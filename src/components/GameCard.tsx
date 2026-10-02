@@ -120,7 +120,7 @@ export const GameCard: React.FC<GameCardProps> = ({
             </span>
 
             <span className="inline-flex items-center bg-[#ff5500]/10 border border-[#ff5500]/25 rounded-full px-2 py-0.5 text-[10px] font-bold text-[#ff6611]">
-              RawGitHack
+              HTML5
             </span>
           </div>
         </div>

@@ -159,6 +159,14 @@ export default function App() {
     handlePlayGame(chosen);
   };
 
+  const handleGoHome = () => {
+    setSearchQuery('');
+    setSelectedCategory('All');
+    setShowFavoritesOnly(false);
+    setActiveGame(null);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const visibleGames = filteredGames.slice(0, visibleCount);
   const hasMore = visibleCount < filteredGames.length;
 
@@ -183,6 +191,7 @@ export default function App() {
         panicKey={panicKey}
         onTriggerPanic={triggerPanic}
         totalGames={allGames.length}
+        onGoHome={handleGoHome}
       />
 
       {/* Main Container */}
@@ -294,19 +303,23 @@ export default function App() {
             
             {/* Brand Col */}
             <div className="space-y-2.5 md:col-span-2">
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-[#ff5500] flex items-center justify-center">
+              <button
+                onClick={handleGoHome}
+                className="flex items-center gap-2.5 group cursor-pointer text-left focus:outline-none"
+                title="Go to Home - All Games"
+              >
+                <div className="w-7 h-7 rounded-lg bg-[#ff5500] flex items-center justify-center group-hover:scale-105 transition-transform">
                   <Flame className="w-4 h-4 text-black fill-black" />
                 </div>
-                <span className="text-lg font-black text-white font-heading tracking-tight">
+                <span className="text-lg font-black text-white font-heading tracking-tight group-hover:text-[#ff5500] transition-colors">
                   MELTED
                 </span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#ff5500]/15 text-[#ff6611] border border-[#ff5500]/30">
                   gn-math
                 </span>
-              </div>
+              </button>
               <p className="text-xs text-zinc-400 max-w-sm leading-relaxed">
-                High-performance unblocked gaming portal powered by gn-math and streamed strictly via RawGitHack.
+                High-performance unblocked gaming portal featuring 840+ instant HTML5 titles.
               </p>
               <div className="flex items-center gap-2 text-[11px] text-zinc-400 pt-1">
                 <span className="flex items-center gap-1 text-[#ff5500] font-semibold">
@@ -314,7 +327,7 @@ export default function App() {
                 </span>
                 <span>·</span>
                 <span className="flex items-center gap-1 text-zinc-300 font-semibold">
-                  <Layers className="w-3.5 h-3.5 text-[#ff5500]" /> RawGitHack Only
+                  <Layers className="w-3.5 h-3.5 text-[#ff5500]" /> Instant Play
                 </span>
                 <span>·</span>
                 <span>840+ Games</span>
@@ -381,7 +394,7 @@ export default function App() {
               &copy; {new Date().getFullYear()} Melted. Archive based on gn-math.
             </div>
             <div>
-              Exclusively powered by RawGitHack
+              Fast, instant in-browser gaming
             </div>
           </div>
         </div>

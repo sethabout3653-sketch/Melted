@@ -23,6 +23,7 @@ interface NavbarProps {
   panicKey: string;
   onTriggerPanic: () => void;
   totalGames: number;
+  onGoHome: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -37,6 +38,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onSelectPreset,
   panicKey,
   onTriggerPanic,
+  onGoHome,
 }) => {
   const [isCloakOpen, setIsCloakOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -69,15 +71,19 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header className="sticky top-0 z-40 w-full bg-[#050505]/95 backdrop-blur-md border-b border-[#1f1f1f]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         
-        {/* Brand Zone */}
+        {/* Brand Zone - Clicking takes you to home with all games */}
         <div className="flex items-center gap-3 shrink-0">
-          <a href="#" className="flex items-center gap-2.5 group">
+          <button 
+            onClick={onGoHome}
+            className="flex items-center gap-2.5 group cursor-pointer text-left focus:outline-none"
+            title="Go to Home - All Games"
+          >
             <div className="w-9 h-9 rounded-xl bg-[#ff5500] flex items-center justify-center shadow-lg shadow-[#ff5500]/25 group-hover:scale-105 transition-transform">
               <Flame className="w-5 h-5 text-black fill-black" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xl font-black tracking-tight text-white font-heading">
+                <span className="text-xl font-black tracking-tight text-white font-heading group-hover:text-[#ff5500] transition-colors">
                   MELTED
                 </span>
                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#ff5500]/15 text-[#ff6611] border border-[#ff5500]/30">
@@ -85,10 +91,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </span>
               </div>
               <div className="text-[11px] text-zinc-400 font-medium -mt-0.5">
-                840+ Unblocked Arcades · RawGitHack
+                840+ Unblocked HTML5 Arcades
               </div>
             </div>
-          </a>
+          </button>
         </div>
 
         {/* Search Bar Zone */}

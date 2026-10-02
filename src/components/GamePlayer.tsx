@@ -4,7 +4,6 @@ import {
   Maximize2, 
   Minimize2, 
   RotateCw, 
-  ExternalLink, 
   Heart, 
   EyeOff,
   AlertTriangle
@@ -81,111 +80,136 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md p-2 sm:p-4 lg:p-6 animate-in fade-in duration-150">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md animate-in fade-in duration-150 ${
+      isFullscreen ? 'p-0' : 'p-2 sm:p-4 lg:p-6'
+    }`}>
       
-      {/* Outer Game Theater Frame */}
+      {/* Outer Game Theater Frame: Pure edge-to-edge in fullscreen */}
       <div 
         ref={containerRef}
-        className={`relative flex flex-col w-full bg-[#0a0a0a] border border-[#222225] rounded-2xl shadow-2xl overflow-hidden transition-all ${
+        className={`relative flex flex-col w-full bg-black overflow-hidden transition-all ${
           isFullscreen 
-            ? 'h-full w-full rounded-none border-none' 
-            : 'max-w-6xl h-[88vh] max-h-[850px]'
+            ? 'h-screen w-screen border-none rounded-none' 
+            : 'max-w-6xl h-[88vh] max-h-[850px] bg-[#0a0a0a] border border-[#222225] rounded-2xl shadow-2xl'
         }`}
       >
         
-        {/* Top Header Bar: Sleek Black & Orange, only purposeful controls */}
-        <div className="flex items-center justify-between px-4 py-3 bg-[#111113] border-b border-[#222225] select-none gap-2 shrink-0">
-          
-          {/* Left info */}
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 rounded-lg overflow-hidden bg-[#1c1c1f] shrink-0 border border-[#2c2c30]">
-              <img 
-                src={game.resolvedCover} 
-                alt="" 
-                className="w-full h-full object-cover" 
-              />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h3 className="font-extrabold text-white text-sm sm:text-base truncate font-heading">
-                  {game.name}
-                </h3>
-                <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full bg-[#ff5500]/15 text-[#ff6611] border border-[#ff5500]/30 text-[10px] font-bold uppercase tracking-wider">
-                  RawGitHack
-                </span>
-              </div>
-              <div className="text-[11px] text-zinc-400 truncate">
-                {game.author ? `By ${game.author}` : 'gn-math Archive'}
-              </div>
-            </div>
-          </div>
-
-          {/* Right Controls - Only purposeful buttons */}
-          <div className="flex items-center gap-1.5 shrink-0">
+        {/* Top Header Bar: ONLY shown when NOT fullscreen */}
+        {!isFullscreen && (
+          <div className="flex items-center justify-between px-4 py-3 bg-[#111113] border-b border-[#222225] select-none gap-2 shrink-0">
             
-            {/* Favorite Button */}
-            <button
-              onClick={() => onToggleFavorite(game.id)}
-              className={`p-2 rounded-lg border transition-colors cursor-pointer ${
-                isFavorite
-                  ? 'bg-[#ff5500]/20 text-[#ff5500] border-[#ff5500]/50'
-                  : 'bg-[#18181b] text-zinc-400 hover:text-white border-[#27272a]'
-              }`}
-              title={isFavorite ? 'Saved to Favorites' : 'Add to Favorites'}
-            >
-              <Heart className={`w-4 h-4 ${isFavorite ? 'fill-[#ff5500]' : ''}`} />
-            </button>
+            {/* Left info */}
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-8 h-8 rounded-lg overflow-hidden bg-[#1c1c1f] shrink-0 border border-[#2c2c30]">
+                <img 
+                  src={game.resolvedCover} 
+                  alt="" 
+                  className="w-full h-full object-cover" 
+                />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-extrabold text-white text-sm sm:text-base truncate font-heading">
+                    {game.name}
+                  </h3>
+                  <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full bg-[#ff5500]/15 text-[#ff6611] border border-[#ff5500]/30 text-[10px] font-bold uppercase tracking-wider">
+                    HTML5
+                  </span>
+                </div>
+                <div className="text-[11px] text-zinc-400 truncate">
+                  {game.author ? `By ${game.author}` : 'gn-math Archive'}
+                </div>
+              </div>
+            </div>
 
-            {/* Stealth about:blank button */}
-            <button
-              onClick={() => launchAboutBlank(currentUrl, game.name)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] hover:bg-[#222226] text-zinc-200 hover:text-[#ff5500] text-xs font-semibold rounded-lg border border-[#27272a] hover:border-[#ff5500]/40 transition-colors cursor-pointer"
-              title="Open stealth tab (about:blank cloak)"
-            >
-              <EyeOff className="w-3.5 h-3.5 text-[#ff5500]" />
-              <span className="hidden sm:inline">Stealth Window</span>
-            </button>
+            {/* Right Controls - Only purposeful buttons */}
+            <div className="flex items-center gap-1.5 shrink-0">
+              
+              {/* Favorite Button */}
+              <button
+                onClick={() => onToggleFavorite(game.id)}
+                className={`p-2 rounded-lg border transition-colors cursor-pointer ${
+                  isFavorite
+                    ? 'bg-[#ff5500]/20 text-[#ff5500] border-[#ff5500]/50'
+                    : 'bg-[#18181b] text-zinc-400 hover:text-white border-[#27272a]'
+                }`}
+                title={isFavorite ? 'Saved to Favorites' : 'Add to Favorites'}
+              >
+                <Heart className={`w-4 h-4 ${isFavorite ? 'fill-[#ff5500]' : ''}`} />
+              </button>
 
-            {/* Reload button */}
-            <button
-              onClick={reloadGame}
-              className="p-2 bg-[#18181b] hover:bg-[#222226] text-zinc-400 hover:text-white rounded-lg border border-[#27272a] hover:border-[#ff5500]/40 transition-colors cursor-pointer"
-              title="Reload game"
-            >
-              <RotateCw className="w-4 h-4" />
-            </button>
+              {/* Stealth about:blank button */}
+              <button
+                onClick={() => launchAboutBlank(currentUrl, game.name)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] hover:bg-[#222226] text-zinc-200 hover:text-[#ff5500] text-xs font-semibold rounded-lg border border-[#27272a] hover:border-[#ff5500]/40 transition-colors cursor-pointer"
+                title="Open stealth tab (about:blank cloak)"
+              >
+                <EyeOff className="w-3.5 h-3.5 text-[#ff5500]" />
+                <span className="hidden sm:inline">Stealth Window</span>
+              </button>
 
-            {/* Fullscreen button */}
-            <button
-              onClick={toggleFullscreen}
-              className="p-2 bg-[#18181b] hover:bg-[#222226] text-zinc-400 hover:text-white rounded-lg border border-[#27272a] hover:border-[#ff5500]/40 transition-colors cursor-pointer"
-              title={isFullscreen ? 'Exit Fullscreen' : 'Enter Fullscreen'}
-            >
-              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-            </button>
+              {/* Reload button */}
+              <button
+                onClick={reloadGame}
+                className="p-2 bg-[#18181b] hover:bg-[#222226] text-zinc-400 hover:text-white rounded-lg border border-[#27272a] hover:border-[#ff5500]/40 transition-colors cursor-pointer"
+                title="Reload game"
+              >
+                <RotateCw className="w-4 h-4" />
+              </button>
 
-            {/* Close button */}
-            <button
-              onClick={onClose}
-              className="p-2 bg-[#ff5500] hover:bg-[#e64d00] text-black font-bold rounded-lg transition-colors cursor-pointer ml-1"
-              title="Close game (Esc)"
-            >
-              <X className="w-4 h-4 stroke-[3]" />
-            </button>
+              {/* Fullscreen button */}
+              <button
+                onClick={toggleFullscreen}
+                className="p-2 bg-[#18181b] hover:bg-[#222226] text-zinc-400 hover:text-white rounded-lg border border-[#27272a] hover:border-[#ff5500]/40 transition-colors cursor-pointer"
+                title="Enter Fullscreen"
+              >
+                <Maximize2 className="w-4 h-4" />
+              </button>
+
+              {/* Close button */}
+              <button
+                onClick={onClose}
+                className="p-2 bg-[#ff5500] hover:bg-[#e64d00] text-black font-bold rounded-lg transition-colors cursor-pointer ml-1"
+                title="Close game (Esc)"
+              >
+                <X className="w-4 h-4 stroke-[3]" />
+              </button>
+
+            </div>
 
           </div>
+        )}
 
-        </div>
-
-        {/* Game Canvas Container */}
+        {/* Game Canvas Container: Occupies full screen in fullscreen */}
         <div className="relative flex-1 w-full h-full bg-black overflow-hidden">
           
+          {/* Subtle floating overlay to exit fullscreen if hovered near top-right corner */}
+          {isFullscreen && (
+            <div className="absolute top-3 right-3 z-30 opacity-0 hover:opacity-100 transition-opacity duration-200 flex items-center gap-2">
+              <button
+                onClick={reloadGame}
+                className="p-2 rounded-full bg-black/75 hover:bg-black text-white hover:text-[#ff5500] backdrop-blur-md border border-white/20 transition-all cursor-pointer shadow-xl"
+                title="Reload Game"
+              >
+                <RotateCw className="w-4 h-4" />
+              </button>
+              <button
+                onClick={toggleFullscreen}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/75 hover:bg-black text-white hover:text-[#ff5500] backdrop-blur-md border border-white/20 transition-all cursor-pointer shadow-xl text-xs font-semibold"
+                title="Exit Fullscreen (Esc)"
+              >
+                <Minimize2 className="w-4 h-4 text-[#ff5500]" />
+                <span>Exit Fullscreen</span>
+              </button>
+            </div>
+          )}
+
           {/* Loading indicator */}
           {isLoading && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0a0a] z-10 space-y-3">
               <div className="w-9 h-9 border-3 border-[#ff5500] border-t-transparent rounded-full animate-spin" />
               <p className="text-sm font-semibold text-zinc-200 font-heading">
-                Loading {game.name} from RawGitHack...
+                Loading {game.name}...
               </p>
               <span className="text-xs text-zinc-400">
                 gn-math Archive
@@ -230,17 +254,19 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
         </div>
 
-        {/* Bottom Bar */}
-        <div className="px-4 py-2 bg-[#0a0a0a] border-t border-[#1c1c20] flex items-center justify-between text-[11px] text-zinc-400 select-none">
-          <div className="flex items-center gap-2">
-            <span>🎮 Click game to focus keyboard</span>
-            <span>·</span>
-            <span>Press [Esc] to exit</span>
+        {/* Bottom Bar: ONLY shown when NOT fullscreen */}
+        {!isFullscreen && (
+          <div className="px-4 py-2 bg-[#0a0a0a] border-t border-[#1c1c20] flex items-center justify-between text-[11px] text-zinc-400 select-none shrink-0">
+            <div className="flex items-center gap-2">
+              <span>🎮 Click game to focus keyboard</span>
+              <span>·</span>
+              <span>Press [Esc] to exit</span>
+            </div>
+            <div className="text-zinc-400 font-mono">
+              HTML5 Arcade
+            </div>
           </div>
-          <div className="text-zinc-400 font-mono">
-            RawGitHack CDN
-          </div>
-        </div>
+        )}
 
       </div>
 

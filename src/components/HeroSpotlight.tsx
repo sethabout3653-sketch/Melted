@@ -35,7 +35,7 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
               <Zap className="w-3.5 h-3.5 fill-[#ff5500] text-[#ff5500]" /> Featured Title
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#18181b] border border-[#27272a] text-zinc-300 text-xs font-medium">
-              RawGitHack CDN
+              HTML5 Fast Load
             </span>
             <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#18181b] border border-[#27272a] text-zinc-300 text-xs font-medium">
               <ShieldCheck className="w-3 h-3 text-[#ff5500]" /> Unblocked
@@ -60,7 +60,7 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
 
           {/* Editorial blurb */}
           <p className="text-sm text-zinc-300 max-w-xl font-normal leading-relaxed">
-            Instant 60 FPS unblocked gameplay powered by gn-math and streamed via RawGitHack CDN. 
+            Instant 60 FPS unblocked gameplay powered by gn-math and streamed instantly in-browser. 
             Fully responsive controls with built-in tab cloaking.
           </p>
 

@@ -80,7 +80,7 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
       {/* Sorting & info line */}
       <div className="flex items-center justify-between gap-3 text-xs text-zinc-400 pt-1 border-t border-[#1c1c20]">
         <div className="text-zinc-400">
-          <strong className="text-white font-semibold">{categoryCounts[selectedCategory] || 0}</strong> games · RawGitHack CDN
+          <strong className="text-white font-semibold">{categoryCounts[selectedCategory] || 0}</strong> games available
         </div>
 
         {/* Sort Selector */}
