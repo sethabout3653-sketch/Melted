@@ -8,13 +8,16 @@ import {
   Heart,
   X,
   WifiOff,
-  DownloadCloud
+  Gamepad2,
+  MessageSquare
 } from 'lucide-react';
 import { CloakPreset } from '../hooks/useCloak';
 import { PWAInstallButton } from './PWAInstallButton';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 
 interface NavbarProps {
+  currentTab: 'games' | 'chat';
+  onTabChange: (tab: 'games' | 'chat') => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onRandomGame: () => void;
@@ -28,12 +31,11 @@ interface NavbarProps {
   onTriggerPanic: () => void;
   totalGames: number;
   onGoHome: () => void;
-  cachedCount?: number;
-  onCacheAllGames?: () => void;
-  isPreCaching?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
+  currentTab,
+  onTabChange,
   searchQuery,
   onSearchChange,
   onRandomGame,
@@ -46,9 +48,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   panicKey,
   onTriggerPanic,
   onGoHome,
-  cachedCount = 0,
-  onCacheAllGames,
-  isPreCaching = false,
 }) => {
   const [isCloakOpen, setIsCloakOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -60,12 +59,13 @@ export const Navbar: React.FC<NavbarProps> = ({
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.key === '/' || (e.ctrlKey && e.key === 'k')) && document.activeElement !== searchInputRef.current) {
         e.preventDefault();
+        onTabChange('games');
         searchInputRef.current?.focus();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [onTabChange]);
 
   // Close cloak dropdown on click outside
   useEffect(() => {
@@ -82,12 +82,15 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header className="sticky top-0 z-40 w-full bg-[#050505]/95 backdrop-blur-md border-b border-[#1f1f1f]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         
-        {/* Brand Zone - Clicking takes you to home with all games */}
-        <div className="flex items-center gap-3 shrink-0">
+        {/* Brand Zone - Clean human UI without any repetitive tags */}
+        <div className="flex items-center gap-4 shrink-0">
           <button 
-            onClick={onGoHome}
+            onClick={() => {
+              onTabChange('games');
+              onGoHome();
+            }}
             className="flex items-center gap-2.5 group cursor-pointer text-left focus:outline-none"
-            title="Go to Home - All Games"
+            title="Go to Home"
           >
             <div className="w-9 h-9 rounded-xl bg-[#ff5500] flex items-center justify-center shadow-lg shadow-[#ff5500]/25 group-hover:scale-105 transition-transform">
               <Flame className="w-5 h-5 text-black fill-black" />
@@ -97,9 +100,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="text-xl font-black tracking-tight text-white font-heading group-hover:text-[#ff5500] transition-colors">
                   MELTED
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#ff5500]/15 text-[#ff6611] border border-[#ff5500]/30">
-                  gn-math
-                </span>
                 {!isOnline && (
                   <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
                     <WifiOff className="w-3 h-3" /> Offline
@@ -107,22 +107,52 @@ export const Navbar: React.FC<NavbarProps> = ({
                 )}
               </div>
               <div className="text-[11px] text-zinc-400 font-medium -mt-0.5">
-                840+ Unblocked HTML5 Arcades
+                840+ Unblocked Games
               </div>
             </div>
           </button>
+
+          {/* Primary View Switcher: Games vs Discord Chat */}
+          <div className="hidden sm:flex items-center bg-[#121214] p-1 rounded-xl border border-[#222225]">
+            <button
+              onClick={() => onTabChange('games')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                currentTab === 'games'
+                  ? 'bg-[#ff5500] text-black shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Gamepad2 className="w-3.5 h-3.5" />
+              <span>Games</span>
+            </button>
+
+            <button
+              onClick={() => onTabChange('chat')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                currentTab === 'chat'
+                  ? 'bg-[#ff5500] text-black shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>Chat</span>
+            </button>
+          </div>
         </div>
 
-        {/* Search Bar Zone */}
-        <div className="flex-1 max-w-lg mx-2">
+        {/* Search Bar Zone (Visible when in Games tab, or switches to games on search) */}
+        <div className="flex-1 max-w-md mx-2">
           <div className="relative flex items-center">
             <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 pointer-events-none" />
             <input
               ref={searchInputRef}
               type="text"
               value={searchQuery}
-              onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Search 840+ games... (Press '/' to search)"
+              onChange={(e) => {
+                if (currentTab !== 'games') onTabChange('games');
+                onSearchChange(e.target.value);
+              }}
+              placeholder="Search 840+ games... (Press '/')"
               className="w-full bg-[#121214] hover:bg-[#161619] focus:bg-[#161619] text-sm text-zinc-100 placeholder-zinc-400 rounded-xl pl-10 pr-10 py-2 border border-[#222225] focus:border-[#ff5500] focus:outline-none focus:ring-1 focus:ring-[#ff5500] transition-all"
             />
             {searchQuery ? (
@@ -134,7 +164,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <X className="w-3.5 h-3.5" />
               </button>
             ) : (
-              <kbd className="hidden sm:inline-block absolute right-3 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 bg-[#1c1c1f] rounded border border-[#2c2c30]">
+              <kbd className="hidden md:inline-block absolute right-3 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 bg-[#1c1c1f] rounded border border-[#2c2c30]">
                 /
               </kbd>
             )}
@@ -144,39 +174,41 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Action Controls */}
         <div className="flex items-center gap-2 shrink-0">
           
-          {/* In-App PWA Install Prompt Button (Desktop/Android/iOS) */}
-          <PWAInstallButton />
+          {/* Mobile Chat switcher button */}
+          <button
+            onClick={() => onTabChange(currentTab === 'games' ? 'chat' : 'games')}
+            className={`sm:hidden flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+              currentTab === 'chat'
+                ? 'bg-[#ff5500] text-black border-[#ff5500] shadow-sm'
+                : 'bg-[#121214] text-zinc-200 border-[#222225]'
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5" />
+            <span>Chat</span>
+          </button>
 
-          {/* Offline Cache All Games trigger button */}
-          {onCacheAllGames && !isPreCaching && (
-            <button
-              onClick={onCacheAllGames}
-              className="hidden lg:flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-zinc-300 bg-[#121214] hover:bg-[#1c1c20] hover:text-[#ff5500] rounded-xl border border-[#222225] hover:border-[#ff5500]/40 transition-all cursor-pointer"
-              title="Cache games locally to play without internet connection"
-            >
-              <DownloadCloud className="w-3.5 h-3.5 text-[#ff5500]" />
-              <span>Cache Offline</span>
-              {cachedCount > 0 && (
-                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">
-                  {cachedCount}
-                </span>
-              )}
-            </button>
-          )}
+          {/* In-App PWA Install Prompt */}
+          <PWAInstallButton />
 
           {/* Random Game */}
           <button
-            onClick={onRandomGame}
+            onClick={() => {
+              if (currentTab !== 'games') onTabChange('games');
+              onRandomGame();
+            }}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-zinc-200 bg-[#121214] hover:bg-[#1c1c20] hover:text-[#ff5500] rounded-xl border border-[#222225] hover:border-[#ff5500]/40 transition-all cursor-pointer"
             title="Pick a random game"
           >
             <Shuffle className="w-3.5 h-3.5 text-[#ff5500]" />
-            <span className="hidden md:inline">Random</span>
+            <span className="hidden lg:inline">Random</span>
           </button>
 
           {/* Favorites Filter */}
           <button
-            onClick={onToggleFavoritesOnly}
+            onClick={() => {
+              if (currentTab !== 'games') onTabChange('games');
+              onToggleFavoritesOnly();
+            }}
             className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
               showFavoritesOnly 
                 ? 'bg-[#ff5500] text-black font-bold border-[#ff5500] shadow-sm'

@@ -29,13 +29,13 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
         {/* Left Column: Spotlight details */}
         <div className="lg:col-span-7 space-y-4">
           
-          {/* Tag row: Pure orange & black pills */}
+          {/* Tag row */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#ff5500]/15 border border-[#ff5500]/30 text-[#ff6611] text-xs font-bold uppercase tracking-wider">
               <Zap className="w-3.5 h-3.5 fill-[#ff5500] text-[#ff5500]" /> Featured Title
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#18181b] border border-[#27272a] text-zinc-300 text-xs font-medium">
-              HTML5 Fast Load
+              Instant Play
             </span>
             <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#18181b] border border-[#27272a] text-zinc-300 text-xs font-medium">
               <ShieldCheck className="w-3 h-3 text-[#ff5500]" /> Unblocked
@@ -48,7 +48,7 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
               {activeGame.name}
             </h2>
             <div className="flex items-center gap-2 text-xs sm:text-sm text-zinc-400 mt-2 font-medium">
-              <span>{activeGame.author ? `By ${activeGame.author}` : 'gn-math Archive'}</span>
+              <span>{activeGame.author ? `By ${activeGame.author}` : 'Arcade Archive'}</span>
               <span>·</span>
               <span className="flex items-center text-[#ff6611] font-semibold gap-1">
                 <Star className="w-3.5 h-3.5 fill-[#ff5500] text-[#ff5500]" /> 4.9
@@ -58,13 +58,13 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
             </div>
           </div>
 
-          {/* Editorial blurb */}
+          {/* Blurb */}
           <p className="text-sm text-zinc-300 max-w-xl font-normal leading-relaxed">
-            Instant 60 FPS unblocked gameplay powered by gn-math and streamed instantly in-browser. 
-            Fully responsive controls with built-in tab cloaking.
+            Instant 60 FPS unblocked gameplay streamed seamlessly in-browser. 
+            Responsive controls with built-in tab camouflage.
           </p>
 
-          {/* Action CTAs: Bold solid orange and clean dark button */}
+          {/* Action CTAs */}
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <button
               onClick={() => onPlay(activeGame)}
@@ -80,7 +80,7 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
               title="Open in an unblockable stealth about:blank window"
             >
               <ExternalLink className="w-4 h-4 text-zinc-400" />
-              <span>Stealth Tab (about:blank)</span>
+              <span>Stealth Window</span>
             </button>
           </div>
 

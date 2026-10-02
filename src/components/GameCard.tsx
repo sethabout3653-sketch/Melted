@@ -49,7 +49,7 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
                 {game.name}
               </span>
               <span className="text-[10px] text-zinc-400 mt-0.5">
-                HTML5 Arcade
+                Arcade
               </span>
             </div>
           ) : (
@@ -98,7 +98,7 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
           )}
         </div>
 
-        {/* Title & Metadata Pills */}
+        {/* Title & Metadata */}
         <div className="space-y-1.5">
           <h3 
             onClick={() => onPlay(game)}
@@ -109,10 +109,10 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
           </h3>
 
           <p className="text-xs text-zinc-400 line-clamp-1 font-normal">
-            {game.author ? `By ${game.author}` : 'HTML5 Game Archive'}
+            {game.author ? `By ${game.author}` : 'Arcade Title'}
           </p>
 
-          {/* Metadata Pills: Clean and restrained */}
+          {/* Metadata Badges */}
           <div className="flex flex-wrap items-center gap-1.5 pt-1">
             <span className="inline-flex items-center gap-1 bg-[#17171a] border border-[#27272a] rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-[#ff6611]">
               <span>★</span> {ratingNumber}
@@ -123,19 +123,15 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
             </span>
 
             {isCached ? (
-              <span className="inline-flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-2 py-0.5 text-[10px] font-bold text-emerald-400">
-                <Check className="w-2.5 h-2.5 stroke-[3]" /> Offline
+              <span className="inline-flex items-center gap-1 bg-[#ff5500]/10 border border-[#ff5500]/30 rounded-full px-2 py-0.5 text-[10px] font-bold text-[#ff6611]">
+                <Check className="w-2.5 h-2.5 stroke-[3]" /> Offline Ready
               </span>
-            ) : (
-              <span className="inline-flex items-center bg-[#ff5500]/10 border border-[#ff5500]/25 rounded-full px-2 py-0.5 text-[10px] font-bold text-[#ff6611]">
-                HTML5
-              </span>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
 
-      {/* Card Actions: 16px internal padding */}
+      {/* Card Actions */}
       <div className="mt-4 pt-3 border-t border-[#1c1c20] flex items-center justify-between gap-2">
         <button
           onClick={() => onPlay(game)}
@@ -148,7 +144,7 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
         <button
           onClick={() => onAboutBlank(game)}
           className="p-2 text-zinc-400 hover:text-white bg-[#151518] hover:bg-[#202024] rounded-xl border border-[#252528] hover:border-[#ff5500]/40 transition-all cursor-pointer"
-          title="Open in stealth about:blank tab"
+          title="Open in stealth about:blank window"
         >
           <ExternalLink className="w-3.5 h-3.5" />
         </button>

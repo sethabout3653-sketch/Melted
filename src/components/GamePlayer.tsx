@@ -113,16 +113,16 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                     {game.name}
                   </h3>
                   <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full bg-[#ff5500]/15 text-[#ff6611] border border-[#ff5500]/30 text-[10px] font-bold uppercase tracking-wider">
-                    HTML5
+                    {game.category.split(' ')[0]}
                   </span>
                 </div>
                 <div className="text-[11px] text-zinc-400 truncate">
-                  {game.author ? `By ${game.author}` : 'gn-math Archive'}
+                  {game.author ? `By ${game.author}` : 'Arcade Title'}
                 </div>
               </div>
             </div>
 
-            {/* Right Controls - Only purposeful buttons */}
+            {/* Right Controls */}
             <div className="flex items-center gap-1.5 shrink-0">
               
               {/* Favorite Button */}
@@ -212,7 +212,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 Loading {game.name}...
               </p>
               <span className="text-xs text-zinc-400">
-                gn-math Archive
+                Starting game engine
               </span>
             </div>
           )}
@@ -241,7 +241,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 Game blocked in iframe
               </h4>
               <p className="text-xs text-zinc-400 max-w-md">
-                Launch in a stealth about:blank window to bypass iframe restrictions.
+                Launch in a stealth about:blank window to bypass restrictions.
               </p>
               <button
                 onClick={() => launchAboutBlank(currentUrl, game.name)}
@@ -263,7 +263,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               <span>Press [Esc] to exit</span>
             </div>
             <div className="text-zinc-400 font-mono">
-              HTML5 Arcade
+              Fullscreen & Gamepad Ready
             </div>
           </div>
         )}

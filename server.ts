@@ -95,8 +95,16 @@ app.get('/api/raw/:filename', async (req, res) => {
   }
 });
 
+import http from 'http';
+import { initWebSocketDatabase } from './src/server/wsDatabase';
+
 // Serve frontend: Vite dev middlewares in development, static files in production
 async function startServer() {
+  const server = http.createServer(app);
+
+  // Initialize PostgreSQL-like WebSocket Database on /ws-db
+  initWebSocketDatabase(server);
+
   if (!IS_PROD) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
@@ -112,7 +120,7 @@ async function startServer() {
     });
   }
 
-  app.listen(Number(PORT), '0.0.0.0', () => {
+  server.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`🔥 Melted server running on http://0.0.0.0:${PORT} (Mode: ${IS_PROD ? 'Production' : 'Development'})`);
     startRenderKeepAlive();
   });

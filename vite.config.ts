@@ -16,7 +16,7 @@ export default defineConfig(() => {
           id: '/',
           name: 'Melted — Unblocked Games & Arcades',
           short_name: 'Melted',
-          description: 'Fast, modern unblocked gaming portal featuring 840+ instant HTML5 games with full offline support.',
+          description: 'Fast, modern unblocked gaming portal featuring 840+ instant titles with full offline support.',
           theme_color: '#080808',
           background_color: '#080808',
           display: 'standalone',

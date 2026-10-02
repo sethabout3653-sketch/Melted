@@ -5,7 +5,7 @@ import { resolveGameUrl } from '../services/gameService';
 const CACHE_NAME = 'melted-offline-games-v1';
 const CACHED_IDS_STORAGE_KEY = 'melted_cached_game_ids';
 
-export function useGameCache() {
+export function useGameCache(allGames?: GameItem[]) {
   const [cachedIds, setCachedIds] = useState<Set<number>>(() => {
     try {
       const stored = localStorage.getItem(CACHED_IDS_STORAGE_KEY);
@@ -18,6 +18,7 @@ export function useGameCache() {
   const [isPreCaching, setIsPreCaching] = useState(false);
   const [cacheProgress, setCacheProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
   const isCancelledRef = useRef(false);
+  const autoCacheStartedRef = useRef(false);
 
   // Sync cached IDs with Cache Storage on mount
   useEffect(() => {
@@ -44,7 +45,7 @@ export function useGameCache() {
           });
         }
       } catch (err) {
-        console.warn('Cache verification check:', err);
+        console.warn('Cache check:', err);
       }
     };
 
@@ -58,7 +59,6 @@ export function useGameCache() {
       const url = resolveGameUrl(game.url);
       const cache = await caches.open(CACHE_NAME);
 
-      // Check if already in cache
       const existing = await cache.match(url);
       if (existing) {
         setCachedIds((prev) => {
@@ -69,7 +69,6 @@ export function useGameCache() {
         return true;
       }
 
-      // Fetch game and store in cache
       const response = await fetch(url, { cache: 'force-cache' });
       if (response.ok) {
         await cache.put(url, response.clone());
@@ -82,67 +81,78 @@ export function useGameCache() {
       }
       return false;
     } catch (err) {
-      console.warn(`Failed to cache ${game.name}:`, err);
+      console.warn(`Cache notice ${game.name}:`, err);
       return false;
     }
   }, []);
 
-  // Pre-cache top games smoothly in non-blocking idle batches (NEVER freezes or lags UI)
-  const preCacheGames = useCallback(async (gamesToCache: GameItem[]) => {
-    if (!('caches' in window) || isPreCaching || gamesToCache.length === 0) return;
+  // Silent background auto-caching: caches all games seamlessly during browser idle time
+  useEffect(() => {
+    if (!allGames || allGames.length === 0 || autoCacheStartedRef.current) return;
+    if (!('caches' in window)) return;
 
-    setIsPreCaching(true);
-    isCancelledRef.current = false;
-    const total = gamesToCache.length;
-    setCacheProgress({ current: 0, total });
+    autoCacheStartedRef.current = true;
 
-    const cache = await caches.open(CACHE_NAME);
+    let isMounted = true;
 
-    for (let i = 0; i < total; i++) {
-      if (isCancelledRef.current) break;
+    const startBackgroundCaching = async () => {
+      // Delay initial start by 2.5 seconds to let UI hydrate and render with zero hitch
+      await new Promise((r) => setTimeout(r, 2500));
+      if (!isMounted) return;
 
-      const game = gamesToCache[i];
-      const url = resolveGameUrl(game.url);
+      setIsPreCaching(true);
+      const cache = await caches.open(CACHE_NAME);
+      const total = allGames.length;
+      setCacheProgress({ current: 0, total });
 
-      try {
-        const match = await cache.match(url);
-        if (!match) {
-          const res = await fetch(url, { cache: 'default' });
-          if (res.ok) {
-            await cache.put(url, res.clone());
+      for (let i = 0; i < total; i++) {
+        if (!isMounted || isCancelledRef.current) break;
+
+        const game = allGames[i];
+        const url = resolveGameUrl(game.url);
+
+        try {
+          const match = await cache.match(url);
+          if (!match) {
+            const res = await fetch(url, { cache: 'default' });
+            if (res.ok) {
+              await cache.put(url, res.clone());
+            }
           }
+
+          setCachedIds((prev) => {
+            const next = new Set(prev).add(game.id);
+            localStorage.setItem(CACHED_IDS_STORAGE_KEY, JSON.stringify([...next]));
+            return next;
+          });
+        } catch {
+          // Continue silently
         }
 
-        setCachedIds((prev) => {
-          const next = new Set(prev).add(game.id);
-          localStorage.setItem(CACHED_IDS_STORAGE_KEY, JSON.stringify([...next]));
-          return next;
-        });
-      } catch (e) {
-        // Silently continue
+        setCacheProgress({ current: i + 1, total });
+
+        // Non-blocking yield to browser event loop
+        await new Promise((resolve) => setTimeout(resolve, 60));
       }
 
-      setCacheProgress({ current: i + 1, total });
+      if (isMounted) {
+        setIsPreCaching(false);
+      }
+    };
 
-      // Yield execution to the browser event loop between fetches so 60 FPS is maintained
-      await new Promise((resolve) => setTimeout(resolve, 80));
-    }
+    startBackgroundCaching();
 
-    setIsPreCaching(false);
-  }, [isPreCaching]);
-
-  const cancelPreCaching = useCallback(() => {
-    isCancelledRef.current = true;
-    setIsPreCaching(false);
-  }, []);
+    return () => {
+      isMounted = false;
+      isCancelledRef.current = true;
+    };
+  }, [allGames]);
 
   return {
     cachedIds,
     isGameCached: (id: number) => cachedIds.has(id),
     cacheSingleGame,
-    preCacheGames,
     isPreCaching,
     cacheProgress,
-    cancelPreCaching,
   };
 }
