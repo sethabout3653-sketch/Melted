@@ -6,9 +6,13 @@ import {
   ShieldAlert, 
   EyeOff, 
   Heart,
-  X
+  X,
+  WifiOff,
+  DownloadCloud
 } from 'lucide-react';
 import { CloakPreset } from '../hooks/useCloak';
+import { PWAInstallButton } from './PWAInstallButton';
+import { useOnlineStatus } from '../hooks/useOnlineStatus';
 
 interface NavbarProps {
   searchQuery: string;
@@ -24,6 +28,9 @@ interface NavbarProps {
   onTriggerPanic: () => void;
   totalGames: number;
   onGoHome: () => void;
+  cachedCount?: number;
+  onCacheAllGames?: () => void;
+  isPreCaching?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -39,10 +46,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   panicKey,
   onTriggerPanic,
   onGoHome,
+  cachedCount = 0,
+  onCacheAllGames,
+  isPreCaching = false,
 }) => {
   const [isCloakOpen, setIsCloakOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const cloakDropdownRef = useRef<HTMLDivElement>(null);
+  const isOnline = useOnlineStatus();
 
   // Keyboard shortcut '/' to focus search
   useEffect(() => {
@@ -89,6 +100,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-[#ff5500]/15 text-[#ff6611] border border-[#ff5500]/30">
                   gn-math
                 </span>
+                {!isOnline && (
+                  <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                    <WifiOff className="w-3 h-3" /> Offline
+                  </span>
+                )}
               </div>
               <div className="text-[11px] text-zinc-400 font-medium -mt-0.5">
                 840+ Unblocked HTML5 Arcades
@@ -112,7 +128,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             {searchQuery ? (
               <button
                 onClick={() => onSearchChange('')}
-                className="absolute right-3 p-1 text-zinc-400 hover:text-white rounded-full transition-colors"
+                className="absolute right-3 p-1 text-zinc-400 hover:text-white rounded-full transition-colors cursor-pointer"
                 title="Clear search"
               >
                 <X className="w-3.5 h-3.5" />
@@ -125,9 +141,29 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Action Controls: Strictly purposeful */}
+        {/* Action Controls */}
         <div className="flex items-center gap-2 shrink-0">
           
+          {/* In-App PWA Install Prompt Button (Desktop/Android/iOS) */}
+          <PWAInstallButton />
+
+          {/* Offline Cache All Games trigger button */}
+          {onCacheAllGames && !isPreCaching && (
+            <button
+              onClick={onCacheAllGames}
+              className="hidden lg:flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-zinc-300 bg-[#121214] hover:bg-[#1c1c20] hover:text-[#ff5500] rounded-xl border border-[#222225] hover:border-[#ff5500]/40 transition-all cursor-pointer"
+              title="Cache games locally to play without internet connection"
+            >
+              <DownloadCloud className="w-3.5 h-3.5 text-[#ff5500]" />
+              <span>Cache Offline</span>
+              {cachedCount > 0 && (
+                <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-400 font-bold">
+                  {cachedCount}
+                </span>
+              )}
+            </button>
+          )}
+
           {/* Random Game */}
           <button
             onClick={onRandomGame}

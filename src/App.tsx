@@ -1,9 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useDeferredValue } from 'react';
 import { Navbar } from './components/Navbar';
 import { HeroSpotlight } from './components/HeroSpotlight';
 import { CategoryFilter } from './components/CategoryFilter';
 import { GameCard } from './components/GameCard';
 import { GamePlayer } from './components/GamePlayer';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { 
   getAllGames, 
   getFavorites, 
@@ -11,6 +12,7 @@ import {
   recordRecentPlay 
 } from './services/gameService';
 import { useCloak, launchAboutBlank } from './hooks/useCloak';
+import { useGameCache } from './hooks/useGameCache';
 import { GameItem, GameCategory } from './types/game';
 import { 
   Flame, 
@@ -18,13 +20,16 @@ import {
   ShieldCheck, 
   Layers, 
   ArrowRight,
-  Gamepad2
+  Gamepad2,
+  DownloadCloud
 } from 'lucide-react';
 
 const PAGE_SIZE = 36;
 
 export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
+  const deferredQuery = useDeferredValue(searchQuery);
+
   const [selectedCategory, setSelectedCategory] = useState<GameCategory>('All');
   const [sortBy, setSortBy] = useState<'popular' | 'alpha-asc' | 'alpha-desc' | 'random'>('popular');
   const [favorites, setFavorites] = useState<number[]>(() => getFavorites());
@@ -41,6 +46,17 @@ export default function App() {
     presets,
   } = useCloak();
 
+  // Offline Game Caching Engine
+  const {
+    cachedIds,
+    isGameCached,
+    cacheSingleGame,
+    preCacheGames,
+    isPreCaching,
+    cacheProgress,
+    cancelPreCaching,
+  } = useGameCache();
+
   // 14-Minute Periodic HTTP Keep-Alive for Render
   useEffect(() => {
     const keepAlivePing = async () => {
@@ -55,7 +71,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Load all 841 games from gn-math (Strictly RawGitHack)
+  // Load all games from gn-math
   const allGames = useMemo(() => {
     return getAllGames();
   }, []);
@@ -90,7 +106,7 @@ export default function App() {
     return counts;
   }, [allGames, favorites]);
 
-  // Filtered & sorted game list
+  // Filtered & sorted game list (uses deferredQuery for 60 FPS zero-lag typing)
   const filteredGames = useMemo(() => {
     let list = [...allGames];
 
@@ -103,9 +119,9 @@ export default function App() {
       list = list.filter((g) => g.category === selectedCategory);
     }
 
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
+    // Filter by deferred search query (never lags UI)
+    if (deferredQuery.trim()) {
+      const q = deferredQuery.toLowerCase().trim();
       list = list.filter(
         (g) =>
           g.name.toLowerCase().includes(q) ||
@@ -130,12 +146,12 @@ export default function App() {
     }
 
     return list;
-  }, [allGames, selectedCategory, searchQuery, sortBy, showFavoritesOnly, favorites]);
+  }, [allGames, selectedCategory, deferredQuery, sortBy, showFavoritesOnly, favorites]);
 
   // Reset visible count when filter changes
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [selectedCategory, searchQuery, sortBy, showFavoritesOnly]);
+  }, [selectedCategory, deferredQuery, sortBy, showFavoritesOnly]);
 
   const handleToggleFavorite = (id: number) => {
     toggleFavoriteStorage(id);
@@ -144,11 +160,13 @@ export default function App() {
 
   const handlePlayGame = (game: GameItem) => {
     recordRecentPlay(game.id);
+    cacheSingleGame(game); // Auto-caches played game silently for offline play
     setActiveGame(game);
   };
 
   const handleAboutBlank = (game: GameItem) => {
     recordRecentPlay(game.id);
+    cacheSingleGame(game);
     launchAboutBlank(game.resolvedUrl, game.name);
   };
 
@@ -167,11 +185,17 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleCachePopularGames = () => {
+    // Cache featured & top 40 games in idle batches
+    const targets = allGames.filter((g) => g.featured || favorites.includes(g.id)).slice(0, 40);
+    preCacheGames(targets);
+  };
+
   const visibleGames = filteredGames.slice(0, visibleCount);
   const hasMore = visibleCount < filteredGames.length;
 
   return (
-    <div className="min-h-screen bg-[#080808] text-[#f4f4f5] flex flex-col font-sans">
+    <div className="min-h-screen bg-[#080808] text-[#f4f4f5] flex flex-col font-sans selection:bg-[#ff5500] selection:text-black">
       
       {/* Top Navigation Bar: Sleek Black and Orange */}
       <Navbar
@@ -192,6 +216,9 @@ export default function App() {
         onTriggerPanic={triggerPanic}
         totalGames={allGames.length}
         onGoHome={handleGoHome}
+        cachedCount={cachedIds.size}
+        onCacheAllGames={handleCachePopularGames}
+        isPreCaching={isPreCaching}
       />
 
       {/* Main Container */}
@@ -206,7 +233,7 @@ export default function App() {
           />
         )}
 
-        {/* Categories & Sorting (No weird buttons, only RawGitHack) */}
+        {/* Categories & Sorting */}
         <CategoryFilter
           selectedCategory={selectedCategory}
           onSelectCategory={(cat) => {
@@ -257,13 +284,13 @@ export default function App() {
                 setSelectedCategory('All');
                 setShowFavoritesOnly(false);
               }}
-              className="px-5 py-2.5 bg-[#ff5500] hover:bg-[#e64d00] text-black text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer"
+              className="px-5 py-2.5 bg-[#ff5500] hover:bg-[#e64d00] text-black text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer font-heading"
             >
               View All {allGames.length} Games
             </button>
           </div>
         ) : (
-          /* Game Grid */
+          /* Game Grid with GPU transforms and React.memo cards for 0 lag */
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
             {visibleGames.map((game) => (
               <GameCard
@@ -273,6 +300,7 @@ export default function App() {
                 onToggleFavorite={handleToggleFavorite}
                 isFavorite={favorites.includes(game.id)}
                 onAboutBlank={handleAboutBlank}
+                isCached={isGameCached(game.id)}
               />
             ))}
           </div>
@@ -283,7 +311,7 @@ export default function App() {
           <div className="mt-10 text-center">
             <button
               onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
-              className="inline-flex items-center gap-2 px-8 py-3 bg-[#111114] hover:bg-[#18181c] text-white hover:text-[#ff5500] font-bold text-xs sm:text-sm rounded-xl border border-[#242428] hover:border-[#ff5500]/40 transition-all cursor-pointer font-heading"
+              className="inline-flex items-center gap-2 px-8 py-3 bg-[#111114] hover:bg-[#18181c] text-white hover:text-[#ff5500] font-bold text-xs sm:text-sm rounded-xl border border-[#242428] hover:border-[#ff5500]/40 transition-all cursor-pointer font-heading shadow-lg"
             >
               <span>Load More Games</span>
               <span className="text-xs text-zinc-400">
@@ -319,7 +347,7 @@ export default function App() {
                 </span>
               </button>
               <p className="text-xs text-zinc-400 max-w-sm leading-relaxed">
-                High-performance unblocked gaming portal featuring 840+ instant HTML5 titles.
+                High-performance unblocked gaming portal featuring 840+ instant HTML5 titles with full offline support.
               </p>
               <div className="flex items-center gap-2 text-[11px] text-zinc-400 pt-1">
                 <span className="flex items-center gap-1 text-[#ff5500] font-semibold">
@@ -327,7 +355,7 @@ export default function App() {
                 </span>
                 <span>·</span>
                 <span className="flex items-center gap-1 text-zinc-300 font-semibold">
-                  <Layers className="w-3.5 h-3.5 text-[#ff5500]" /> Instant Play
+                  <Layers className="w-3.5 h-3.5 text-[#ff5500]" /> Offline Ready
                 </span>
                 <span>·</span>
                 <span>840+ Games</span>
@@ -363,12 +391,18 @@ export default function App() {
               </ul>
             </div>
 
-            {/* Stealth & Utilities */}
+            {/* Offline & Stealth */}
             <div className="space-y-2">
               <div className="text-xs font-bold uppercase tracking-wider text-zinc-300">
-                Stealth & Protection
+                Offline & Stealth
               </div>
               <ul className="space-y-1.5 text-xs text-zinc-400">
+                <li>
+                  <button onClick={handleCachePopularGames} className="hover:text-[#ff5500] transition-colors cursor-pointer flex items-center gap-1.5">
+                    <DownloadCloud className="w-3.5 h-3.5 text-[#ff5500]" />
+                    <span>Cache Top Games for Offline</span>
+                  </button>
+                </li>
                 <li>
                   <button onClick={() => applyPreset('classroom')} className="hover:text-[#ff5500] transition-colors cursor-pointer">
                     Disguise as Classroom
@@ -394,11 +428,19 @@ export default function App() {
               &copy; {new Date().getFullYear()} Melted. Archive based on gn-math.
             </div>
             <div>
-              Fast, instant in-browser gaming
+              Fast, instant offline & in-browser gaming
             </div>
           </div>
         </div>
       </footer>
+
+      {/* Floating Offline Status & Pre-cache Progress Indicator */}
+      <OfflineIndicator
+        cachedCount={cachedIds.size}
+        isPreCaching={isPreCaching}
+        cacheProgress={cacheProgress}
+        onCancelPreCache={cancelPreCaching}
+      />
 
       {/* Game Player Modal */}
       {activeGame && (

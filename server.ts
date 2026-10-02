@@ -83,10 +83,11 @@ app.get('/api/raw/:filename', async (req, res) => {
 
     const html = await response.text();
 
-    // Serve with permissive headers so games run without any iframe blocking
+    // Serve with permissive headers and long-term caching for offline speed
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('X-Frame-Options', 'ALLOWALL');
+    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
     res.send(html);
   } catch (error: any) {
     console.error(`Error loading game ${filename}:`, error);

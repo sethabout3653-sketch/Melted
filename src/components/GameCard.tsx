@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Heart, ExternalLink, Flame, Gamepad2 } from 'lucide-react';
+import { Play, Heart, ExternalLink, Flame, Gamepad2, Check } from 'lucide-react';
 import { GameItem } from '../types/game';
 
 interface GameCardProps {
@@ -8,14 +8,16 @@ interface GameCardProps {
   onToggleFavorite: (id: number) => void;
   isFavorite: boolean;
   onAboutBlank: (game: GameItem) => void;
+  isCached?: boolean;
 }
 
-export const GameCard: React.FC<GameCardProps> = ({
+export const GameCard: React.FC<GameCardProps> = React.memo(({
   game,
   onPlay,
   onToggleFavorite,
   isFavorite,
   onAboutBlank,
+  isCached = false,
 }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
@@ -23,18 +25,18 @@ export const GameCard: React.FC<GameCardProps> = ({
   const ratingNumber = (4.7 + ((game.id * 13) % 30) / 100).toFixed(1);
 
   return (
-    <div className="group relative bg-[#0e0e10] hover:bg-[#141416] border border-[#202024] hover:border-[#ff5500]/50 rounded-2xl p-4 transition-all duration-200 hover:shadow-xl hover:shadow-[#ff5500]/5 flex flex-col justify-between">
+    <div className="group relative bg-[#0e0e10] hover:bg-[#131316] border border-[#202024] hover:border-[#ff5500]/40 rounded-2xl p-4 transition-all duration-200 hover:shadow-xl hover:shadow-[#ff5500]/5 flex flex-col justify-between transform-gpu">
       
       {/* Top Section */}
       <div>
         {/* Large Thumbnail with 16px radius */}
         <div 
           onClick={() => onPlay(game)}
-          className="relative w-full aspect-[16/10] rounded-[16px] overflow-hidden bg-[#18181b] cursor-pointer mb-3.5 border border-[#26262a]"
+          className="relative w-full aspect-[16/10] rounded-[16px] overflow-hidden bg-[#161619] cursor-pointer mb-3.5 border border-[#26262a]"
         >
           {/* Skeleton placeholder while loading */}
           {!imageLoaded && !imageError && (
-            <div className="absolute inset-0 bg-[#161618] animate-pulse" />
+            <div className="absolute inset-0 bg-[#161619] animate-pulse" />
           )}
 
           {/* Fallback styling container if image fails to load */}
@@ -47,7 +49,7 @@ export const GameCard: React.FC<GameCardProps> = ({
                 {game.name}
               </span>
               <span className="text-[10px] text-zinc-400 mt-0.5">
-                gn-math Arcade
+                HTML5 Arcade
               </span>
             </div>
           ) : (
@@ -56,17 +58,18 @@ export const GameCard: React.FC<GameCardProps> = ({
               alt={game.name}
               referrerPolicy="no-referrer"
               loading="lazy"
+              decoding="async"
               onLoad={() => setImageLoaded(true)}
               onError={() => setImageError(true)}
-              className={`w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105 ${
+              className={`w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105 will-change-transform ${
                 imageLoaded ? 'opacity-100' : 'opacity-0'
               }`}
             />
           )}
 
           {/* Subtle dark gradient scrim at bottom */}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-3">
-            <span className="text-[11px] font-bold text-white drop-shadow-md flex items-center gap-1">
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-3">
+            <span className="text-[11px] font-bold text-white drop-shadow-md flex items-center gap-1 font-heading">
               <Play className="w-3 h-3 fill-[#ff5500] text-[#ff5500]" /> Launch Game
             </span>
           </div>
@@ -89,7 +92,7 @@ export const GameCard: React.FC<GameCardProps> = ({
 
           {/* Featured badge */}
           {game.featured && (
-            <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full bg-[#ff5500] text-black text-[9px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1">
+            <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full bg-[#ff5500] text-black text-[9px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1 font-heading">
               <Flame className="w-2.5 h-2.5 fill-black" /> Hot
             </div>
           )}
@@ -106,7 +109,7 @@ export const GameCard: React.FC<GameCardProps> = ({
           </h3>
 
           <p className="text-xs text-zinc-400 line-clamp-1 font-normal">
-            {game.author ? `By ${game.author}` : 'gn-math HTML5 Library'}
+            {game.author ? `By ${game.author}` : 'HTML5 Game Archive'}
           </p>
 
           {/* Metadata Pills: Clean and restrained */}
@@ -119,9 +122,15 @@ export const GameCard: React.FC<GameCardProps> = ({
               {game.category.split(' ')[0]}
             </span>
 
-            <span className="inline-flex items-center bg-[#ff5500]/10 border border-[#ff5500]/25 rounded-full px-2 py-0.5 text-[10px] font-bold text-[#ff6611]">
-              HTML5
-            </span>
+            {isCached ? (
+              <span className="inline-flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/30 rounded-full px-2 py-0.5 text-[10px] font-bold text-emerald-400">
+                <Check className="w-2.5 h-2.5 stroke-[3]" /> Offline
+              </span>
+            ) : (
+              <span className="inline-flex items-center bg-[#ff5500]/10 border border-[#ff5500]/25 rounded-full px-2 py-0.5 text-[10px] font-bold text-[#ff6611]">
+                HTML5
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -130,7 +139,7 @@ export const GameCard: React.FC<GameCardProps> = ({
       <div className="mt-4 pt-3 border-t border-[#1c1c20] flex items-center justify-between gap-2">
         <button
           onClick={() => onPlay(game)}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-bold text-black bg-[#ff5500] hover:bg-[#e64d00] active:scale-[0.98] rounded-xl transition-all shadow-md shadow-[#ff5500]/20 cursor-pointer"
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-bold text-black bg-[#ff5500] hover:bg-[#e64d00] active:scale-[0.98] rounded-xl transition-all shadow-md shadow-[#ff5500]/20 cursor-pointer font-heading"
         >
           <Play className="w-3.5 h-3.5 fill-black" />
           <span>Play</span>
@@ -147,4 +156,4 @@ export const GameCard: React.FC<GameCardProps> = ({
 
     </div>
   );
-};
+});
