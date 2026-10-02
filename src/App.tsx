@@ -34,7 +34,6 @@ export default function App() {
   const [sortBy, setSortBy] = useState<'popular' | 'alpha-asc' | 'alpha-desc' | 'random'>('popular');
   const [favorites, setFavorites] = useState<number[]>(() => getFavorites());
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
-  const [activeGame, setActiveGame] = useState<GameItem | null>(null);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   // Tab cloaking & Panic key system
@@ -75,6 +74,34 @@ export default function App() {
   const allGames = useMemo(() => {
     return getAllGames();
   }, []);
+
+  // Restore game from URL on refresh (works even if refreshed completely offline!)
+  const [activeGame, setActiveGame] = useState<GameItem | null>(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const gameIdStr = params.get('game');
+      if (gameIdStr) {
+        const id = parseInt(gameIdStr, 10);
+        const all = getAllGames();
+        return all.find((g) => g.id === id) || null;
+      }
+    } catch {}
+    return null;
+  });
+
+  // Keep URL in sync with active game so page reload restores the exact session
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      if (activeGame) {
+        url.searchParams.set('game', String(activeGame.id));
+        window.history.replaceState({}, '', url.toString());
+      } else {
+        url.searchParams.delete('game');
+        window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
+      }
+    } catch {}
+  }, [activeGame]);
 
   // Featured games for spotlight
   const featuredGames = useMemo(() => {
