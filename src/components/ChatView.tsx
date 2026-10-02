@@ -20,6 +20,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useWebSocketDatabase } from '../services/wsDatabaseClient';
+import { useWebRTC } from '../services/useWebRTC';
 
 export const ChatView: React.FC = () => {
   const [activeChannel, setActiveChannel] = useState<'text-general' | 'voice-general' | 'video-general'>('text-general');
@@ -44,6 +45,8 @@ export const ChatView: React.FC = () => {
     messages,
     updateUser,
     insertMessage,
+    sendRtcSignal,
+    registerRtcHandlers,
   } = useWebSocketDatabase(currentUser);
 
   // Voice & Video States
@@ -58,7 +61,8 @@ export const ChatView: React.FC = () => {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
 
-  // Media Stream State (so React reliably mounts it to <video>)
+  // Local Reactive Media Streams
+  const [localAudioStream, setLocalAudioStream] = useState<MediaStream | null>(null);
   const [activeVideoStream, setActiveVideoStream] = useState<MediaStream | null>(null);
 
   // Media Stream refs
@@ -69,6 +73,27 @@ export const ChatView: React.FC = () => {
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Real connected peers in channels
+  const voiceUsers = users.filter((u) => u.current_channel === 'voice-general' && u.id !== currentUser.id);
+  const videoUsers = users.filter((u) => u.current_channel === 'video-general' && u.id !== currentUser.id);
+
+  // WebRTC Mesh Manager for real peer-to-peer audio & video transmission
+  const activePeers = activeChannel === 'voice-general' 
+    ? voiceUsers 
+    : activeChannel === 'video-general' 
+    ? videoUsers 
+    : [];
+
+  const { remoteStreams, remoteSpeaking } = useWebRTC({
+    currentUserId: currentUser.id,
+    activeChannel,
+    localAudioStream,
+    localVideoStream: activeVideoStream,
+    peers: activePeers,
+    sendRtcSignal,
+    registerRtcHandlers,
+  });
 
   // Video Ref Callback: Guarantees video stream attaches when the <video> DOM node mounts
   const setLocalVideoRef = useCallback((videoElement: HTMLVideoElement | null) => {
@@ -105,14 +130,15 @@ export const ChatView: React.FC = () => {
     }
   }, [messages, activeChannel]);
 
-  // 1. Microphone capture & volume analyzer (Independent of channel)
+  // 1. Microphone capture & volume analyzer
   const initAudioProcessing = async (): Promise<boolean> => {
     try {
       if (!navigator.mediaDevices?.getUserMedia) return true;
-      if (micStreamRef.current) return true; // already running
+      if (micStreamRef.current) return true;
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       micStreamRef.current = stream;
+      setLocalAudioStream(stream);
 
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       const audioCtx = new AudioCtx();
@@ -159,6 +185,7 @@ export const ChatView: React.FC = () => {
       micStreamRef.current.getTracks().forEach((track) => track.stop());
       micStreamRef.current = null;
     }
+    setLocalAudioStream(null);
     if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
       audioContextRef.current.close().catch(() => {});
       audioContextRef.current = null;
@@ -200,7 +227,7 @@ export const ChatView: React.FC = () => {
     setActiveVideoStream(null);
   };
 
-  // 2. Camera capture for Video Channel (strictly separates from Voice Channel)
+  // 2. Camera capture for Video Channel
   const startVideo = async () => {
     if (isInVoice) {
       stopAudioProcessing();
@@ -220,14 +247,12 @@ export const ChatView: React.FC = () => {
         throw new Error('Camera is not supported on this browser.');
       }
 
-      // Try basic standard video constraints first to avoid constraint rejection
       let camStream: MediaStream;
       try {
         camStream = await navigator.mediaDevices.getUserMedia({
           video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
         });
       } catch {
-        // Fallback to minimal video constraint
         camStream = await navigator.mediaDevices.getUserMedia({ video: true });
       }
 
@@ -268,13 +293,11 @@ export const ChatView: React.FC = () => {
 
   const toggleCamera = async () => {
     if (isVideoEnabled && cameraStreamRef.current) {
-      // Turn off
       cameraStreamRef.current.getVideoTracks().forEach((track) => {
         track.enabled = false;
       });
       setIsVideoEnabled(false);
     } else if (cameraStreamRef.current) {
-      // Re-enable existing track
       cameraStreamRef.current.getVideoTracks().forEach((track) => {
         track.enabled = true;
       });
@@ -283,7 +306,6 @@ export const ChatView: React.FC = () => {
         localVideoRef.current.play().catch(() => {});
       }
     } else {
-      // Request camera fresh
       await startVideo();
     }
   };
@@ -358,10 +380,6 @@ export const ChatView: React.FC = () => {
     insertMessage(inputText, 'text-general');
     setInputText('');
   };
-
-  // ONLY real connected other users from WebSocket database (ZERO built-in users)
-  const voiceUsers = users.filter((u) => u.current_channel === 'voice-general' && u.id !== currentUser.id);
-  const videoUsers = users.filter((u) => u.current_channel === 'video-general' && u.id !== currentUser.id);
 
   return (
     <div className="flex h-[calc(100vh-4rem)] bg-[#080808] text-[#e4e4e7] overflow-hidden select-none font-sans">
@@ -446,20 +464,23 @@ export const ChatView: React.FC = () => {
                   </div>
                 )}
 
-                {voiceUsers.map((u) => (
-                  <div key={u.id} className="flex items-center gap-2 py-1 px-1.5 rounded text-xs text-zinc-300">
-                    <div 
-                      className={`w-5 h-5 rounded-full text-black font-extrabold text-[10px] flex items-center justify-center shrink-0 ${
-                        u.is_speaking ? 'ring-2 ring-[#ff5500] shadow-[0_0_10px_#ff5500]' : ''
-                      }`}
-                      style={{ backgroundColor: u.avatar_color }}
-                    >
-                      {u.username.slice(0, 2).toUpperCase()}
+                {voiceUsers.map((u) => {
+                  const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
+                  return (
+                    <div key={u.id} className="flex items-center gap-2 py-1 px-1.5 rounded text-xs text-zinc-300">
+                      <div 
+                        className={`w-5 h-5 rounded-full text-black font-extrabold text-[10px] flex items-center justify-center shrink-0 ${
+                          isPeerSpeaking ? 'ring-2 ring-[#ff5500] shadow-[0_0_10px_#ff5500]' : ''
+                        }`}
+                        style={{ backgroundColor: u.avatar_color }}
+                      >
+                        {u.username.slice(0, 2).toUpperCase()}
+                      </div>
+                      <span className="truncate">{u.username}</span>
+                      {u.is_muted && <MicOff className="w-3 h-3 text-zinc-500 ml-auto shrink-0" />}
                     </div>
-                    <span className="truncate">{u.username}</span>
-                    {u.is_muted && <MicOff className="w-3 h-3 text-zinc-500 ml-auto shrink-0" />}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -512,20 +533,23 @@ export const ChatView: React.FC = () => {
                   </div>
                 )}
 
-                {videoUsers.map((u) => (
-                  <div key={u.id} className="flex items-center gap-2 py-1 px-1.5 rounded text-xs text-zinc-300">
-                    <div 
-                      className={`w-5 h-5 rounded-full text-black font-extrabold text-[10px] flex items-center justify-center shrink-0 ${
-                        u.is_speaking ? 'ring-2 ring-[#ff5500]' : ''
-                      }`}
-                      style={{ backgroundColor: u.avatar_color }}
-                    >
-                      {u.username.slice(0, 2).toUpperCase()}
+                {videoUsers.map((u) => {
+                  const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
+                  return (
+                    <div key={u.id} className="flex items-center gap-2 py-1 px-1.5 rounded text-xs text-zinc-300">
+                      <div 
+                        className={`w-5 h-5 rounded-full text-black font-extrabold text-[10px] flex items-center justify-center shrink-0 ${
+                          isPeerSpeaking ? 'ring-2 ring-[#ff5500]' : ''
+                        }`}
+                        style={{ backgroundColor: u.avatar_color }}
+                      >
+                        {u.username.slice(0, 2).toUpperCase()}
+                      </div>
+                      <span className="truncate">{u.username}</span>
+                      <Video className="w-3 h-3 text-zinc-500 ml-auto shrink-0" />
                     </div>
-                    <span className="truncate">{u.username}</span>
-                    <Video className="w-3 h-3 text-[#ff5500] ml-auto shrink-0" />
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -735,7 +759,7 @@ export const ChatView: React.FC = () => {
           </div>
         )}
 
-        {/* CHANNEL 2: VOICE GENERAL (Multi-User Grid, 0 Built-in Users) */}
+        {/* CHANNEL 2: VOICE GENERAL (With Real WebRTC Peer Audio) */}
         {activeChannel === 'voice-general' && (
           <div className="flex-1 flex flex-col p-6 bg-[#080808] overflow-y-auto justify-between">
             
@@ -766,32 +790,50 @@ export const ChatView: React.FC = () => {
                   </div>
                 )}
 
-                {/* Other Real Users Connected via WebSockets */}
-                {voiceUsers.map((u) => (
-                  <div key={u.id} className="relative aspect-video sm:aspect-square max-h-56 bg-[#121215] rounded-3xl border border-[#26262a] flex flex-col items-center justify-center p-4 transition-all">
-                    <div className="relative mb-3">
-                      <div 
-                        className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl text-black font-black text-2xl flex items-center justify-center shadow-lg transition-all ${
-                          u.is_speaking ? 'ring-4 ring-[#ff5500] shadow-[0_0_25px_#ff5500]/60' : ''
-                        }`}
-                        style={{ backgroundColor: u.avatar_color }}
-                      >
-                        {u.username.slice(0, 2).toUpperCase()}
-                      </div>
-                      {u.is_muted && (
-                        <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#18181b] border-2 border-zinc-600 flex items-center justify-center text-zinc-400">
-                          <MicOff className="w-3.5 h-3.5" />
-                        </div>
+                {/* Other Real Users Connected via WebSockets + WebRTC Audio Stream */}
+                {voiceUsers.map((u) => {
+                  const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
+                  return (
+                    <div key={u.id} className="relative aspect-video sm:aspect-square max-h-56 bg-[#121215] rounded-3xl border border-[#26262a] flex flex-col items-center justify-center p-4 transition-all">
+                      
+                      {/* WebRTC Live Audio Element: Plays peer's real microphone audio */}
+                      {remoteStreams[u.id] && (
+                        <audio
+                          autoPlay
+                          playsInline
+                          ref={(el) => {
+                            if (el && remoteStreams[u.id]) {
+                              el.srcObject = remoteStreams[u.id];
+                              el.play().catch(() => {});
+                            }
+                          }}
+                        />
                       )}
+
+                      <div className="relative mb-3">
+                        <div 
+                          className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl text-black font-black text-2xl flex items-center justify-center shadow-lg transition-all ${
+                            isPeerSpeaking ? 'ring-4 ring-[#ff5500] shadow-[0_0_25px_#ff5500]/60' : ''
+                          }`}
+                          style={{ backgroundColor: u.avatar_color }}
+                        >
+                          {u.username.slice(0, 2).toUpperCase()}
+                        </div>
+                        {u.is_muted && (
+                          <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#18181b] border-2 border-zinc-600 flex items-center justify-center text-zinc-400">
+                            <MicOff className="w-3.5 h-3.5" />
+                          </div>
+                        )}
+                      </div>
+                      <span className="text-sm font-bold text-white font-heading truncate max-w-[140px]">
+                        {u.username}
+                      </span>
+                      <span className="text-[11px] text-zinc-400 mt-0.5">
+                        {isPeerSpeaking ? 'Speaking' : u.is_muted ? 'Muted' : 'Listening'}
+                      </span>
                     </div>
-                    <span className="text-sm font-bold text-white font-heading truncate max-w-[140px]">
-                      {u.username}
-                    </span>
-                    <span className="text-[11px] text-zinc-400 mt-0.5">
-                      {u.is_speaking ? 'Speaking' : u.is_muted ? 'Muted' : 'Listening'}
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {/* Clean prompt if nobody else is in voice */}
                 {isInVoice && voiceUsers.length === 0 && (
@@ -856,7 +898,7 @@ export const ChatView: React.FC = () => {
           </div>
         )}
 
-        {/* CHANNEL 3: VIDEO GENERAL (Human-Designed Camera Loading & Real Video Stream) */}
+        {/* CHANNEL 3: VIDEO GENERAL (With Real WebRTC Live Video & Audio) */}
         {activeChannel === 'video-general' && (
           <div className="flex-1 flex flex-col p-6 bg-[#080808] overflow-y-auto justify-between">
             
@@ -868,7 +910,7 @@ export const ChatView: React.FC = () => {
                 {isInVideo && (
                   <div className="relative aspect-video bg-[#121215] rounded-3xl border border-[#26262a] overflow-hidden shadow-2xl flex items-center justify-center group">
                     
-                    {/* 1. Camera Loading Screen (Clean, Human-Designed) */}
+                    {/* Camera Loading Screen */}
                     {isCameraStarting && (
                       <div className="absolute inset-0 bg-[#0e0e11] z-20 flex flex-col items-center justify-center space-y-3">
                         <div className="w-8 h-8 border-2 border-[#ff5500] border-t-transparent rounded-full animate-spin" />
@@ -883,7 +925,7 @@ export const ChatView: React.FC = () => {
                       </div>
                     )}
 
-                    {/* 2. Camera Notice Banner (Unobtrusive) */}
+                    {/* Camera Notice Banner */}
                     {cameraError && !isCameraStarting && (
                       <div className="absolute top-3 left-3 right-3 bg-[#141418]/90 backdrop-blur-md border border-[#26262a] rounded-xl px-3 py-1.5 flex items-center justify-between text-[11px] text-zinc-300 z-20 shadow-lg">
                         <div className="flex items-center gap-1.5 truncate">
@@ -900,7 +942,7 @@ export const ChatView: React.FC = () => {
                       </div>
                     )}
 
-                    {/* 3. Live Video Element */}
+                    {/* Local Live Video Element */}
                     <video
                       ref={setLocalVideoRef}
                       autoPlay
@@ -909,7 +951,7 @@ export const ChatView: React.FC = () => {
                       className={`w-full h-full object-cover ${(!isVideoEnabled && !isScreenSharing) || isCameraStarting ? 'hidden' : 'block'}`}
                     />
 
-                    {/* 4. Avatar Tile (When Camera is Off or Unavailable) */}
+                    {/* Local Avatar Tile */}
                     {!isVideoEnabled && !isScreenSharing && !isCameraStarting && (
                       <div className="flex flex-col items-center justify-center">
                         <div className={`w-20 h-20 rounded-2xl bg-[#ff5500] text-black font-black text-2xl flex items-center justify-center shadow-lg shadow-[#ff5500]/25 transition-all ${
@@ -935,27 +977,72 @@ export const ChatView: React.FC = () => {
                   </div>
                 )}
 
-                {/* Other Real Users Connected via WebSockets */}
-                {videoUsers.map((u) => (
-                  <div key={u.id} className="relative aspect-video bg-[#121215] rounded-3xl border border-[#26262a] overflow-hidden shadow-2xl flex items-center justify-center">
-                    <div className="flex flex-col items-center justify-center">
-                      <div 
-                        className={`w-20 h-20 rounded-2xl text-black font-black text-2xl flex items-center justify-center shadow-lg ${
-                          u.is_speaking ? 'ring-4 ring-[#ff5500]' : ''
-                        }`}
-                        style={{ backgroundColor: u.avatar_color }}
-                      >
-                        {u.username.slice(0, 2).toUpperCase()}
-                      </div>
-                      <span className="text-xs text-zinc-400 mt-2">Live Video</span>
-                    </div>
+                {/* Other Real Users: Real WebRTC Video Feed & Audio */}
+                {videoUsers.map((u) => {
+                  const peerStream = remoteStreams[u.id];
+                  const hasRemoteVideo = peerStream && peerStream.getVideoTracks().some((t) => t.enabled && t.readyState === 'live');
+                  const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
 
-                    <div className="absolute bottom-3 left-3 bg-black/75 backdrop-blur-md px-3 py-1 rounded-xl text-xs font-bold text-white border border-white/10 flex items-center gap-2">
-                      <span>{u.username}</span>
-                      <Video className="w-3.5 h-3.5 text-[#ff5500]" />
+                  return (
+                    <div key={u.id} className="relative aspect-video bg-[#121215] rounded-3xl border border-[#26262a] overflow-hidden shadow-2xl flex items-center justify-center">
+                      
+                      {/* WebRTC Live Audio for peer */}
+                      {peerStream && (
+                        <audio
+                          autoPlay
+                          playsInline
+                          ref={(el) => {
+                            if (el && peerStream) {
+                              el.srcObject = peerStream;
+                              el.play().catch(() => {});
+                            }
+                          }}
+                        />
+                      )}
+
+                      {/* WebRTC Live Video Stream */}
+                      {hasRemoteVideo ? (
+                        <video
+                          autoPlay
+                          playsInline
+                          ref={(el) => {
+                            if (el && peerStream) {
+                              el.srcObject = peerStream;
+                              el.play().catch(() => {});
+                            }
+                          }}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center">
+                          <div 
+                            className={`w-20 h-20 rounded-2xl text-black font-black text-2xl flex items-center justify-center shadow-lg transition-all ${
+                              isPeerSpeaking ? 'ring-4 ring-[#ff5500] shadow-[0_0_20px_#ff5500]' : ''
+                            }`}
+                            style={{ backgroundColor: u.avatar_color }}
+                          >
+                            {u.username.slice(0, 2).toUpperCase()}
+                          </div>
+                          <span className="text-xs text-zinc-400 mt-2">
+                            {u.has_video ? 'Connecting feed...' : 'Avatar Mode'}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Overlay Label */}
+                      <div className="absolute bottom-3 left-3 bg-black/75 backdrop-blur-md px-3 py-1 rounded-xl text-xs font-bold text-white border border-white/10 flex items-center gap-2">
+                        <span>{u.username}</span>
+                        {hasRemoteVideo ? (
+                          <Video className="w-3.5 h-3.5 text-[#ff5500]" />
+                        ) : u.is_muted ? (
+                          <MicOff className="w-3.5 h-3.5 text-zinc-500" />
+                        ) : (
+                          <Volume2 className="w-3.5 h-3.5 text-[#ff5500]" />
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
 
                 {/* Clean prompt if only 1 user */}
                 {isInVideo && videoUsers.length === 0 && (

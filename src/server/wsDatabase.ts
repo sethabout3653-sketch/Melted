@@ -25,8 +25,7 @@ export interface DbMessage {
   created_at: number;
 }
 
-// In-Memory Relational Tables (PostgreSQL-like Structure over WebSockets)
-// STRICTLY REAL CONNECTED USERS ONLY - ZERO BUILT-IN USERS
+// In-Memory Relational Tables over WebSockets (0 built-in users)
 class WebSocketDatabase {
   public users: Map<string, DbUser> = new Map();
   public messages: DbMessage[] = [];
@@ -36,7 +35,6 @@ class WebSocketDatabase {
     { id: 'video-general', name: 'general', type: 'video' },
   ];
 
-  // SQL-like operations
   public selectUsers(where?: Partial<DbUser>): DbUser[] {
     const list = Array.from(this.users.values());
     if (!where) return list;
@@ -68,6 +66,7 @@ class WebSocketDatabase {
 export function initWebSocketDatabase(server: Server) {
   const wss = new WebSocketServer({ server, path: '/ws-db' });
   const db = new WebSocketDatabase();
+  const userIdToSocket = new Map<string, WebSocket>();
 
   function broadcastTable(tableName: string, data: any) {
     const payload = JSON.stringify({
@@ -84,10 +83,25 @@ export function initWebSocketDatabase(server: Server) {
     });
   }
 
+  function broadcastMediaPresence(type: 'USER_JOINED_MEDIA' | 'USER_LEFT_MEDIA', userId: string, channel: string) {
+    const payload = JSON.stringify({
+      type,
+      userId,
+      channel,
+      timestamp: Date.now(),
+    });
+
+    wss.clients.forEach((client) => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(payload);
+      }
+    });
+  }
+
   wss.on('connection', (ws) => {
     let boundUserId: string | null = null;
 
-    // Send initial snapshot on connect
+    // Send initial snapshot
     ws.send(JSON.stringify({
       type: 'DB_INIT',
       tables: {
@@ -102,7 +116,6 @@ export function initWebSocketDatabase(server: Server) {
         const msg = JSON.parse(raw.toString());
 
         switch (msg.type) {
-          // SQL SELECT / QUERY
           case 'SQL_QUERY': {
             if (msg.table === 'users') {
               ws.send(JSON.stringify({
@@ -120,7 +133,6 @@ export function initWebSocketDatabase(server: Server) {
             break;
           }
 
-          // SQL INSERT (message)
           case 'SQL_INSERT': {
             if (msg.table === 'messages') {
               const newMsg: DbMessage = {
@@ -139,35 +151,65 @@ export function initWebSocketDatabase(server: Server) {
             break;
           }
 
-          // SQL UPDATE (user status)
           case 'SQL_UPDATE': {
             if (msg.table === 'users') {
               const user = db.users.get(msg.id);
               if (user) {
+                const oldChannel = user.current_channel;
                 Object.assign(user, msg.set, { updated_at: Date.now() });
                 db.users.set(msg.id, user);
                 broadcastTable('users', db.selectUsers());
+
+                // Detect channel media transitions
+                if (msg.set.current_channel && msg.set.current_channel !== oldChannel) {
+                  if (msg.set.current_channel === 'voice-general' || msg.set.current_channel === 'video-general') {
+                    broadcastMediaPresence('USER_JOINED_MEDIA', msg.id, msg.set.current_channel);
+                  }
+                  if (oldChannel === 'voice-general' || oldChannel === 'video-general') {
+                    broadcastMediaPresence('USER_LEFT_MEDIA', msg.id, oldChannel);
+                  }
+                }
               }
             }
             break;
           }
 
-          // REGISTER PRESENCE (Real connecting user only)
           case 'REGISTER_USER': {
-            boundUserId = msg.user.id;
-            db.upsertUser({
-              id: msg.user.id,
-              username: msg.user.username,
-              avatar_color: msg.user.avatar_color || '#ff5500',
-              current_channel: msg.user.current_channel || 'text-general',
-              is_speaking: Boolean(msg.user.is_speaking),
-              is_muted: Boolean(msg.user.is_muted),
-              is_deafened: Boolean(msg.user.is_deafened),
-              has_video: Boolean(msg.user.has_video),
-              is_screen_sharing: Boolean(msg.user.is_screen_sharing),
-              updated_at: Date.now(),
-            });
-            broadcastTable('users', db.selectUsers());
+            if (msg.user && typeof msg.user.id === 'string') {
+              const uId: string = msg.user.id;
+              boundUserId = uId;
+              userIdToSocket.set(uId, ws);
+
+              db.upsertUser({
+                id: uId,
+                username: msg.user.username,
+                avatar_color: msg.user.avatar_color || '#ff5500',
+                current_channel: msg.user.current_channel || 'text-general',
+                is_speaking: Boolean(msg.user.is_speaking),
+                is_muted: Boolean(msg.user.is_muted),
+                is_deafened: Boolean(msg.user.is_deafened),
+                has_video: Boolean(msg.user.has_video),
+                is_screen_sharing: Boolean(msg.user.is_screen_sharing),
+                updated_at: Date.now(),
+              });
+              broadcastTable('users', db.selectUsers());
+            }
+            break;
+          }
+
+          // Direct WebRTC Signaling Relay
+          case 'RTC_SIGNAL': {
+            if (msg.targetUserId) {
+              const targetWs = userIdToSocket.get(msg.targetUserId);
+              if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+                targetWs.send(JSON.stringify({
+                  type: 'RTC_SIGNAL',
+                  fromUserId: msg.fromUserId,
+                  targetUserId: msg.targetUserId,
+                  signal: msg.signal,
+                }));
+              }
+            }
             break;
           }
 
@@ -181,11 +223,16 @@ export function initWebSocketDatabase(server: Server) {
 
     ws.on('close', () => {
       if (boundUserId) {
+        const user = db.users.get(boundUserId);
+        if (user && (user.current_channel === 'voice-general' || user.current_channel === 'video-general')) {
+          broadcastMediaPresence('USER_LEFT_MEDIA', boundUserId, user.current_channel);
+        }
+        userIdToSocket.delete(boundUserId);
         db.deleteUser(boundUserId);
         broadcastTable('users', db.selectUsers());
       }
     });
   });
 
-  console.log(`🔌 WebSocket Database mounted at /ws-db (0 built-in users)`);
+  console.log(`🔌 WebSocket Database mounted at /ws-db with WebRTC Signaling`);
 }
