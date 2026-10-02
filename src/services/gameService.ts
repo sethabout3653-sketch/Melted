@@ -1,7 +1,6 @@
 import rawGamesData from '../data/gnMathGames.json';
 import { RawGame, GameItem, GameCategory } from '../types/game';
 
-// Strictly and exclusively powered by RawGitHack
 export const RAWGITHACK_BASE = 'https://raw.githack.com/freebuisness/html/main';
 export const COVER_BASE = 'https://cdn.jsdelivr.net/gh/freebuisness/covers@main';
 
@@ -10,12 +9,21 @@ export function resolveCoverUrl(rawCover?: string): string {
   return rawCover.replace('{COVER_URL}', COVER_BASE);
 }
 
+// Seamless streaming endpoint via backend proxy with RawGitHack engine
 export function resolveGameUrl(rawUrl: string): string {
   if (!rawUrl) return '';
   if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
     return rawUrl;
   }
-  // Exclusively RawGitHack
+  const filename = rawUrl.replace('{HTML_URL}/', '');
+  return `/api/raw/${filename}`;
+}
+
+export function getDirectRawGitHackUrl(rawUrl: string): string {
+  if (!rawUrl) return '';
+  if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+    return rawUrl;
+  }
   return rawUrl.replace('{HTML_URL}', RAWGITHACK_BASE);
 }
 
@@ -200,7 +208,6 @@ export function getAllGames(): GameItem[] {
   });
 }
 
-// Local storage key for favorites
 const FAVORITES_KEY = 'melted_favorite_ids';
 const RECENT_KEY = 'melted_recent_ids';
 

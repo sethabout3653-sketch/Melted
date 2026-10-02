@@ -41,6 +41,20 @@ export default function App() {
     presets,
   } = useCloak();
 
+  // 14-Minute Periodic HTTP Keep-Alive for Render
+  useEffect(() => {
+    const keepAlivePing = async () => {
+      try {
+        await fetch('/api/health');
+      } catch (err) {
+        // Silently catch network errors during keep-alive ping
+      }
+    };
+
+    const interval = setInterval(keepAlivePing, 14 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   // Load all 841 games from gn-math (Strictly RawGitHack)
   const allGames = useMemo(() => {
     return getAllGames();
