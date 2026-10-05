@@ -17,15 +17,15 @@ export function useGlobalChat() {
   });
 
   const chat = useWebSocketDatabase(currentUser);
-  const { messages, setUserCallHandler } = chat;
+  const { messages, setUserCallHandler, isConnected } = chat;
 
   const lastMessageId = useRef<string | null>(null);
 
   useEffect(() => {
     if (isConnected && currentUser) {
-      registerUser(currentUser);
+      chat.registerUser(currentUser);
     }
-  }, [isConnected, currentUser, registerUser]);
+  }, [isConnected, currentUser, chat]);
 
   useEffect(() => {
     setUserCallHandler((fromUserId, fromUserName, callType) => {

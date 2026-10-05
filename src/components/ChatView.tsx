@@ -126,11 +126,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const updateUserRef = useRef(updateUser);
+  updateUserRef.current = updateUser;
+
   // Voice Detection Logic: Visual indicators for active speaker
   useEffect(() => {
     if (!localAudioStream || isMuted) {
       setIsUserSpeaking(false);
-      updateUser({ is_speaking: false });
+      updateUserRef.current({ is_speaking: false });
       return;
     }
 
@@ -157,7 +160,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         if (speaking !== lastSpeakState) {
           lastSpeakState = speaking;
           setIsUserSpeaking(speaking);
-          updateUser({ is_speaking: speaking });
+          updateUserRef.current({ is_speaking: speaking });
         }
         
         animFrameRef.current = requestAnimationFrame(checkVolume);
@@ -171,7 +174,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [localAudioStream, isMuted, updateUser]);
+  }, [localAudioStream, isMuted]);
 
   // Handlers
   const startVoice = async () => {
@@ -194,6 +197,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     setLocalAudioStream(null);
     setIsInVoice(false);
     updateUser({ current_channel: 'text-general', is_speaking: false });
+    setActiveChannel('text-general');
   };
 
   const startVideo = async () => {
@@ -206,7 +210,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       });
       cameraStreamRef.current = stream;
       setActiveVideoStream(stream);
-      setLocalAudioStream(stream); // also use audio from camera
+      setLocalAudioStream(stream); 
       setIsInVideo(true);
       setIsVideoEnabled(true);
       updateUser({ 
@@ -227,10 +231,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       cameraStreamRef.current.getTracks().forEach(t => t.stop());
       cameraStreamRef.current = null;
     }
-    if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach(t => t.stop());
-      screenStreamRef.current = null;
-    }
     setActiveVideoStream(null);
     setLocalAudioStream(null);
     setIsInVideo(false);
@@ -242,6 +242,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       is_screen_sharing: false,
       is_speaking: false 
     });
+    setActiveChannel('text-general');
   };
 
   const toggleMute = () => {

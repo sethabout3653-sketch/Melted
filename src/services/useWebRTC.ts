@@ -279,7 +279,11 @@ export function useWebRTC({
 
   // Initiate offer to a peer
   const initiateOffer = useCallback(async (peerId: string) => {
-    if (isMakingOffer.current.get(peerId)) return;
+    console.log(`[WebRTC] Starting initiateOffer for peer: ${peerId}`);
+    if (isMakingOffer.current.get(peerId)) {
+      console.log(`[WebRTC] Already making offer to peer: ${peerId}`);
+      return;
+    }
     try {
       isMakingOffer.current.set(peerId, true);
       const pc = getOrCreatePeerConnection(peerId);
@@ -291,7 +295,8 @@ export function useWebRTC({
         offerToReceiveVideo: activeChannel === 'video-general',
       });
       await pc.setLocalDescription(offer);
-
+      
+      console.log(`[WebRTC] Offer created and set for peer: ${peerId}`);
       sendRtcSignal(peerId, {
         type: 'offer',
         sdp: pc.localDescription?.sdp,
@@ -346,6 +351,7 @@ export function useWebRTC({
 
     // Initiate offer with any new peer
     peers.forEach((peer) => {
+      console.log(`[WebRTC] Initiating offer to peer: ${peer.id}, channel: ${activeChannel}, userId: ${currentUserId}`);
       if (!peerConnections.current.has(peer.id) && currentUserId > peer.id) {
         initiateOffer(peer.id);
       }
