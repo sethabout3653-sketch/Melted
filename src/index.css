@@ -2,14 +2,16 @@
 
 @layer base {
   body {
-    font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background-color: #080808;
+    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: #050505;
     color: #f4f4f5;
     overflow-x: hidden;
+    letter-spacing: -0.015em;
   }
 
   h1, h2, h3, .font-heading {
-    font-family: 'Outfit', 'Plus Jakarta Sans', sans-serif;
+    font-family: 'Outfit', 'Inter', sans-serif;
+    letter-spacing: -0.035em;
   }
 
   code, pre, .font-mono {
@@ -17,30 +19,28 @@
   }
 }
 
-/* Custom sleek black & orange scrollbar */
 ::-webkit-scrollbar {
   width: 7px;
   height: 7px;
 }
 
 ::-webkit-scrollbar-track {
-  background: #080808;
+  background: #050505;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #222222;
+  background: #1c1c22;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #ff5500;
+  background: #0066ff;
 }
 
-.glow-orange {
-  box-shadow: 0 0 25px -4px rgba(255, 85, 0, 0.4);
+.glow-blue {
+  box-shadow: 0 0 25px -4px rgba(0, 102, 255, 0.4);
 }
 
-.glow-subtle-orange {
-  box-shadow: 0 4px 20px -2px rgba(255, 85, 0, 0.15);
+.glow-subtle-blue {
+  box-shadow: 0 4px 20px -2px rgba(0, 102, 255, 0.15);
 }
-

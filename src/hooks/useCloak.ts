@@ -10,9 +10,9 @@ export interface CloakPreset {
 export const CLOAK_PRESETS: CloakPreset[] = [
   {
     id: 'default',
-    name: 'Melted (Original)',
-    title: 'Melted — Unblocked Games & Arcades',
-    favicon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%23FF5722'/><path d='M30 65 Q50 25 70 65 Q60 80 50 65 Q40 80 30 65 Z' fill='%23FFF'/></svg>",
+    name: 'Frosted (Original)',
+    title: 'Frosted — Unblocked Games & Arcades',
+    favicon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%230066FF'/><path d='M30 65 Q50 25 70 65 Q60 80 50 65 Q40 80 30 65 Z' fill='%23FFF'/></svg>",
   },
   {
     id: 'classroom',

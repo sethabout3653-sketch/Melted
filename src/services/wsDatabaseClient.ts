@@ -131,6 +131,17 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     }
   }, [currentUser.id, currentUser.username, currentUser.avatar_color]);
 
+  // SQL-like DELETE
+  const deleteMessage = useCallback((messageId: number) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'SQL_DELETE',
+        table: 'messages',
+        id: messageId,
+      }));
+    }
+  }, []);
+
   // Send WebRTC Signal
   const sendRtcSignal = useCallback((targetUserId: string, signal: any) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -160,6 +171,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     isConnected,
     updateUser,
     insertMessage,
+    deleteMessage,
     sendRtcSignal,
     registerRtcHandlers,
   };

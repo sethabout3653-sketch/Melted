@@ -1,63 +1,90 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
-  X, 
+  Play, 
+  Heart, 
+  RotateCw, 
   Maximize2, 
   Minimize2, 
-  RotateCw, 
-  Heart, 
-  EyeOff,
-  AlertTriangle
+  X, 
+  EyeOff, 
+  Zap, 
+  AlertCircle 
 } from 'lucide-react';
 import { GameItem } from '../types/game';
+import { getLuminPlayableUrl, launchLuminNativePlayer } from '../services/luminService';
 import { resolveGameUrl } from '../services/gameService';
 import { launchAboutBlank } from '../hooks/useCloak';
 
 interface GamePlayerProps {
-  game: GameItem | null;
+  game: GameItem;
   onClose: () => void;
-  isFavorite: boolean;
   onToggleFavorite: (id: number) => void;
+  isFavorite: boolean;
 }
 
 export const GamePlayer: React.FC<GamePlayerProps> = ({
   game,
   onClose,
-  isFavorite,
   onToggleFavorite,
+  isFavorite,
 }) => {
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [playableUrl, setPlayableUrl] = useState<string>('');
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
-  // Close with Escape key
+  // Handle Fullscreen change listener
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+  }, []);
+
+  // Keyboard shortcut: Escape to close player
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (document.fullscreenElement) {
-          document.exitFullscreen().catch(() => {});
-        } else {
-          onClose();
-        }
+      if (e.key === 'Escape' && !document.fullscreenElement) {
+        onClose();
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  // Fullscreen change listener
+  // Resolve Playable URL on mount
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement));
+    let active = true;
+    setIsLoading(true);
+    setHasError(false);
+
+    if (game.source === 'lumin' && game.luminId) {
+      getLuminPlayableUrl(game.luminId).then((url) => {
+        if (!active) return;
+        if (url) {
+          setPlayableUrl(url);
+        } else {
+          // Fallback to direct loadGame if URL fetching failed
+          launchLuminNativePlayer(game.luminId!);
+          onClose();
+        }
+      }).catch(() => {
+        if (active) setHasError(true);
+      });
+    } else {
+      setPlayableUrl(resolveGameUrl(game.url));
+    }
+
+    return () => {
+      active = false;
     };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, []);
+  }, [game, onClose]);
 
   if (!game) return null;
-
-  const currentUrl = resolveGameUrl(game.url);
 
   const toggleFullscreen = async () => {
     try {
@@ -74,8 +101,15 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const reloadGame = () => {
     setIsLoading(true);
     setHasError(false);
-    if (iframeRef.current) {
-      iframeRef.current.src = currentUrl + (currentUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
+    if (game.source === 'lumin' && game.luminId) {
+      getLuminPlayableUrl(game.luminId).then((url) => {
+        if (url) {
+          setPlayableUrl(url);
+          if (iframeRef.current) iframeRef.current.src = url;
+        }
+      });
+    } else if (iframeRef.current && playableUrl) {
+      iframeRef.current.src = playableUrl + (playableUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
     }
   };
 
@@ -102,7 +136,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-8 h-8 rounded-lg overflow-hidden bg-[#1c1c1f] shrink-0 border border-[#2c2c30]">
                 <img 
-                  src={game.resolvedCover} 
+                  src={game.resolvedCover || undefined} 
                   alt="" 
                   className="w-full h-full object-cover" 
                 />
@@ -112,7 +146,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   <h3 className="font-extrabold text-white text-sm sm:text-base truncate font-heading">
                     {game.name}
                   </h3>
-                  <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full bg-[#ff5500]/15 text-[#ff6611] border border-[#ff5500]/30 text-[10px] font-bold uppercase tracking-wider">
+                  <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full bg-[#0066ff]/15 text-[#3b82f6] border border-[#0066ff]/30 text-[10px] font-bold uppercase tracking-wider">
                     {game.category.split(' ')[0]}
                   </span>
                 </div>
@@ -130,28 +164,30 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 onClick={() => onToggleFavorite(game.id)}
                 className={`p-2 rounded-lg border transition-colors cursor-pointer ${
                   isFavorite
-                    ? 'bg-[#ff5500]/20 text-[#ff5500] border-[#ff5500]/50'
+                    ? 'bg-[#0066ff]/20 text-[#0066ff] border-[#0066ff]/50'
                     : 'bg-[#18181b] text-zinc-400 hover:text-white border-[#27272a]'
                 }`}
                 title={isFavorite ? 'Saved to Favorites' : 'Add to Favorites'}
               >
-                <Heart className={`w-4 h-4 ${isFavorite ? 'fill-[#ff5500]' : ''}`} />
+                <Heart className={`w-4 h-4 ${isFavorite ? 'fill-[#0066ff]' : ''}`} />
               </button>
 
               {/* Stealth about:blank button */}
-              <button
-                onClick={() => launchAboutBlank(currentUrl, game.name)}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] hover:bg-[#222226] text-zinc-200 hover:text-[#ff5500] text-xs font-semibold rounded-lg border border-[#27272a] hover:border-[#ff5500]/40 transition-colors cursor-pointer"
-                title="Open stealth tab (about:blank cloak)"
-              >
-                <EyeOff className="w-3.5 h-3.5 text-[#ff5500]" />
-                <span className="hidden sm:inline">Stealth Window</span>
-              </button>
+              {playableUrl && (
+                <button
+                  onClick={() => launchAboutBlank(playableUrl, game.name)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#18181b] hover:bg-[#222226] text-zinc-200 hover:text-[#0066ff] text-xs font-semibold rounded-lg border border-[#27272a] hover:border-[#0066ff]/40 transition-colors cursor-pointer"
+                  title="Open stealth tab (about:blank cloak)"
+                >
+                  <EyeOff className="w-3.5 h-3.5 text-[#0066ff]" />
+                  <span className="hidden sm:inline">Stealth Window</span>
+                </button>
+              )}
 
               {/* Reload button */}
               <button
                 onClick={reloadGame}
-                className="p-2 bg-[#18181b] hover:bg-[#222226] text-zinc-400 hover:text-white rounded-lg border border-[#27272a] hover:border-[#ff5500]/40 transition-colors cursor-pointer"
+                className="p-2 bg-[#18181b] hover:bg-[#222226] text-zinc-400 hover:text-white rounded-lg border border-[#27272a] hover:border-[#0066ff]/40 transition-colors cursor-pointer"
                 title="Reload game"
               >
                 <RotateCw className="w-4 h-4" />
@@ -160,7 +196,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               {/* Fullscreen button */}
               <button
                 onClick={toggleFullscreen}
-                className="p-2 bg-[#18181b] hover:bg-[#222226] text-zinc-400 hover:text-white rounded-lg border border-[#27272a] hover:border-[#ff5500]/40 transition-colors cursor-pointer"
+                className="p-2 bg-[#18181b] hover:bg-[#222226] text-zinc-400 hover:text-white rounded-lg border border-[#27272a] hover:border-[#0066ff]/40 transition-colors cursor-pointer"
                 title="Enter Fullscreen"
               >
                 <Maximize2 className="w-4 h-4" />
@@ -169,7 +205,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               {/* Close button */}
               <button
                 onClick={onClose}
-                className="p-2 bg-[#ff5500] hover:bg-[#e64d00] text-black font-bold rounded-lg transition-colors cursor-pointer ml-1"
+                className="p-2 bg-[#0066ff] hover:bg-[#0052cc] text-white font-bold rounded-lg transition-colors cursor-pointer ml-1"
                 title="Close game (Esc)"
               >
                 <X className="w-4 h-4 stroke-[3]" />
@@ -183,90 +219,78 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         {/* Game Canvas Container: Occupies full screen in fullscreen */}
         <div className="relative flex-1 w-full h-full bg-black overflow-hidden">
           
-          {/* Subtle floating overlay to exit fullscreen if hovered near top-right corner */}
+          {/* Floating exit fullscreen button */}
           {isFullscreen && (
             <div className="absolute top-3 right-3 z-30 opacity-0 hover:opacity-100 transition-opacity duration-200 flex items-center gap-2">
               <button
                 onClick={reloadGame}
-                className="p-2 rounded-full bg-black/75 hover:bg-black text-white hover:text-[#ff5500] backdrop-blur-md border border-white/20 transition-all cursor-pointer shadow-xl"
+                className="p-2 rounded-full bg-black/75 hover:bg-black text-white hover:text-[#0066ff] backdrop-blur-md border border-white/20 transition-all cursor-pointer shadow-xl"
                 title="Reload Game"
               >
                 <RotateCw className="w-4 h-4" />
               </button>
               <button
                 onClick={toggleFullscreen}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/75 hover:bg-black text-white hover:text-[#ff5500] backdrop-blur-md border border-white/20 transition-all cursor-pointer shadow-xl text-xs font-semibold"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/75 hover:bg-black text-white hover:text-[#0066ff] backdrop-blur-md border border-white/20 transition-all cursor-pointer shadow-xl text-xs font-semibold"
                 title="Exit Fullscreen (Esc)"
               >
-                <Minimize2 className="w-4 h-4 text-[#ff5500]" />
+                <Minimize2 className="w-4 h-4 text-[#0066ff]" />
                 <span>Exit Fullscreen</span>
               </button>
             </div>
           )}
 
-          {/* Loading indicator */}
-          {isLoading && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0a0a0a] z-10 space-y-3">
-              <div className="w-9 h-9 border-3 border-[#ff5500] border-t-transparent rounded-full animate-spin" />
-              <p className="text-sm font-semibold text-zinc-200 font-heading">
-                Loading {game.name}...
-              </p>
-              <span className="text-xs text-zinc-400">
-                Starting game engine
-              </span>
-            </div>
-          )}
-
           {/* Iframe */}
-          <iframe
-            ref={iframeRef}
-            src={currentUrl}
-            title={game.name}
-            className="w-full h-full border-none"
-            allow="fullscreen; autoplay; gamepad; focus-without-user-activation; clipboard-read; clipboard-write; microphone; camera;"
-            onLoad={() => setIsLoading(false)}
-            onError={() => {
-              setIsLoading(false);
-              setHasError(true);
-            }}
-          />
+          {playableUrl && (
+            <iframe
+              ref={iframeRef}
+              src={playableUrl || undefined}
+              title={game.name}
+              className="w-full h-full border-none"
+              allow="fullscreen; autoplay; gamepad; focus-without-user-activation; clipboard-read; clipboard-write; microphone; camera; pointer-lock"
+              allowFullScreen
+              onLoad={() => setIsLoading(false)}
+              onError={() => {
+                setIsLoading(false);
+                setHasError(true);
+              }}
+            />
+          )}
 
           {/* Fallback */}
           {hasError && (
             <div className="absolute inset-0 bg-[#0a0a0a] flex flex-col items-center justify-center p-6 text-center z-20 space-y-4">
-              <div className="p-3 bg-[#ff5500]/15 rounded-2xl border border-[#ff5500]/40 text-[#ff5500]">
-                <AlertTriangle className="w-8 h-8" />
+              <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400">
+                <AlertCircle className="w-6 h-6" />
               </div>
-              <h4 className="text-lg font-bold text-white">
-                Game blocked in iframe
-              </h4>
-              <p className="text-xs text-zinc-400 max-w-md">
-                Launch in a stealth about:blank window to bypass restrictions.
-              </p>
-              <button
-                onClick={() => launchAboutBlank(currentUrl, game.name)}
-                className="px-5 py-2.5 bg-[#ff5500] hover:bg-[#e64d00] text-black text-xs font-bold rounded-xl shadow-md cursor-pointer"
-              >
-                Open in Stealth Window
-              </button>
+              <div>
+                <h4 className="text-base font-bold text-white font-heading">
+                  Failed to Load Game Stream
+                </h4>
+                <p className="text-xs text-zinc-400 mt-1 max-w-sm">
+                  The upstream game server may be blocking direct embedding. Try opening in a Stealth Window or reload.
+                </p>
+              </div>
+              <div className="flex items-center gap-3 pt-2">
+                <button
+                  onClick={reloadGame}
+                  className="px-4 py-2 bg-[#1c1c20] hover:bg-[#25252a] text-white text-xs font-bold rounded-xl border border-[#303036] transition-all cursor-pointer"
+                >
+                  Try Again
+                </button>
+                {playableUrl && (
+                  <button
+                    onClick={() => launchAboutBlank(playableUrl, game.name)}
+                    className="px-4 py-2 bg-[#0066ff] hover:bg-[#0052cc] text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-lg shadow-[#0066ff]/20"
+                  >
+                    Open Stealth Window
+                  </button>
+                )}
+              </div>
             </div>
           )}
 
         </div>
-
-        {/* Bottom Bar: ONLY shown when NOT fullscreen */}
-        {!isFullscreen && (
-          <div className="px-4 py-2 bg-[#0a0a0a] border-t border-[#1c1c20] flex items-center justify-between text-[11px] text-zinc-400 select-none shrink-0">
-            <div className="flex items-center gap-2">
-              <span>🎮 Click game to focus keyboard</span>
-              <span>·</span>
-              <span>Press [Esc] to exit</span>
-            </div>
-            <div className="text-zinc-400 font-mono">
-              Fullscreen & Gamepad Ready
-            </div>
-          </div>
-        )}
 
       </div>
 

@@ -1,19 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-  Flame, 
+  Snowflake, 
   Search, 
   Shuffle, 
-  ShieldAlert, 
   EyeOff, 
-  Heart,
-  X,
-  WifiOff,
-  Gamepad2,
-  MessageSquare
+  Heart, 
+  X, 
+  WifiOff, 
+  Gamepad2, 
+  MessageSquare,
+  Zap
 } from 'lucide-react';
 import { CloakPreset } from '../hooks/useCloak';
 import { PWAInstallButton } from './PWAInstallButton';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { GameCategory } from '../types/game';
 
 interface NavbarProps {
   currentTab: 'games' | 'chat';
@@ -27,10 +28,10 @@ interface NavbarProps {
   activePreset: string;
   presets: CloakPreset[];
   onSelectPreset: (id: string) => void;
-  panicKey: string;
-  onTriggerPanic: () => void;
   totalGames: number;
   onGoHome: () => void;
+  selectedCategory?: GameCategory;
+  onSelectCategory?: (category: GameCategory) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -45,9 +46,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   activePreset,
   presets,
   onSelectPreset,
-  panicKey,
-  onTriggerPanic,
   onGoHome,
+  selectedCategory = 'All',
+  onSelectCategory,
 }) => {
   const [isCloakOpen, setIsCloakOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -82,7 +83,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     <header className="sticky top-0 z-40 w-full bg-[#050505]/95 backdrop-blur-md border-b border-[#1f1f1f]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         
-        {/* Brand Zone - Clean human UI without any repetitive tags */}
+        {/* Brand Zone */}
         <div className="flex items-center gap-4 shrink-0">
           <button 
             onClick={() => {
@@ -92,13 +93,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="flex items-center gap-2.5 group cursor-pointer text-left focus:outline-none"
             title="Go to Home"
           >
-            <div className="w-9 h-9 rounded-xl bg-[#ff5500] flex items-center justify-center shadow-lg shadow-[#ff5500]/25 group-hover:scale-105 transition-transform">
-              <Flame className="w-5 h-5 text-black fill-black" />
+            <div className="w-9 h-9 rounded-xl bg-[#0066ff] flex items-center justify-center shadow-lg shadow-[#0066ff]/25 group-hover:scale-105 transition-transform">
+              <Snowflake className="w-5 h-5 text-white fill-none animate-spin-[spin_3s_linear_infinite]" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xl font-black tracking-tight text-white font-heading group-hover:text-[#ff5500] transition-colors">
-                  MELTED
+                <span className="text-xl font-black tracking-tight text-white font-heading group-hover:text-[#0066ff] transition-colors">
+                  Frosted
                 </span>
                 {!isOnline && (
                   <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
@@ -106,31 +107,31 @@ export const Navbar: React.FC<NavbarProps> = ({
                   </span>
                 )}
               </div>
-              <div className="text-[11px] text-zinc-400 font-medium -mt-0.5">
-                840+ Unblocked Games
-              </div>
             </div>
           </button>
 
-          {/* Primary View Switcher: Games vs Discord Chat */}
-          <div className="hidden sm:flex items-center bg-[#121214] p-1 rounded-xl border border-[#222225]">
+          {/* Primary View Switcher: All Games vs Chat */}
+          <div className="hidden sm:flex items-center bg-[#121214] p-1 rounded-xl border border-[#222225] gap-0.5">
             <button
-              onClick={() => onTabChange('games')}
+              onClick={() => {
+                onTabChange('games');
+                if (onSelectCategory) onSelectCategory('All');
+              }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                currentTab === 'games'
-                  ? 'bg-[#ff5500] text-black shadow-sm'
+                currentTab === 'games' && selectedCategory !== 'Lumin Games'
+                  ? 'bg-[#0066ff] text-white shadow-sm'
                   : 'text-zinc-400 hover:text-white'
               }`}
             >
               <Gamepad2 className="w-3.5 h-3.5" />
-              <span>Games</span>
+              <span>All Games</span>
             </button>
 
             <button
               onClick={() => onTabChange('chat')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 currentTab === 'chat'
-                  ? 'bg-[#ff5500] text-black shadow-sm'
+                  ? 'bg-[#0066ff] text-white shadow-sm'
                   : 'text-zinc-400 hover:text-white'
               }`}
             >
@@ -140,7 +141,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Search Bar Zone (Visible when in Games tab, or switches to games on search) */}
+        {/* Search Bar Zone */}
         <div className="flex-1 max-w-md mx-2">
           <div className="relative flex items-center">
             <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 pointer-events-none" />
@@ -152,8 +153,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                 if (currentTab !== 'games') onTabChange('games');
                 onSearchChange(e.target.value);
               }}
-              placeholder="Search 840+ games... (Press '/')"
-              className="w-full bg-[#121214] hover:bg-[#161619] focus:bg-[#161619] text-sm text-zinc-100 placeholder-zinc-400 rounded-xl pl-10 pr-10 py-2 border border-[#222225] focus:border-[#ff5500] focus:outline-none focus:ring-1 focus:ring-[#ff5500] transition-all"
+              placeholder="what are we going to play"
+              className="w-full bg-[#121214] hover:bg-[#161619] focus:bg-[#161619] text-sm text-zinc-100 placeholder-zinc-400 rounded-xl pl-10 pr-10 py-2 border border-[#222225] focus:border-[#0066ff] focus:outline-none focus:ring-1 focus:ring-[#0066ff] transition-all"
             />
             {searchQuery ? (
               <button
@@ -173,13 +174,13 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Action Controls */}
         <div className="flex items-center gap-2 shrink-0">
-          
+
           {/* Mobile Chat switcher button */}
           <button
             onClick={() => onTabChange(currentTab === 'games' ? 'chat' : 'games')}
             className={`sm:hidden flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
               currentTab === 'chat'
-                ? 'bg-[#ff5500] text-black border-[#ff5500] shadow-sm'
+                ? 'bg-[#0066ff] text-white border-[#0066ff] shadow-sm'
                 : 'bg-[#121214] text-zinc-200 border-[#222225]'
             }`}
           >
@@ -196,10 +197,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               if (currentTab !== 'games') onTabChange('games');
               onRandomGame();
             }}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-zinc-200 bg-[#121214] hover:bg-[#1c1c20] hover:text-[#ff5500] rounded-xl border border-[#222225] hover:border-[#ff5500]/40 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-zinc-200 bg-[#121214] hover:bg-[#1c1c20] hover:text-[#0066ff] rounded-xl border border-[#222225] hover:border-[#0066ff]/40 transition-all cursor-pointer"
             title="Pick a random game"
           >
-            <Shuffle className="w-3.5 h-3.5 text-[#ff5500]" />
+            <Shuffle className="w-3.5 h-3.5 text-[#0066ff]" />
             <span className="hidden lg:inline">Random</span>
           </button>
 
@@ -211,16 +212,16 @@ export const Navbar: React.FC<NavbarProps> = ({
             }}
             className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
               showFavoritesOnly 
-                ? 'bg-[#ff5500] text-black font-bold border-[#ff5500] shadow-sm'
-                : 'bg-[#121214] hover:bg-[#1c1c20] text-zinc-200 border-[#222225] hover:border-[#ff5500]/40'
+                ? 'bg-[#0066ff] text-white font-bold border-[#0066ff] shadow-sm'
+                : 'bg-[#121214] hover:bg-[#1c1c20] text-zinc-200 border-[#222225] hover:border-[#0066ff]/40'
             }`}
             title="Show saved favorites"
           >
-            <Heart className={`w-3.5 h-3.5 ${showFavoritesOnly ? 'fill-black text-black' : 'text-[#ff5500]'}`} />
+            <Heart className={`w-3.5 h-3.5 ${showFavoritesOnly ? 'fill-white text-white' : 'text-[#0066ff]'}`} />
             <span className="hidden lg:inline">Saved</span>
             {favoritesCount > 0 && (
               <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                showFavoritesOnly ? 'bg-black/30 text-black' : 'bg-[#ff5500]/20 text-[#ff5500]'
+                showFavoritesOnly ? 'bg-black/30 text-white' : 'bg-[#0066ff]/20 text-[#60a5fa]'
               }`}>
                 {favoritesCount}
               </span>
@@ -231,7 +232,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="relative" ref={cloakDropdownRef}>
             <button
               onClick={() => setIsCloakOpen(!isCloakOpen)}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-zinc-200 bg-[#121214] hover:bg-[#1c1c20] hover:text-[#ff5500] rounded-xl border border-[#222225] hover:border-[#ff5500]/40 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-zinc-200 bg-[#121214] hover:bg-[#1c1c20] hover:text-[#0066ff] rounded-xl border border-[#222225] hover:border-[#0066ff]/40 transition-all cursor-pointer"
               title="Disguise browser tab"
             >
               <EyeOff className="w-3.5 h-3.5 text-zinc-300" />
@@ -255,12 +256,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                         }}
                         className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left rounded-xl transition-colors cursor-pointer ${
                           isSelected 
-                            ? 'bg-[#ff5500] text-black font-bold' 
+                            ? 'bg-[#0066ff] text-white font-bold' 
                             : 'text-zinc-300 hover:bg-[#1a1a1d]'
                         }`}
                       >
                         <img 
-                          src={preset.favicon} 
+                          src={preset.favicon || undefined} 
                           alt="" 
                           className="w-4 h-4 rounded-sm object-contain"
                           onError={(e) => {
@@ -269,7 +270,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                         />
                         <div className="truncate">
                           <div className="truncate">{preset.name}</div>
-                          <div className={`text-[10px] truncate ${isSelected ? 'text-black/80' : 'text-zinc-400'}`}>
+                          <div className={`text-[10px] truncate ${isSelected ? 'text-white/80' : 'text-zinc-400'}`}>
                             {preset.title}
                           </div>
                         </div>
@@ -280,19 +281,6 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             )}
           </div>
-
-          {/* Panic Key Button: Direct escape action */}
-          <button
-            onClick={onTriggerPanic}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-[#ff6611] bg-[#ff5500]/10 hover:bg-[#ff5500]/20 rounded-xl border border-[#ff5500]/30 hover:border-[#ff5500]/60 transition-all cursor-pointer group"
-            title={`Panic Button: Click or press [${panicKey}] to escape immediately`}
-          >
-            <ShieldAlert className="w-3.5 h-3.5 text-[#ff5500] group-hover:scale-110 transition-transform" />
-            <span className="hidden sm:inline">Panic</span>
-            <kbd className="px-1 py-0.2 bg-[#ff5500]/20 text-[#ff7722] rounded text-[10px] font-mono border border-[#ff5500]/40">
-              {panicKey}
-            </kbd>
-          </button>
 
         </div>
 

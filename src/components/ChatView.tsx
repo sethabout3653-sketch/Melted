@@ -25,29 +25,48 @@ import { useWebRTC } from '../services/useWebRTC';
 export const ChatView: React.FC = () => {
   const [activeChannel, setActiveChannel] = useState<'text-general' | 'voice-general' | 'video-general'>('text-general');
   const [inputText, setInputText] = useState('');
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editColor, setEditColor] = useState('');
 
   // Persistent user identity
-  const [currentUser] = useState(() => {
-    const savedId = localStorage.getItem('melted_chat_user_id') || ('u_' + Math.random().toString(36).substr(2, 6));
-    const savedName = localStorage.getItem('melted_chat_username') || ('Player_' + Math.floor(100 + Math.random() * 900));
-    localStorage.setItem('melted_chat_user_id', savedId);
-    localStorage.setItem('melted_chat_username', savedName);
+  const [currentUser, setCurrentUser] = useState(() => {
+    const savedId = localStorage.getItem('frosted_chat_user_id') || ('u_' + Math.random().toString(36).substr(2, 6));
+    const savedName = localStorage.getItem('frosted_chat_username') || ('Player_' + Math.floor(100 + Math.random() * 900));
+    const savedColor = localStorage.getItem('frosted_chat_usercolor') || '#0066ff';
+    localStorage.setItem('frosted_chat_user_id', savedId);
+    localStorage.setItem('frosted_chat_username', savedName);
+    localStorage.setItem('frosted_chat_usercolor', savedColor);
     return {
       id: savedId,
       username: savedName,
-      avatar_color: '#ff5500',
+      avatar_color: savedColor,
     };
   });
 
-  // Reactive WebSocket Database Client
   const {
     users,
     messages,
     updateUser,
     insertMessage,
+    deleteMessage,
     sendRtcSignal,
     registerRtcHandlers,
   } = useWebSocketDatabase(currentUser);
+
+  useEffect(() => {
+    setEditName(currentUser.username);
+    setEditColor(currentUser.avatar_color);
+  }, [currentUser]);
+
+  const saveProfile = () => {
+    const updatedUser = { ...currentUser, username: editName, avatar_color: editColor };
+    setCurrentUser(updatedUser);
+    localStorage.setItem('frosted_chat_username', editName);
+    localStorage.setItem('frosted_chat_usercolor', editColor);
+    updateUser({ username: editName, avatar_color: editColor });
+    setIsProfileModalOpen(false);
+  };
 
   // Voice & Video States
   const [isInVoice, setIsInVoice] = useState(false);
@@ -407,11 +426,11 @@ export const ChatView: React.FC = () => {
               onClick={() => setActiveChannel('text-general')}
               className={`w-full group flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                 activeChannel === 'text-general'
-                  ? 'bg-[#ff5500]/15 text-[#ff5500] font-semibold border border-[#ff5500]/30'
+                  ? 'bg-[#0066ff]/15 text-[#0066ff] font-semibold border border-[#0066ff]/30'
                   : 'text-zinc-400 hover:bg-[#151518] hover:text-white'
               }`}
             >
-              <Hash className={`w-4 h-4 ${activeChannel === 'text-general' ? 'text-[#ff5500]' : 'text-zinc-500 group-hover:text-white'}`} />
+              <Hash className={`w-4 h-4 ${activeChannel === 'text-general' ? 'text-[#0066ff]' : 'text-zinc-500 group-hover:text-white'}`} />
               <span className="truncate">general</span>
             </button>
           </div>
@@ -420,7 +439,7 @@ export const ChatView: React.FC = () => {
           <div>
             <div className="px-2 mb-1.5 text-[11px] font-bold text-zinc-500 tracking-wider uppercase flex items-center justify-between">
               <span>Voice Channels</span>
-              <span className="text-[10px] text-[#ff5500] font-mono">
+              <span className="text-[10px] text-[#0066ff] font-mono">
                 {voiceUsers.length + (isInVoice ? 1 : 0)} connected
               </span>
             </div>
@@ -434,16 +453,16 @@ export const ChatView: React.FC = () => {
               }}
               className={`w-full group flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                 activeChannel === 'voice-general'
-                  ? 'bg-[#ff5500]/15 text-[#ff5500] font-semibold border border-[#ff5500]/30'
+                  ? 'bg-[#0066ff]/15 text-[#0066ff] font-semibold border border-[#0066ff]/30'
                   : 'text-zinc-400 hover:bg-[#151518] hover:text-white'
               }`}
             >
               <div className="flex items-center gap-2 truncate">
-                <Volume2 className={`w-4 h-4 ${activeChannel === 'voice-general' || isInVoice ? 'text-[#ff5500]' : 'text-zinc-500 group-hover:text-white'}`} />
+                <Volume2 className={`w-4 h-4 ${activeChannel === 'voice-general' || isInVoice ? 'text-[#0066ff]' : 'text-zinc-500 group-hover:text-white'}`} />
                 <span className="truncate">general</span>
               </div>
               {isInVoice && (
-                <span className="text-[10px] text-[#ff5500] font-mono font-bold uppercase">
+                <span className="text-[10px] text-[#0066ff] font-mono font-bold uppercase">
                   Connected
                 </span>
               )}
@@ -454,13 +473,13 @@ export const ChatView: React.FC = () => {
               <div className="mt-1 ml-4 pl-2 border-l border-[#242428] space-y-1">
                 {isInVoice && (
                   <div className="flex items-center gap-2 py-1 px-1.5 rounded text-xs text-white">
-                    <div className={`w-5 h-5 rounded-full bg-[#ff5500] text-black font-black text-[10px] flex items-center justify-center shrink-0 transition-all ${
-                      isUserSpeaking ? 'ring-2 ring-[#ff5500] shadow-[0_0_10px_#ff5500]' : ''
+                    <div className={`w-5 h-5 rounded-full bg-[#0066ff] text-black font-black text-[10px] flex items-center justify-center shrink-0 transition-all ${
+                      isUserSpeaking ? 'ring-2 ring-[#0066ff] shadow-[0_0_10px_#0066ff]' : ''
                     }`}>
                       {currentUser.username.slice(0, 2).toUpperCase()}
                     </div>
                     <span className="truncate text-zinc-200">{currentUser.username} (You)</span>
-                    {isMuted && <MicOff className="w-3 h-3 text-[#ff5500] ml-auto shrink-0" />}
+                    {isMuted && <MicOff className="w-3 h-3 text-[#0066ff] ml-auto shrink-0" />}
                   </div>
                 )}
 
@@ -470,7 +489,7 @@ export const ChatView: React.FC = () => {
                     <div key={u.id} className="flex items-center gap-2 py-1 px-1.5 rounded text-xs text-zinc-300">
                       <div 
                         className={`w-5 h-5 rounded-full text-black font-extrabold text-[10px] flex items-center justify-center shrink-0 ${
-                          isPeerSpeaking ? 'ring-2 ring-[#ff5500] shadow-[0_0_10px_#ff5500]' : ''
+                          isPeerSpeaking ? 'ring-2 ring-[#0066ff] shadow-[0_0_10px_#0066ff]' : ''
                         }`}
                         style={{ backgroundColor: u.avatar_color }}
                       >
@@ -489,7 +508,7 @@ export const ChatView: React.FC = () => {
           <div>
             <div className="px-2 mb-1.5 text-[11px] font-bold text-zinc-500 tracking-wider uppercase flex items-center justify-between">
               <span>Video Channels</span>
-              <span className="text-[10px] text-[#ff5500] font-mono">
+              <span className="text-[10px] text-[#0066ff] font-mono">
                 {videoUsers.length + (isInVideo ? 1 : 0)} connected
               </span>
             </div>
@@ -503,16 +522,16 @@ export const ChatView: React.FC = () => {
               }}
               className={`w-full group flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
                 activeChannel === 'video-general'
-                  ? 'bg-[#ff5500]/15 text-[#ff5500] font-semibold border border-[#ff5500]/30'
+                  ? 'bg-[#0066ff]/15 text-[#0066ff] font-semibold border border-[#0066ff]/30'
                   : 'text-zinc-400 hover:bg-[#151518] hover:text-white'
               }`}
             >
               <div className="flex items-center gap-2 truncate">
-                <Video className={`w-4 h-4 ${activeChannel === 'video-general' || isInVideo ? 'text-[#ff5500]' : 'text-zinc-500 group-hover:text-white'}`} />
+                <Video className={`w-4 h-4 ${activeChannel === 'video-general' || isInVideo ? 'text-[#0066ff]' : 'text-zinc-500 group-hover:text-white'}`} />
                 <span className="truncate">general</span>
               </div>
               {isInVideo && (
-                <span className="text-[10px] text-[#ff5500] font-mono font-bold uppercase">
+                <span className="text-[10px] text-[#0066ff] font-mono font-bold uppercase">
                   Live
                 </span>
               )}
@@ -523,13 +542,13 @@ export const ChatView: React.FC = () => {
               <div className="mt-1 ml-4 pl-2 border-l border-[#242428] space-y-1">
                 {isInVideo && (
                   <div className="flex items-center gap-2 py-1 px-1.5 rounded text-xs text-white">
-                    <div className={`w-5 h-5 rounded-full bg-[#ff5500] text-black font-black text-[10px] flex items-center justify-center shrink-0 ${
-                      isUserSpeaking ? 'ring-2 ring-[#ff5500]' : ''
+                    <div className={`w-5 h-5 rounded-full bg-[#0066ff] text-black font-black text-[10px] flex items-center justify-center shrink-0 ${
+                      isUserSpeaking ? 'ring-2 ring-[#0066ff]' : ''
                     }`}>
                       {currentUser.username.slice(0, 2).toUpperCase()}
                     </div>
                     <span className="truncate text-zinc-200">{currentUser.username} (You)</span>
-                    <Video className="w-3 h-3 text-[#ff5500] ml-auto shrink-0" />
+                    <Video className="w-3 h-3 text-[#0066ff] ml-auto shrink-0" />
                   </div>
                 )}
 
@@ -539,7 +558,7 @@ export const ChatView: React.FC = () => {
                     <div key={u.id} className="flex items-center gap-2 py-1 px-1.5 rounded text-xs text-zinc-300">
                       <div 
                         className={`w-5 h-5 rounded-full text-black font-extrabold text-[10px] flex items-center justify-center shrink-0 ${
-                          isPeerSpeaking ? 'ring-2 ring-[#ff5500]' : ''
+                          isPeerSpeaking ? 'ring-2 ring-[#0066ff]' : ''
                         }`}
                         style={{ backgroundColor: u.avatar_color }}
                       >
@@ -561,9 +580,9 @@ export const ChatView: React.FC = () => {
           <div className="p-2 border-t border-[#1c1c20] bg-[#111114]">
             <div className="flex items-center justify-between px-2 py-1.5">
               <div className="flex items-center gap-2">
-                <Radio className="w-4 h-4 text-[#ff5500]" />
+                <Radio className="w-4 h-4 text-[#0066ff]" />
                 <div className="leading-tight">
-                  <div className="text-[12px] font-bold text-[#ff5500]">
+                  <div className="text-[12px] font-bold text-[#0066ff]">
                     {isInVideo ? 'Video Connected' : 'Voice Connected'}
                   </div>
                   <div className="text-[10px] text-zinc-400 font-mono">general</div>
@@ -571,7 +590,7 @@ export const ChatView: React.FC = () => {
               </div>
               <button
                 onClick={isInVideo ? stopVideo : stopVoice}
-                className="p-1.5 text-zinc-400 hover:text-[#ff5500] hover:bg-[#1a1a1e] rounded-lg transition-colors cursor-pointer"
+                className="p-1.5 text-zinc-400 hover:text-[#0066ff] hover:bg-[#1a1a1e] rounded-lg transition-colors cursor-pointer"
                 title="Disconnect"
               >
                 <PhoneOff className="w-4 h-4" />
@@ -583,7 +602,7 @@ export const ChatView: React.FC = () => {
         {/* User Profile Bar */}
         <div className="h-14 px-3 bg-[#0a0a0c] flex items-center justify-between border-t border-[#1c1c20]">
           <div className="flex items-center gap-2.5 p-1 hover:bg-[#141417] rounded-lg cursor-pointer min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-[#ff5500] text-black font-extrabold flex items-center justify-center text-xs shrink-0 shadow-sm shadow-[#ff5500]/20">
+            <div className="w-8 h-8 rounded-xl bg-[#0066ff] text-black font-extrabold flex items-center justify-center text-xs shrink-0 shadow-sm shadow-[#0066ff]/20">
               {currentUser.username.slice(0, 2).toUpperCase()}
             </div>
             <div className="leading-tight truncate">
@@ -596,7 +615,7 @@ export const ChatView: React.FC = () => {
             <button
               onClick={toggleMute}
               className={`p-1.5 rounded-lg hover:bg-[#17171a] transition-colors cursor-pointer ${
-                isMuted ? 'text-[#ff5500]' : 'hover:text-white'
+                isMuted ? 'text-[#0066ff]' : 'hover:text-white'
               }`}
               title={isMuted ? 'Unmute' : 'Mute'}
             >
@@ -606,7 +625,7 @@ export const ChatView: React.FC = () => {
             <button
               onClick={toggleDeafen}
               className={`p-1.5 rounded-lg hover:bg-[#17171a] transition-colors cursor-pointer ${
-                isDeafened ? 'text-[#ff5500]' : 'hover:text-white'
+                isDeafened ? 'text-[#0066ff]' : 'hover:text-white'
               }`}
               title={isDeafened ? 'Undeafen' : 'Deafen'}
             >
@@ -625,7 +644,7 @@ export const ChatView: React.FC = () => {
           <div className="flex items-center gap-2 min-w-0">
             {activeChannel === 'text-general' && (
               <>
-                <Hash className="w-5 h-5 text-[#ff5500]" />
+                <Hash className="w-5 h-5 text-[#0066ff]" />
                 <h1 className="font-bold text-white text-[15px] font-heading tracking-tight">general</h1>
                 <div className="hidden sm:block h-4 w-[1px] bg-[#222226] mx-2" />
                 <span className="hidden sm:inline text-xs text-zinc-400 truncate">
@@ -635,7 +654,7 @@ export const ChatView: React.FC = () => {
             )}
             {activeChannel === 'voice-general' && (
               <>
-                <Volume2 className="w-5 h-5 text-[#ff5500]" />
+                <Volume2 className="w-5 h-5 text-[#0066ff]" />
                 <h1 className="font-bold text-white text-[15px] font-heading tracking-tight">general</h1>
                 <div className="hidden sm:block h-4 w-[1px] bg-[#222226] mx-2" />
                 <span className="hidden sm:inline text-xs text-zinc-400 truncate">
@@ -645,7 +664,7 @@ export const ChatView: React.FC = () => {
             )}
             {activeChannel === 'video-general' && (
               <>
-                <Video className="w-5 h-5 text-[#ff5500]" />
+                <Video className="w-5 h-5 text-[#0066ff]" />
                 <h1 className="font-bold text-white text-[15px] font-heading tracking-tight">general</h1>
                 <div className="hidden sm:block h-4 w-[1px] bg-[#222226] mx-2" />
                 <span className="hidden sm:inline text-xs text-zinc-400 truncate">
@@ -662,7 +681,7 @@ export const ChatView: React.FC = () => {
               <input
                 type="text"
                 placeholder="Search"
-                className="bg-[#141417] text-xs text-white rounded-lg px-2.5 py-1 pr-6 w-28 sm:w-36 focus:w-44 transition-all focus:outline-none placeholder-zinc-500 border border-[#222226] focus:border-[#ff5500]"
+                className="bg-[#141417] text-xs text-white rounded-lg px-2.5 py-1 pr-6 w-28 sm:w-36 focus:w-44 transition-all focus:outline-none placeholder-zinc-500 border border-[#222226] focus:border-[#0066ff]"
               />
               <Search className="w-3 h-3 text-zinc-500 absolute right-2 top-2" />
             </div>
@@ -677,7 +696,7 @@ export const ChatView: React.FC = () => {
             <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-4">
               
               <div className="pb-6 border-b border-[#1c1c20] mb-4">
-                <div className="w-14 h-14 rounded-2xl bg-[#ff5500]/15 border border-[#ff5500]/30 flex items-center justify-center mb-3 text-[#ff5500]">
+                <div className="w-14 h-14 rounded-2xl bg-[#0066ff]/15 border border-[#0066ff]/30 flex items-center justify-center mb-3 text-[#0066ff]">
                   <Hash className="w-8 h-8" />
                 </div>
                 <h2 className="text-2xl font-black text-white font-heading">
@@ -692,7 +711,7 @@ export const ChatView: React.FC = () => {
                 <div key={msg.id} className="flex items-start gap-3.5 hover:bg-[#111114] -mx-4 px-4 py-2 rounded-xl transition-colors group">
                   <div 
                     className="w-9 h-9 rounded-xl text-black font-extrabold flex items-center justify-center shrink-0 text-xs shadow-sm"
-                    style={{ backgroundColor: msg.avatar_color || '#ff5500' }}
+                    style={{ backgroundColor: msg.avatar_color || '#0066ff' }}
                   >
                     {msg.sender_name.slice(0, 2).toUpperCase()}
                   </div>
@@ -709,6 +728,15 @@ export const ChatView: React.FC = () => {
                       {msg.content}
                     </p>
                   </div>
+                  {msg.sender_id === currentUser.id && (
+                    <button
+                      onClick={() => deleteMessage(msg.id)}
+                      className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+                      title="Delete message"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               ))}
               <div ref={messagesEndRef} />
@@ -716,7 +744,7 @@ export const ChatView: React.FC = () => {
 
             {/* Input Bar */}
             <div className="p-4 pt-0">
-              <form onSubmit={handleSendMessage} className="bg-[#121215] border border-[#222226] focus-within:border-[#ff5500] rounded-xl px-4 py-2.5 flex items-center gap-3 transition-colors">
+              <form onSubmit={handleSendMessage} className="bg-[#121215] border border-[#222226] focus-within:border-[#0066ff] rounded-xl px-4 py-2.5 flex items-center gap-3 transition-colors">
                 <button
                   type="button"
                   className="text-zinc-500 hover:text-white transition-colors cursor-pointer shrink-0"
@@ -746,7 +774,7 @@ export const ChatView: React.FC = () => {
                   disabled={!inputText.trim()}
                   className={`p-1.5 rounded-lg transition-colors cursor-pointer shrink-0 ${
                     inputText.trim() 
-                      ? 'bg-[#ff5500] text-black hover:bg-[#e64d00]' 
+                      ? 'bg-[#0066ff] text-black hover:bg-[#e64d00]' 
                       : 'text-zinc-600 hover:text-zinc-400'
                   }`}
                   title="Send"
@@ -770,13 +798,13 @@ export const ChatView: React.FC = () => {
                 {isInVoice && (
                   <div className="relative aspect-video sm:aspect-square max-h-56 bg-[#121215] rounded-3xl border border-[#26262a] flex flex-col items-center justify-center p-4 transition-all">
                     <div className="relative mb-3">
-                      <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-[#ff5500] text-black font-black text-2xl flex items-center justify-center shadow-lg shadow-[#ff5500]/25 transition-all ${
-                        isUserSpeaking ? 'ring-4 ring-[#ff5500] shadow-[0_0_25px_#ff5500]/60' : ''
+                      <div className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-[#0066ff] text-black font-black text-2xl flex items-center justify-center shadow-lg shadow-[#0066ff]/25 transition-all ${
+                        isUserSpeaking ? 'ring-4 ring-[#0066ff] shadow-[0_0_25px_#0066ff]/60' : ''
                       }`}>
                         {currentUser.username.slice(0, 2).toUpperCase()}
                       </div>
                       {isMuted && (
-                        <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#18181b] border-2 border-[#ff5500] flex items-center justify-center text-[#ff5500]">
+                        <div className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-[#18181b] border-2 border-[#0066ff] flex items-center justify-center text-[#0066ff]">
                           <MicOff className="w-3.5 h-3.5" />
                         </div>
                       )}
@@ -813,7 +841,7 @@ export const ChatView: React.FC = () => {
                       <div className="relative mb-3">
                         <div 
                           className={`w-16 h-16 sm:w-20 sm:h-20 rounded-2xl text-black font-black text-2xl flex items-center justify-center shadow-lg transition-all ${
-                            isPeerSpeaking ? 'ring-4 ring-[#ff5500] shadow-[0_0_25px_#ff5500]/60' : ''
+                            isPeerSpeaking ? 'ring-4 ring-[#0066ff] shadow-[0_0_25px_#0066ff]/60' : ''
                           }`}
                           style={{ backgroundColor: u.avatar_color }}
                         >
@@ -853,7 +881,7 @@ export const ChatView: React.FC = () => {
               {!isInVoice ? (
                 <button
                   onClick={startVoice}
-                  className="flex items-center gap-2 px-6 py-3 bg-[#ff5500] hover:bg-[#e64d00] text-black font-black text-sm rounded-xl shadow-lg shadow-[#ff5500]/20 transition-all cursor-pointer font-heading"
+                  className="flex items-center gap-2 px-6 py-3 bg-[#0066ff] hover:bg-[#e64d00] text-black font-black text-sm rounded-xl shadow-lg shadow-[#0066ff]/20 transition-all cursor-pointer font-heading"
                 >
                   <Mic className="w-4 h-4" />
                   <span>Join Voice</span>
@@ -864,7 +892,7 @@ export const ChatView: React.FC = () => {
                     onClick={toggleMute}
                     className={`p-3 rounded-xl border transition-all cursor-pointer ${
                       isMuted 
-                        ? 'bg-[#ff5500]/20 text-[#ff5500] border-[#ff5500]/40' 
+                        ? 'bg-[#0066ff]/20 text-[#0066ff] border-[#0066ff]/40' 
                         : 'bg-[#18181b] text-zinc-300 hover:text-white border-[#2c2c30]'
                     }`}
                     title={isMuted ? 'Unmute' : 'Mute'}
@@ -876,7 +904,7 @@ export const ChatView: React.FC = () => {
                     onClick={toggleDeafen}
                     className={`p-3 rounded-xl border transition-all cursor-pointer ${
                       isDeafened 
-                        ? 'bg-[#ff5500]/20 text-[#ff5500] border-[#ff5500]/40' 
+                        ? 'bg-[#0066ff]/20 text-[#0066ff] border-[#0066ff]/40' 
                         : 'bg-[#18181b] text-zinc-300 hover:text-white border-[#2c2c30]'
                     }`}
                     title={isDeafened ? 'Undeafen' : 'Deafen'}
@@ -886,7 +914,7 @@ export const ChatView: React.FC = () => {
 
                   <button
                     onClick={stopVoice}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-[#18181b] hover:bg-[#202024] text-[#ff5500] font-bold text-xs rounded-xl border border-[#2c2c32] hover:border-[#ff5500]/50 transition-all cursor-pointer font-heading"
+                    className="flex items-center gap-2 px-4 py-2.5 bg-[#18181b] hover:bg-[#202024] text-[#0066ff] font-bold text-xs rounded-xl border border-[#2c2c32] hover:border-[#0066ff]/50 transition-all cursor-pointer font-heading"
                   >
                     <PhoneOff className="w-4 h-4" />
                     <span>Disconnect</span>
@@ -913,7 +941,7 @@ export const ChatView: React.FC = () => {
                     {/* Camera Loading Screen */}
                     {isCameraStarting && (
                       <div className="absolute inset-0 bg-[#0e0e11] z-20 flex flex-col items-center justify-center space-y-3">
-                        <div className="w-8 h-8 border-2 border-[#ff5500] border-t-transparent rounded-full animate-spin" />
+                        <div className="w-8 h-8 border-2 border-[#0066ff] border-t-transparent rounded-full animate-spin" />
                         <div className="text-center">
                           <p className="text-sm font-bold text-white font-heading">
                             Starting camera...
@@ -929,12 +957,12 @@ export const ChatView: React.FC = () => {
                     {cameraError && !isCameraStarting && (
                       <div className="absolute top-3 left-3 right-3 bg-[#141418]/90 backdrop-blur-md border border-[#26262a] rounded-xl px-3 py-1.5 flex items-center justify-between text-[11px] text-zinc-300 z-20 shadow-lg">
                         <div className="flex items-center gap-1.5 truncate">
-                          <AlertCircle className="w-3.5 h-3.5 text-[#ff5500] shrink-0" />
+                          <AlertCircle className="w-3.5 h-3.5 text-[#0066ff] shrink-0" />
                           <span className="truncate">{cameraError}</span>
                         </div>
                         <button
                           onClick={startVideo}
-                          className="ml-2 text-[#ff5500] hover:text-white font-bold shrink-0 cursor-pointer flex items-center gap-1 text-[10px]"
+                          className="ml-2 text-[#0066ff] hover:text-white font-bold shrink-0 cursor-pointer flex items-center gap-1 text-[10px]"
                         >
                           <RotateCw className="w-2.5 h-2.5" />
                           <span>Retry</span>
@@ -954,8 +982,8 @@ export const ChatView: React.FC = () => {
                     {/* Local Avatar Tile */}
                     {!isVideoEnabled && !isScreenSharing && !isCameraStarting && (
                       <div className="flex flex-col items-center justify-center">
-                        <div className={`w-20 h-20 rounded-2xl bg-[#ff5500] text-black font-black text-2xl flex items-center justify-center shadow-lg shadow-[#ff5500]/25 transition-all ${
-                          isUserSpeaking ? 'ring-4 ring-[#ff5500] shadow-[0_0_25px_#ff5500]/60' : ''
+                        <div className={`w-20 h-20 rounded-2xl bg-[#0066ff] text-black font-black text-2xl flex items-center justify-center shadow-lg shadow-[#0066ff]/25 transition-all ${
+                          isUserSpeaking ? 'ring-4 ring-[#0066ff] shadow-[0_0_25px_#0066ff]/60' : ''
                         }`}>
                           {currentUser.username.slice(0, 2).toUpperCase()}
                         </div>
@@ -969,7 +997,7 @@ export const ChatView: React.FC = () => {
                     <div className="absolute bottom-3 left-3 bg-black/75 backdrop-blur-md px-3 py-1 rounded-xl text-xs font-bold text-white border border-white/10 flex items-center gap-2 z-10">
                       <span>{currentUser.username} (You)</span>
                       {isScreenSharing && (
-                        <span className="text-[10px] bg-[#ff5500] text-black px-1.5 py-0.2 rounded font-black">
+                        <span className="text-[10px] bg-[#0066ff] text-black px-1.5 py-0.2 rounded font-black">
                           Screen
                         </span>
                       )}
@@ -1017,7 +1045,7 @@ export const ChatView: React.FC = () => {
                         <div className="flex flex-col items-center justify-center">
                           <div 
                             className={`w-20 h-20 rounded-2xl text-black font-black text-2xl flex items-center justify-center shadow-lg transition-all ${
-                              isPeerSpeaking ? 'ring-4 ring-[#ff5500] shadow-[0_0_20px_#ff5500]' : ''
+                              isPeerSpeaking ? 'ring-4 ring-[#0066ff] shadow-[0_0_20px_#0066ff]' : ''
                             }`}
                             style={{ backgroundColor: u.avatar_color }}
                           >
@@ -1033,11 +1061,11 @@ export const ChatView: React.FC = () => {
                       <div className="absolute bottom-3 left-3 bg-black/75 backdrop-blur-md px-3 py-1 rounded-xl text-xs font-bold text-white border border-white/10 flex items-center gap-2">
                         <span>{u.username}</span>
                         {hasRemoteVideo ? (
-                          <Video className="w-3.5 h-3.5 text-[#ff5500]" />
+                          <Video className="w-3.5 h-3.5 text-[#0066ff]" />
                         ) : u.is_muted ? (
                           <MicOff className="w-3.5 h-3.5 text-zinc-500" />
                         ) : (
-                          <Volume2 className="w-3.5 h-3.5 text-[#ff5500]" />
+                          <Volume2 className="w-3.5 h-3.5 text-[#0066ff]" />
                         )}
                       </div>
                     </div>
@@ -1062,7 +1090,7 @@ export const ChatView: React.FC = () => {
               {!isInVideo ? (
                 <button
                   onClick={startVideo}
-                  className="flex items-center gap-2 px-6 py-3 bg-[#ff5500] hover:bg-[#e64d00] text-black font-black text-sm rounded-xl shadow-lg shadow-[#ff5500]/20 transition-all cursor-pointer font-heading"
+                  className="flex items-center gap-2 px-6 py-3 bg-[#0066ff] hover:bg-[#e64d00] text-black font-black text-sm rounded-xl shadow-lg shadow-[#0066ff]/20 transition-all cursor-pointer font-heading"
                 >
                   <Video className="w-4 h-4" />
                   <span>Join Video</span>
@@ -1075,7 +1103,7 @@ export const ChatView: React.FC = () => {
                     className={`p-3 rounded-xl border transition-all cursor-pointer ${
                       isVideoEnabled 
                         ? 'bg-[#18181b] text-white border-[#2c2c30]' 
-                        : 'bg-[#ff5500]/20 text-[#ff5500] border-[#ff5500]/40'
+                        : 'bg-[#0066ff]/20 text-[#0066ff] border-[#0066ff]/40'
                     }`}
                     title={isVideoEnabled ? 'Turn Off Camera' : 'Turn On Camera'}
                   >
@@ -1087,7 +1115,7 @@ export const ChatView: React.FC = () => {
                     onClick={toggleScreenShare}
                     className={`p-3 rounded-xl border transition-all cursor-pointer ${
                       isScreenSharing 
-                        ? 'bg-[#ff5500] text-black border-[#ff5500] font-bold' 
+                        ? 'bg-[#0066ff] text-black border-[#0066ff] font-bold' 
                         : 'bg-[#18181b] text-zinc-300 hover:text-white border-[#2c2c30]'
                     }`}
                     title={isScreenSharing ? 'Stop Sharing' : 'Share Screen'}
@@ -1100,7 +1128,7 @@ export const ChatView: React.FC = () => {
                     onClick={toggleMute}
                     className={`p-3 rounded-xl border transition-all cursor-pointer ${
                       isMuted 
-                        ? 'bg-[#ff5500]/20 text-[#ff5500] border-[#ff5500]/40' 
+                        ? 'bg-[#0066ff]/20 text-[#0066ff] border-[#0066ff]/40' 
                         : 'bg-[#18181b] text-zinc-300 hover:text-white border-[#2c2c30]'
                     }`}
                     title={isMuted ? 'Unmute' : 'Mute'}
@@ -1113,7 +1141,7 @@ export const ChatView: React.FC = () => {
                     onClick={toggleDeafen}
                     className={`p-3 rounded-xl border transition-all cursor-pointer ${
                       isDeafened 
-                        ? 'bg-[#ff5500]/20 text-[#ff5500] border-[#ff5500]/40' 
+                        ? 'bg-[#0066ff]/20 text-[#0066ff] border-[#0066ff]/40' 
                         : 'bg-[#18181b] text-zinc-300 hover:text-white border-[#2c2c30]'
                     }`}
                     title={isDeafened ? 'Undeafen' : 'Deafen'}
@@ -1124,7 +1152,7 @@ export const ChatView: React.FC = () => {
                   {/* Disconnect Video */}
                   <button
                     onClick={stopVideo}
-                    className="flex items-center gap-2 px-4 py-2.5 bg-[#18181b] hover:bg-[#202024] text-[#ff5500] font-bold text-xs rounded-xl border border-[#2c2c32] hover:border-[#ff5500]/50 transition-all cursor-pointer font-heading"
+                    className="flex items-center gap-2 px-4 py-2.5 bg-[#18181b] hover:bg-[#202024] text-[#0066ff] font-bold text-xs rounded-xl border border-[#2c2c32] hover:border-[#0066ff]/50 transition-all cursor-pointer font-heading"
                   >
                     <PhoneOff className="w-4 h-4" />
                     <span>Disconnect</span>

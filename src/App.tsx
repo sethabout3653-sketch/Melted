@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useDeferredValue } from 'react';
+import React, { useState, useEffect, useMemo, useDeferredValue } from 'react';
 import { Navbar } from './components/Navbar';
 import { HeroSpotlight } from './components/HeroSpotlight';
 import { CategoryFilter } from './components/CategoryFilter';
@@ -6,23 +6,21 @@ import { GameCard } from './components/GameCard';
 import { GamePlayer } from './components/GamePlayer';
 import { ChatView } from './components/ChatView';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import { 
-  getAllGames, 
-  getFavorites, 
-  toggleFavorite as toggleFavoriteStorage, 
-  recordRecentPlay 
-} from './services/gameService';
+import { FrostedLoadingScreen } from './components/FrostedLoadingScreen';
+import { fetchGames, resolveGameUrl } from './services/gameService';
+import { fetchLuminGames } from './services/luminService';
 import { useCloak, launchAboutBlank } from './hooks/useCloak';
 import { useGameCache } from './hooks/useGameCache';
 import { GameItem, GameCategory } from './types/game';
 import { 
-  Flame, 
+  Snowflake, 
   Search, 
   ShieldCheck, 
   Layers, 
   ArrowRight,
   Gamepad2,
-  MessageSquare
+  MessageSquare,
+  Zap
 } from 'lucide-react';
 
 const PAGE_SIZE = 36;
@@ -38,133 +36,169 @@ export default function App() {
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
-  // Tab cloaking & Panic key system
+  // Tab cloaking system
   const {
     activePreset,
     applyPreset,
-    panicKey,
-    triggerPanic,
     presets,
   } = useCloak();
 
-  // Load all games
-  const allGames = useMemo(() => {
-    return getAllGames();
-  }, []);
+  // Master Games State
+  const [allGames, setAllGames] = useState<GameItem[]>([]);
+  const [isCatalogLoading, setIsCatalogLoading] = useState(true);
+  const [activeGame, setActiveGame] = useState<GameItem | null>(null);
 
-  // Automatic silent background caching engine (no duplicate manual UI)
-  const {
-    cachedIds,
-    isGameCached,
-    cacheSingleGame,
-    isPreCaching,
-    cacheProgress,
-  } = useGameCache(allGames);
+  // Offline caching hook
+  const { isGameCached, cacheProgress, cachedIds } = useGameCache(allGames);
 
-  // Restore game from URL on refresh (even when completely offline!)
-  const [activeGame, setActiveGame] = useState<GameItem | null>(() => {
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const gameIdStr = params.get('game');
-      if (gameIdStr) {
-        const id = parseInt(gameIdStr, 10);
-        const all = getAllGames();
-        return all.find((g) => g.id === id) || null;
-      }
-    } catch {}
-    return null;
-  });
-
-  // Keep URL in sync with active game
+  // Initial Master Catalog Load (Melted Archive + Lumin SDK 1169+ Games)
   useEffect(() => {
-    try {
-      const url = new URL(window.location.href);
-      if (activeGame) {
-        url.searchParams.set('game', String(activeGame.id));
-        window.history.replaceState({}, '', url.toString());
-      } else {
-        url.searchParams.delete('game');
-        window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
-      }
-    } catch {}
-  }, [activeGame]);
-
-  // Periodic HTTP Keep-Alive
-  useEffect(() => {
-    const keepAlivePing = async () => {
+    let active = true;
+    async function loadAllCatalogs() {
+      setIsCatalogLoading(true);
       try {
-        await fetch('/api/health');
-      } catch {}
-    };
+        const [meltedGames, luminGames] = await Promise.all([
+          fetchGames().catch(() => []),
+          fetchLuminGames().catch(() => []),
+        ]);
 
-    const interval = setInterval(keepAlivePing, 14 * 60 * 1000);
-    return () => clearInterval(interval);
+        if (!active) return;
+
+        // Combine master archives
+        const masterMap = new Map<string, GameItem>();
+        
+        // Add Melted games
+        meltedGames.forEach((g) => {
+          if (g && g.name) {
+            masterMap.set(g.name.toLowerCase().trim(), g);
+          }
+        });
+
+        // Add Lumin games
+        luminGames.forEach((g) => {
+          if (g && g.name) {
+            const key = g.name.toLowerCase().trim();
+            if (!masterMap.has(key)) {
+              masterMap.set(key, g);
+            }
+          }
+        });
+
+        const combined = Array.from(masterMap.values());
+        setAllGames(combined.length > 0 ? combined : luminGames);
+        
+        // Guarantee 2.5s of smooth Roku bounce animation intro
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+      } catch (err) {
+        console.warn('Catalog load warning:', err);
+      } finally {
+        if (active) setIsCatalogLoading(false);
+      }
+    }
+    loadAllCatalogs();
+    return () => {
+      active = false;
+    };
   }, []);
 
-  // Featured games for spotlight
-  const featuredGames = useMemo(() => {
-    return allGames.filter((g) => g.featured).slice(0, 10);
-  }, [allGames]);
+  // Favorites helpers
+  function getFavorites(): number[] {
+    try {
+      const stored = localStorage.getItem('frosted_favorites');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function toggleFavoriteStorage(id: number) {
+    try {
+      const current = getFavorites();
+      const updated = current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id];
+      localStorage.setItem('frosted_favorites', JSON.stringify(updated));
+    } catch {}
+  }
+
+  const handleToggleFavorite = (id: number) => {
+    toggleFavoriteStorage(id);
+    setFavorites(getFavorites());
+  };
+
+  const handleAboutBlank = (game: GameItem) => {
+    const url = game.source === 'lumin' ? game.url : resolveGameUrl(game.url);
+    if (url) {
+      launchAboutBlank(url, game.name);
+    }
+  };
+
+  const handlePlayGame = (game: GameItem) => {
+    setActiveGame(game);
+  };
+
+  const handleCloseGame = () => {
+    setActiveGame(null);
+  };
 
   // Category counts
   const categoryCounts = useMemo(() => {
-    const counts: Record<GameCategory, number> = {
+    const counts: Record<string, number> = {
       All: allGames.length,
       Featured: allGames.filter((g) => g.featured).length,
-      'Action & Shooters': 0,
-      'Driving & Racing': 0,
-      'Skill & Platformer': 0,
-      'Horror & Mystery': 0,
-      'Retro & Arcade': 0,
-      'Sports & Physics': 0,
-      'Puzzle & Casual': 0,
-      'Emulators & Ports': 0,
+      'Lumin Games': allGames.filter((g) => g.source === 'lumin').length,
+      'Action & Shooters': allGames.filter((g) => g.category === 'Action & Shooters').length,
+      'Driving & Racing': allGames.filter((g) => g.category === 'Driving & Racing').length,
+      'Skill & Platformer': allGames.filter((g) => g.category === 'Skill & Platformer').length,
+      'Horror & Mystery': allGames.filter((g) => g.category === 'Horror & Mystery').length,
+      'Retro & Arcade': allGames.filter((g) => g.category === 'Retro & Arcade').length,
+      'Sports & Physics': allGames.filter((g) => g.category === 'Sports & Physics').length,
+      'Puzzle & Casual': allGames.filter((g) => g.category === 'Puzzle & Casual').length,
+      'Emulators & Ports': allGames.filter((g) => g.category === 'Emulators & Ports').length,
       Favorites: favorites.length,
     };
-
-    allGames.forEach((g) => {
-      if (counts[g.category] !== undefined) {
-        counts[g.category]++;
-      }
-    });
-
-    return counts;
+    return counts as Record<GameCategory, number>;
   }, [allGames, favorites]);
 
-  // Filtered games
+  // Featured list for spotlight
+  const featuredGames = useMemo(() => {
+    return allGames.filter((g) => g.featured).slice(0, 6);
+  }, [allGames]);
+
+  // Filtered and sorted games list
   const filteredGames = useMemo(() => {
     let list = [...allGames];
 
+    // Favorites filter
     if (showFavoritesOnly || selectedCategory === 'Favorites') {
       list = list.filter((g) => favorites.includes(g.id));
+    } else if (selectedCategory === 'Lumin Games') {
+      list = list.filter((g) => g.source === 'lumin');
     } else if (selectedCategory === 'Featured') {
       list = list.filter((g) => g.featured);
     } else if (selectedCategory !== 'All') {
       list = list.filter((g) => g.category === selectedCategory);
     }
 
+    // Search query filter
     if (deferredQuery.trim()) {
       const q = deferredQuery.toLowerCase().trim();
-      list = list.filter(
-        (g) =>
-          g.name.toLowerCase().includes(q) ||
-          (g.author && g.author.toLowerCase().includes(q)) ||
-          g.category.toLowerCase().includes(q)
+      list = list.filter((g) => 
+        g.name.toLowerCase().includes(q) || 
+        g.category.toLowerCase().includes(q) ||
+        (g.author && g.author.toLowerCase().includes(q))
       );
     }
 
+    // Sorting
     if (sortBy === 'alpha-asc') {
       list.sort((a, b) => a.name.localeCompare(b.name));
     } else if (sortBy === 'alpha-desc') {
       list.sort((a, b) => b.name.localeCompare(a.name));
     } else if (sortBy === 'random') {
-      list.sort((a, b) => ((a.id * 17) % 100) - ((b.id * 17) % 100));
+      list.sort((a, b) => ((a.id * 7) % 100) - ((b.id * 7) % 100));
     } else {
-      list.sort((a, b) => {
-        if (a.featured && !b.featured) return -1;
-        if (!a.featured && b.featured) return 1;
-        return a.id - b.id;
-      });
+      list.sort((a, b) => (b.featured ? 1 : 0) - (a.featured ? 1 : 0));
     }
 
     return list;
@@ -173,23 +207,6 @@ export default function App() {
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
   }, [selectedCategory, deferredQuery, sortBy, showFavoritesOnly]);
-
-  const handleToggleFavorite = (id: number) => {
-    toggleFavoriteStorage(id);
-    setFavorites(getFavorites());
-  };
-
-  const handlePlayGame = (game: GameItem) => {
-    recordRecentPlay(game.id);
-    cacheSingleGame(game);
-    setActiveGame(game);
-  };
-
-  const handleAboutBlank = (game: GameItem) => {
-    recordRecentPlay(game.id);
-    cacheSingleGame(game);
-    launchAboutBlank(game.resolvedUrl, game.name);
-  };
 
   const handleRandomGame = () => {
     if (!allGames.length) return;
@@ -211,9 +228,10 @@ export default function App() {
   const hasMore = visibleCount < filteredGames.length;
 
   return (
-    <div className="min-h-screen bg-[#080808] text-[#f4f4f5] flex flex-col font-sans selection:bg-[#ff5500] selection:text-black">
+    <div className="min-h-screen bg-[#050505] text-[#f4f4f5] flex flex-col font-sans selection:bg-[#0066ff] selection:text-white">
+      <FrostedLoadingScreen isLoading={isCatalogLoading} />
       
-      {/* Top Navigation Bar: Sleek Black and Orange with Tab Switcher */}
+      {/* Top Navigation Bar: Sleek Black and Electric Blue */}
       <Navbar
         currentTab={currentTab}
         onTabChange={setCurrentTab}
@@ -230,10 +248,13 @@ export default function App() {
         activePreset={activePreset}
         presets={presets}
         onSelectPreset={applyPreset}
-        panicKey={panicKey}
-        onTriggerPanic={triggerPanic}
         totalGames={allGames.length}
         onGoHome={handleGoHome}
+        selectedCategory={selectedCategory}
+        onSelectCategory={(cat) => {
+          setSelectedCategory(cat);
+          setShowFavoritesOnly(cat === 'Favorites');
+        }}
       />
 
       {/* Main View: Either Discord Chat OR Games Catalog */}
@@ -268,14 +289,14 @@ export default function App() {
           {searchQuery && (
             <div className="mb-6 flex items-center justify-between bg-[#111114] px-4 py-3 rounded-xl border border-[#202024]">
               <div className="flex items-center gap-2 text-sm text-zinc-300">
-                <Search className="w-4 h-4 text-[#ff5500]" />
+                <Search className="w-4 h-4 text-[#0066ff]" />
                 <span>
                   Found <strong className="text-white">{filteredGames.length}</strong> games for &ldquo;{searchQuery}&rdquo;
                 </span>
               </div>
               <button
                 onClick={() => setSearchQuery('')}
-                className="text-xs text-[#ff5500] hover:underline font-semibold cursor-pointer"
+                className="text-xs text-[#0066ff] hover:underline font-semibold cursor-pointer"
               >
                 Clear search
               </button>
@@ -285,7 +306,7 @@ export default function App() {
           {/* Empty State */}
           {filteredGames.length === 0 ? (
             <div className="py-20 text-center bg-[#0e0e10] rounded-2xl border border-[#222225] p-8 max-w-lg mx-auto space-y-4">
-              <div className="w-14 h-14 rounded-2xl bg-[#ff5500]/15 border border-[#ff5500]/30 text-[#ff5500] flex items-center justify-center mx-auto">
+              <div className="w-14 h-14 rounded-2xl bg-[#0066ff]/15 border border-[#0066ff]/30 text-[#0066ff] flex items-center justify-center mx-auto">
                 <Gamepad2 className="w-7 h-7" />
               </div>
               <h3 className="text-xl font-black text-white font-heading">
@@ -302,7 +323,7 @@ export default function App() {
                   setSelectedCategory('All');
                   setShowFavoritesOnly(false);
                 }}
-                className="px-5 py-2.5 bg-[#ff5500] hover:bg-[#e64d00] text-black text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer font-heading"
+                className="px-5 py-2.5 bg-[#0066ff] hover:bg-[#0052cc] text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer font-heading"
               >
                 View All {allGames.length} Games
               </button>
@@ -326,16 +347,24 @@ export default function App() {
 
           {/* Load More Pagination */}
           {hasMore && (
-            <div className="mt-10 text-center">
+            <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
               <button
-                onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE)}
-                className="inline-flex items-center gap-2 px-8 py-3 bg-[#111114] hover:bg-[#18181c] text-white hover:text-[#ff5500] font-bold text-xs sm:text-sm rounded-xl border border-[#242428] hover:border-[#ff5500]/40 transition-all cursor-pointer font-heading shadow-lg"
+                onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE * 2)}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-[#111114] hover:bg-[#18181c] text-white hover:text-[#0066ff] font-bold text-xs sm:text-sm rounded-xl border border-[#242428] hover:border-[#0066ff]/40 transition-all cursor-pointer font-heading shadow-lg"
               >
                 <span>Load More Games</span>
                 <span className="text-xs text-zinc-400">
                   ({visibleCount} of {filteredGames.length})
                 </span>
-                <ArrowRight className="w-4 h-4 text-[#ff5500]" />
+                <ArrowRight className="w-4 h-4 text-[#0066ff]" />
+              </button>
+
+              <button
+                onClick={() => setVisibleCount(filteredGames.length)}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-[#0066ff] hover:bg-[#0052cc] text-white font-extrabold text-xs sm:text-sm rounded-xl transition-all cursor-pointer font-heading shadow-md shadow-[#0066ff]/20"
+              >
+                <Zap className="w-4 h-4 fill-white text-white" />
+                <span>Show All {filteredGames.length} Games</span>
               </button>
             </div>
           )}
@@ -343,7 +372,7 @@ export default function App() {
         </main>
       )}
 
-      {/* Footer: Clean and Human (only shown in Games view) */}
+      {/* Footer: Clean, Precise, Robotic Alignment */}
       {currentTab === 'games' && (
         <footer className="mt-16 border-t border-[#1c1c20] bg-[#050505] py-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -356,26 +385,24 @@ export default function App() {
                   className="flex items-center gap-2.5 group cursor-pointer text-left focus:outline-none"
                   title="Go to Home"
                 >
-                  <div className="w-7 h-7 rounded-lg bg-[#ff5500] flex items-center justify-center group-hover:scale-105 transition-transform">
-                    <Flame className="w-4 h-4 text-black fill-black" />
+                  <div className="w-7 h-7 rounded-lg bg-[#0066ff] flex items-center justify-center group-hover:scale-105 transition-transform">
+                    <Snowflake className="w-4 h-4 text-white fill-none" />
                   </div>
-                  <span className="text-lg font-black text-white font-heading tracking-tight group-hover:text-[#ff5500] transition-colors">
-                    MELTED
+                  <span className="text-lg font-black text-white font-heading tracking-tight group-hover:text-[#0066ff] transition-colors">
+                    Frosted
                   </span>
                 </button>
                 <p className="text-xs text-zinc-400 max-w-sm leading-relaxed">
-                  High-performance unblocked gaming portal featuring 840+ instant titles with full offline support.
+                  High-performance unblocked gaming portal featuring instant titles with full offline support.
                 </p>
                 <div className="flex items-center gap-2 text-[11px] text-zinc-400 pt-1">
-                  <span className="flex items-center gap-1 text-[#ff5500] font-semibold">
+                  <span className="flex items-center gap-1 text-[#0066ff] font-semibold">
                     <ShieldCheck className="w-3.5 h-3.5" /> 100% Unblocked
                   </span>
                   <span>·</span>
                   <span className="flex items-center gap-1 text-zinc-300 font-semibold">
-                    <Layers className="w-3.5 h-3.5 text-[#ff5500]" /> Offline Ready
+                    <Layers className="w-3.5 h-3.5 text-[#0066ff]" /> Offline Ready
                   </span>
-                  <span>·</span>
-                  <span>840+ Games</span>
                 </div>
               </div>
 
@@ -386,22 +413,22 @@ export default function App() {
                 </div>
                 <ul className="space-y-1.5 text-xs text-zinc-400">
                   <li>
-                    <button onClick={() => setSelectedCategory('Action & Shooters')} className="hover:text-[#ff5500] transition-colors cursor-pointer">
+                    <button onClick={() => setSelectedCategory('Action & Shooters')} className="hover:text-[#0066ff] transition-colors cursor-pointer">
                       Action & Shooters
                     </button>
                   </li>
                   <li>
-                    <button onClick={() => setSelectedCategory('Driving & Racing')} className="hover:text-[#ff5500] transition-colors cursor-pointer">
+                    <button onClick={() => setSelectedCategory('Driving & Racing')} className="hover:text-[#0066ff] transition-colors cursor-pointer">
                       Driving & Racing
                     </button>
                   </li>
                   <li>
-                    <button onClick={() => setSelectedCategory('Skill & Platformer')} className="hover:text-[#ff5500] transition-colors cursor-pointer">
+                    <button onClick={() => setSelectedCategory('Skill & Platformer')} className="hover:text-[#0066ff] transition-colors cursor-pointer">
                       Skill & Platformer
                     </button>
                   </li>
                   <li>
-                    <button onClick={() => setSelectedCategory('Horror & Mystery')} className="hover:text-[#ff5500] transition-colors cursor-pointer">
+                    <button onClick={() => setSelectedCategory('Horror & Mystery')} className="hover:text-[#0066ff] transition-colors cursor-pointer">
                       Horror / Mystery
                     </button>
                   </li>
@@ -415,23 +442,23 @@ export default function App() {
                 </div>
                 <ul className="space-y-1.5 text-xs text-zinc-400">
                   <li>
-                    <button onClick={() => setCurrentTab('chat')} className="hover:text-[#ff5500] transition-colors cursor-pointer flex items-center gap-1.5 text-zinc-300">
-                      <MessageSquare className="w-3.5 h-3.5 text-[#ff5500]" />
+                    <button onClick={() => setCurrentTab('chat')} className="hover:text-[#0066ff] transition-colors cursor-pointer flex items-center gap-1.5 text-zinc-300">
+                      <MessageSquare className="w-3.5 h-3.5 text-[#0066ff]" />
                       <span>Community Chat</span>
                     </button>
                   </li>
                   <li>
-                    <button onClick={() => applyPreset('classroom')} className="hover:text-[#ff5500] transition-colors cursor-pointer">
+                    <button onClick={() => applyPreset('classroom')} className="hover:text-[#0066ff] transition-colors cursor-pointer">
                       Disguise as Classroom
                     </button>
                   </li>
                   <li>
-                    <button onClick={() => applyPreset('drive')} className="hover:text-[#ff5500] transition-colors cursor-pointer">
+                    <button onClick={() => applyPreset('drive')} className="hover:text-[#0066ff] transition-colors cursor-pointer">
                       Disguise as Google Drive
                     </button>
                   </li>
                   <li>
-                    <button onClick={handleRandomGame} className="hover:text-[#ff5500] transition-colors cursor-pointer">
+                    <button onClick={handleRandomGame} className="hover:text-[#0066ff] transition-colors cursor-pointer">
                       Surprise Game
                     </button>
                   </li>
@@ -442,7 +469,7 @@ export default function App() {
 
             <div className="pt-6 border-t border-[#19191c] flex flex-col sm:flex-row items-center justify-between text-[11px] text-zinc-400 gap-2">
               <div>
-                &copy; {new Date().getFullYear()} MELTED. Fast, instant offline gaming.
+                &copy; {new Date().getFullYear()} Frosted. Fast, instant offline gaming.
               </div>
               <div>
                 Instant 60 FPS in-browser gameplay
@@ -452,7 +479,7 @@ export default function App() {
         </footer>
       )}
 
-      {/* Floating Offline Notification (clean, non-intrusive) */}
+      {/* Floating Offline Notification */}
       <OfflineIndicator
         cachedCount={cachedIds.size}
         isPreCaching={false}
@@ -463,7 +490,7 @@ export default function App() {
       {activeGame && (
         <GamePlayer
           game={activeGame}
-          onClose={() => setActiveGame(null)}
+          onClose={handleCloseGame}
           isFavorite={favorites.includes(activeGame.id)}
           onToggleFavorite={handleToggleFavorite}
         />

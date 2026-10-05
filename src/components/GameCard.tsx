@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Heart, ExternalLink, Flame, Gamepad2, Check } from 'lucide-react';
+import { Play, Heart, ExternalLink, Flame, Gamepad2 } from 'lucide-react';
 import { GameItem } from '../types/game';
 
 interface GameCardProps {
@@ -25,7 +25,7 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
   const ratingNumber = (4.7 + ((game.id * 13) % 30) / 100).toFixed(1);
 
   return (
-    <div className="group relative bg-[#0e0e10] hover:bg-[#131316] border border-[#202024] hover:border-[#ff5500]/40 rounded-2xl p-4 transition-all duration-200 hover:shadow-xl hover:shadow-[#ff5500]/5 flex flex-col justify-between transform-gpu">
+    <div className="group relative bg-[#0e0e10] hover:bg-[#131316] border border-[#202024] hover:border-[#0066ff]/40 rounded-2xl p-4 transition-all duration-200 hover:shadow-xl hover:shadow-[#0066ff]/5 flex flex-col justify-between transform-gpu">
       
       {/* Top Section */}
       <div>
@@ -40,9 +40,9 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
           )}
 
           {/* Fallback styling container if image fails to load */}
-          {imageError ? (
+          {imageError || !game.resolvedCover ? (
             <div className="absolute inset-0 bg-[#121214] flex flex-col items-center justify-center p-4 text-center">
-              <div className="w-10 h-10 rounded-xl bg-[#ff5500]/15 border border-[#ff5500]/30 flex items-center justify-center text-[#ff5500] mb-2">
+              <div className="w-10 h-10 rounded-xl bg-[#0066ff]/15 border border-[#0066ff]/30 flex items-center justify-center text-[#0066ff] mb-2">
                 <Gamepad2 className="w-5 h-5" />
               </div>
               <span className="text-xs font-bold text-zinc-300 font-heading line-clamp-1">
@@ -54,7 +54,7 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
             </div>
           ) : (
             <img
-              src={game.resolvedCover}
+              src={game.resolvedCover || undefined}
               alt={game.name}
               referrerPolicy="no-referrer"
               loading="lazy"
@@ -70,7 +70,7 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
           {/* Subtle dark gradient scrim at bottom */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-3">
             <span className="text-[11px] font-bold text-white drop-shadow-md flex items-center gap-1 font-heading">
-              <Play className="w-3 h-3 fill-[#ff5500] text-[#ff5500]" /> Launch Game
+              <Play className="w-3 h-3 fill-[#0066ff] text-[#0066ff]" /> Launch Game
             </span>
           </div>
 
@@ -85,65 +85,55 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
           >
             <Heart
               className={`w-3.5 h-3.5 transition-colors ${
-                isFavorite ? 'fill-[#ff5500] text-[#ff5500]' : 'text-zinc-400 hover:text-white'
+                isFavorite ? 'fill-[#0066ff] text-[#0066ff]' : 'text-zinc-400 hover:text-white'
               }`}
             />
           </button>
 
-          {/* Featured badge */}
-          {game.featured && (
-            <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full bg-[#ff5500] text-black text-[9px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1 font-heading">
-              <Flame className="w-2.5 h-2.5 fill-black" /> Hot
-            </div>
-          )}
+            {/* Featured badge */}
+            {game.featured ? (
+              <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full bg-[#0066ff] text-white text-[9px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1 font-heading">
+                <Flame className="w-2.5 h-2.5 fill-white text-white" /> Hot
+              </div>
+            ) : null}
         </div>
 
         {/* Title & Metadata */}
         <div className="space-y-1.5">
           <h3 
             onClick={() => onPlay(game)}
-            className="font-extrabold text-[15px] text-zinc-100 hover:text-[#ff5500] transition-colors leading-snug line-clamp-1 cursor-pointer font-heading"
+            className="font-extrabold text-[15px] text-zinc-100 hover:text-[#0066ff] transition-colors leading-snug line-clamp-1 cursor-pointer font-heading"
             title={game.name}
           >
             {game.name}
           </h3>
 
-          <p className="text-xs text-zinc-400 line-clamp-1 font-normal">
-            {game.author ? `By ${game.author}` : 'Arcade Title'}
-          </p>
-
-          {/* Metadata Badges */}
-          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-            <span className="inline-flex items-center gap-1 bg-[#17171a] border border-[#27272a] rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-[#ff6611]">
-              <span>★</span> {ratingNumber}
+          <div className="flex items-center justify-between text-xs text-zinc-400">
+            <span className="text-[11px] text-zinc-400 font-medium truncate">
+              {game.author || 'Arcade'}
             </span>
-
-            <span className="inline-flex items-center bg-[#17171a] border border-[#27272a] rounded-full px-2.5 py-0.5 text-[11px] font-medium text-zinc-300">
-              {game.category.split(' ')[0]}
-            </span>
-
-            {isCached ? (
-              <span className="inline-flex items-center gap-1 bg-[#ff5500]/10 border border-[#ff5500]/30 rounded-full px-2 py-0.5 text-[10px] font-bold text-[#ff6611]">
-                <Check className="w-2.5 h-2.5 stroke-[3]" /> Offline Ready
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold text-zinc-300">
+                ★ {ratingNumber}
               </span>
-            ) : null}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Card Actions */}
+      {/* Bottom Action Footer */}
       <div className="mt-4 pt-3 border-t border-[#1c1c20] flex items-center justify-between gap-2">
         <button
           onClick={() => onPlay(game)}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 text-xs font-bold text-black bg-[#ff5500] hover:bg-[#e64d00] active:scale-[0.98] rounded-xl transition-all shadow-md shadow-[#ff5500]/20 cursor-pointer font-heading"
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-[#18181b] hover:bg-[#0066ff] text-zinc-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-[#27272a] hover:border-[#0066ff] font-heading shadow-sm"
         >
-          <Play className="w-3.5 h-3.5 fill-black" />
+          <Play className="w-3.5 h-3.5 fill-current" />
           <span>Play</span>
         </button>
 
         <button
           onClick={() => onAboutBlank(game)}
-          className="p-2 text-zinc-400 hover:text-white bg-[#151518] hover:bg-[#202024] rounded-xl border border-[#252528] hover:border-[#ff5500]/40 transition-all cursor-pointer"
+          className="p-2 bg-[#18181b] hover:bg-[#222226] text-zinc-400 hover:text-white rounded-xl border border-[#27272a] transition-all cursor-pointer"
           title="Open in stealth about:blank window"
         >
           <ExternalLink className="w-3.5 h-3.5" />

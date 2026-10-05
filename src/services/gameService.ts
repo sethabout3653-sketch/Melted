@@ -208,6 +208,10 @@ export function getAllGames(): GameItem[] {
   });
 }
 
+export async function fetchGames(): Promise<GameItem[]> {
+  return getAllGames();
+}
+
 const FAVORITES_KEY = 'melted_favorite_ids';
 const RECENT_KEY = 'melted_recent_ids';
 

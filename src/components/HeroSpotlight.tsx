@@ -21,8 +21,8 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
 
   return (
     <div className="relative mb-8 overflow-hidden rounded-2xl bg-[#0e0e10] border border-[#222226] p-6 lg:p-8 shadow-2xl">
-      {/* Background ambient orange glow */}
-      <div className="absolute -top-24 right-1/4 w-96 h-96 bg-[#ff5500]/10 rounded-full blur-3xl pointer-events-none" />
+      {/* Background ambient blue glow */}
+      <div className="absolute -top-24 right-1/4 w-96 h-96 bg-[#0066ff]/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
         
@@ -31,14 +31,14 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
           
           {/* Tag row */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#ff5500]/15 border border-[#ff5500]/30 text-[#ff6611] text-xs font-bold uppercase tracking-wider">
-              <Zap className="w-3.5 h-3.5 fill-[#ff5500] text-[#ff5500]" /> Featured Title
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0066ff]/15 border border-[#0066ff]/30 text-[#60a5fa] text-xs font-bold uppercase tracking-wider">
+              <Zap className="w-3.5 h-3.5 fill-[#0066ff] text-[#0066ff]" /> Featured Title
             </span>
             <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#18181b] border border-[#27272a] text-zinc-300 text-xs font-medium">
               Instant Play
             </span>
             <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#18181b] border border-[#27272a] text-zinc-300 text-xs font-medium">
-              <ShieldCheck className="w-3 h-3 text-[#ff5500]" /> Unblocked
+              <ShieldCheck className="w-3 h-3 text-[#0066ff]" /> Unblocked
             </span>
           </div>
 
@@ -50,11 +50,11 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
             <div className="flex items-center gap-2 text-xs sm:text-sm text-zinc-400 mt-2 font-medium">
               <span>{activeGame.author ? `By ${activeGame.author}` : 'Arcade Archive'}</span>
               <span>·</span>
-              <span className="flex items-center text-[#ff6611] font-semibold gap-1">
-                <Star className="w-3.5 h-3.5 fill-[#ff5500] text-[#ff5500]" /> 4.9
+              <span className="flex items-center text-[#60a5fa] font-semibold gap-1">
+                <Star className="w-3.5 h-3.5 fill-[#0066ff] text-[#0066ff]" /> 4.9
               </span>
               <span>·</span>
-              <span className="text-zinc-400">840+ Games Library</span>
+              <span className="text-zinc-400">Arcade Library</span>
             </div>
           </div>
 
@@ -68,15 +68,15 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <button
               onClick={() => onPlay(activeGame)}
-              className="flex items-center gap-2 px-6 py-3 bg-[#ff5500] hover:bg-[#e64d00] text-black text-sm font-extrabold rounded-xl shadow-lg shadow-[#ff5500]/25 active:scale-[0.98] transition-all cursor-pointer font-heading"
+              className="flex items-center gap-2 px-6 py-3 bg-[#0066ff] hover:bg-[#0052cc] text-white text-sm font-extrabold rounded-xl shadow-lg shadow-[#0066ff]/25 active:scale-[0.98] transition-all cursor-pointer font-heading"
             >
-              <Play className="w-4 h-4 fill-black text-black" />
+              <Play className="w-4 h-4 fill-white text-white" />
               <span>Play Now</span>
             </button>
 
             <button
               onClick={() => onAboutBlank(activeGame)}
-              className="flex items-center gap-2 px-5 py-3 bg-[#18181b] hover:bg-[#222226] text-zinc-200 hover:text-white text-sm font-semibold rounded-xl border border-[#27272a] hover:border-[#ff5500]/40 transition-all cursor-pointer"
+              className="flex items-center gap-2 px-5 py-3 bg-[#18181b] hover:bg-[#222226] text-zinc-200 hover:text-white text-sm font-semibold rounded-xl border border-[#27272a] hover:border-[#0066ff]/40 transition-all cursor-pointer"
               title="Open in an unblockable stealth about:blank window"
             >
               <ExternalLink className="w-4 h-4 text-zinc-400" />
@@ -95,14 +95,14 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
             className="group relative w-full aspect-[16/10] rounded-xl overflow-hidden bg-[#161619] border border-[#26262a] shadow-2xl cursor-pointer"
           >
             <img
-              src={activeGame.resolvedCover}
+              src={activeGame.resolvedCover || undefined}
               alt={activeGame.name}
               referrerPolicy="no-referrer"
               className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-4">
               <div>
-                <span className="text-[10px] uppercase font-black tracking-wider text-black bg-[#ff5500] px-2 py-0.5 rounded-full">
+                <span className="text-[10px] uppercase font-black tracking-wider text-white bg-[#0066ff] px-2 py-0.5 rounded-full">
                   Trending
                 </span>
                 <div className="text-base font-bold text-white mt-1">
@@ -122,13 +122,13 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
                   onClick={() => setSelectedIndex(idx)}
                   className={`relative rounded-lg overflow-hidden aspect-[4/3] border transition-all cursor-pointer ${
                     isSelected 
-                      ? 'border-[#ff5500] ring-2 ring-[#ff5500]/50' 
+                      ? 'border-[#0066ff] ring-2 ring-[#0066ff]/50' 
                       : 'border-[#27272a] opacity-60 hover:opacity-100'
                   }`}
                   title={game.name}
                 >
                   <img
-                    src={game.resolvedCover}
+                    src={game.resolvedCover || undefined}
                     alt={game.name}
                     referrerPolicy="no-referrer"
                     className="w-full h-full object-cover"

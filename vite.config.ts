@@ -14,11 +14,11 @@ export default defineConfig(() => {
         includeAssets: ['icon.svg', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
         manifest: {
           id: '/',
-          name: 'Melted — Unblocked Games & Arcades',
-          short_name: 'Melted',
-          description: 'Fast, modern unblocked gaming portal featuring 840+ instant titles with full offline support.',
-          theme_color: '#080808',
-          background_color: '#080808',
+          name: 'Frosted',
+          short_name: 'Frosted',
+          description: 'Fast, modern unblocked gaming portal featuring instant titles with full offline support.',
+          theme_color: '#050505',
+          background_color: '#050505',
           display: 'standalone',
           start_url: '/',
           scope: '/',
@@ -45,13 +45,14 @@ export default defineConfig(() => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2,json}'],
+          navigateFallbackDenylist: [/^\/api\//], // NEVER fallback to index.html for raw game assets!
           runtimeCaching: [
             {
-              // Cache HTML Game files for instant offline play
-              urlPattern: /\/api\/raw\/.*\.html/i,
+              // Cache ALL HTML and asset files under raw catalog for instant offline play
+              urlPattern: /\/api\/raw\/.*/i,
               handler: 'StaleWhileRevalidate',
               options: {
-                cacheName: 'melted-game-packages-cache',
+                cacheName: 'frosted-game-packages-cache',
                 expiration: {
                   maxEntries: 1000,
                   maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
@@ -66,7 +67,7 @@ export default defineConfig(() => {
               urlPattern: /^https:\/\/cdn\.jsdelivr\.net\/gh\/freebuisness\/covers@main\/.*/i,
               handler: 'CacheFirst',
               options: {
-                cacheName: 'melted-covers-cache',
+                cacheName: 'frosted-covers-cache',
                 expiration: {
                   maxEntries: 1000,
                   maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days

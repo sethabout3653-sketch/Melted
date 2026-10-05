@@ -140,7 +140,7 @@ export function initWebSocketDatabase(server: Server) {
                 channel_id: msg.row.channel_id || 'text-general',
                 sender_id: msg.row.sender_id,
                 sender_name: msg.row.sender_name,
-                avatar_color: msg.row.avatar_color || '#ff5500',
+                avatar_color: msg.row.avatar_color || '#0066ff',
                 content: msg.row.content,
                 timestamp: msg.row.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 created_at: Date.now(),
@@ -183,7 +183,7 @@ export function initWebSocketDatabase(server: Server) {
               db.upsertUser({
                 id: uId,
                 username: msg.user.username,
-                avatar_color: msg.user.avatar_color || '#ff5500',
+                avatar_color: msg.user.avatar_color || '#0066ff',
                 current_channel: msg.user.current_channel || 'text-general',
                 is_speaking: Boolean(msg.user.is_speaking),
                 is_muted: Boolean(msg.user.is_muted),
