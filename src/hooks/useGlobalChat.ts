@@ -17,29 +17,30 @@ export function useGlobalChat() {
   });
 
   const chat = useWebSocketDatabase(currentUser);
-  const { messages, registerRtcHandlers } = chat;
+  const { messages, setUserCallHandler } = chat;
 
   const lastMessageId = useRef<string | null>(null);
 
   useEffect(() => {
-    registerRtcHandlers(
-      () => {}, // signal
-      () => {}, // joined
-      () => {}, // left
-      (fromUserId, fromUserName, callType) => {
-        // Incoming Call Notification
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1344/1344-preview.mp3'); 
-        audio.play().catch(() => {});
+    if (isConnected && currentUser) {
+      registerUser(currentUser);
+    }
+  }, [isConnected, currentUser, registerUser]);
 
-        if (Notification.permission === 'granted') {
-          new Notification('Incoming Call', {
-            body: `${fromUserName} is calling you for a ${callType} chat!`,
-            icon: '/apple-touch-icon.png'
-          });
-        }
+  useEffect(() => {
+    setUserCallHandler((fromUserId, fromUserName, callType) => {
+      // Incoming Call Notification
+      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1344/1344-preview.mp3'); 
+      audio.play().catch(() => {});
+
+      if (Notification.permission === 'granted') {
+        new Notification('Incoming Call', {
+          body: `${fromUserName} is calling you for a ${callType} chat!`,
+          icon: '/apple-touch-icon.png'
+        });
       }
-    );
-  }, [registerRtcHandlers]);
+    });
+  }, [setUserCallHandler]);
 
   useEffect(() => {
     if (messages.length === 0) return;

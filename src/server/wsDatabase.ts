@@ -66,7 +66,9 @@ class WebSocketDatabase {
 export function initWebSocketDatabase(server: Server) {
   const wss = new WebSocketServer({ server, path: '/ws-db' });
   const db = new WebSocketDatabase();
-  const userIdToSocket = new Map<string, WebSocket>();
+  
+  // Track multiple sockets per user ID (for multi-tab support)
+  const userIdToSockets = new Map<string, Set<WebSocket>>();
 
   function broadcastTable(tableName: string, data: any) {
     const payload = JSON.stringify({
@@ -174,11 +176,23 @@ export function initWebSocketDatabase(server: Server) {
             break;
           }
 
+          case 'SQL_DELETE': {
+            if (msg.table === 'messages' && msg.id) {
+              db.messages = db.messages.filter((m) => m.id !== msg.id);
+              broadcastTable('messages', db.messages);
+            }
+            break;
+          }
+
           case 'REGISTER_USER': {
             if (msg.user && typeof msg.user.id === 'string') {
               const uId: string = msg.user.id;
               boundUserId = uId;
-              userIdToSocket.set(uId, ws);
+              
+              if (!userIdToSockets.has(uId)) {
+                userIdToSockets.set(uId, new Set());
+              }
+              userIdToSockets.get(uId)?.add(ws);
 
               db.upsertUser({
                 id: uId,
@@ -200,30 +214,34 @@ export function initWebSocketDatabase(server: Server) {
           // Direct WebRTC Signaling Relay
           case 'RTC_SIGNAL': {
             if (msg.targetUserId) {
-              const targetWs = userIdToSocket.get(msg.targetUserId);
-              if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-                targetWs.send(JSON.stringify({
-                  type: 'RTC_SIGNAL',
-                  fromUserId: msg.fromUserId,
-                  targetUserId: msg.targetUserId,
-                  signal: msg.signal,
-                }));
-              }
+              const targetSockets = userIdToSockets.get(msg.targetUserId);
+              targetSockets?.forEach(targetWs => {
+                if (targetWs.readyState === WebSocket.OPEN) {
+                  targetWs.send(JSON.stringify({
+                    type: 'RTC_SIGNAL',
+                    fromUserId: msg.fromUserId,
+                    targetUserId: msg.targetUserId,
+                    signal: msg.signal,
+                  }));
+                }
+              });
             }
             break;
           }
 
           case 'USER_CALL': {
             if (msg.targetUserId) {
-              const targetWs = userIdToSocket.get(msg.targetUserId);
-              if (targetWs && targetWs.readyState === WebSocket.OPEN) {
-                targetWs.send(JSON.stringify({
-                  type: 'USER_CALL',
-                  fromUserId: msg.fromUserId,
-                  fromUserName: msg.fromUserName,
-                  callType: msg.callType, // 'audio' or 'video'
-                }));
-              }
+              const targetSockets = userIdToSockets.get(msg.targetUserId);
+              targetSockets?.forEach(targetWs => {
+                if (targetWs.readyState === WebSocket.OPEN) {
+                  targetWs.send(JSON.stringify({
+                    type: 'USER_CALL',
+                    fromUserId: msg.fromUserId,
+                    fromUserName: msg.fromUserName,
+                    callType: msg.callType,
+                  }));
+                }
+              });
             }
             break;
           }
@@ -238,13 +256,19 @@ export function initWebSocketDatabase(server: Server) {
 
     ws.on('close', () => {
       if (boundUserId) {
-        const user = db.users.get(boundUserId);
-        if (user && (user.current_channel === 'voice-general' || user.current_channel === 'video-general')) {
-          broadcastMediaPresence('USER_LEFT_MEDIA', boundUserId, user.current_channel);
+        const sockets = userIdToSockets.get(boundUserId);
+        if (sockets) {
+          sockets.delete(ws);
+          if (sockets.size === 0) {
+            const user = db.users.get(boundUserId);
+            if (user && (user.current_channel === 'voice-general' || user.current_channel === 'video-general')) {
+              broadcastMediaPresence('USER_LEFT_MEDIA', boundUserId, user.current_channel);
+            }
+            userIdToSockets.delete(boundUserId);
+            db.deleteUser(boundUserId);
+            broadcastTable('users', db.selectUsers());
+          }
         }
-        userIdToSocket.delete(boundUserId);
-        db.deleteUser(boundUserId);
-        broadcastTable('users', db.selectUsers());
       }
     });
   });

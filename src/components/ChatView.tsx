@@ -38,7 +38,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     registerUser,
     callUser,
     sendRtcSignal,
-    registerRtcHandlers,
+    setRtcSignalHandler,
+    setUserCallHandler,
+    setMediaHandlers,
   } = globalChat;
 
   const [activeChannel, setActiveChannel] = useState<'text-general' | 'voice-general' | 'video-general'>('text-general');
@@ -107,7 +109,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     localVideoStream: activeVideoStream,
     peers: activePeers,
     sendRtcSignal,
-    registerRtcHandlers,
+    setRtcSignalHandler,
+    setMediaHandlers,
   });
 
   // Video Ref Callback: Guarantees video stream attaches when the <video> DOM node mounts
@@ -283,34 +286,60 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
           </div>
         </div>
 
-        {/* Channels List */}
+        {/* ONLINE USERS SECTION */}
         <div className="flex-1 overflow-y-auto px-2 py-3 space-y-4">
           
-          {/* ONLINE USERS */}
-          <div>
-            <div className="px-2 mb-1.5 text-[11px] font-bold text-zinc-500 tracking-wider uppercase">
-              Online ({users.length})
+          <div className="mb-4">
+            <div className="px-2 mb-2 text-[11px] font-black text-zinc-500 tracking-wider uppercase flex items-center justify-between">
+              <span>Direct Messages</span>
+              <PlusCircle className="w-3.5 h-3.5 hover:text-white cursor-pointer transition-colors" />
             </div>
-            <div className="space-y-1">
+          </div>
+
+          <div>
+            <div className="px-2 mb-2 text-[11px] font-black text-zinc-500 tracking-wider uppercase flex items-center justify-between">
+              <span>Who's Online ({users.length})</span>
+              <div className={`w-1.5 h-1.5 rounded-full ${globalChat.isConnected ? 'bg-emerald-500 shadow-[0_0_5px_#10b981]' : 'bg-red-500 animate-pulse'}`} />
+            </div>
+            <div className="space-y-0.5">
+              {users.length === 0 && (
+                <div className="px-2.5 py-2 text-[10px] text-zinc-500 italic">
+                  Connecting to relay...
+                </div>
+              )}
               {users.map((u: any) => (
-                <div key={u.id} className="flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-sm text-zinc-400 group">
-                  <div className="flex items-center gap-2 truncate">
-                    <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-                    <span className="truncate">{u.username}</span>
+                <div key={u.id} className={`flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-xl text-sm transition-all group cursor-default ${u.id === currentUser.id ? 'bg-white/5' : 'hover:bg-white/5'}`}>
+                  <div className="flex items-center gap-2.5 truncate">
+                    <div className="relative shrink-0">
+                      <div 
+                        className="w-7 h-7 rounded-lg text-black font-black text-[10px] flex items-center justify-center shadow-sm"
+                        style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+                      >
+                        {u.username.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-[#0d0d0f]" />
+                    </div>
+                    <div className="flex flex-col min-w-0 leading-tight">
+                      <span className={`truncate font-bold text-[13px] ${u.id === currentUser.id ? 'text-white' : 'text-zinc-300 group-hover:text-white'}`}>
+                        {u.username}
+                        {u.id === currentUser.id && <span className="ml-1 text-[9px] text-[#0066ff] font-black tracking-widest uppercase opacity-70">You</span>}
+                      </span>
+                      <span className="text-[9px] text-zinc-500 uppercase font-black tracking-tighter">Online</span>
+                    </div>
                   </div>
                   {u.id !== currentUser.id && (
-                    <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1">
+                    <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5">
                       <button 
                         onClick={() => callUser(u.id, 'audio')}
                         title="Audio Call" 
-                        className="hover:text-[#0066ff] p-1"
+                        className="p-1.5 text-zinc-400 hover:text-[#0066ff] hover:bg-[#0066ff]/10 rounded-lg transition-all"
                       >
                         <Mic className="w-3.5 h-3.5" />
                       </button>
                       <button 
                         onClick={() => callUser(u.id, 'video')}
                         title="Video Call" 
-                        className="hover:text-[#0066ff] p-1"
+                        className="p-1.5 text-zinc-400 hover:text-[#0066ff] hover:bg-[#0066ff]/10 rounded-lg transition-all"
                       >
                         <Video className="w-3.5 h-3.5" />
                       </button>
@@ -321,17 +350,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             </div>
           </div>
 
-          {/* TEXT CHANNELS */}
-          <div>
-            <div className="px-2 mb-1.5 text-[11px] font-bold text-zinc-500 tracking-wider uppercase">
+          {/* TEXT CHANNELS SECTION */}
+          <div className="pt-2">
+            <div className="px-2 mb-2 text-[11px] font-black text-zinc-500 tracking-wider uppercase">
               Text Channels
             </div>
-
             <button
               onClick={() => setActiveChannel('text-general')}
-              className={`w-full group flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+              className={`w-full group flex items-center gap-2 px-2.5 py-2 rounded-xl text-sm font-bold transition-all cursor-pointer ${
                 activeChannel === 'text-general'
-                  ? 'bg-[#0066ff]/15 text-[#0066ff] font-semibold border border-[#0066ff]/30'
+                  ? 'bg-[#0066ff]/10 text-[#0066ff] border border-[#0066ff]/20'
                   : 'text-zinc-400 hover:bg-[#151518] hover:text-white'
               }`}
             >

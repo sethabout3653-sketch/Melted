@@ -16,8 +16,8 @@ export const PWAInstallButton: React.FC = () => {
     return (
       <button
         onClick={install}
-        className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-black bg-[#0066ff] hover:bg-[#e64d00] rounded-xl shadow-md shadow-[#0066ff]/20 transition-all cursor-pointer font-heading"
-        title="Install Melted as a desktop or mobile application"
+        className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-white bg-[#0066ff] hover:bg-[#0052cc] rounded-xl shadow-md shadow-[#0066ff]/20 transition-all cursor-pointer font-heading"
+        title="Install Frosted as a desktop or mobile application"
       >
         <Download className="w-3.5 h-3.5 stroke-[2.5]" />
         <span className="hidden md:inline">Install App</span>

@@ -32,6 +32,8 @@ interface NavbarProps {
   onGoHome: () => void;
   selectedCategory?: GameCategory;
   onSelectCategory?: (category: GameCategory) => void;
+  onlineCount?: number;
+  isConnected?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -49,6 +51,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   onGoHome,
   selectedCategory = 'All',
   onSelectCategory,
+  onlineCount = 0,
+  isConnected = false,
 }) => {
   const [isCloakOpen, setIsCloakOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -137,6 +141,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <MessageSquare className="w-3.5 h-3.5" />
               <span>Chat</span>
+              {onlineCount > 0 && (
+                <div className="flex items-center gap-1 ml-1 pl-1.5 border-l border-white/20">
+                  <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-emerald-400 shadow-[0_0_5px_rgba(52,211,153,0.5)]' : 'bg-red-400'}`} />
+                  <span className="text-[10px] font-black">{onlineCount}</span>
+                </div>
+              )}
             </button>
           </div>
         </div>

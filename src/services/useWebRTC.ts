@@ -29,8 +29,8 @@ interface UseWebRTCProps {
   localVideoStream: MediaStream | null;
   peers: DbUser[];
   sendRtcSignal: (targetUserId: string, signal: any) => void;
-  registerRtcHandlers: (
-    onSignal: (fromUserId: string, signal: any) => void,
+  setRtcSignalHandler: (fn: (fromUserId: string, signal: any) => void) => void;
+  setMediaHandlers: (
     onJoined: (userId: string, channel: string) => void,
     onLeft: (userId: string, channel: string) => void
   ) => void;
@@ -43,7 +43,8 @@ export function useWebRTC({
   localVideoStream,
   peers,
   sendRtcSignal,
-  registerRtcHandlers,
+  setRtcSignalHandler,
+  setMediaHandlers,
 }: UseWebRTCProps) {
   const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
   const [remoteSpeaking, setRemoteSpeaking] = useState<Record<string, boolean>>({});
@@ -308,10 +309,11 @@ export function useWebRTC({
 
   // Register WebSocket Signal Handlers
   useEffect(() => {
-    registerRtcHandlers(
-      (fromUserId, signal) => {
-        handleIncomingSignal(fromUserId, signal);
-      },
+    setRtcSignalHandler((fromUserId, signal) => {
+      handleIncomingSignal(fromUserId, signal);
+    });
+
+    setMediaHandlers(
       (userId, channel) => {
         if (channel === activeChannel && isMediaChannel && userId !== currentUserId) {
           // Immediately initiate call
@@ -324,7 +326,7 @@ export function useWebRTC({
         closePeer(userId);
       }
     );
-  }, [registerRtcHandlers, handleIncomingSignal, activeChannel, isMediaChannel, currentUserId, initiateOffer, closePeer]);
+  }, [setRtcSignalHandler, setMediaHandlers, handleIncomingSignal, activeChannel, isMediaChannel, currentUserId, initiateOffer, closePeer]);
 
   // Synchronize peer connections with current channel peers
   useEffect(() => {

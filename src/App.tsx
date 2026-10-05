@@ -91,7 +91,7 @@ export default function App() {
         const combined = Array.from(masterMap.values());
         setAllGames(combined.length > 0 ? combined : luminGames);
         
-        // Guarantee 2.5s of smooth Roku bounce animation intro
+        // Guarantee 2.5s of smooth Frosted bounce animation intro
         await new Promise((resolve) => setTimeout(resolve, 2500));
       } catch (err) {
         console.warn('Catalog load warning:', err);
@@ -150,7 +150,6 @@ export default function App() {
     const counts: Record<string, number> = {
       All: allGames.length,
       Featured: allGames.filter((g) => g.featured).length,
-      'Lumin Games': allGames.filter((g) => g.source === 'lumin').length,
       'Action & Shooters': allGames.filter((g) => g.category === 'Action & Shooters').length,
       'Driving & Racing': allGames.filter((g) => g.category === 'Driving & Racing').length,
       'Skill & Platformer': allGames.filter((g) => g.category === 'Skill & Platformer').length,
@@ -176,8 +175,6 @@ export default function App() {
     // Favorites filter
     if (showFavoritesOnly || selectedCategory === 'Favorites') {
       list = list.filter((g) => favorites.includes(g.id));
-    } else if (selectedCategory === 'Lumin Games') {
-      list = list.filter((g) => g.source === 'lumin');
     } else if (selectedCategory === 'Featured') {
       list = list.filter((g) => g.featured);
     } else if (selectedCategory !== 'All') {
@@ -259,6 +256,8 @@ export default function App() {
           setSelectedCategory(cat);
           setShowFavoritesOnly(cat === 'Favorites');
         }}
+        onlineCount={globalChat.users.length}
+        isConnected={globalChat.isConnected}
       />
 
       {/* Main View: Either Discord Chat OR Games Catalog */}
