@@ -213,6 +213,21 @@ export function initWebSocketDatabase(server: Server) {
             break;
           }
 
+          case 'USER_CALL': {
+            if (msg.targetUserId) {
+              const targetWs = userIdToSocket.get(msg.targetUserId);
+              if (targetWs && targetWs.readyState === WebSocket.OPEN) {
+                targetWs.send(JSON.stringify({
+                  type: 'USER_CALL',
+                  fromUserId: msg.fromUserId,
+                  fromUserName: msg.fromUserName,
+                  callType: msg.callType, // 'audio' or 'video'
+                }));
+              }
+            }
+            break;
+          }
+
           default:
             break;
         }

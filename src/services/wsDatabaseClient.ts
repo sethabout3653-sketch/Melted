@@ -17,6 +17,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
 
   // Callbacks for WebRTC signaling
   const onRtcSignalRef = useRef<((fromUserId: string, signal: any) => void) | null>(null);
+  const onUserCallRef = useRef<((fromUserId: string, fromUserName: string, callType: 'audio' | 'video') => void) | null>(null);
   const onUserJoinedMediaRef = useRef<((userId: string, channel: string) => void) | null>(null);
   const onUserLeftMediaRef = useRef<((userId: string, channel: string) => void) | null>(null);
 
@@ -61,6 +62,10 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
           } else if (msg.type === 'RTC_SIGNAL') {
             if (onRtcSignalRef.current) {
               onRtcSignalRef.current(msg.fromUserId, msg.signal);
+            }
+          } else if (msg.type === 'USER_CALL') {
+            if (onUserCallRef.current) {
+              onUserCallRef.current(msg.fromUserId, msg.fromUserName, msg.callType);
             }
           } else if (msg.type === 'USER_JOINED_MEDIA') {
             if (onUserJoinedMediaRef.current) {
@@ -132,12 +137,29 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
   }, [currentUser.id, currentUser.username, currentUser.avatar_color]);
 
   // SQL-like DELETE
-  const deleteMessage = useCallback((messageId: number) => {
+  const deleteMessage = useCallback((messageId: string) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: 'SQL_DELETE',
         table: 'messages',
         id: messageId,
+      }));
+    }
+  }, []);
+
+  const registerUser = useCallback((user: { id: string; username: string; avatar_color: string }) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'REGISTER_USER',
+        user: {
+          ...user,
+          current_channel: 'text-general',
+          is_speaking: false,
+          is_muted: false,
+          is_deafened: false,
+          has_video: false,
+          is_screen_sharing: false,
+        },
       }));
     }
   }, []);
@@ -154,15 +176,29 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     }
   }, [currentUser.id]);
 
+  const callUser = useCallback((targetUserId: string, callType: 'audio' | 'video') => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'USER_CALL',
+        fromUserId: currentUser.id,
+        fromUserName: currentUser.username,
+        targetUserId,
+        callType,
+      }));
+    }
+  }, [currentUser.id, currentUser.username]);
+
   // Register WebRTC callbacks
   const registerRtcHandlers = useCallback((
     onSignal: (fromUserId: string, signal: any) => void,
     onJoined: (userId: string, channel: string) => void,
-    onLeft: (userId: string, channel: string) => void
+    onLeft: (userId: string, channel: string) => void,
+    onCall?: (fromUserId: string, fromUserName: string, callType: 'audio' | 'video') => void
   ) => {
     onRtcSignalRef.current = onSignal;
     onUserJoinedMediaRef.current = onJoined;
     onUserLeftMediaRef.current = onLeft;
+    if (onCall) onUserCallRef.current = onCall;
   }, []);
 
   return {
@@ -172,7 +208,10 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     updateUser,
     insertMessage,
     deleteMessage,
+    registerUser,
+    callUser,
     sendRtcSignal,
     registerRtcHandlers,
+    ws: wsRef.current,
   };
 }

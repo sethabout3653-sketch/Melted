@@ -11,6 +11,7 @@ import { fetchGames, resolveGameUrl } from './services/gameService';
 import { fetchLuminGames } from './services/luminService';
 import { useCloak, launchAboutBlank } from './hooks/useCloak';
 import { useGameCache } from './hooks/useGameCache';
+import { useGlobalChat } from './hooks/useGlobalChat';
 import { GameItem, GameCategory } from './types/game';
 import { 
   Snowflake, 
@@ -50,6 +51,9 @@ export default function App() {
 
   // Offline caching hook
   const { isGameCached, cacheProgress, cachedIds } = useGameCache(allGames);
+
+  // Global Chat and Notifications
+  const globalChat = useGlobalChat();
 
   // Initial Master Catalog Load (Melted Archive + Lumin SDK 1169+ Games)
   useEffect(() => {
@@ -259,7 +263,7 @@ export default function App() {
 
       {/* Main View: Either Discord Chat OR Games Catalog */}
       {currentTab === 'chat' ? (
-        <ChatView />
+        <ChatView globalChat={globalChat} />
       ) : (
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
           
