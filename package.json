@@ -26,7 +26,8 @@
     "start": "tsx server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "deploy": "wrangler pages deploy dist"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -53,6 +54,32 @@
     "tailwindcss": "^4.3.3",
     "tsx": "^4.21.0",
     "typescript": "^7.0.2",
-    "vite-plugin-pwa": "^1.3.0"
+    "vite-plugin-pwa": "^1.3.0",
+    "wrangler": "^4.148.0"
+  },
+  "optionalDependencies": {
+    "@tailwindcss/oxide-android-arm64": "4.3.3",
+    "@tailwindcss/oxide-darwin-arm64": "4.3.3",
+    "@tailwindcss/oxide-darwin-x64": "4.3.3",
+    "@tailwindcss/oxide-freebsd-x64": "4.3.3",
+    "@tailwindcss/oxide-linux-arm-gnueabihf": "4.3.3",
+    "@tailwindcss/oxide-linux-arm64-gnu": "4.3.3",
+    "@tailwindcss/oxide-linux-arm64-musl": "4.3.3",
+    "@tailwindcss/oxide-linux-x64-gnu": "4.3.3",
+    "@tailwindcss/oxide-linux-x64-musl": "4.3.3",
+    "@tailwindcss/oxide-wasm32-wasi": "4.3.3",
+    "@tailwindcss/oxide-win32-arm64-msvc": "4.3.3",
+    "@tailwindcss/oxide-win32-x64-msvc": "4.3.3",
+    "lightningcss-android-arm64": "1.33.0",
+    "lightningcss-darwin-arm64": "1.33.0",
+    "lightningcss-darwin-x64": "1.33.0",
+    "lightningcss-freebsd-x64": "1.33.0",
+    "lightningcss-linux-arm-gnueabihf": "1.33.0",
+    "lightningcss-linux-arm64-gnu": "1.33.0",
+    "lightningcss-linux-arm64-musl": "1.33.0",
+    "lightningcss-linux-x64-gnu": "1.33.0",
+    "lightningcss-linux-x64-musl": "1.33.0",
+    "lightningcss-win32-arm64-msvc": "1.33.0",
+    "lightningcss-win32-x64-msvc": "1.33.0"
   }
 }
