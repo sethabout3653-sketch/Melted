@@ -6,18 +6,22 @@ let isLuminInitialized = false;
 let isInitializing = false;
 const initCallbacks: Array<(success: boolean) => void> = [];
 
-// School Wi-Fi proof curated seed catalog with 100% unblocked local arcade streams
+// Exact verified seed catalog mapping 1:1 to authentic titles
 export const SEED_LUMIN_GAMES: Array<{ id: string; name: string; category: GameCategory; cover?: string; url: string }> = [
-  { id: 'space-invaders', name: 'Space Invaders', category: 'Retro & Arcade', cover: 'https://raw.githubusercontent.com/3kho/3kho-assets/main/space-invaders/space-invaders.png', url: '/api/raw/117-fixf.html' },
-  { id: 'snake-classic', name: 'Snake Classic', category: 'Retro & Arcade', url: '/api/raw/168.html' },
-  { id: 'pacman', name: 'Pac-Man Arcade', category: 'Retro & Arcade', cover: 'https://raw.githubusercontent.com/3kho/3kho-assets/main/pacman/pacman.png', url: '/api/raw/515-f.html' },
-  { id: 'pong', name: 'Retro Pong', category: 'Retro & Arcade', url: '/api/raw/117-fixf.html' },
-  { id: 'breakout', name: 'Breakout DX', category: 'Retro & Arcade', url: '/api/raw/362.html' },
-  { id: 'moto-x3m', name: 'Moto X3M Bike Race', category: 'Driving & Racing', cover: 'https://raw.githubusercontent.com/3kho/3kho-assets/main/moto-x3m/moto-x3m.png', url: '/api/raw/96.html' },
+  { id: 'slope', name: 'Slope', category: 'Skill & Platformer', cover: 'https://raw.githubusercontent.com/3kho/3kho-assets/main/slope/slope.png', url: '/api/raw/198.html' },
+  { id: 'moto-x3m', name: 'Moto X3M', category: 'Driving & Racing', cover: 'https://raw.githubusercontent.com/3kho/3kho-assets/main/moto-x3m/moto-x3m.png', url: '/api/raw/96.html' },
   { id: 'flappy-bird', name: 'Flappy Bird', category: 'Skill & Platformer', cover: 'https://raw.githubusercontent.com/3kho/3kho-assets/main/flappy-bird/flappy-bird.png', url: '/api/raw/129.html' },
-  { id: 'slope', name: 'Slope 3D Runner', category: 'Skill & Platformer', cover: 'https://raw.githubusercontent.com/3kho/3kho-assets/main/slope/slope.png', url: '/api/raw/198.html' },
-  { id: '2048', name: '2048 Puzzle', category: 'Puzzle & Casual', cover: 'https://raw.githubusercontent.com/3kho/3kho-assets/main/2048/2048.png', url: '/api/raw/114-f.html' },
-  { id: 'tetris', name: 'Tetris Classic', category: 'Puzzle & Casual', url: '/api/raw/733.html' }
+  { id: '2048', name: '2048', category: 'Puzzle & Casual', cover: 'https://raw.githubusercontent.com/3kho/3kho-assets/main/2048/2048.png', url: '/api/raw/114-f.html' },
+  { id: 'tetris', name: 'Tetris', category: 'Puzzle & Casual', url: '/api/raw/733.html' },
+  { id: 'retro-bowl', name: 'Retro Bowl', category: 'Sports & Physics', url: '/api/raw/33-ff.html' },
+  { id: 'cookie-clicker', name: 'Cookie Clicker', category: 'Puzzle & Casual', url: '/api/raw/82-a.html' },
+  { id: '1v1-lol', name: '1v1.LoL', category: 'Action & Shooters', url: '/api/raw/58.html' },
+  { id: 'geometry-dash', name: 'Geometry Dash', category: 'Skill & Platformer', url: '/api/raw/868.html' },
+  { id: 'bitlife', name: 'BitLife', category: 'Puzzle & Casual', url: '/api/raw/70.html' },
+  { id: 'undertale-yellow', name: 'Undertale Yellow', category: 'Emulators & Ports', url: '/api/raw/456-f.html' },
+  { id: 'bad-time-simulator', name: 'Bad Time Simulator (Sans Fight)', category: 'Retro & Arcade', url: '/api/raw/472.html' },
+  { id: 'undertale-last-breath', name: 'Undertale: Last Breath', category: 'Action & Shooters', url: '/api/raw/731.html' },
+  { id: 'undertale-last-breath-phase-3', name: 'Undertale Last Breath PHASE THREE', category: 'Action & Shooters', url: '/api/raw/748.html' }
 ];
 
 // FNV-1a hash with index offset to guarantee 0 collisions across 1169+ items
@@ -30,7 +34,7 @@ export function hashStringToId(str: string, index: number = 0): number {
   return -1000000 - Math.abs(hash % 5000000) - (index % 1000);
 }
 
-// Convert seed items into GameItem structures with verified unblocked endpoints
+// Convert seed items into GameItem structures with verified endpoints
 export function getInitialLuminGames(): GameItem[] {
   return SEED_LUMIN_GAMES.map((g, idx) => ({
     id: hashStringToId(g.id, idx),
@@ -48,58 +52,86 @@ export function getInitialLuminGames(): GameItem[] {
   }));
 }
 
-// Ensure Lumin SDK is loaded and initialized in headless mode (with strict School Wi-Fi timeout)
+// Ensure Lumin SDK is loaded and initialized in headless mode
 export async function ensureLuminSDK(): Promise<boolean> {
   if (isLuminInitialized && (window as any).Lumin) {
     return true;
   }
 
+  // Check if Lumin is already attached to window
+  if ((window as any).Lumin) {
+    try {
+      const Lumin = (window as any).Lumin;
+      if (typeof Lumin.init === 'function') {
+        await Lumin.init({ headless: true });
+      }
+      isLuminInitialized = true;
+      return true;
+    } catch (err) {
+      console.warn('Lumin init error:', err);
+    }
+  }
+
   if (isInitializing) {
     return new Promise((resolve) => {
       initCallbacks.push(resolve);
-      // Fallback timeout so callbacks never hang on school firewalls
-      setTimeout(() => resolve(isLuminInitialized), 1000);
+      setTimeout(() => resolve(isLuminInitialized), 3000);
     });
   }
 
   isInitializing = true;
 
   try {
-    const Lumin = (window as any).Lumin;
-    if (!Lumin) {
-      // Race script load against 1.2s timeout to avoid blocking school Chromebooks
-      await Promise.race([
-        new Promise<void>((resolve, reject) => {
-          const existing = document.querySelector('script[src*="luminsdk"]');
-          if (existing) {
-            existing.addEventListener('load', () => resolve());
-            existing.addEventListener('error', () => reject(new Error('Lumin script load error')));
-            return;
+    // If not in window, ensure script is loaded
+    if (!(window as any).Lumin) {
+      await new Promise<void>((resolve) => {
+        const checkWindow = () => {
+          if ((window as any).Lumin) {
+            resolve();
+            return true;
           }
-          const script = document.createElement('script');
+          return false;
+        };
+
+        if (checkWindow()) return;
+
+        let script = document.querySelector('script[src*="luminsdk"]') as HTMLScriptElement | null;
+        if (!script) {
+          script = document.createElement('script');
           script.src = 'https://cdn.jsdelivr.net/gh/luminsdk/script@latest/lumin.min.js';
           script.async = true;
-          script.onload = () => resolve();
-          script.onerror = () => reject(new Error('Lumin script CDN unavailable'));
           document.head.appendChild(script);
-        }),
-        new Promise<void>((_, reject) => 
-          setTimeout(() => reject(new Error('Lumin CDN timeout - School network resilient mode activated')), 1200)
-        )
-      ]);
+        }
+
+        script.addEventListener('load', () => resolve());
+        script.addEventListener('error', () => resolve());
+
+        // Poll every 50ms up to 2.5s in case script already finished or loaded async
+        const pollInterval = setInterval(() => {
+          if (checkWindow()) {
+            clearInterval(pollInterval);
+          }
+        }, 50);
+
+        setTimeout(() => {
+          clearInterval(pollInterval);
+          resolve();
+        }, 2500);
+      });
     }
 
     const luminInstance = (window as any).Lumin;
     if (luminInstance && typeof luminInstance.init === 'function') {
-      await Promise.race([
-        luminInstance.init({ headless: true }),
-        new Promise((resolve) => setTimeout(resolve, 800))
-      ]);
+      try {
+        await luminInstance.init({ headless: true });
+      } catch (e) {}
       isLuminInitialized = true;
       console.log('⚡ [Lumin SDK] Headless mode initialized successfully.');
+    } else if (luminInstance) {
+      isLuminInitialized = true;
     }
   } catch (err) {
-    console.warn('⚡ [Lumin SDK] Network resilient mode:', err);
+    console.warn('⚡ [Lumin SDK] Initialization notice:', err);
   } finally {
     isInitializing = false;
     initCallbacks.forEach((cb) => cb(isLuminInitialized));
@@ -126,6 +158,27 @@ function mapLuminCategory(luminCat?: string, name?: string): GameCategory {
   return name ? detectCategory({ id: 0, name, cover: '', url: '' }) : 'Action & Shooters';
 }
 
+// Strict exact title match against 841+ local unblocked packages (prevents loading wrong games)
+export function findExactUnblockedGame(nameOrId: string): string | null {
+  if (!nameOrId) return null;
+  const target = nameOrId.toLowerCase()
+    .replace(/\(lumin\)/gi, '')
+    .replace(/lumin sdk/gi, '')
+    .replace(/[^a-z0-9]/g, '')
+    .trim();
+  
+  if (!target || target.length < 3) return null;
+
+  for (const game of (rawGamesData as RawGame[])) {
+    const candidate = game.name.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+    if (candidate === target) {
+      const filename = game.url.replace('{HTML_URL}/', '');
+      return `/api/raw/${filename}`;
+    }
+  }
+  return null;
+}
+
 // Batch resolve game covers directly from Lumin SDK API object properties or image token (NO FAKE/STOCK IMAGES)
 async function resolveGameCoversInBatches(rawGames: any[], Lumin: any): Promise<GameItem[]> {
   const BATCH_SIZE = 50;
@@ -146,14 +199,18 @@ async function resolveGameCoversInBatches(rawGames: any[], Lumin: any): Promise<
 
         const category = mapLuminCategory(g.category, g.name);
         const displayName = g.name ? (g.name.includes('(Lumin)') ? g.name : `${g.name} (Lumin)`) : 'Lumin Game';
+        
+        // Exact 1:1 match against local library or direct play URL from Lumin object
+        const exactMatchUrl = findExactUnblockedGame(g.name || '');
+        const liveGameUrl = g.url || g.play_url || g.iframe_url || g.embed_url || g.link || exactMatchUrl || '';
 
         return {
           id: hashStringToId(g.id || g.name || `game-${i + idx}`, i + idx),
           name: displayName,
           cover: coverUrl,
-          url: '',
-          resolvedCover: coverUrl, // If empty, GameCard renders clean native game title card with zero fake images
-          resolvedUrl: '',
+          url: liveGameUrl,
+          resolvedCover: coverUrl,
+          resolvedUrl: liveGameUrl,
           author: 'Lumin SDK',
           category,
           source: 'lumin' as const,
@@ -304,86 +361,88 @@ export async function fetchLuminGames(): Promise<GameItem[]> {
   }
 }
 
-// Curated mapping of Lumin IDs to 100% unblocked local arcade streams (School Wi-Fi proof)
+// Curated mapping of exact verified game keys to authentic endpoints
 const LUMIN_UNBLOCKED_MAP: Record<string, string> = {
-  'space-invaders': '/api/raw/117-fixf.html',
-  'snake-classic': '/api/raw/168.html',
-  'snake': '/api/raw/168.html',
-  'pacman': '/api/raw/515-f.html',
-  'pong': '/api/raw/117-fixf.html',
-  'retro-pong': '/api/raw/117-fixf.html',
-  'breakout': '/api/raw/362.html',
+  'slope': '/api/raw/198.html',
   'moto-x3m': '/api/raw/96.html',
   'flappy-bird': '/api/raw/129.html',
-  'slope': '/api/raw/198.html',
   '2048': '/api/raw/114-f.html',
   'tetris': '/api/raw/733.html',
+  'retro-bowl': '/api/raw/33-ff.html',
+  'cookie-clicker': '/api/raw/82-a.html',
+  '1v1-lol': '/api/raw/58.html',
+  '1v1.lol': '/api/raw/58.html',
+  'geometry-dash': '/api/raw/868.html',
+  'bitlife': '/api/raw/70.html',
   'chess': '/api/raw/151.html',
   'minesweeper': '/api/raw/313.html',
-  'cookie-clicker': '/api/raw/82-a.html',
-  'retro-bowl': '/api/raw/33-ff.html',
+  'undertale-yellow': '/api/raw/456-f.html',
+  'bad-time-simulator': '/api/raw/472.html',
+  'sans-fight': '/api/raw/472.html',
+  'undertale-last-breath': '/api/raw/731.html',
+  'undertale-last-breath-phase-3': '/api/raw/748.html',
+  'fnf-vs-undertale': '/api/raw/657.html',
 };
 
-// Fuzzy match any Lumin game title against 841+ local unblocked packages
-export function findMatchingUnblockedGame(query: string): string | null {
-  if (!query) return null;
-  const clean = query.toLowerCase().replace(/[^a-z0-9]/g, ' ').trim();
-  const words = clean.split(/\s+/).filter(w => w.length > 2 && w !== 'lumin' && w !== 'sdk' && w !== 'game');
-  if (words.length === 0) return null;
+// Get authentic playable URL for any Lumin game (Strictly matches the exact game)
+export async function getLuminPlayableUrl(luminId: string, gameName?: string, fallbackUrl?: string): Promise<string> {
+  const cleanId = (luminId || '').replace('-lumin', '').toLowerCase().trim();
+  const normalizedName = (gameName || '').toLowerCase().replace(/\(lumin\)/gi, '').replace(/lumin sdk/gi, '').trim();
 
-  for (const game of (rawGamesData as RawGame[])) {
-    const gName = game.name.toLowerCase();
-    if (words.every(w => gName.includes(w))) {
-      const filename = game.url.replace('{HTML_URL}/', '');
-      return `/api/raw/${filename}`;
-    }
+  // 1. Check verified 1:1 map first for exact known titles
+  if (normalizedName === 'undertale yellow' || cleanId === 'undertale-yellow') {
+    return '/api/raw/456-f.html';
+  }
+  if (normalizedName === 'undertale: last breath' || cleanId === 'undertale-last-breath') {
+    return '/api/raw/731.html';
+  }
+  if (normalizedName === 'undertale last breath phase three' || cleanId === 'undertale-last-breath-phase-3') {
+    return '/api/raw/748.html';
+  }
+  if (normalizedName === 'bad time simulator' || normalizedName === 'sans fight' || cleanId === 'bad-time-simulator' || cleanId === 'sans-fight') {
+    return '/api/raw/472.html';
+  }
+  if (LUMIN_UNBLOCKED_MAP[cleanId]) {
+    return LUMIN_UNBLOCKED_MAP[cleanId];
   }
 
-  for (const word of words) {
-    const match = (rawGamesData as RawGame[]).find(g => g.name.toLowerCase().includes(word));
-    if (match) {
-      const filename = match.url.replace('{HTML_URL}/', '');
-      return `/api/raw/${filename}`;
-    }
-  }
-
-  return null;
-}
-
-// Get 100% playable unblocked URL for any Lumin game (Guaranteed to work on school Chromebooks & restrictive Wi-Fi)
-export async function getLuminPlayableUrl(luminId: string): Promise<string> {
-  const cleanId = luminId.replace('-lumin', '').toLowerCase();
-
-  // 1. Direct hit in curated unblocked library
-  for (const [key, streamUrl] of Object.entries(LUMIN_UNBLOCKED_MAP)) {
-    if (cleanId.includes(key)) {
-      return streamUrl;
-    }
-  }
-
-  // 2. Fuzzy match in 841+ unblocked game archive
-  const unblockedMatch = findMatchingUnblockedGame(cleanId);
-  if (unblockedMatch) {
-    return unblockedMatch;
-  }
-
-  // 3. Resilient check with Lumin SDK (with quick 800ms race timeout)
+  // 2. Query official Lumin SDK for the authentic live game URL
   try {
     const ready = await ensureLuminSDK();
     const Lumin = (window as any).Lumin;
     if (ready && Lumin && typeof Lumin.getGameUrl === 'function') {
       const res = await Promise.race([
         Lumin.getGameUrl(luminId),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('SDK URL timeout')), 800))
+        new Promise((_, reject) => setTimeout(() => reject(new Error('SDK URL timeout')), 1000))
       ]);
-      if (res?.url) return res.url;
+      const resolved = typeof res === 'string' ? res : (res as any)?.url;
+      if (resolved && (resolved.startsWith('http://') || resolved.startsWith('https://') || resolved.startsWith('/'))) {
+        return resolved;
+      }
     }
   } catch (err) {
-    console.warn('[Lumin SDK] Using unblocked fallback mirror:', err);
+    console.warn('[Lumin SDK] getGameUrl notice:', err);
   }
 
-  // 4. Default high-compatibility unblocked arcade mirror (Slope / 2048)
-  return '/api/raw/198.html';
+  // 3. Strict exact match by name or ID in local unblocked arcade
+  if (gameName) {
+    const exactLocal = findExactUnblockedGame(gameName);
+    if (exactLocal) return exactLocal;
+  }
+  const exactId = findExactUnblockedGame(cleanId);
+  if (exactId) return exactId;
+
+  // 4. If fallback URL already existed on the game object, use it
+  if (fallbackUrl && fallbackUrl.trim() !== '') {
+    return fallbackUrl;
+  }
+
+  // 5. If ID is a direct slug from Lumin catalog (e.g. subway-surfers, cut-the-rope)
+  if (cleanId && !cleanId.startsWith('game-') && !cleanId.startsWith('lumin-')) {
+    return `https://luminsdk.com/play/${cleanId}`;
+  }
+
+  return '';
 }
 
 // Launch game with Lumin's player

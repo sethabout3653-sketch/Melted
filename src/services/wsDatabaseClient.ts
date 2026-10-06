@@ -14,6 +14,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<any>(null);
+  const pingIntervalRef = useRef<any>(null);
 
   // Use a ref for currentUser to avoid reconnecting when only username/avatar changes
   const currentUserRef = useRef(currentUser);
@@ -41,6 +42,26 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     onUserLeftMediaRef.current = onLeft;
   }, []);
 
+  const startHeartbeat = useCallback(() => {
+    if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+    
+    // Cloudflare Pages / Workers WebSocket 100s timeout prevention ping (sent every 25s)
+    pingIntervalRef.current = setInterval(() => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        try {
+          wsRef.current.send(JSON.stringify({ type: 'PING', timestamp: Date.now() }));
+        } catch {}
+      }
+    }, 25000);
+  }, []);
+
+  const stopHeartbeat = useCallback(() => {
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = null;
+    }
+  }, []);
+
   const connect = useCallback(() => {
     if (wsRef.current && (wsRef.current.readyState === WebSocket.CONNECTING || wsRef.current.readyState === WebSocket.OPEN)) {
       return;
@@ -54,6 +75,8 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
 
       ws.onopen = () => {
         setIsConnected(true);
+        startHeartbeat();
+
         // Register current user
         const u = currentUserRef.current;
         ws.send(JSON.stringify({
@@ -75,6 +98,16 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
+          if (msg.type === 'PING') {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
+            }
+            return;
+          }
+          if (msg.type === 'PONG') {
+            // Heartbeat acknowledged by Cloudflare / Node server
+            return;
+          }
           if (msg.type === 'DB_INIT') {
             if (msg.tables.users) setUsers(msg.tables.users);
             if (msg.tables.messages) setMessages(msg.tables.messages);
@@ -108,6 +141,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
 
       ws.onclose = () => {
         setIsConnected(false);
+        stopHeartbeat();
         wsRef.current = null;
         if (!reconnectTimeoutRef.current) {
           reconnectTimeoutRef.current = setTimeout(() => {
@@ -122,6 +156,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
       };
     } catch (err) {
       console.warn('[WS DB Client] connection error, will retry:', err);
+      stopHeartbeat();
       if (!reconnectTimeoutRef.current) {
         reconnectTimeoutRef.current = setTimeout(() => {
           reconnectTimeoutRef.current = null;
@@ -129,17 +164,18 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
         }, 3000);
       }
     }
-  }, []);
+  }, [startHeartbeat, stopHeartbeat]);
 
   useEffect(() => {
     connect();
     return () => {
+      stopHeartbeat();
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (wsRef.current) {
         wsRef.current.close();
       }
     };
-  }, [connect]);
+  }, [connect, stopHeartbeat]);
 
   // SQL-like UPDATE
   const updateUser = useCallback((set: Partial<DbUser>) => {

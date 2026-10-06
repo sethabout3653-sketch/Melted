@@ -63,65 +63,56 @@ export default function App() {
   // Global Chat and Notifications
   const globalChat = useGlobalChat();
 
-  // Initial Master Catalog Load (Melted Archive + Lumin SDK Games)
+  // Master Catalog Load: Instant local boot + background 1,169+ Lumin catalog sync
   useEffect(() => {
     let active = true;
 
-    // Hard fail-safe for school Chromebooks: NEVER block longer than 1.5s under any circumstance
-    const hardTimeout = setTimeout(() => {
+    // Fast intro animation dismissal (600ms)
+    const introTimer = setTimeout(() => {
       if (active) setIsCatalogLoading(false);
-    }, 1500);
+    }, 600);
 
-    async function loadAllCatalogs() {
+    async function syncCatalogs() {
       try {
-        const meltedGames = await fetchGames().catch(() => getAllGames());
+        const meltedGames = getAllGames();
+        
+        // Fetch full Lumin SDK catalog (1,169+ games)
+        const luminGames = await fetchLuminGames();
 
-        // Race Lumin games against a strict 800ms limit so school Wi-Fi never hangs
-        const luminGames = await Promise.race([
-          fetchLuminGames().catch(() => getInitialLuminGames()),
-          new Promise<GameItem[]>((res) => setTimeout(() => res(getInitialLuminGames()), 800))
-        ]);
+        if (!active || !luminGames || luminGames.length === 0) return;
 
-        if (!active) return;
-
-        // Combine master archives
+        // Combine master archives preserving 100% of all titles across both catalogs
         const masterMap = new Map<string, GameItem>();
         
         // Add Melted games
         meltedGames.forEach((g) => {
-          if (g && g.name) {
-            masterMap.set(g.name.toLowerCase().trim(), g);
+          if (g && g.id !== undefined) {
+            masterMap.set(`melted-${g.id}`, g);
           }
         });
 
-        // Add Lumin games
+        // Add full Lumin games
         luminGames.forEach((g) => {
-          if (g && g.name) {
-            const key = g.name.toLowerCase().trim();
-            if (!masterMap.has(key)) {
-              masterMap.set(key, g);
-            }
+          if (g && (g.luminId || g.id !== undefined)) {
+            masterMap.set(`lumin-${g.luminId || g.id}`, g);
           }
         });
 
         const combined = Array.from(masterMap.values());
-        setAllGames(combined.length > 0 ? combined : luminGames);
-        
-        // Smooth 600ms Frosted bounce intro animation
-        await new Promise((resolve) => setTimeout(resolve, 600));
+        setAllGames(combined);
+        console.log(`⚡ [Master Catalog] ${combined.length} Total Games Loaded!`);
       } catch (err) {
-        console.warn('Catalog load notice:', err);
+        console.warn('Catalog sync notice:', err);
       } finally {
-        clearTimeout(hardTimeout);
         if (active) setIsCatalogLoading(false);
       }
     }
 
-    loadAllCatalogs();
+    syncCatalogs();
 
     return () => {
       active = false;
-      clearTimeout(hardTimeout);
+      clearTimeout(introTimer);
     };
   }, []);
 

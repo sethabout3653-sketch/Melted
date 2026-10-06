@@ -122,7 +122,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 if (onSelectCategory) onSelectCategory('All');
               }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                currentTab === 'games' && selectedCategory !== 'Lumin Games'
+                currentTab === 'games'
                   ? 'bg-[#0066ff] text-white shadow-sm'
                   : 'text-zinc-400 hover:text-white'
               }`}

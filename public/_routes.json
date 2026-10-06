@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "include": [
+    "/api/*",
+    "/ws-db"
+  ],
+  "exclude": [
+    "/assets/*",
+    "/favicon.ico",
+    "/manifest.webmanifest",
+    "/*.png",
+    "/*.svg"
+  ]
+}

@@ -250,6 +250,21 @@ export function initWebSocketDatabase(server: Server) {
             break;
           }
 
+          case 'PING': {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({
+                type: 'PONG',
+                timestamp: Date.now(),
+              }));
+            }
+            break;
+          }
+
+          case 'PONG': {
+            // Heartbeat response from client
+            break;
+          }
+
           default:
             break;
         }
@@ -258,7 +273,17 @@ export function initWebSocketDatabase(server: Server) {
       }
     });
 
+    // Cloudflare 100s timeout prevention: Server-side periodic ping every 30 seconds
+    const serverHeartbeatInterval = setInterval(() => {
+      if (ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(JSON.stringify({ type: 'PING', timestamp: Date.now() }));
+        } catch {}
+      }
+    }, 30000);
+
     ws.on('close', () => {
+      clearInterval(serverHeartbeatInterval);
       if (boundUserId) {
         const sockets = userIdToSockets.get(boundUserId);
         if (sockets) {

@@ -14,7 +14,6 @@ export interface RawGame {
 export type GameCategory = 
   | 'All'
   | 'Featured'
-  | 'Lumin Games'
   | 'Action & Shooters'
   | 'Driving & Racing'
   | 'Skill & Platformer'
