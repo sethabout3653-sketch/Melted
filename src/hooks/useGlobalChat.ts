@@ -1,5 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useWebSocketDatabase } from '../services/wsDatabaseClient';
+
+export interface ActiveCall {
+  fromUserId?: string;
+  fromUserName?: string;
+  targetUserId?: string;
+  targetUserName?: string;
+  callType: 'audio' | 'video';
+}
 
 export function useGlobalChat() {
   const [currentUser, setCurrentUser] = useState(() => {
@@ -17,23 +25,41 @@ export function useGlobalChat() {
   });
 
   const chat = useWebSocketDatabase(currentUser);
-  const { messages, setUserCallHandler, isConnected } = chat;
+  const { messages, setUserCallHandler, isConnected, registerUser, callUser: rawCallUser } = chat;
 
   const lastMessageId = useRef<string | null>(null);
+  const registeredKeyRef = useRef<string>('');
 
+  // Call state
+  const [incomingCall, setIncomingCall] = useState<ActiveCall | null>(null);
+  const [outgoingCall, setOutgoingCall] = useState<ActiveCall | null>(null);
+
+  // Sync user profile with server when user connects or profile attributes change (prevents infinite loop!)
   useEffect(() => {
-    if (isConnected && currentUser) {
-      chat.registerUser(currentUser);
+    const userKey = `${currentUser.id}:${currentUser.username}:${currentUser.avatar_color}`;
+    if (isConnected && registeredKeyRef.current !== userKey) {
+      registeredKeyRef.current = userKey;
+      registerUser(currentUser);
     }
-  }, [isConnected, currentUser, chat]);
+  }, [isConnected, currentUser.id, currentUser.username, currentUser.avatar_color, registerUser]);
 
+  // Handle incoming call events from relay server
   useEffect(() => {
     setUserCallHandler((fromUserId, fromUserName, callType) => {
-      // Incoming Call Notification
-      const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1344/1344-preview.mp3'); 
-      audio.play().catch(() => {});
+      setIncomingCall({
+        fromUserId,
+        fromUserName,
+        callType,
+      });
 
-      if (Notification.permission === 'granted') {
+      // Subtle incoming call sound
+      try {
+        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1344/1344-preview.mp3');
+        audio.volume = 0.5;
+        audio.play().catch(() => {});
+      } catch {}
+
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
         new Notification('Incoming Call', {
           body: `${fromUserName} is calling you for a ${callType} chat!`,
           icon: '/apple-touch-icon.png'
@@ -42,6 +68,24 @@ export function useGlobalChat() {
     });
   }, [setUserCallHandler]);
 
+  const initiateCall = useCallback((targetUserId: string, targetUserName: string, callType: 'audio' | 'video') => {
+    setOutgoingCall({
+      targetUserId,
+      targetUserName,
+      callType,
+    });
+    rawCallUser(targetUserId, callType);
+  }, [rawCallUser]);
+
+  const dismissIncomingCall = useCallback(() => {
+    setIncomingCall(null);
+  }, []);
+
+  const dismissOutgoingCall = useCallback(() => {
+    setOutgoingCall(null);
+  }, []);
+
+  // Message notifications
   useEffect(() => {
     if (messages.length === 0) return;
     const lastMessage = messages[messages.length - 1];
@@ -50,18 +94,17 @@ export function useGlobalChat() {
       lastMessageId.current = lastMessage.id;
       
       if (lastMessage.sender_id !== currentUser.id) {
-        // Notification Sound
-        const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
-        audio.play().catch(() => {});
+        try {
+          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
+          audio.volume = 0.4;
+          audio.play().catch(() => {});
+        } catch {}
 
-        // Browser Notification
-        if (Notification.permission === 'granted') {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           new Notification('New Message', {
             body: `${lastMessage.sender_name}: ${lastMessage.content}`,
             icon: '/apple-touch-icon.png'
           });
-        } else if (Notification.permission !== 'denied') {
-          Notification.requestPermission();
         }
       }
     }
@@ -70,6 +113,11 @@ export function useGlobalChat() {
   return {
     currentUser,
     setCurrentUser,
-    ...chat
+    incomingCall,
+    outgoingCall,
+    initiateCall,
+    dismissIncomingCall,
+    dismissOutgoingCall,
+    ...chat,
   };
 }

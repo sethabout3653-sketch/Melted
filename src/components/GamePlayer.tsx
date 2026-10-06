@@ -63,24 +63,38 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     setHasError(false);
 
     if (game.source === 'lumin' && game.luminId) {
-      getLuminPlayableUrl(game.luminId).then((url) => {
-        if (!active) return;
-        if (url) {
-          setPlayableUrl(url);
-        } else {
-          // Fallback to direct loadGame if URL fetching failed
-          launchLuminNativePlayer(game.luminId!);
-          onClose();
-        }
-      }).catch(() => {
-        if (active) setHasError(true);
-      });
+      if (game.resolvedUrl || game.url) {
+        setPlayableUrl(game.resolvedUrl || game.url);
+        setIsLoading(false);
+      } else {
+        getLuminPlayableUrl(game.luminId).then((url) => {
+          if (!active) return;
+          if (url) {
+            setPlayableUrl(url);
+          } else {
+            setPlayableUrl(resolveGameUrl(game.url) || '/api/raw/198.html');
+          }
+          setIsLoading(false);
+        }).catch(() => {
+          if (active) {
+            setPlayableUrl(resolveGameUrl(game.url) || '/api/raw/198.html');
+            setIsLoading(false);
+          }
+        });
+      }
     } else {
       setPlayableUrl(resolveGameUrl(game.url));
+      setIsLoading(false);
     }
+
+    // Safety timeout for school Chromebooks: never show loading screen for more than 2.5s
+    const safetyTimer = setTimeout(() => {
+      if (active) setIsLoading(false);
+    }, 2500);
 
     return () => {
       active = false;
+      clearTimeout(safetyTimer);
     };
   }, [game, onClose]);
 
@@ -236,6 +250,29 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               >
                 <Minimize2 className="w-4 h-4 text-[#0066ff]" />
                 <span>Exit Fullscreen</span>
+              </button>
+            </div>
+          )}
+
+          {/* Loading Screen Overlay */}
+          {isLoading && !hasError && (
+            <div className="absolute inset-0 bg-[#0a0a0c]/90 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-10 select-none animate-in fade-in duration-200">
+              <div className="relative mb-4">
+                <div className="w-14 h-14 rounded-2xl bg-[#0066ff]/20 border border-[#0066ff]/40 flex items-center justify-center text-[#0066ff] shadow-xl shadow-[#0066ff]/20 animate-pulse">
+                  <Zap className="w-7 h-7 fill-[#0066ff]" />
+                </div>
+              </div>
+              <h4 className="text-white font-extrabold text-sm sm:text-base font-heading">
+                Starting Unblocked Stream...
+              </h4>
+              <p className="text-zinc-400 text-xs mt-1 max-w-xs font-mono">
+                Optimized for school Chromebooks & restrictive Wi-Fi
+              </p>
+              <button
+                onClick={() => setIsLoading(false)}
+                className="mt-4 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-zinc-300 hover:text-white text-[11px] font-bold transition-all cursor-pointer"
+              >
+                Skip / Play Now
               </button>
             </div>
           )}

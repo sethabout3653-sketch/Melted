@@ -9,13 +9,35 @@ export const FrostedLoadingScreen: React.FC<FrostedLoadingScreenProps> = ({ isLo
   const [isFadingOut, setIsFadingOut] = useState(false);
   const [shouldRender, setShouldRender] = useState(true);
 
+  // School Chromebook & Slow Wi-Fi fail-safe: Never stay mounted for more than 1.8s
+  useEffect(() => {
+    const hardTimer = setTimeout(() => {
+      setIsFadingOut(true);
+      const renderTimer = setTimeout(() => {
+        setShouldRender(false);
+      }, 600);
+      return () => clearTimeout(renderTimer);
+    }, 1800);
+
+    const handleInteraction = () => {
+      setIsFadingOut(true);
+      setTimeout(() => setShouldRender(false), 400);
+    };
+
+    window.addEventListener('keydown', handleInteraction);
+    return () => {
+      clearTimeout(hardTimer);
+      window.removeEventListener('keydown', handleInteraction);
+    };
+  }, []);
+
   // Monitor loading state and trigger smooth fade-out
   useEffect(() => {
     if (!isLoading) {
       setIsFadingOut(true);
       const timer = setTimeout(() => {
         setShouldRender(false);
-      }, 800); // Matches CSS transition duration
+      }, 700); // Matches CSS transition duration
       return () => clearTimeout(timer);
     }
   }, [isLoading]);
@@ -24,7 +46,11 @@ export const FrostedLoadingScreen: React.FC<FrostedLoadingScreenProps> = ({ isLo
 
   return (
     <div 
-      className={`fixed inset-0 z-50 bg-[#020203] flex flex-col items-center justify-center overflow-hidden select-none transition-all duration-700 ease-in-out transform-gpu ${
+      onClick={() => {
+        setIsFadingOut(true);
+        setTimeout(() => setShouldRender(false), 400);
+      }}
+      className={`fixed inset-0 z-50 bg-[#020203] flex flex-col items-center justify-center overflow-hidden select-none transition-all duration-700 ease-in-out transform-gpu cursor-pointer ${
         isFadingOut ? 'opacity-0 scale-[1.03] blur-[15px] pointer-events-none' : 'opacity-100 scale-100'
       }`}
     >

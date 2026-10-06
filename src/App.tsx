@@ -7,8 +7,8 @@ import { GamePlayer } from './components/GamePlayer';
 import { ChatView } from './components/ChatView';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { FrostedLoadingScreen } from './components/FrostedLoadingScreen';
-import { fetchGames, resolveGameUrl } from './services/gameService';
-import { fetchLuminGames } from './services/luminService';
+import { fetchGames, getAllGames, resolveGameUrl } from './services/gameService';
+import { fetchLuminGames, getInitialLuminGames } from './services/luminService';
 import { useCloak, launchAboutBlank } from './hooks/useCloak';
 import { useGameCache } from './hooks/useGameCache';
 import { useGlobalChat } from './hooks/useGlobalChat';
@@ -44,8 +44,16 @@ export default function App() {
     presets,
   } = useCloak();
 
-  // Master Games State
-  const [allGames, setAllGames] = useState<GameItem[]>([]);
+  // Master Games State - Pre-populated with initial catalogue so UI renders instantly
+  const [allGames, setAllGames] = useState<GameItem[]>(() => {
+    try {
+      const initial = getAllGames();
+      const seedLumin = getInitialLuminGames();
+      return [...initial, ...seedLumin];
+    } catch {
+      return [];
+    }
+  });
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
   const [activeGame, setActiveGame] = useState<GameItem | null>(null);
 
@@ -55,15 +63,23 @@ export default function App() {
   // Global Chat and Notifications
   const globalChat = useGlobalChat();
 
-  // Initial Master Catalog Load (Melted Archive + Lumin SDK 1169+ Games)
+  // Initial Master Catalog Load (Melted Archive + Lumin SDK Games)
   useEffect(() => {
     let active = true;
+
+    // Hard fail-safe for school Chromebooks: NEVER block longer than 1.5s under any circumstance
+    const hardTimeout = setTimeout(() => {
+      if (active) setIsCatalogLoading(false);
+    }, 1500);
+
     async function loadAllCatalogs() {
-      setIsCatalogLoading(true);
       try {
-        const [meltedGames, luminGames] = await Promise.all([
-          fetchGames().catch(() => []),
-          fetchLuminGames().catch(() => []),
+        const meltedGames = await fetchGames().catch(() => getAllGames());
+
+        // Race Lumin games against a strict 800ms limit so school Wi-Fi never hangs
+        const luminGames = await Promise.race([
+          fetchLuminGames().catch(() => getInitialLuminGames()),
+          new Promise<GameItem[]>((res) => setTimeout(() => res(getInitialLuminGames()), 800))
         ]);
 
         if (!active) return;
@@ -91,17 +107,21 @@ export default function App() {
         const combined = Array.from(masterMap.values());
         setAllGames(combined.length > 0 ? combined : luminGames);
         
-        // Guarantee 2.5s of smooth Frosted bounce animation intro
-        await new Promise((resolve) => setTimeout(resolve, 2500));
+        // Smooth 600ms Frosted bounce intro animation
+        await new Promise((resolve) => setTimeout(resolve, 600));
       } catch (err) {
-        console.warn('Catalog load warning:', err);
+        console.warn('Catalog load notice:', err);
       } finally {
+        clearTimeout(hardTimeout);
         if (active) setIsCatalogLoading(false);
       }
     }
+
     loadAllCatalogs();
+
     return () => {
       active = false;
+      clearTimeout(hardTimeout);
     };
   }, []);
 

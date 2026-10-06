@@ -53,9 +53,12 @@ app.get('/api/health', (req, res) => {
 // Proxy game files to guarantee 100% reliable iframe loading
 // Fetches from RawGitHack first, with resilient fallback to GitHub Raw if Cloudflare restricts it
 app.get('/api/raw/:filename', async (req, res) => {
-  const filename = req.params.filename;
-  if (!filename || !filename.endsWith('.html')) {
+  let filename = req.params.filename;
+  if (!filename) {
     return res.status(400).send('Invalid game filename');
+  }
+  if (!filename.endsWith('.html')) {
+    filename = `${filename}.html`;
   }
 
   const rawgithackUrl = `https://raw.githack.com/freebuisness/html/main/${filename}`;

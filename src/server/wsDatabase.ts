@@ -207,6 +207,10 @@ export function initWebSocketDatabase(server: Server) {
                 updated_at: Date.now(),
               });
               broadcastTable('users', db.selectUsers());
+
+              if (msg.user.current_channel === 'voice-general' || msg.user.current_channel === 'video-general') {
+                broadcastMediaPresence('USER_JOINED_MEDIA', uId, msg.user.current_channel);
+              }
             }
             break;
           }

@@ -3,19 +3,11 @@ import { DbUser } from '../server/wsDatabase';
 
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [
-    // Standard Port 443 STUN endpoints (School & restrictive Wi-Fi / GreatKids safe)
-    { urls: 'stun:stun.l.google.com:443' },
-    { urls: 'stun:stun1.l.google.com:443' },
-    { urls: 'stun:stun2.l.google.com:443' },
-    { urls: 'stun:stun3.l.google.com:443' },
-    { urls: 'stun:stun4.l.google.com:443' },
-    { urls: 'stun:stun.nextcloud.com:443' },
-    { urls: 'stun:stun.sipgate.net:443' },
-    { urls: 'stun:stun.voip.blackberry.com:443' },
-    // Standard STUN fallback
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
   ],
   iceTransportPolicy: 'all',
@@ -173,9 +165,13 @@ export function useWebRTC({
     pc = new RTCPeerConnection(RTC_CONFIG);
     peerConnections.current.set(peerId, pc);
 
-    // Add audio and video transceivers for bi-directional streaming
+    // Always initialize audio transceiver with sendrecv so voice connects immediately
     pc.addTransceiver('audio', { direction: 'sendrecv' });
-    pc.addTransceiver('video', { direction: 'sendrecv' });
+
+    // Video transceiver if activeChannel is video-general
+    if (activeChannel === 'video-general') {
+      pc.addTransceiver('video', { direction: 'sendrecv' });
+    }
 
     // Initial track assignment
     updateTracksForPeer(pc);
@@ -190,18 +186,31 @@ export function useWebRTC({
       }
     };
 
-    // Track handler
+    pc.oniceconnectionstatechange = () => {
+      console.log(`[WebRTC] Peer ${peerId} iceConnectionState:`, pc.iceConnectionState);
+      if (pc.iceConnectionState === 'failed') {
+        try {
+          pc.restartIce?.();
+        } catch (err) {
+          console.warn('[WebRTC] restartIce error:', err);
+        }
+      }
+    };
+
+    // Track handler - stable stream retention to prevent video flickering
     pc.ontrack = (event) => {
-      const incomingStream = event.streams[0] || new MediaStream([event.track]);
+      console.log(`[WebRTC] ontrack received for peer ${peerId}, kind: ${event.track.kind}`);
+      const incomingTrack = event.track;
       
       setRemoteStreams((prev) => {
         const existing = prev[peerId];
         if (existing) {
-          if (!existing.getTracks().some((t) => t.id === event.track.id)) {
-            existing.addTrack(event.track);
+          if (!existing.getTracks().some((t) => t.id === incomingTrack.id)) {
+            existing.addTrack(incomingTrack);
           }
-          return { ...prev, [peerId]: new MediaStream(existing.getTracks()) };
+          return { ...prev };
         }
+        const incomingStream = event.streams && event.streams[0] ? event.streams[0] : new MediaStream([incomingTrack]);
         return { ...prev, [peerId]: incomingStream };
       });
 
@@ -211,13 +220,14 @@ export function useWebRTC({
     };
 
     pc.onconnectionstatechange = () => {
+      console.log(`[WebRTC] Peer ${peerId} connectionState:`, pc.connectionState);
       if (pc?.connectionState === 'failed' || pc?.connectionState === 'closed') {
         closePeer(peerId);
       }
     };
 
     return pc;
-  }, [sendRtcSignal, closePeer, setupRemoteAudioAnalysis, updateTracksForPeer]);
+  }, [sendRtcSignal, closePeer, setupRemoteAudioAnalysis, updateTracksForPeer, activeChannel]);
 
   // Handle incoming signaling messages
   const handleIncomingSignal = useCallback(async (fromUserId: string, signal: any) => {
@@ -228,6 +238,20 @@ export function useWebRTC({
 
       if (signal.type === 'offer') {
         const remoteDesc = signal.description || { type: 'offer', sdp: signal.sdp };
+        const isPolite = currentUserId < fromUserId;
+        const offerCollision = pc.signalingState !== 'stable' || isMakingOffer.current.get(fromUserId);
+
+        if (offerCollision) {
+          if (!isPolite) {
+            console.log(`[WebRTC] Glare detected, impolite peer ignoring offer from ${fromUserId}`);
+            return;
+          }
+          console.log(`[WebRTC] Glare detected, polite peer rolling back offer for ${fromUserId}`);
+          try {
+            await pc.setLocalDescription({ type: 'rollback' } as any);
+          } catch {}
+        }
+
         await pc.setRemoteDescription(new RTCSessionDescription(remoteDesc));
 
         // Drain candidate queue
@@ -320,18 +344,17 @@ export function useWebRTC({
 
     setMediaHandlers(
       (userId, channel) => {
-        if (channel === activeChannel && isMediaChannel && userId !== currentUserId) {
-          // Immediately initiate call
-          if (currentUserId > userId) {
-            initiateOffer(userId);
-          }
+        if (isMediaChannel && userId !== currentUserId) {
+          console.log(`[WebRTC] Peer ${userId} joined ${channel}. Initiating call immediately.`);
+          initiateOffer(userId);
         }
       },
       (userId) => {
+        console.log(`[WebRTC] Peer ${userId} left media.`);
         closePeer(userId);
       }
     );
-  }, [setRtcSignalHandler, setMediaHandlers, handleIncomingSignal, activeChannel, isMediaChannel, currentUserId, initiateOffer, closePeer]);
+  }, [setRtcSignalHandler, setMediaHandlers, handleIncomingSignal, isMediaChannel, currentUserId, initiateOffer, closePeer]);
 
   // Synchronize peer connections with current channel peers
   useEffect(() => {
@@ -349,11 +372,15 @@ export function useWebRTC({
       }
     });
 
-    // Initiate offer with any new peer
+    // Initiate offer with any new peer that is not connected
     peers.forEach((peer) => {
-      console.log(`[WebRTC] Initiating offer to peer: ${peer.id}, channel: ${activeChannel}, userId: ${currentUserId}`);
-      if (!peerConnections.current.has(peer.id) && currentUserId > peer.id) {
-        initiateOffer(peer.id);
+      const existing = peerConnections.current.get(peer.id);
+      const isConnected = existing && (existing.connectionState === 'connected' || existing.connectionState === 'connecting');
+      if (!isConnected) {
+        if (currentUserId > peer.id) {
+          console.log(`[WebRTC] Sync effect initiating offer to peer: ${peer.id}`);
+          initiateOffer(peer.id);
+        }
       }
     });
   }, [peers, isMediaChannel, currentUserId, initiateOffer, closePeer, closeAllPeers]);

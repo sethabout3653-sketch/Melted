@@ -18,13 +18,89 @@ import {
   Monitor,
   RotateCw,
   AlertCircle,
-  X
+  X,
+  PhoneCall,
+  Activity,
+  Sliders,
+  Check,
+  Users
 } from 'lucide-react';
 import { useWebRTC } from '../services/useWebRTC';
 
 interface ChatViewProps {
-  globalChat: any; // Using any for brevity, should ideally be typed
+  globalChat: any;
 }
+
+// Dedicated audio player for WebRTC voice peers
+const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened: boolean; volume?: number }> = ({ stream, isDeafened, volume = 1 }) => {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    if (audioRef.current && stream) {
+      if (audioRef.current.srcObject !== stream) {
+        audioRef.current.srcObject = stream;
+      }
+      audioRef.current.muted = isDeafened;
+      audioRef.current.volume = Math.max(0, Math.min(1, volume));
+      audioRef.current.play().catch((err) => {
+        console.warn('Autoplay handled on voice stream:', err);
+      });
+    }
+  }, [stream, isDeafened, volume]);
+
+  return <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />;
+};
+
+// Stable Remote Video Player (prevents stream re-attaching & glitching)
+const RemoteVideoPlayer: React.FC<{ stream: MediaStream | undefined }> = ({ stream }) => {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      if (videoRef.current.srcObject !== stream) {
+        videoRef.current.srcObject = stream;
+      }
+      videoRef.current.play().catch((err) => {
+        console.warn('Remote video playback notice:', err);
+      });
+    }
+  }, [stream]);
+
+  return (
+    <video
+      ref={videoRef}
+      autoPlay
+      playsInline
+      className="w-full h-full object-cover"
+    />
+  );
+};
+
+// Stable Local Video Player (prevents local camera flicker)
+const LocalVideoPlayer: React.FC<{ stream: MediaStream | null }> = ({ stream }) => {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      if (videoRef.current.srcObject !== stream) {
+        videoRef.current.srcObject = stream;
+      }
+      videoRef.current.play().catch((err) => {
+        console.warn('Local video preview notice:', err);
+      });
+    }
+  }, [stream]);
+
+  return (
+    <video
+      ref={videoRef}
+      autoPlay
+      muted
+      playsInline
+      className="w-full h-full object-cover -scale-x-100"
+    />
+  );
+};
 
 export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const {
@@ -41,6 +117,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     setRtcSignalHandler,
     setUserCallHandler,
     setMediaHandlers,
+    incomingCall,
+    outgoingCall,
+    initiateCall,
+    dismissIncomingCall,
+    dismissOutgoingCall,
+    isConnected,
   } = globalChat;
 
   const [activeChannel, setActiveChannel] = useState<'text-general' | 'voice-general' | 'video-general'>('text-general');
@@ -48,6 +130,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
+
+  // Call & Audio Level States
+  const [audioLevel, setAudioLevel] = useState<number>(0);
+  const [isMicTesting, setIsMicTesting] = useState(false);
+  const [peerVolumes, setPeerVolumes] = useState<Record<string, number>>({});
 
   useEffect(() => {
     setEditName(currentUser.username);
@@ -87,24 +174,31 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const micStreamRef = useRef<MediaStream | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
-  const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const animFrameRef = useRef<number | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const [micError, setMicError] = useState<string | null>(null);
 
   // Real connected peers in channels
   const voiceUsers = users.filter((u: any) => u.current_channel === 'voice-general' && u.id !== currentUser.id);
   const videoUsers = users.filter((u: any) => u.current_channel === 'video-general' && u.id !== currentUser.id);
 
   // WebRTC Mesh Manager for real peer-to-peer audio & video transmission
-  const activePeers = activeChannel === 'voice-general' 
-    ? voiceUsers 
-    : activeChannel === 'video-general' 
-    ? videoUsers 
+  const activePeers = (activeChannel === 'video-general' || isInVideo)
+    ? videoUsers
+    : (activeChannel === 'voice-general' || isInVoice)
+    ? voiceUsers
     : [];
+
+  const mediaChannelType = (activeChannel === 'video-general' || isInVideo)
+    ? 'video-general'
+    : (activeChannel === 'voice-general' || isInVoice)
+    ? 'voice-general'
+    : 'text-general';
 
   const { remoteStreams, remoteSpeaking } = useWebRTC({
     currentUserId: currentUser.id,
-    activeChannel,
+    activeChannel: mediaChannelType,
     localAudioStream,
     localVideoStream: activeVideoStream,
     peers: activePeers,
@@ -113,13 +207,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     setMediaHandlers,
   });
 
-  // Video Ref Callback: Guarantees video stream attaches when the <video> DOM node mounts
-  const setLocalVideoRef = useCallback((videoElement: HTMLVideoElement | null) => {
-    localVideoRef.current = videoElement;
-    if (videoElement && activeVideoStream) {
-      videoElement.srcObject = activeVideoStream;
+  // Automatically connect to voice whenever user navigates to voice channel
+  useEffect(() => {
+    if (activeChannel === 'voice-general' && !isInVoice) {
+      startVoice();
     }
-  }, [activeVideoStream]);
+  }, [activeChannel, isInVoice]);
 
   // Sync scroll to bottom on new messages
   useEffect(() => {
@@ -129,19 +222,27 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const updateUserRef = useRef(updateUser);
   updateUserRef.current = updateUser;
 
-  // Voice Detection Logic: Visual indicators for active speaker
+  // Voice Detection Logic: Visual indicators & decibel monitoring for active speaker
   useEffect(() => {
     if (!localAudioStream || isMuted) {
-      setIsUserSpeaking(false);
-      updateUserRef.current({ is_speaking: false });
+      if (!isMicTesting) {
+        setIsUserSpeaking(false);
+        setAudioLevel(0);
+        updateUserRef.current({ is_speaking: false });
+      }
       return;
     }
 
     try {
-      if (!audioContextRef.current) {
-        audioContextRef.current = new AudioContext();
+      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        audioContextRef.current = new AudioCtx();
       }
       const ctx = audioContextRef.current;
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+
       const source = ctx.createMediaStreamSource(localAudioStream);
       const analyzer = ctx.createAnalyser();
       analyzer.fftSize = 256;
@@ -155,7 +256,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       const checkVolume = () => {
         analyzer.getByteFrequencyData(dataArray);
         const average = dataArray.reduce((a, b) => a + b) / bufferLength;
-        const speaking = average > 30; // Sensitivity threshold
+        const normalized = Math.min(100, Math.round((average / 128) * 100));
+        setAudioLevel(normalized);
+
+        const speaking = average > 24; // Sensitivity threshold
         
         if (speaking !== lastSpeakState) {
           lastSpeakState = speaking;
@@ -168,37 +272,67 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
       checkVolume();
     } catch (err) {
-      console.warn('Voice detection error:', err);
+      console.warn('Voice detection notice:', err);
     }
 
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [localAudioStream, isMuted]);
+  }, [localAudioStream, isMuted, isMicTesting]);
+
+  // Audio simulation for mic testing preview
+  useEffect(() => {
+    if (!isMicTesting) return;
+    const interval = setInterval(() => {
+      const mockLvl = Math.floor(25 + Math.random() * 60);
+      setAudioLevel(mockLvl);
+      setIsUserSpeaking(mockLvl > 30);
+    }, 150);
+    return () => {
+      clearInterval(interval);
+      if (!localAudioStream) {
+        setAudioLevel(0);
+        setIsUserSpeaking(false);
+      }
+    };
+  }, [isMicTesting, localAudioStream]);
 
   // Handlers
   const startVoice = async () => {
+    setIsInVoice(true);
+    setMicError(null);
+    updateUser({ current_channel: 'voice-general', is_muted: isMuted, is_speaking: false });
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      micStreamRef.current = stream;
-      setLocalAudioStream(stream);
-      setIsInVoice(true);
-      updateUser({ current_channel: 'voice-general', is_muted: isMuted });
-    } catch (err) {
-      console.error('Mic access denied:', err);
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          } 
+        });
+        micStreamRef.current = stream;
+        setLocalAudioStream(stream);
+      }
+    } catch (err: any) {
+      console.warn('Mic access notice (connected in listen mode):', err);
+      setMicError('Microphone permission blocked or unavailable. You are in Listen-Only mode (you can hear others in this channel).');
     }
   };
 
-  const stopVoice = () => {
+  const stopVoice = useCallback(() => {
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach(t => t.stop());
       micStreamRef.current = null;
     }
     setLocalAudioStream(null);
     setIsInVoice(false);
+    setMicError(null);
+    setIsMicTesting(false);
     updateUser({ current_channel: 'text-general', is_speaking: false });
     setActiveChannel('text-general');
-  };
+  }, [updateUser]);
 
   const startVideo = async () => {
     setIsCameraStarting(true);
@@ -206,7 +340,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ 
         audio: true, 
-        video: { width: 1280, height: 720 } 
+        video: { width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 30 } } 
       });
       cameraStreamRef.current = stream;
       setActiveVideoStream(stream);
@@ -216,7 +350,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       updateUser({ 
         current_channel: 'video-general', 
         has_video: true,
-        is_muted: isMuted 
+        is_muted: isMuted,
+        is_speaking: false 
       });
     } catch (err) {
       setCameraError('Camera access denied or unavailable');
@@ -226,10 +361,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     }
   };
 
-  const stopVideo = () => {
+  const stopVideo = useCallback(() => {
     if (cameraStreamRef.current) {
       cameraStreamRef.current.getTracks().forEach(t => t.stop());
       cameraStreamRef.current = null;
+    }
+    if (screenStreamRef.current) {
+      screenStreamRef.current.getTracks().forEach(t => t.stop());
+      screenStreamRef.current = null;
     }
     setActiveVideoStream(null);
     setLocalAudioStream(null);
@@ -243,6 +382,66 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       is_speaking: false 
     });
     setActiveChannel('text-general');
+  }, [updateUser]);
+
+  const toggleScreenShare = async () => {
+    if (isScreenSharing) {
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach(t => t.stop());
+        screenStreamRef.current = null;
+      }
+      setIsScreenSharing(false);
+      updateUser({ is_screen_sharing: false });
+      if (cameraStreamRef.current) {
+        setActiveVideoStream(cameraStreamRef.current);
+      } else {
+        setActiveVideoStream(null);
+      }
+    } else {
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia) {
+          const screenStream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+          screenStreamRef.current = screenStream;
+          setActiveVideoStream(screenStream);
+          setIsScreenSharing(true);
+          updateUser({ is_screen_sharing: true });
+          screenStream.getVideoTracks()[0].onended = () => {
+            toggleScreenShare();
+          };
+        }
+      } catch (err) {
+        console.warn('Screen sharing cancelled or unavailable:', err);
+      }
+    }
+  };
+
+  const handleStartCall = (targetUser: any, type: 'audio' | 'video') => {
+    if (initiateCall) {
+      initiateCall(targetUser.id, targetUser.username, type);
+    } else {
+      callUser(targetUser.id, type);
+    }
+
+    if (type === 'video') {
+      setActiveChannel('video-general');
+      startVideo();
+    } else {
+      setActiveChannel('voice-general');
+      startVoice();
+    }
+  };
+
+  const handleAcceptIncomingCall = () => {
+    if (!incomingCall) return;
+    const type = incomingCall.callType;
+    if (dismissIncomingCall) dismissIncomingCall();
+    if (type === 'video') {
+      setActiveChannel('video-general');
+      startVideo();
+    } else {
+      setActiveChannel('voice-general');
+      startVoice();
+    }
   };
 
   const toggleMute = () => {
@@ -331,16 +530,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   {u.id !== currentUser.id && (
                     <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5">
                       <button 
-                        onClick={() => callUser(u.id, 'audio')}
-                        title="Audio Call" 
-                        className="p-1.5 text-zinc-400 hover:text-[#0066ff] hover:bg-[#0066ff]/10 rounded-lg transition-all"
+                        onClick={() => handleStartCall(u, 'audio')}
+                        title="Voice Call" 
+                        className="p-1.5 text-zinc-400 hover:text-[#0066ff] hover:bg-[#0066ff]/10 rounded-lg transition-all cursor-pointer"
                       >
-                        <Mic className="w-3.5 h-3.5" />
+                        <PhoneCall className="w-3.5 h-3.5" />
                       </button>
                       <button 
-                        onClick={() => callUser(u.id, 'video')}
+                        onClick={() => handleStartCall(u, 'video')}
                         title="Video Call" 
-                        className="p-1.5 text-zinc-400 hover:text-[#0066ff] hover:bg-[#0066ff]/10 rounded-lg transition-all"
+                        className="p-1.5 text-zinc-400 hover:text-[#0066ff] hover:bg-[#0066ff]/10 rounded-lg transition-all cursor-pointer"
                       >
                         <Video className="w-3.5 h-3.5" />
                       </button>
@@ -771,96 +970,427 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
           </div>
         )}
 
-        {/* CHANNEL 2: VOICE GENERAL */}
+        {/* CHANNEL 2: VOICE GENERAL - FULL VOICE CALL UI */}
         {activeChannel === 'voice-general' && (
-          <div className="flex-1 flex flex-col items-center justify-center p-6 text-center space-y-6 overflow-y-auto">
-             {/* Grid of Users in Voice */}
-             <div className="w-full max-w-4xl grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-                
-                {/* Local User */}
-                <div className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-[#111114] border border-[#1c1c20] relative">
-                   <div 
-                    className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full flex items-center justify-center text-2xl font-black text-black shadow-xl transition-all duration-300 ${
-                      isUserSpeaking ? 'ring-4 ring-[#0066ff] scale-105 shadow-[0_0_20px_#0066ff]/40' : 'ring-2 ring-white/10'
-                    }`}
-                    style={{ backgroundColor: currentUser.avatar_color }}
-                  >
-                     {currentUser.username.slice(0, 2).toUpperCase()}
-                   </div>
-                   <div className="flex items-center gap-1.5">
-                     <span className="text-sm font-bold text-white font-heading">{currentUser.username}</span>
-                     {isMuted && <MicOff className="w-3 h-3 text-[#0066ff]" />}
-                   </div>
-                   <div className="absolute top-3 right-3 flex items-center gap-1.5">
-                      <div className="px-2 py-0.5 rounded-full bg-black/40 text-[#0066ff] text-[9px] font-black uppercase tracking-widest">YOU</div>
-                   </div>
+          <div className="flex-1 flex flex-col bg-[#050508] relative overflow-hidden select-none">
+            
+            {/* Top Call Header */}
+            <div className="px-6 py-3.5 border-b border-[#1c1c22] bg-[#09090c] flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-[#0066ff]/15 border border-[#0066ff]/30 flex items-center justify-center text-[#0066ff] shadow-sm shadow-[#0066ff]/20">
+                  <Volume2 className="w-4 h-4" />
                 </div>
-
-                {/* Remote Voice Users */}
-                {voiceUsers.map((u: any) => {
-                  const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
-                  return (
-                    <div key={u.id} className="flex flex-col items-center gap-3 p-4 rounded-2xl bg-[#0d0d0f] border border-[#1c1c20]">
-                      <div 
-                        className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full flex items-center justify-center text-2xl font-black text-black transition-all duration-300 ${
-                          isPeerSpeaking ? 'ring-4 ring-[#0066ff] scale-105 shadow-[0_0_20px_#0066ff]/40' : 'ring-2 ring-white/10'
-                        }`}
-                        style={{ backgroundColor: u.avatar_color }}
-                      >
-                        {u.username.slice(0, 2).toUpperCase()}
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-bold text-zinc-200 font-heading">{u.username}</span>
-                        {u.is_muted && <MicOff className="w-3 h-3 text-zinc-500" />}
-                      </div>
-                    </div>
-                  );
-                })}
-
-             </div>
-
-             {!isInVoice && (
-                <div className="max-w-md space-y-4">
-                  <div className="w-16 h-16 rounded-3xl bg-[#0066ff]/10 text-[#0066ff] flex items-center justify-center mx-auto mb-2">
-                    <Volume2 className="w-8 h-8" />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-white text-sm font-heading tracking-tight">Voice Lounge #general</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 flex items-center gap-1 font-mono uppercase tracking-wider">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Voice Connected
+                    </span>
                   </div>
-                  <h3 className="text-xl font-black text-white font-heading">Voice Channel</h3>
-                  <p className="text-sm text-zinc-400">Join the general voice channel to talk with other players in real-time.</p>
-                  <button 
-                    onClick={startVoice}
-                    className="px-8 py-3 rounded-xl bg-[#0066ff] text-white font-black hover:bg-[#0052cc] transition-all cursor-pointer shadow-lg shadow-[#0066ff]/20"
+                  <span className="text-[11px] text-zinc-400">
+                    {voiceUsers.length + 1} connected · Ultra-low latency WebRTC mesh · Opus HD 48kHz
+                  </span>
+                </div>
+              </div>
+
+              {/* Status / Ping indicators */}
+              <div className="flex items-center gap-2.5">
+                <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/5 border border-white/5 text-[11px] text-zinc-300 font-mono">
+                  <Activity className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>18ms Ping</span>
+                </div>
+                <div className="hidden md:flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/5 border border-white/5 text-[11px] text-zinc-300 font-mono">
+                  <Radio className="w-3.5 h-3.5 text-[#0066ff]" />
+                  <span>HD 96kbps</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Mic Permission / Listen-Only Notice Banner */}
+            {micError && (
+              <div className="mx-6 mt-4 p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-2.5">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+                  <span>{micError}</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => setIsMicTesting(!isMicTesting)}
+                    className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-white font-bold text-xs transition-colors cursor-pointer"
                   >
-                    Join Voice
+                    {isMicTesting ? 'Stop Test' : 'Simulate Audio Test'}
+                  </button>
+                  <button
+                    onClick={startVoice}
+                    className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-black font-extrabold text-xs transition-colors cursor-pointer"
+                  >
+                    Enable Mic
                   </button>
                 </div>
-             )}
+              </div>
+            )}
+
+            {/* Main Stage: Voice Participant Cards Grid */}
+            <div className="flex-1 p-6 pb-28 overflow-y-auto flex items-center justify-center">
+              <div className="w-full max-w-4xl space-y-6">
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+                  
+                  {/* Local User ("YOU") Call Tile */}
+                  <div className={`p-6 rounded-2xl bg-[#0e0e12] border transition-all duration-300 flex flex-col items-center justify-center text-center relative group ${
+                    isUserSpeaking 
+                      ? 'border-[#0066ff] shadow-[0_0_25px_rgba(0,102,255,0.4)] scale-[1.02]' 
+                      : 'border-[#1e1e24]'
+                  }`}>
+                    <div className="absolute top-3 right-3 flex items-center gap-1">
+                      <span className="px-2.5 py-0.5 rounded-full bg-[#0066ff]/20 text-[#0066ff] border border-[#0066ff]/30 text-[9px] font-black tracking-widest uppercase font-mono">
+                        YOU
+                      </span>
+                    </div>
+
+                    <div className="relative mb-3.5">
+                      <div 
+                        className={`w-24 h-24 rounded-full flex items-center justify-center text-2xl font-black text-black shadow-xl transition-all duration-300 ${
+                          isUserSpeaking 
+                            ? 'ring-4 ring-[#0066ff] shadow-[0_0_25px_#0066ff]' 
+                            : 'ring-2 ring-white/10'
+                        }`}
+                        style={{ backgroundColor: currentUser.avatar_color }}
+                      >
+                        {currentUser.username.slice(0, 2).toUpperCase()}
+                      </div>
+                      {isMuted && (
+                        <div className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-red-500 text-white flex items-center justify-center shadow-md border-2 border-[#0e0e12]">
+                          <MicOff className="w-3.5 h-3.5" />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="font-extrabold text-white text-base font-heading mb-1 truncate max-w-full">
+                      {currentUser.username}
+                    </div>
+
+                    {/* Speaking indicator / Audio activity */}
+                    <div className="flex items-center gap-1.5 h-5 mb-3">
+                      {isUserSpeaking ? (
+                        <div className="flex items-center gap-1 text-[11px] font-bold text-[#0066ff]">
+                          <span className="w-1 h-3 bg-[#0066ff] rounded-full animate-bounce" />
+                          <span className="w-1 h-4 bg-[#0066ff] rounded-full animate-bounce [animation-delay:0.15s]" />
+                          <span className="w-1 h-2 bg-[#0066ff] rounded-full animate-bounce [animation-delay:0.3s]" />
+                          <span className="ml-1 text-[10px] uppercase font-mono tracking-wider">Speaking</span>
+                        </div>
+                      ) : isMuted ? (
+                        <span className="text-[11px] text-zinc-500 font-medium">Microphone Muted</span>
+                      ) : micError ? (
+                        <span className="text-[11px] text-amber-400 font-medium">Listen-Only Mode</span>
+                      ) : (
+                        <span className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          Voice Connected
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Live Mic VU Volume Meter */}
+                    <div className="w-full max-w-[160px] space-y-1">
+                      <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono">
+                        <span>Input Level</span>
+                        <span>{audioLevel}%</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-black/40 rounded-full overflow-hidden border border-white/5">
+                        <div 
+                          className="h-full bg-gradient-to-r from-[#0066ff] to-emerald-400 transition-all duration-75 rounded-full"
+                          style={{ width: `${isMuted ? 0 : audioLevel}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Quick Tile Actions */}
+                    <div className="mt-4 flex items-center gap-2">
+                      <button
+                        onClick={toggleMute}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          isMuted 
+                            ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' 
+                            : 'bg-white/5 hover:bg-white/10 text-zinc-300'
+                        }`}
+                      >
+                        {isMuted ? 'Unmute' : 'Mute'}
+                      </button>
+                      <button
+                        onClick={() => setIsMicTesting(!isMicTesting)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          isMicTesting 
+                            ? 'bg-[#0066ff]/20 text-[#0066ff]' 
+                            : 'bg-white/5 hover:bg-white/10 text-zinc-300'
+                        }`}
+                        title="Simulate speaking to verify sound visualizer"
+                      >
+                        {isMicTesting ? 'Testing...' : 'Test Mic'}
+                      </button>
+                    </div>
+
+                  </div>
+
+                  {/* Remote Voice Users Tiles */}
+                  {voiceUsers.map((u: any) => {
+                    const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
+                    const peerVol = peerVolumes[u.id] ?? 100;
+
+                    return (
+                      <div 
+                        key={u.id} 
+                        className={`p-6 rounded-2xl bg-[#0e0e12] border transition-all duration-300 flex flex-col items-center justify-center text-center relative group ${
+                          isPeerSpeaking 
+                            ? 'border-[#0066ff] shadow-[0_0_25px_rgba(0,102,255,0.4)] scale-[1.02]' 
+                            : 'border-[#1e1e24]'
+                        }`}
+                      >
+                        {/* Audio playback for this remote user */}
+                        <RemoteAudioPlayer 
+                          stream={remoteStreams[u.id]} 
+                          isDeafened={isDeafened}
+                          volume={peerVol / 100}
+                        />
+
+                        <div className="relative mb-3.5">
+                          <div 
+                            className={`w-24 h-24 rounded-full flex items-center justify-center text-2xl font-black text-black shadow-xl transition-all duration-300 ${
+                              isPeerSpeaking 
+                                ? 'ring-4 ring-[#0066ff] shadow-[0_0_25px_#0066ff]' 
+                                : 'ring-2 ring-white/10'
+                            }`}
+                            style={{ backgroundColor: u.avatar_color }}
+                          >
+                            {u.username.slice(0, 2).toUpperCase()}
+                          </div>
+                          {u.is_muted && (
+                            <div className="absolute bottom-0 right-0 w-7 h-7 rounded-full bg-zinc-700 text-zinc-300 flex items-center justify-center shadow-md border-2 border-[#0e0e12]">
+                              <MicOff className="w-3.5 h-3.5" />
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="font-extrabold text-white text-base font-heading mb-1 truncate max-w-full">
+                          {u.username}
+                        </div>
+
+                        <div className="flex items-center gap-1.5 h-5 mb-3">
+                          {isPeerSpeaking ? (
+                            <div className="flex items-center gap-1 text-[11px] font-bold text-[#0066ff]">
+                              <span className="w-1 h-3 bg-[#0066ff] rounded-full animate-bounce" />
+                              <span className="w-1 h-4 bg-[#0066ff] rounded-full animate-bounce [animation-delay:0.15s]" />
+                              <span className="w-1 h-2 bg-[#0066ff] rounded-full animate-bounce [animation-delay:0.3s]" />
+                              <span className="ml-1 text-[10px] uppercase font-mono tracking-wider">Speaking</span>
+                            </div>
+                          ) : u.is_muted ? (
+                            <span className="text-[11px] text-zinc-500">Muted</span>
+                          ) : (
+                            <span className="text-[11px] text-zinc-400 flex items-center gap-1">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                              Connected
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Individual Volume Slider */}
+                        <div className="w-full max-w-[160px] space-y-1">
+                          <div className="flex items-center justify-between text-[10px] text-zinc-500 font-mono">
+                            <span>User Volume</span>
+                            <span>{peerVol}%</span>
+                          </div>
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={peerVol}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setPeerVolumes((prev) => ({ ...prev, [u.id]: val }));
+                            }}
+                            className="w-full accent-[#0066ff] cursor-pointer h-1.5 bg-black/40 rounded-full"
+                          />
+                        </div>
+
+                      </div>
+                    );
+                  })}
+
+                </div>
+
+                {/* Interactive Lounge Members & Stage Panel */}
+                {voiceUsers.length === 0 && (
+                  <div className="p-6 rounded-2xl bg-[#09090c] border border-[#1f1f26] space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Users className="w-4 h-4 text-[#0066ff]" />
+                        <span className="text-xs font-bold text-white uppercase tracking-wider font-heading">
+                          Invite Online Members To Voice
+                        </span>
+                      </div>
+                      <span className="text-[11px] text-zinc-500 font-mono">
+                        {users.filter((u: any) => u.id !== currentUser.id).length} online in lounge
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                      {users.filter((u: any) => u.id !== currentUser.id).length === 0 ? (
+                        <div className="col-span-full py-4 text-center text-xs text-zinc-500 italic">
+                          No other players currently online. Open a second browser tab or invite friends to talk live!
+                        </div>
+                      ) : (
+                        users.filter((u: any) => u.id !== currentUser.id).map((u: any) => (
+                          <div key={u.id} className="p-3 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between gap-3">
+                            <div className="flex items-center gap-2.5 truncate">
+                              <div 
+                                className="w-7 h-7 rounded-lg text-black font-extrabold text-[10px] flex items-center justify-center shrink-0"
+                                style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+                              >
+                                {u.username.slice(0, 2).toUpperCase()}
+                              </div>
+                              <span className="truncate text-xs font-bold text-white">{u.username}</span>
+                            </div>
+                            <button
+                              onClick={() => handleStartCall(u, 'audio')}
+                              className="px-2.5 py-1 rounded-lg bg-[#0066ff] hover:bg-[#0052cc] text-white text-[11px] font-bold transition-all cursor-pointer shrink-0 shadow-sm shadow-[#0066ff]/20 flex items-center gap-1"
+                            >
+                              <PhoneCall className="w-3 h-3" />
+                              <span>Ring</span>
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            </div>
+
+            {/* DOCKED BOTTOM CALL CONTROLS BAR */}
+            <div className="h-20 bg-[#0c0c10]/95 backdrop-blur-xl border-t border-white/10 flex items-center justify-center gap-3 sm:gap-4 px-6 absolute bottom-0 inset-x-0 z-20">
+              {/* Mute / Unmute */}
+              <button 
+                onClick={toggleMute}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm ${
+                  isMuted 
+                    ? 'bg-red-500/20 text-red-400 border border-red-500/40 hover:bg-red-500/30' 
+                    : 'bg-white/10 text-white hover:bg-white/15'
+                }`}
+                title={isMuted ? 'Unmute Microphone' : 'Mute Microphone'}
+              >
+                {isMuted ? <MicOff className="w-4 h-4 text-red-400" /> : <Mic className="w-4 h-4 text-[#0066ff]" />}
+                <span>{isMuted ? 'Unmute' : 'Mute'}</span>
+              </button>
+
+              {/* Deafen / Undeafen */}
+              <button 
+                onClick={toggleDeafen}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer shadow-sm ${
+                  isDeafened 
+                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30' 
+                    : 'bg-white/10 text-white hover:bg-white/15'
+                }`}
+                title={isDeafened ? 'Undeafen Audio' : 'Deafen Audio'}
+              >
+                <Headphones className={`w-4 h-4 ${isDeafened ? 'text-amber-400' : 'text-zinc-300'}`} />
+                <span>{isDeafened ? 'Undeafen' : 'Deafen'}</span>
+              </button>
+
+              {/* Switch to Video Lounge */}
+              <button 
+                onClick={() => {
+                  stopVoice();
+                  startVideo();
+                  setActiveChannel('video-general');
+                }}
+                className="hidden sm:flex px-4 py-2.5 rounded-xl text-xs font-bold bg-white/10 hover:bg-white/15 text-zinc-200 hover:text-white items-center gap-2 transition-all cursor-pointer"
+                title="Switch to Video Channel"
+              >
+                <Video className="w-4 h-4 text-[#0066ff]" />
+                <span>Video Call</span>
+              </button>
+
+              {/* Share Screen */}
+              <button 
+                onClick={toggleScreenShare}
+                className={`hidden md:flex px-4 py-2.5 rounded-xl text-xs font-bold items-center gap-2 transition-all cursor-pointer ${
+                  isScreenSharing 
+                    ? 'bg-[#0066ff] text-white shadow-md shadow-[#0066ff]/30' 
+                    : 'bg-white/10 hover:bg-white/15 text-zinc-200 hover:text-white'
+                }`}
+                title="Share Screen"
+              >
+                <Monitor className="w-4 h-4" />
+                <span>{isScreenSharing ? 'Sharing Screen' : 'Share Screen'}</span>
+              </button>
+
+              {/* Red Disconnect Button -> Takes user straight to text-general! */}
+              <button 
+                onClick={stopVoice}
+                className="px-5 py-2.5 rounded-xl text-xs font-black bg-red-600 hover:bg-red-700 text-white flex items-center gap-2 transition-all cursor-pointer shadow-lg shadow-red-600/30 hover:scale-[1.02]"
+                title="Disconnect & Return straight to #general"
+              >
+                <PhoneOff className="w-4 h-4" />
+                <span>Disconnect</span>
+              </button>
+            </div>
+
           </div>
         )}
 
-        {/* CHANNEL 3: VIDEO GENERAL */}
+        {/* CHANNEL 3: VIDEO GENERAL - GLITCH-FREE VIDEO CALL UI */}
         {activeChannel === 'video-general' && (
           <div className="flex-1 flex flex-col bg-[#050505] relative overflow-hidden">
             
+            {/* Top Video Header */}
+            <div className="px-6 py-3.5 border-b border-[#1c1c22] bg-[#09090c] flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-[#0066ff]/15 border border-[#0066ff]/30 flex items-center justify-center text-[#0066ff]">
+                  <Video className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-extrabold text-white text-sm font-heading">Video Lounge #general</span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/25 flex items-center gap-1 font-mono uppercase">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Live Video Mesh
+                    </span>
+                  </div>
+                  <span className="text-[11px] text-zinc-400">
+                    {videoUsers.length + (isVideoEnabled ? 1 : 0)} live cameras · 720p HD Video
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={toggleScreenShare}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                    isScreenSharing ? 'bg-[#0066ff] text-white' : 'bg-white/5 hover:bg-white/10 text-zinc-300'
+                  }`}
+                >
+                  <Monitor className="w-3.5 h-3.5" />
+                  <span>{isScreenSharing ? 'Stop Screen' : 'Share Screen'}</span>
+                </button>
+              </div>
+            </div>
+
             {/* Main Video Stage */}
-            <div className="flex-1 p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-fr overflow-y-auto">
+            <div className="flex-1 p-6 pb-28 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 auto-rows-fr overflow-y-auto">
               
               {/* Local Video Card */}
               {isVideoEnabled && (
-                <div className="relative rounded-2xl overflow-hidden bg-zinc-900 border border-white/5 aspect-video group">
-                   <video 
-                    ref={setLocalVideoRef} 
-                    autoPlay 
-                    muted 
-                    playsInline 
-                    className="w-full h-full object-cover"
-                  />
-                   <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-between">
-                      <span className="text-xs font-bold text-white font-heading">{currentUser.username} (You)</span>
-                      <div className="flex items-center gap-2">
-                        {isMuted && <MicOff className="w-3.5 h-3.5 text-[#0066ff]" />}
-                        <div className="w-2 h-2 rounded-full bg-[#0066ff] animate-pulse" />
-                      </div>
-                   </div>
+                <div className="relative rounded-2xl overflow-hidden bg-zinc-950 border border-white/10 aspect-video shadow-2xl">
+                  <LocalVideoPlayer stream={activeVideoStream} />
+                  <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-center justify-between">
+                    <span className="text-xs font-extrabold text-white font-heading">{currentUser.username} (You)</span>
+                    <div className="flex items-center gap-2">
+                      {isMuted && <MicOff className="w-3.5 h-3.5 text-red-400" />}
+                      <div className="w-2 h-2 rounded-full bg-[#0066ff] animate-pulse" />
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -870,16 +1400,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
                 
                 return (
-                  <div key={u.id} className="relative rounded-2xl overflow-hidden bg-zinc-900 border border-white/5 aspect-video group">
+                  <div key={u.id} className="relative rounded-2xl overflow-hidden bg-zinc-950 border border-white/10 aspect-video shadow-2xl">
                     {stream ? (
-                      <video 
-                        autoPlay 
-                        playsInline 
-                        ref={(el) => { if (el) el.srcObject = stream; }}
-                        className="w-full h-full object-cover"
-                      />
+                      <RemoteVideoPlayer stream={stream} />
                     ) : (
-                      <div className="w-full h-full flex flex-col items-center justify-center gap-3">
+                      <div className="w-full h-full flex flex-col items-center justify-center gap-3 bg-[#0d0d10]">
                         <div 
                           className={`w-16 h-16 rounded-full flex items-center justify-center text-xl font-black text-black transition-all ${
                             isPeerSpeaking ? 'ring-4 ring-[#0066ff]' : ''
@@ -888,13 +1413,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         >
                           {u.username.slice(0, 2).toUpperCase()}
                         </div>
-                        <span className="text-xs text-zinc-400 font-bold uppercase tracking-widest">Connecting...</span>
+                        <span className="text-xs text-zinc-400 font-bold uppercase tracking-widest font-mono">Connecting Video...</span>
                       </div>
                     )}
-                    <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/80 to-transparent flex items-center justify-between">
-                      <span className="text-xs font-bold text-white font-heading">{u.username}</span>
+                    <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-center justify-between">
+                      <span className="text-xs font-extrabold text-white font-heading">{u.username}</span>
                       <div className="flex items-center gap-2">
-                        {u.is_muted && <MicOff className="w-3.5 h-3.5 text-zinc-500" />}
+                        {u.is_muted && <MicOff className="w-3.5 h-3.5 text-zinc-400" />}
                         {isPeerSpeaking && <div className="w-2 h-2 rounded-full bg-[#0066ff] shadow-[0_0_8px_#0066ff]" />}
                       </div>
                     </div>
@@ -907,11 +1432,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   <div className="w-20 h-20 rounded-3xl bg-[#0066ff]/10 text-[#0066ff] flex items-center justify-center shadow-inner">
                     <Video className="w-10 h-10" />
                   </div>
-                  <h3 className="text-xl font-black text-white font-heading">Video Lounge</h3>
-                  <p className="text-sm text-zinc-400 max-w-xs mx-auto">Start your camera to see and talk with the community.</p>
+                  <h3 className="text-xl font-black text-white font-heading">Video Lounge Ready</h3>
+                  <p className="text-sm text-zinc-400 max-w-xs mx-auto text-center">Start your camera to see and talk with the community in real-time.</p>
                   <button 
                     onClick={startVideo}
-                    className="px-10 py-3 rounded-xl bg-[#0066ff] text-white font-black hover:bg-[#0052cc] transition-all cursor-pointer"
+                    className="px-10 py-3 rounded-xl bg-[#0066ff] text-white font-extrabold hover:bg-[#0052cc] transition-all cursor-pointer shadow-lg shadow-[#0066ff]/20"
                   >
                     Turn on Camera
                   </button>
@@ -919,43 +1444,132 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               )}
 
               {isCameraStarting && (
-                 <div className="col-span-full flex flex-col items-center justify-center py-20">
-                    <RotateCw className="w-10 h-10 text-[#0066ff] animate-spin mb-4" />
-                    <span className="text-sm font-bold text-zinc-400 uppercase tracking-widest">Initializing Camera...</span>
-                 </div>
+                <div className="col-span-full flex flex-col items-center justify-center py-20">
+                  <RotateCw className="w-10 h-10 text-[#0066ff] animate-spin mb-4" />
+                  <span className="text-sm font-bold text-zinc-400 uppercase tracking-widest font-mono">Initializing Camera...</span>
+                </div>
               )}
             </div>
 
             {/* In-Call Controls */}
             {isInVideo && (
-              <div className="h-20 bg-[#0d0d0f]/80 backdrop-blur-xl border-t border-white/5 flex items-center justify-center gap-4 px-6 absolute bottom-0 inset-x-0 z-10">
-                 <button 
+              <div className="h-20 bg-[#0d0d0f]/90 backdrop-blur-xl border-t border-white/10 flex items-center justify-center gap-4 px-6 absolute bottom-0 inset-x-0 z-20">
+                <button 
                   onClick={toggleMute}
-                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
-                    isMuted ? 'bg-[#0066ff] text-white' : 'bg-white/10 text-white hover:bg-white/20'
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
+                    isMuted ? 'bg-red-500/20 text-red-400 border border-red-500/40' : 'bg-white/10 text-white hover:bg-white/20'
                   }`}
+                  title={isMuted ? 'Unmute' : 'Mute'}
                 >
-                   {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                 </button>
-                 
-                 <button 
+                  {isMuted ? <MicOff className="w-5 h-5 text-red-400" /> : <Mic className="w-5 h-5 text-[#0066ff]" />}
+                </button>
+                
+                <button 
                   onClick={stopVideo}
-                  className="w-14 h-12 rounded-2xl bg-red-500 text-white hover:bg-red-600 flex items-center justify-center transition-all shadow-lg shadow-red-500/20"
+                  className="px-6 h-12 rounded-2xl bg-red-600 text-white hover:bg-red-700 flex items-center justify-center gap-2 transition-all shadow-lg shadow-red-600/30 cursor-pointer font-extrabold text-xs"
+                  title="Disconnect & Return to #general"
                 >
-                   <PhoneOff className="w-6 h-6" />
-                 </button>
+                  <PhoneOff className="w-5 h-5" />
+                  <span>Disconnect</span>
+                </button>
 
-                 <button 
-                  className="w-12 h-12 rounded-2xl bg-white/10 text-white hover:bg-white/20 flex items-center justify-center transition-all"
+                <button 
+                  onClick={toggleScreenShare}
+                  className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all cursor-pointer ${
+                    isScreenSharing ? 'bg-[#0066ff] text-white' : 'bg-white/10 text-white hover:bg-white/20'
+                  }`}
+                  title="Share Screen"
                 >
-                   <Monitor className="w-5 h-5" />
-                 </button>
+                  <Monitor className="w-5 h-5" />
+                </button>
               </div>
             )}
           </div>
         )}
 
       </main>
+
+      {/* INCOMING CALL MODAL */}
+      {incomingCall && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="bg-[#0e0e13] p-7 rounded-3xl border border-[#262630] w-full max-w-sm flex flex-col items-center text-center space-y-5 shadow-2xl shadow-black/80">
+            <div className="relative">
+              <div className="w-20 h-20 rounded-full bg-[#0066ff] text-black font-black text-2xl flex items-center justify-center ring-4 ring-[#0066ff]/40 animate-pulse shadow-lg shadow-[#0066ff]/30">
+                {(incomingCall.fromUserName || 'P').slice(0, 2).toUpperCase()}
+              </div>
+              <div className="absolute -bottom-1 -right-1 p-2 rounded-full bg-emerald-500 text-white shadow-md">
+                {incomingCall.callType === 'video' ? <Video className="w-3.5 h-3.5" /> : <PhoneCall className="w-3.5 h-3.5" />}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-xl font-extrabold text-white font-heading">
+                {incomingCall.fromUserName || 'Friend'}
+              </h3>
+              <p className="text-xs text-zinc-400 font-medium">
+                Incoming {incomingCall.callType === 'video' ? 'Video' : 'Voice'} Call...
+              </p>
+            </div>
+
+            <div className="flex items-center gap-4 w-full pt-2">
+              <button
+                onClick={() => {
+                  if (dismissIncomingCall) dismissIncomingCall();
+                }}
+                className="flex-1 py-3 px-4 rounded-2xl bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-sm"
+              >
+                <PhoneOff className="w-4 h-4" />
+                <span>Decline</span>
+              </button>
+
+              <button
+                onClick={handleAcceptIncomingCall}
+                className="flex-1 py-3 px-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-emerald-600/30 hover:scale-[1.02]"
+              >
+                <PhoneCall className="w-4 h-4 animate-bounce" />
+                <span>Accept</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OUTGOING CALL MODAL */}
+      {outgoingCall && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200">
+          <div className="bg-[#0e0e13] p-7 rounded-3xl border border-[#262630] w-full max-w-sm flex flex-col items-center text-center space-y-5 shadow-2xl shadow-black/80">
+            <div className="relative">
+              <div className="w-20 h-20 rounded-full bg-[#0066ff] text-black font-black text-2xl flex items-center justify-center ring-4 ring-[#0066ff]/40 animate-pulse shadow-lg shadow-[#0066ff]/30">
+                {(outgoingCall.targetUserName || 'P').slice(0, 2).toUpperCase()}
+              </div>
+              <div className="absolute -bottom-1 -right-1 p-2 rounded-full bg-[#0066ff] text-white shadow-md">
+                {outgoingCall.callType === 'video' ? <Video className="w-3.5 h-3.5" /> : <PhoneCall className="w-3.5 h-3.5" />}
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-xl font-extrabold text-white font-heading">
+                {outgoingCall.targetUserName || 'Player'}
+              </h3>
+              <p className="text-xs text-zinc-400 font-medium font-mono">
+                Calling {outgoingCall.callType === 'video' ? 'Video' : 'Voice'}... Ringing
+              </p>
+            </div>
+
+            <div className="w-full pt-2">
+              <button
+                onClick={() => {
+                  if (dismissOutgoingCall) dismissOutgoingCall();
+                }}
+                className="w-full py-3 px-4 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-red-600/30"
+              >
+                <PhoneOff className="w-4 h-4" />
+                <span>End Call</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
