@@ -3,6 +3,20 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "cpu": [
+    "x64",
+    "arm64",
+    "arm",
+    "ia32",
+    "wasm32"
+  ],
+  "os": [
+    "darwin",
+    "linux",
+    "win32",
+    "android",
+    "freebsd"
+  ],
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build",
