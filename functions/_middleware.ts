@@ -13,7 +13,18 @@ export async function onRequest(context: { request: Request; next: () => Promise
     });
   }
 
+  // CRITICAL: WebSockets (Upgrade: websocket or status 101) must pass through untouched!
+  // Re-creating a Response in middleware strips the WebSocket handshake pair and breaks connection.
+  const upgradeHeader = request.headers.get('Upgrade');
+  if (upgradeHeader && upgradeHeader.toLowerCase() === 'websocket') {
+    return next();
+  }
+
   const response = await next();
+
+  if (response.status === 101) {
+    return response;
+  }
 
   // Clone headers and add permissive policies
   const newHeaders = new Headers(response.headers);
@@ -26,3 +37,4 @@ export async function onRequest(context: { request: Request; next: () => Promise
     headers: newHeaders,
   });
 }
+
