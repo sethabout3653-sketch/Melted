@@ -95,8 +95,23 @@ Object.defineProperty(navigator,'vendor',{get:function(){return'Google Inc.'},co
 if(navigator.userAgentData){Object.defineProperty(navigator,'userAgentData',{get:function(){return{brands:[{brand:'Chromium',version:'124'},{brand:'Google Chrome',version:'124'}],mobile:false,platform:'Windows',getHighEntropyValues:function(){return Promise.resolve({architecture:'x86',bitness:'64',mobile:false,platform:'Windows'})}}},configurable:true});}
 
 var s=document.createElement('style');
-s.textContent='canvas,#canvas,body{image-rendering:-webkit-optimize-contrast;image-rendering:crisp-edges;transform:translate3d(0,0,0);backface-visibility:hidden;}';
+s.textContent='canvas,#canvas,body{image-rendering:pixelated;image-rendering:-webkit-optimize-contrast;image-rendering:crisp-edges;transform:translate3d(0,0,0);backface-visibility:hidden;}';
 (document.head||document.documentElement).appendChild(s);
+
+// High-Performance WebGL/Canvas context override for Chromebook GPUs
+var origGetContext=HTMLCanvasElement.prototype.getContext;
+HTMLCanvasElement.prototype.getContext=function(type,attrs){
+  attrs=attrs||{};
+  if(type==='webgl'||type==='webgl2'||type==='experimental-webgl'){
+    attrs.powerPreference='high-performance';
+    attrs.desynchronized=true;
+    attrs.antialias=false;
+    attrs.preserveDrawingBuffer=false;
+  }else if(type==='2d'){
+    attrs.desynchronized=true;
+  }
+  return origGetContext.call(this,type,attrs);
+};
 
 var trackedAudio=[];
 var OrigAudioCtx=window.AudioContext||window.webkitAudioContext;
@@ -116,15 +131,43 @@ function wakeGameEngine(){
     trackedAudio.forEach(function(ctx){
       if(ctx&&ctx.state==='suspended'){ctx.resume().catch(function(){});}
     });
+    // Unpause GameMaker HTML5 (Undertale / Undertale Yellow)
+    if(typeof window.g_isWindowBlurred!=='undefined') window.g_isWindowBlurred=false;
+    if(typeof window.g_WindowHasFocus!=='undefined') window.g_WindowHasFocus=true;
+    if(window.g_pGMEntityManager){
+      if(typeof window.g_pGMEntityManager.Resume==='function') try{window.g_pGMEntityManager.Resume();}catch(e){}
+      if(typeof window.g_pGMEntityManager.UnPause==='function') try{window.g_pGMEntityManager.UnPause();}catch(e){}
+    }
     window.focus();
+    var c=document.querySelector('canvas')||document.getElementById('canvas');
+    if(c){
+      if(c.focus) c.focus();
+      c.dispatchEvent(new Event('focus'));
+    }
+    window.dispatchEvent(new Event('focus'));
   }catch(e){}
 }
 
 window.addEventListener('focus',wakeGameEngine,true);
 window.addEventListener('click',wakeGameEngine,true);
+window.addEventListener('pointerdown',wakeGameEngine,true);
+window.addEventListener('mousedown',wakeGameEngine,true);
 window.addEventListener('keydown',wakeGameEngine,true);
 window.addEventListener('touchstart',wakeGameEngine,true);
 document.addEventListener('visibilitychange',function(){if(!document.hidden)wakeGameEngine();});
+
+// Watchdog to immediately revive audio and game loop after inactive tab backgrounding
+setInterval(function(){
+  if(!document.hidden){
+    try{
+      trackedAudio.forEach(function(ctx){
+        if(ctx&&ctx.state==='suspended'){ctx.resume().catch(function(){});}
+      });
+      if(typeof window.g_isWindowBlurred!=='undefined'&&window.g_isWindowBlurred) window.g_isWindowBlurred=false;
+      if(typeof window.g_WindowHasFocus!=='undefined'&&!window.g_WindowHasFocus) window.g_WindowHasFocus=true;
+    }catch(e){}
+  }
+},1000);
 
 var pendingSaveBatch={};
 var saveFlushTimer=null;

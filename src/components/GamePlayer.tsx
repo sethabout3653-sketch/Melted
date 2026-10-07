@@ -75,6 +75,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         try {
           iframeRef.current.focus();
           iframeRef.current.contentWindow?.postMessage({ type: 'RESUME_GAME' }, '*');
+          iframeRef.current.contentWindow?.postMessage({ type: 'WAKE_GAME' }, '*');
         } catch {
           // Silent
         }
@@ -89,10 +90,12 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleWakeAndFocus);
+    window.addEventListener('pointerdown', handleWakeAndFocus);
 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleWakeAndFocus);
+      window.removeEventListener('pointerdown', handleWakeAndFocus);
       if (wakeLockSentinel && typeof wakeLockSentinel.release === 'function') {
         wakeLockSentinel.release().catch(() => {});
       }
@@ -108,11 +111,19 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  // Keyboard shortcut: Escape to close player
+  // Keyboard shortcut: Escape to close player, and wake game on any game keypress
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !document.fullscreenElement) {
         onClose();
+        return;
+      }
+      if (iframeRef.current && document.activeElement !== iframeRef.current) {
+        try {
+          iframeRef.current.focus();
+          iframeRef.current.contentWindow?.postMessage({ type: 'RESUME_GAME' }, '*');
+          iframeRef.current.contentWindow?.postMessage({ type: 'WAKE_GAME' }, '*');
+        } catch {}
       }
     };
     window.addEventListener('keydown', handleKeyDown);
