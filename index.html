@@ -1,6 +1,34 @@
 <!doctype html>
 <html lang="en">
   <head>
+    <script>
+      (function(){
+        try {
+          var winUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+          Object.defineProperty(navigator, 'userAgent', { get: function() { return winUA; }, configurable: true });
+          Object.defineProperty(navigator, 'platform', { get: function() { return 'Win32'; }, configurable: true });
+          Object.defineProperty(navigator, 'vendor', { get: function() { return 'Google Inc.'; }, configurable: true });
+          if (navigator.userAgentData) {
+            Object.defineProperty(navigator, 'userAgentData', {
+              get: function() {
+                return {
+                  brands: [
+                    { brand: 'Chromium', version: '124' },
+                    { brand: 'Google Chrome', version: '124' }
+                  ],
+                  mobile: false,
+                  platform: 'Windows',
+                  getHighEntropyValues: function() {
+                    return Promise.resolve({ architecture: 'x86', bitness: '64', mobile: false, platform: 'Windows' });
+                  }
+                };
+              },
+              configurable: true
+            });
+          }
+        } catch(e){}
+      })();
+    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title id="app-title">Frosted — Unblocked Games & Arcades</title>

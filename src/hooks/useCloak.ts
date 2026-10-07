@@ -153,6 +153,11 @@ export function launchAboutBlank(gameUrl: string, gameTitle: string) {
 
     win.document.title = gameTitle || 'Classes';
     
+    // Desktop Spoofing Script for School Chromebooks
+    const script = win.document.createElement('script');
+    script.textContent = `(function(){try{var u='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';Object.defineProperty(navigator,'userAgent',{get:function(){return u},configurable:true});Object.defineProperty(navigator,'platform',{get:function(){return'Win32'},configurable:true});Object.defineProperty(navigator,'vendor',{get:function(){return'Google Inc.'},configurable:true});if(navigator.userAgentData){Object.defineProperty(navigator,'userAgentData',{get:function(){return{brands:[{brand:'Chromium',version:'124'},{brand:'Google Chrome',version:'124'}],mobile:false,platform:'Windows',getHighEntropyValues:function(){return Promise.resolve({architecture:'x86',bitness:'64',mobile:false,platform:'Windows'})}}},configurable:true})}}catch(e){}})();`;
+    win.document.head.appendChild(script);
+
     // Set favicon to Google Classroom icon for extra stealth
     const link = win.document.createElement('link');
     link.rel = 'icon';

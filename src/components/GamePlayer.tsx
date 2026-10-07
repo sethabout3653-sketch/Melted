@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Play, 
   Heart, 
   RotateCw, 
   Maximize2, 
@@ -8,12 +7,13 @@ import {
   X, 
   EyeOff, 
   Zap, 
-  AlertCircle 
+  AlertCircle
 } from 'lucide-react';
 import { GameItem } from '../types/game';
-import { getLuminPlayableUrl, launchLuminNativePlayer } from '../services/luminService';
+import { getLuminPlayableUrl } from '../services/luminService';
 import { resolveGameUrl } from '../services/gameService';
 import { launchAboutBlank } from '../hooks/useCloak';
+import { storeGameSave, restoreAutoSaveToIframe, flushPendingSaves } from '../services/saveService';
 
 interface GamePlayerProps {
   game: GameItem;
@@ -35,6 +35,69 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Background Auto-Save Sync Listener from Iframe Game Stream
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      if (!event.data) return;
+      if (event.data.type === 'FROSTED_SAVE_BATCH' && event.data.data) {
+        storeGameSave(game.id, game.name, event.data.data);
+      } else if (event.data.type === 'FROSTED_SAVE_UPDATE' && event.data.key) {
+        storeGameSave(game.id, game.name, { [event.data.key]: event.data.value });
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => {
+      window.removeEventListener('message', handleMessage);
+      flushPendingSaves(game.id, game.name);
+    };
+  }, [game.id, game.name]);
+
+  // Screen Wake Lock & Inactivity Resume for Chromebooks
+  useEffect(() => {
+    let wakeLockSentinel: any = null;
+
+    const requestWakeLock = async () => {
+      try {
+        if ('wakeLock' in navigator && (navigator as any).wakeLock) {
+          wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
+        }
+      } catch {
+        // Silent fail
+      }
+    };
+
+    requestWakeLock();
+
+    const handleWakeAndFocus = () => {
+      requestWakeLock();
+      if (iframeRef.current) {
+        try {
+          iframeRef.current.focus();
+          iframeRef.current.contentWindow?.postMessage({ type: 'RESUME_GAME' }, '*');
+        } catch {
+          // Silent
+        }
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        handleWakeAndFocus();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleWakeAndFocus);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleWakeAndFocus);
+      if (wakeLockSentinel && typeof wakeLockSentinel.release === 'function') {
+        wakeLockSentinel.release().catch(() => {});
+      }
+    };
+  }, []);
 
   // Handle Fullscreen change listener
   useEffect(() => {
@@ -252,7 +315,17 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         )}
 
         {/* Game Canvas Container: Occupies full screen in fullscreen */}
-        <div className="relative flex-1 w-full h-full bg-black overflow-hidden">
+        <div 
+          className="relative flex-1 w-full h-full bg-black overflow-hidden"
+          onClick={() => {
+            if (iframeRef.current) {
+              try {
+                iframeRef.current.focus();
+                iframeRef.current.contentWindow?.postMessage({ type: 'RESUME_GAME' }, '*');
+              } catch {}
+            }
+          }}
+        >
           
           {/* Floating exit fullscreen button */}
           {isFullscreen && (
@@ -304,10 +377,21 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               ref={iframeRef}
               src={playableUrl || undefined}
               title={game.name}
-              className="w-full h-full border-none"
-              allow="fullscreen; autoplay; gamepad; focus-without-user-activation; clipboard-read; clipboard-write; microphone; camera; pointer-lock"
+              tabIndex={0}
+              loading="eager"
+              className="w-full h-full border-none outline-none"
+              allow="fullscreen; autoplay; gamepad; focus-without-user-activation; clipboard-read; clipboard-write; microphone; camera; pointer-lock; xr-spatial-tracking; screen-wake-lock"
               allowFullScreen
-              onLoad={() => setIsLoading(false)}
+              onLoad={() => {
+                setIsLoading(false);
+                // Silently restore saved game data into iframe scope on load
+                if (iframeRef.current?.contentWindow) {
+                  restoreAutoSaveToIframe(game.id, iframeRef.current.contentWindow);
+                  try {
+                    iframeRef.current.focus();
+                  } catch {}
+                }
+              }}
               onError={() => {
                 setIsLoading(false);
                 setHasError(true);
