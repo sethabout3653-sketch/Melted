@@ -86,24 +86,73 @@ class InMemoryDatabase {
 export function initWebSocketDatabase(server: Server) {
   const wss = new WebSocketServer({ server, path: '/ws-db' });
   const db = new InMemoryDatabase();
-  const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
-  const sub = redis.duplicate();
+
+  // Robust Redis setup with in-memory fallback for development
+  let redis: any;
+  let sub: any;
+
+  if (process.env.REDIS_URL) {
+    try {
+      redis = new Redis(process.env.REDIS_URL);
+      redis.on('error', (err) => console.error('Redis Client Error:', err));
+      sub = redis.duplicate();
+      sub.on('error', (err) => console.error('Redis Subscriber Error:', err));
+    } catch (e) {
+      console.error('Failed to connect to Redis, falling back to in-memory.', e);
+    }
+  }
+
+  // Fallback: Use EventEmitter for Pub/Sub if Redis is not configured
+  const EventEmitter = require('events');
+  const pubSubFallback = new EventEmitter();
+
+  const getPubSub = () => ({
+    publish: (channel: string, message: any) => {
+      if (redis) {
+        redis.publish(channel, message);
+      } else {
+        pubSubFallback.emit(channel, message);
+      }
+    },
+    subscribe: (channel: string, callback: (channel: string, message: any) => void) => {
+      if (sub) {
+        sub.subscribe(channel);
+        sub.on('message', callback);
+      } else {
+        pubSubFallback.on(channel, (message) => callback(channel, message));
+      }
+    }
+  });
+
+  const pubSub = getPubSub();
   
   // Track which instance/user is in which room
   const userToRoom = new Map<string, string>();
   // Track multiple sockets per user ID (for multi-tab support)
   const userIdToSockets = new Map<string, Set<WebSocket>>();
+  // Track Redis channel subscriptions on this instance
+  const roomSubscriptions = new Set<string>();
 
-  // Subscribe to room channels
-  sub.subscribe('voice-general');
-  sub.on('message', (channel, message) => {
-    // Broadcast audio data to all users in this channel connected to THIS instance
-    wss.clients.forEach((client) => {
-        if (client.readyState === WebSocket.OPEN) {
-            client.send(message); 
-        }
-    });
-  });
+  function subscribeToRoom(room: string) {
+    const channel = `room:${room}:audio`;
+    if (!roomSubscriptions.has(channel)) {
+      pubSub.subscribe(channel, (chan, msg) => {
+          // Broadcast binary audio data to all users in this room connected to THIS instance
+          const roomName = chan.toString().split(':')[1];
+          
+          wss.clients.forEach((client) => {
+            if (client.readyState === WebSocket.OPEN) {
+              client.send(msg); 
+            }
+          });
+      });
+      roomSubscriptions.add(channel);
+    }
+  }
+
+  function unsubscribeFromRoom(room: string) {
+    // Implementation for unsubscribing
+  }
 
   function broadcastTable(tableName: string, data: any) {
     const payload = JSON.stringify({
@@ -151,13 +200,23 @@ export function initWebSocketDatabase(server: Server) {
     ws.on('message', (raw) => {
       if (Buffer.isBuffer(raw)) {
           // Handle binary audio chunk
-          redis.publish('voice-general', raw);
+          const room = boundUserId ? (userToRoom.get(boundUserId) || 'general') : 'general';
+          pubSub.publish(`room:${room}:audio`, raw);
           return;
       }
       try {
         const msg = JSON.parse(raw.toString());
 
         switch (msg.type) {
+          case 'JOIN_ROOM': {
+            if (boundUserId && msg.room) {
+              userToRoom.set(boundUserId, msg.room);
+              subscribeToRoom(msg.room);
+            }
+            break;
+          }
+// ...
+
           case 'SQL_QUERY': {
             console.log(`[WebSocket DB] SQL_QUERY: ${msg.table} where=${JSON.stringify(msg.where || {})}`);
             try {
