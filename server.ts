@@ -20,12 +20,7 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-app.use('/uploads', (req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', '*');
-  next();
-}, express.static(uploadsDir));
+app.use('/uploads', express.static(uploadsDir));
 
 // File Upload Endpoint
 app.post('/api/upload', (req, res) => {
@@ -54,44 +49,6 @@ app.post('/api/upload', (req, res) => {
   } catch (err: any) {
     console.error('File upload error:', err);
     res.status(500).json({ error: 'Failed to upload file to server', message: err?.message });
-  }
-});
-
-// File Download Endpoint
-app.get('/api/download', async (req, res) => {
-  try {
-    const fileUrl = (req.query.url as string) || '';
-    const rawFilename = (req.query.filename as string) || 'download';
-    const filename = path.basename(rawFilename).replace(/[^\w.-]/g, '_') || 'download';
-
-    if (!fileUrl) {
-      return res.status(400).send('Missing url parameter');
-    }
-
-    if (fileUrl.startsWith('/uploads/')) {
-      const safeBasename = path.basename(fileUrl);
-      const localPath = path.join(uploadsDir, safeBasename);
-      if (fs.existsSync(localPath)) {
-        return res.download(localPath, filename);
-      }
-    }
-
-    const extRes = await fetch(fileUrl);
-    if (!extRes.ok) {
-      return res.status(extRes.status).send('Failed to fetch remote attachment');
-    }
-
-    const contentType = extRes.headers.get('content-type') || 'application/octet-stream';
-    const arrayBuffer = await extRes.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    res.setHeader('Content-Type', contentType);
-    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
-    res.setHeader('Content-Length', buffer.length.toString());
-    res.send(buffer);
-  } catch (err: any) {
-    console.error('Download endpoint error:', err);
-    res.status(500).send('Failed to download file');
   }
 });
 

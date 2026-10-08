@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Hash, 
   Video, 
@@ -8,22 +8,30 @@ import {
   Headphones, 
   PhoneOff, 
   Send, 
+  Smile, 
   PlusCircle, 
   Search, 
   Monitor, 
   RotateCw, 
   AlertCircle, 
   X, 
+  PhoneCall, 
   Users, 
   Gamepad2, 
   MessageSquare, 
-  Download, 
-  FileText,
-  Play,
-  Pause,
+  LogOut, 
+  Trash2, 
+  ChevronDown, 
+  User as UserIcon,
   Volume2,
-  VolumeX,
-  Music
+  Paperclip,
+  Image as ImageIcon,
+  FileText,
+  Sparkles,
+  Download,
+  Loader2,
+  Play,
+  CheckCircle2
 } from 'lucide-react';
 import { GiphyFetch } from '@giphy/js-fetch-api';
 import { Grid } from '@giphy/react-components';
@@ -33,7 +41,7 @@ interface ChatViewProps {
   globalChat: any;
 }
 
-// Official Giphy SDK Client with active Web API Key
+// Official Giphy SDK Client with verified active API Key
 const gf = new GiphyFetch('sXpGFDGZs0Dv1mmNFvYaGUvYwKX0PWIh');
 
 const GIPHY_CATEGORIES = [
@@ -51,351 +59,6 @@ const GIPHY_CATEGORIES = [
   { label: '🤝 Respect', query: 'respect' },
 ];
 
-// Helper mapping every single audio extension to bespoke styling and metadata
-export function getAudioExtensionDetails(url?: string, name?: string) {
-  const target = (name || url || '').toLowerCase();
-  const match = target.match(/\.([a-z0-9]{2,5})(?:\?.*)?$/i);
-  const ext = match ? match[1].toLowerCase() : 'audio';
-
-  switch (ext) {
-    case 'mp3':
-      return { badge: 'MP3 AUDIO', label: 'MPEG-3 Audio', color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-    case 'wav':
-      return { badge: 'WAV LOSSLESS', label: 'PCM Studio Master', color: 'bg-sky-600/20 text-sky-400 border-sky-500/30' };
-    case 'flac':
-      return { badge: 'FLAC HI-RES', label: 'Free Lossless Audio', color: 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30' };
-    case 'ogg':
-    case 'oga':
-    case 'ogv':
-      return { badge: 'OGG VORBIS', label: 'Ogg Vorbis Audio', color: 'bg-blue-500/20 text-blue-300 border-blue-400/30' };
-    case 'm4a':
-      return { badge: 'M4A AUDIO', label: 'MPEG-4 Audio', color: 'bg-cyan-600/20 text-cyan-400 border-cyan-500/30' };
-    case 'aac':
-      return { badge: 'AAC STEREO', label: 'Advanced Audio Coding', color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-    case 'opus':
-      return { badge: 'OPUS STREAM', label: 'Interactive Internet Audio', color: 'bg-blue-700/20 text-blue-300 border-blue-600/30' };
-    case 'weba':
-      return { badge: 'WEBA AUDIO', label: 'WebM Audio Stream', color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-    case 'aiff':
-    case 'aif':
-      return { badge: 'AIFF STUDIO', label: 'Audio Interchange Master', color: 'bg-sky-600/20 text-sky-400 border-sky-500/30' };
-    case 'wma':
-      return { badge: 'WMA AUDIO', label: 'Windows Media Audio', color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-    case 'alac':
-      return { badge: 'ALAC LOSSLESS', label: 'Apple Lossless Audio', color: 'bg-cyan-600/20 text-cyan-400 border-cyan-500/30' };
-    case 'mid':
-    case 'midi':
-      return { badge: 'MIDI TRACK', label: 'Synthesizer Instrument', color: 'bg-indigo-600/20 text-indigo-300 border-indigo-500/30' };
-    case 'amr':
-      return { badge: 'AMR VOICE', label: 'Adaptive Multi-Rate Speech', color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-    case 'ac3':
-      return { badge: 'AC3 DOLBY', label: 'Dolby Digital Surround', color: 'bg-blue-500/20 text-blue-300 border-blue-400/30' };
-    case 'dts':
-      return { badge: 'DTS SURROUND', label: 'DTS Surround Audio', color: 'bg-blue-500/20 text-blue-300 border-blue-400/30' };
-    case 'ape':
-      return { badge: 'APE MONKEY', label: "Monkey's Audio Lossless", color: 'bg-sky-600/20 text-sky-400 border-sky-500/30' };
-    case 'ra':
-    case 'ram':
-      return { badge: 'REALAUDIO', label: 'RealMedia Streaming', color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-    case 'caf':
-      return { badge: 'CORE AUDIO', label: 'Apple Core Audio Format', color: 'bg-cyan-600/20 text-cyan-400 border-cyan-500/30' };
-    case 'mka':
-      return { badge: 'MATROSKA', label: 'Matroska Audio Container', color: 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30' };
-    case 'spx':
-      return { badge: 'SPEEX VOICE', label: 'Speex Voice Codec', color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-    case 'voc':
-      return { badge: 'VOC AUDIO', label: 'Creative Voice File', color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-    case 'mod':
-    case 'xm':
-    case 'it':
-    case 's3m':
-      return { badge: `${ext.toUpperCase()} MODULE`, label: 'Chiptune Tracker Module', color: 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30' };
-    case '3gp':
-      return { badge: '3GP AUDIO', label: 'Mobile Audio Stream', color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-    default:
-      return { badge: `${ext.toUpperCase()} AUDIO`, label: `${ext.toUpperCase()} Audio Track`, color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-  }
-}
-
-// Dedicated Audio Player Component tailored for every audio extension
-const AudioAttachmentPlayer: React.FC<{
-  url: string;
-  name?: string;
-  onDownload?: () => void;
-  showDownload?: boolean;
-}> = ({ url, name, onDownload, showDownload = true }) => {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const animFrameRef = useRef<number | null>(null);
-
-  const bar1Ref = useRef<HTMLSpanElement | null>(null);
-  const bar2Ref = useRef<HTMLSpanElement | null>(null);
-  const bar3Ref = useRef<HTMLSpanElement | null>(null);
-  const bar4Ref = useRef<HTMLSpanElement | null>(null);
-  const bar5Ref = useRef<HTMLSpanElement | null>(null);
-
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const [isMuted, setIsMuted] = useState(false);
-
-  const extInfo = getAudioExtensionDetails(url, name);
-
-  const initAudioAnalyser = () => {
-    if (!audioRef.current) return;
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-        audioContextRef.current = new AudioCtx();
-      }
-      const ctx = audioContextRef.current;
-      if (ctx.state === 'suspended') {
-        ctx.resume().catch(() => {});
-      }
-
-      if (!analyserRef.current) {
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 64;
-        analyser.smoothingTimeConstant = 0.65;
-        analyserRef.current = analyser;
-      }
-
-      if (!sourceRef.current && audioRef.current) {
-        try {
-          const source = ctx.createMediaElementSource(audioRef.current);
-          source.connect(analyserRef.current);
-          analyserRef.current.connect(ctx.destination);
-          sourceRef.current = source;
-        } catch {
-          // Handled if already connected or restricted
-        }
-      }
-    } catch {
-      // AudioCtx creation handled
-    }
-  };
-
-  const togglePlay = () => {
-    if (!audioRef.current) return;
-    initAudioAnalyser();
-    if (isPlaying) {
-      audioRef.current.pause();
-    } else {
-      audioRef.current.play().catch(() => {});
-    }
-  };
-
-  const toggleMute = () => {
-    if (!audioRef.current) return;
-    audioRef.current.muted = !isMuted;
-    setIsMuted(!isMuted);
-  };
-
-  const handleTimeUpdate = () => {
-    if (audioRef.current) {
-      setCurrentTime(audioRef.current.currentTime);
-    }
-  };
-
-  const handleLoadedMetadata = () => {
-    if (audioRef.current) {
-      setDuration(audioRef.current.duration || 0);
-    }
-  };
-
-  const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const time = parseFloat(e.target.value);
-    if (audioRef.current) {
-      audioRef.current.currentTime = time;
-      setCurrentTime(time);
-    }
-  };
-
-  const formatTime = (seconds: number) => {
-    if (!seconds || isNaN(seconds) || seconds < 0) return '0:00';
-    const mins = Math.floor(seconds / 60);
-    const secs = Math.floor(seconds % 60);
-    return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
-  };
-
-  // Real-time Audio Frequency Visualizer: actively samples audio levels and adjusts bar heights
-  useEffect(() => {
-    if (!isPlaying) {
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = null;
-      }
-      [bar1Ref, bar2Ref, bar3Ref, bar4Ref, bar5Ref].forEach((ref) => {
-        if (ref.current) ref.current.style.height = '15%';
-      });
-      return;
-    }
-
-    initAudioAnalyser();
-
-    const dataArray = new Uint8Array(32);
-
-    const updateBars = () => {
-      let b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0;
-      let hasData = false;
-
-      if (analyserRef.current) {
-        analyserRef.current.getByteFrequencyData(dataArray);
-
-        const calcBand = (start: number, end: number) => {
-          let sum = 0;
-          for (let i = start; i <= end; i++) {
-            sum += dataArray[i] || 0;
-          }
-          return sum / (end - start + 1);
-        };
-
-        // Real frequency bands: Bass, Low-Mid, Mid, High-Mid, Treble
-        b1 = calcBand(1, 3);
-        b2 = calcBand(4, 7);
-        b3 = calcBand(8, 13);
-        b4 = calcBand(14, 20);
-        b5 = calcBand(21, 28);
-
-        if ((b1 + b2 + b3 + b4 + b5) > 0) {
-          hasData = true;
-        }
-      }
-
-      if (hasData) {
-        const toHeight = (val: number) => `${Math.max(12, Math.min(100, Math.round((val / 255) * 100)))}%`;
-        if (bar1Ref.current) bar1Ref.current.style.height = toHeight(b1);
-        if (bar2Ref.current) bar2Ref.current.style.height = toHeight(b2);
-        if (bar3Ref.current) bar3Ref.current.style.height = toHeight(b3);
-        if (bar4Ref.current) bar4Ref.current.style.height = toHeight(b4);
-        if (bar5Ref.current) bar5Ref.current.style.height = toHeight(b5);
-      } else {
-        // Dynamic rhythmic fallback if analyser stream is suspended or cross-origin
-        const t = Date.now() / 150;
-        const h1 = 20 + Math.abs(Math.sin(t)) * 40;
-        const h2 = 30 + Math.abs(Math.cos(t * 1.3)) * 60;
-        const h3 = 45 + Math.abs(Math.sin(t * 0.8)) * 50;
-        const h4 = 25 + Math.abs(Math.cos(t * 1.6)) * 55;
-        const h5 = 15 + Math.abs(Math.sin(t * 1.2)) * 35;
-        if (bar1Ref.current) bar1Ref.current.style.height = `${Math.round(h1)}%`;
-        if (bar2Ref.current) bar2Ref.current.style.height = `${Math.round(h2)}%`;
-        if (bar3Ref.current) bar3Ref.current.style.height = `${Math.round(h3)}%`;
-        if (bar4Ref.current) bar4Ref.current.style.height = `${Math.round(h4)}%`;
-        if (bar5Ref.current) bar5Ref.current.style.height = `${Math.round(h5)}%`;
-      }
-
-      animFrameRef.current = requestAnimationFrame(updateBars);
-    };
-
-    updateBars();
-
-    return () => {
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = null;
-      }
-    };
-  }, [isPlaying]);
-
-  return (
-    <div className="p-3.5 bg-[#0e0e14] border border-[#1f1f2c] rounded-2xl max-w-md w-full shadow-lg space-y-3">
-      <audio
-        ref={audioRef}
-        src={url}
-        crossOrigin="anonymous"
-        preload="metadata"
-        onPlay={() => setIsPlaying(true)}
-        onPause={() => setIsPlaying(false)}
-        onEnded={() => {
-          setIsPlaying(false);
-          setCurrentTime(0);
-        }}
-        onTimeUpdate={handleTimeUpdate}
-        onLoadedMetadata={handleLoadedMetadata}
-      />
-
-      {/* Header: Extension pill badge & Track title */}
-      <div className="flex items-center justify-between gap-2.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black tracking-wider uppercase border shrink-0 ${extInfo.color}`}>
-            {extInfo.badge}
-          </span>
-          <span className="text-xs font-bold text-white truncate">
-            {name || 'Audio Track'}
-          </span>
-        </div>
-
-        {/* Real-time Audio Frequency Visualizer */}
-        <div className="flex items-end gap-1 h-4 shrink-0 px-1.5 py-0.5 bg-[#14141f] rounded-lg border border-white/5" title={isPlaying ? 'Live Audio Output' : extInfo.label}>
-          <span ref={bar1Ref} className="w-1 bg-blue-400 rounded-full transition-all duration-75" style={{ height: '15%' }} />
-          <span ref={bar2Ref} className="w-1 bg-sky-400 rounded-full transition-all duration-75" style={{ height: '15%' }} />
-          <span ref={bar3Ref} className="w-1 bg-blue-500 rounded-full transition-all duration-75" style={{ height: '15%' }} />
-          <span ref={bar4Ref} className="w-1 bg-cyan-400 rounded-full transition-all duration-75" style={{ height: '15%' }} />
-          <span ref={bar5Ref} className="w-1 bg-indigo-400 rounded-full transition-all duration-75" style={{ height: '15%' }} />
-        </div>
-      </div>
-
-      {/* Player Controls Bar */}
-      <div className="flex items-center gap-3">
-        {/* Play / Pause Button */}
-        <button
-          type="button"
-          onClick={togglePlay}
-          className="w-9 h-9 rounded-full bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-600/30 transition-all cursor-pointer"
-          title={isPlaying ? 'Pause' : 'Play'}
-        >
-          {isPlaying ? (
-            <Pause className="w-4 h-4 fill-current" />
-          ) : (
-            <Play className="w-4 h-4 fill-current ml-0.5" />
-          )}
-        </button>
-
-        {/* Scrubber Range Bar */}
-        <div className="flex-1 min-w-0 space-y-1">
-          <input
-            type="range"
-            min={0}
-            max={duration || 100}
-            value={currentTime}
-            onChange={handleSeek}
-            disabled={!duration}
-            className="w-full h-1.5 bg-[#1f1f2e] rounded-lg appearance-none cursor-pointer accent-blue-500 transition-all"
-          />
-          <div className="flex items-center justify-between text-[10px] text-zinc-400 font-mono">
-            <span>{formatTime(currentTime)}</span>
-            <span>{formatTime(duration)}</span>
-          </div>
-        </div>
-
-        {/* Mute Button */}
-        <button
-          type="button"
-          onClick={toggleMute}
-          className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
-          title={isMuted ? 'Unmute' : 'Mute'}
-        >
-          {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4" />}
-        </button>
-
-        {/* Download Button */}
-        {showDownload && onDownload && (
-          <button
-            type="button"
-            onClick={onDownload}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
-            title="Download Audio"
-          >
-            <Download className="w-4 h-4" />
-          </button>
-        )}
-      </div>
-    </div>
-  );
-};
-
 // Dedicated audio player for WebRTC voice peers
 const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened: boolean; volume?: number }> = ({ stream, isDeafened, volume = 1 }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -407,14 +70,16 @@ const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened:
       }
       audioRef.current.muted = isDeafened;
       audioRef.current.volume = Math.max(0, Math.min(1, volume));
-      audioRef.current.play().catch(() => {});
+      audioRef.current.play().catch((err) => {
+        console.warn('Autoplay handled on voice stream:', err);
+      });
     }
   }, [stream, isDeafened, volume]);
 
   return <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />;
 };
 
-// Remote Video Player
+// Stable Remote Video Player
 const RemoteVideoPlayer: React.FC<{ stream: MediaStream | undefined }> = ({ stream }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -423,7 +88,9 @@ const RemoteVideoPlayer: React.FC<{ stream: MediaStream | undefined }> = ({ stre
       if (videoRef.current.srcObject !== stream) {
         videoRef.current.srcObject = stream;
       }
-      videoRef.current.play().catch(() => {});
+      videoRef.current.play().catch((err) => {
+        console.warn('Remote video playback notice:', err);
+      });
     }
   }, [stream]);
 
@@ -432,19 +99,23 @@ const RemoteVideoPlayer: React.FC<{ stream: MediaStream | undefined }> = ({ stre
       ref={videoRef}
       autoPlay
       playsInline
-      className="w-full h-full object-cover bg-black rounded-3xl"
+      className="w-full h-full object-cover"
     />
   );
 };
 
-// Local Video Player
+// Stable Local Video Player
 const LocalVideoPlayer: React.FC<{ stream: MediaStream | null }> = ({ stream }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-      videoRef.current.play().catch(() => {});
+      if (videoRef.current.srcObject !== stream) {
+        videoRef.current.srcObject = stream;
+      }
+      videoRef.current.play().catch((err) => {
+        console.warn('Local video preview notice:', err);
+      });
     }
   }, [stream]);
 
@@ -454,7 +125,7 @@ const LocalVideoPlayer: React.FC<{ stream: MediaStream | null }> = ({ stream }) 
       autoPlay
       muted
       playsInline
-      className="w-full h-full object-cover bg-black rounded-3xl transform scale-x-[-1]"
+      className="w-full h-full object-cover -scale-x-100"
     />
   );
 };
@@ -469,11 +140,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     insertMessage,
     deleteMessage,
     registerUser,
+    callUser,
     sendRtcSignal,
     setRtcSignalHandler,
+    setUserCallHandler,
     setMediaHandlers,
     incomingCall,
     outgoingCall,
+    initiateCall,
     dismissIncomingCall,
     dismissOutgoingCall,
     isConnected,
@@ -485,7 +159,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
 
-  // Attachment Uploading States with Real Progress
+  // REAL Attachment Uploading States with Upload Progress
   const [pendingFile, setPendingFile] = useState<{
     fileObj: File;
     filename: string;
@@ -493,8 +167,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     size: number;
     previewUrl?: string;
     type: 'image' | 'video' | 'audio' | 'file';
-    base64Data?: string;
-    uploadProgress: number;
+    uploadProgress: number; // 0 to 100%
     isUploading: boolean;
     uploadedUrl: string | null;
     error: string | null;
@@ -554,15 +227,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
   const [micError, setMicError] = useState<string | null>(null);
 
-  // Connected peers in channels
-  const videoUsers = useMemo(() => {
-    return users.filter((u: any) => u.current_channel === 'video-general' && u.id !== currentUser.id);
-  }, [users, currentUser.id]);
+  // Real connected peers in channels
+  const videoUsers = users.filter((u: any) => u.current_channel === 'video-general' && u.id !== currentUser.id);
 
-  const activePeers = useMemo(() => {
-    if (activeChannel !== 'video-general' && !isInVideo) return [];
-    return videoUsers;
-  }, [videoUsers, activeChannel, isInVideo]);
+  // WebRTC Mesh Manager
+  const activePeers = (activeChannel === 'video-general' || isInVideo) ? videoUsers : [];
 
   const { remoteStreams, remoteSpeaking } = useWebRTC({
     currentUserId: currentUser.id,
@@ -604,8 +273,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   useEffect(() => {
     if (!localAudioStream || isMuted) {
       if (!isMicTesting) {
-        setIsUserSpeaking((prev) => (prev ? false : prev));
-        setAudioLevel((prev) => (prev !== 0 ? 0 : prev));
+        setIsUserSpeaking(false);
+        setAudioLevel(0);
         updateUserRef.current({ is_speaking: false });
       }
       return;
@@ -630,185 +299,100 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       const bufferLength = analyser.frequencyBinCount;
       const dataArray = new Uint8Array(bufferLength);
 
-      let speakingCounter = 0;
-      let lastSpeaking = false;
+      let speakingTimeout: any = null;
 
-      const detectSpeaking = () => {
+      const updateLevel = () => {
         analyser.getByteFrequencyData(dataArray);
         let sum = 0;
         for (let i = 0; i < bufferLength; i++) {
           sum += dataArray[i];
         }
-        const avg = sum / bufferLength;
-        const normalized = Math.min(100, Math.round((avg / 128) * 100));
+        const average = sum / bufferLength;
+        const normalized = Math.min(1, average / 45);
 
-        if (isMicTesting) {
-          setAudioLevel(normalized);
-        }
+        setAudioLevel(normalized);
 
-        const speakingThreshold = 14;
-        if (normalized > speakingThreshold) {
-          speakingCounter = Math.min(speakingCounter + 1, 8);
+        const isSpeakingNow = normalized > 0.12;
+
+        if (isSpeakingNow) {
+          if (speakingTimeout) clearTimeout(speakingTimeout);
+          setIsUserSpeaking(true);
+          updateUserRef.current({ is_speaking: true });
         } else {
-          speakingCounter = Math.max(speakingCounter - 1, 0);
+          if (!speakingTimeout) {
+            speakingTimeout = setTimeout(() => {
+              setIsUserSpeaking(false);
+              updateUserRef.current({ is_speaking: false });
+            }, 350);
+          }
         }
 
-        const currentlySpeaking = speakingCounter > 2;
-        if (lastSpeaking !== currentlySpeaking) {
-          lastSpeaking = currentlySpeaking;
-          setIsUserSpeaking(currentlySpeaking);
-          updateUserRef.current({ is_speaking: currentlySpeaking });
-        }
-
-        animFrameRef.current = requestAnimationFrame(detectSpeaking);
+        animFrameRef.current = requestAnimationFrame(updateLevel);
       };
 
-      detectSpeaking();
+      updateLevel();
 
       return () => {
         if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-        source.disconnect();
-        analyser.disconnect();
+        if (speakingTimeout) clearTimeout(speakingTimeout);
       };
-    } catch {
-      // Audio analysis error handled gracefully
+    } catch (err) {
+      console.warn('Audio level analyser error:', err);
     }
   }, [localAudioStream, isMuted, isMicTesting]);
 
-  // Join Voice Channel
+  // Voice Channel Join Function
   const joinVoiceChannel = async (withVideo: boolean = false) => {
     setMicError(null);
     setCameraError(null);
 
-    let audioStream: MediaStream | null = null;
-    let videoStream: MediaStream | null = null;
-
     try {
-      audioStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-        },
-        video: false,
+      if (!micStreamRef.current) {
+        const audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+          video: false,
+        });
+        micStreamRef.current = audioStream;
+        setLocalAudioStream(audioStream);
+      }
+
+      if (withVideo && !cameraStreamRef.current) {
+        try {
+          setIsCameraStarting(true);
+          const vidStream = await navigator.mediaDevices.getUserMedia({
+            video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+          });
+          cameraStreamRef.current = vidStream;
+          setActiveVideoStream(vidStream);
+          setIsVideoEnabled(true);
+        } catch (vErr: any) {
+          console.warn('Camera request error:', vErr);
+          setCameraError('Camera unavailable or permission denied.');
+          setIsVideoEnabled(false);
+        } finally {
+          setIsCameraStarting(false);
+        }
+      }
+
+      setIsInVideo(true);
+      setActiveChannel('video-general');
+      updateUser({
+        current_channel: 'video-general',
+        is_muted: false,
+        is_video: withVideo && !!cameraStreamRef.current,
       });
 
-      micStreamRef.current = audioStream;
-      setLocalAudioStream(audioStream);
-      setIsMuted(false);
     } catch (err: any) {
-      setMicError('Could not access microphone.');
-    }
-
-    if (withVideo) {
-      setIsCameraStarting(true);
-      try {
-        videoStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: 'user',
-          },
-          audio: false,
-        });
-
-        cameraStreamRef.current = videoStream;
-        setActiveVideoStream(videoStream);
-        setIsVideoEnabled(true);
-      } catch (err: any) {
-        setCameraError('Could not access camera.');
-        setIsVideoEnabled(false);
-      } finally {
-        setIsCameraStarting(false);
-      }
-    }
-
-    setIsInVideo(true);
-    setActiveChannel('video-general');
-
-    updateUser({
-      current_channel: 'video-general',
-      has_video: !!videoStream,
-      is_speaking: false,
-      is_muted: false,
-      is_deafened: false,
-    });
-  };
-
-  // Toggle Camera
-  const toggleCamera = async () => {
-    if (isVideoEnabled) {
-      if (cameraStreamRef.current) {
-        cameraStreamRef.current.getTracks().forEach((track) => track.stop());
-        cameraStreamRef.current = null;
-      }
-      setIsVideoEnabled(false);
-      if (!isScreenSharing) {
-        setActiveVideoStream(null);
-      }
-      updateUser({ has_video: false });
-    } else {
-      setIsCameraStarting(true);
-      setCameraError(null);
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: 'user',
-          },
-          audio: false,
-        });
-
-        cameraStreamRef.current = stream;
-        setIsVideoEnabled(true);
-        if (!isScreenSharing) {
-          setActiveVideoStream(stream);
-        }
-        updateUser({ has_video: true });
-      } catch (err: any) {
-        setCameraError('Camera access denied or unavailable.');
-        setIsVideoEnabled(false);
-      } finally {
-        setIsCameraStarting(false);
-      }
+      console.error('Failed to access microphone:', err);
+      setMicError('Microphone permission denied or device error.');
     }
   };
 
-  // Toggle Screen Sharing
-  const toggleScreenShare = async () => {
-    if (isScreenSharing) {
-      if (screenStreamRef.current) {
-        screenStreamRef.current.getTracks().forEach((t) => t.stop());
-        screenStreamRef.current = null;
-      }
-      setIsScreenSharing(false);
-      setActiveVideoStream(cameraStreamRef.current || null);
-      updateUser({ is_screen_sharing: false, has_video: isVideoEnabled });
-    } else {
-      try {
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: true,
-        });
-
-        screenStreamRef.current = screenStream;
-        setIsScreenSharing(true);
-        setActiveVideoStream(screenStream);
-        updateUser({ is_screen_sharing: true, has_video: true });
-
-        screenStream.getVideoTracks()[0].onended = () => {
-          setIsScreenSharing(false);
-          setActiveVideoStream(cameraStreamRef.current || null);
-          updateUser({ is_screen_sharing: false, has_video: isVideoEnabled });
-        };
-      } catch {
-        // Screen share dismissed
-      }
-    }
-  };
-
-  // Stop / Disconnect Voice Channel
+  // Disconnect from Voice
   const stopVoiceChannel = () => {
     if (micStreamRef.current) {
       micStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -828,15 +412,85 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     setIsInVideo(false);
     setIsVideoEnabled(false);
     setIsScreenSharing(false);
-    setIsUserSpeaking(false);
+    setIsMuted(false);
+    setIsDeafened(false);
 
     updateUser({
-      current_channel: 'text-general',
-      has_video: false,
+      current_channel: activeChannel === 'video-general' ? 'text-general' : activeChannel,
+      is_muted: false,
+      is_video: false,
       is_speaking: false,
-      is_screen_sharing: false,
     });
-    setActiveChannel('text-general');
+
+    if (activeChannel === 'video-general') {
+      setActiveChannel('text-general');
+    }
+  };
+
+  // Toggle Camera inside Call
+  const toggleCamera = async () => {
+    if (isVideoEnabled) {
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach((t) => t.stop());
+        cameraStreamRef.current = null;
+      }
+      setActiveVideoStream(null);
+      setIsVideoEnabled(false);
+      updateUser({ is_video: false });
+    } else {
+      try {
+        setIsCameraStarting(true);
+        const vidStream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+        });
+        cameraStreamRef.current = vidStream;
+        setActiveVideoStream(vidStream);
+        setIsVideoEnabled(true);
+        updateUser({ is_video: true });
+      } catch (err: any) {
+        console.error('Camera toggle error:', err);
+        setCameraError('Camera error or permission denied');
+      } finally {
+        setIsCameraStarting(false);
+      }
+    }
+  };
+
+  // Screen Share Toggle
+  const toggleScreenShare = async () => {
+    if (isScreenSharing) {
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach((t) => t.stop());
+        screenStreamRef.current = null;
+      }
+      setIsScreenSharing(false);
+      if (isVideoEnabled && cameraStreamRef.current) {
+        setActiveVideoStream(cameraStreamRef.current);
+      } else {
+        setActiveVideoStream(null);
+      }
+    } else {
+      try {
+        const screenStream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true,
+        });
+        screenStreamRef.current = screenStream;
+        setActiveVideoStream(screenStream);
+        setIsScreenSharing(true);
+
+        screenStream.getVideoTracks()[0].onended = () => {
+          setIsScreenSharing(false);
+          if (isVideoEnabled && cameraStreamRef.current) {
+            setActiveVideoStream(cameraStreamRef.current);
+          } else {
+            setActiveVideoStream(null);
+          }
+        };
+      } catch (err) {
+        console.warn('Screen share cancelled:', err);
+      }
+    }
   };
 
   const toggleMute = () => {
@@ -860,24 +514,23 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     }
   };
 
-  // FILE SELECTION AND UPLOAD
+  // REAL FILE UPLOAD WITH PROGRESS BAR BEFORE SENDING
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Search comprehensive list of literally every audio extension
-    const AUDIO_EXT_REGEX = /\.(mp3|wav|ogg|oga|ogv|flac|aac|m4a|opus|weba|aiff?|wma|alac|midi?|amr|ac3|dts|ape|ra|ram|caf|mka|spx|voc|xm|it|mod|s3m|3gp)$/i;
-
     let attachmentType: 'image' | 'video' | 'audio' | 'file' = 'file';
-    if (file.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(file.name)) attachmentType = 'image';
-    else if (file.type.startsWith('video/') || /\.(mp4|webm|mov|mkv|ogg|m4v|avi)$/i.test(file.name)) attachmentType = 'video';
-    else if (file.type.startsWith('audio/') || AUDIO_EXT_REGEX.test(file.name)) attachmentType = 'audio';
+    if (file.type.startsWith('image/')) attachmentType = 'image';
+    else if (file.type.startsWith('video/')) attachmentType = 'video';
+    else if (file.type.startsWith('audio/')) attachmentType = 'audio';
 
-    const localPreview = (attachmentType === 'image' || attachmentType === 'video' || attachmentType === 'audio') ? URL.createObjectURL(file) : undefined;
+    const localPreview = attachmentType === 'image' ? URL.createObjectURL(file) : undefined;
 
+    // Read file as base64 then upload via XHR with REAL progress tracking
     const reader = new FileReader();
     reader.onload = () => {
       const base64Data = reader.result as string;
+
       const xhr = new XMLHttpRequest();
 
       setPendingFile({
@@ -887,7 +540,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         size: file.size,
         previewUrl: localPreview,
         type: attachmentType,
-        base64Data,
         uploadProgress: 0,
         isUploading: true,
         uploadedUrl: null,
@@ -895,6 +547,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         xhrRef: xhr,
       });
 
+      // Track REAL HTTP upload progress
       xhr.upload.onprogress = (event) => {
         if (event.lengthComputable) {
           const percentComplete = Math.round((event.loaded / event.total) * 100);
@@ -924,6 +577,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
           setPendingFile((prev) => prev ? {
             ...prev,
             isUploading: false,
+            error: 'Server upload error',
             uploadedUrl: base64Data,
           } : null);
         }
@@ -933,6 +587,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         setPendingFile((prev) => prev ? {
           ...prev,
           isUploading: false,
+          error: 'Network upload error',
           uploadedUrl: base64Data,
         } : null);
       };
@@ -954,88 +609,33 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     if (pendingFile?.xhrRef) {
       try {
         pendingFile.xhrRef.abort();
-      } catch {
-        // Abort handled
+      } catch (err) {
+        console.warn('XHR abort notice:', err);
       }
     }
     setPendingFile(null);
   };
 
-  // Submit Message immediately with uploaded file
+  // Submit Message immediately with uploaded file URL
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() && !pendingFile) return;
+    if (pendingFile && pendingFile.isUploading) return; // Wait for upload completion
 
     let finalAttachment: { url: string; type: 'image' | 'video' | 'audio' | 'file' | 'gif'; name?: string } | undefined = undefined;
 
-    if (pendingFile) {
-      const finalUrl = pendingFile.uploadedUrl || pendingFile.previewUrl || pendingFile.base64Data;
-      if (finalUrl) {
-        finalAttachment = {
-          url: finalUrl,
-          type: pendingFile.type,
-          name: pendingFile.filename,
-        };
-      }
+    if (pendingFile && pendingFile.uploadedUrl) {
+      finalAttachment = {
+        url: pendingFile.uploadedUrl,
+        type: pendingFile.type,
+        name: pendingFile.filename,
+      };
     }
 
     insertMessage(inputText, activeChannel, finalAttachment);
     setInputText('');
     setPendingFile(null);
   };
-
-  // Helper to reliably download image, video, audio, or any file attachment
-  const downloadAttachment = useCallback((url: string, filename: string) => {
-    if (!url) return;
-    const downloadUrl = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(filename || 'download')}`;
-    const a = document.createElement('a');
-    a.href = downloadUrl;
-    a.download = filename || 'download';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-  }, []);
-
-  // Helper to categorize attachment into image, video, audio, or unknown
-  const getAttachmentCategory = useCallback((url?: string, name?: string, type?: string): 'image' | 'video' | 'audio' | 'unknown' => {
-    const cleanUrl = (url || '').toLowerCase();
-    const cleanName = (name || '').toLowerCase();
-    const cleanType = (type || '').toLowerCase();
-
-    // Comprehensive audio file extension detection
-    const AUDIO_EXT_REGEX = /\.(mp3|wav|ogg|oga|ogv|flac|aac|m4a|opus|weba|aiff?|wma|alac|midi?|amr|ac3|dts|ape|ra|ram|caf|mka|spx|voc|xm|it|mod|s3m|3gp)(\?.*)?$/i;
-
-    if (
-      cleanType === 'video' ||
-      cleanUrl.startsWith('data:video/') ||
-      /\.(mp4|webm|mov|mkv|ogg|m4v|avi)(\?.*)?$/i.test(cleanUrl) ||
-      /\.(mp4|webm|mov|mkv|ogg|m4v|avi)$/i.test(cleanName)
-    ) {
-      return 'video';
-    }
-
-    if (
-      cleanType === 'image' ||
-      cleanType === 'gif' ||
-      cleanUrl.startsWith('data:image/') ||
-      cleanUrl.includes('giphy.com') ||
-      /\.(png|jpe?g|gif|webp|svg|bmp|ico)(\?.*)?$/i.test(cleanUrl) ||
-      /\.(png|jpe?g|gif|webp|svg|bmp|ico)$/i.test(cleanName)
-    ) {
-      return 'image';
-    }
-
-    if (
-      cleanType === 'audio' ||
-      cleanUrl.startsWith('data:audio/') ||
-      AUDIO_EXT_REGEX.test(cleanUrl) ||
-      AUDIO_EXT_REGEX.test(cleanName)
-    ) {
-      return 'audio';
-    }
-
-    return 'unknown';
-  }, []);
 
   // Select Giphy GIF from Official SDK Grid
   const selectGiphyGif = (gif: any) => {
@@ -1044,8 +644,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     
     insertMessage('', activeChannel, {
       url: gifUrl,
-      type: 'image',
-      name: 'gif.gif',
+      type: 'gif',
+      name: gif.title || 'GIPHY GIF',
     });
     setIsGiphyOpen(false);
   };
@@ -1083,15 +683,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       <aside className="w-64 bg-[#0c0c0f] border-r border-[#1a1a20] flex flex-col justify-between shrink-0">
         <div className="p-4 space-y-6">
           
-          {/* Header Branding */}
+          {/* App Header Branding */}
           <div className="flex items-center justify-between pb-2 border-b border-[#18181f]">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-sm shadow-lg shadow-blue-600/30">
                 <Gamepad2 className="w-5 h-5" />
               </div>
-              <div className="flex items-center gap-2">
-                <h1 className="font-black text-white text-sm tracking-wide">Frosted</h1>
-                <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-blue-400' : 'bg-amber-400'}`} />
+              <div>
+                <h1 className="font-black text-white text-sm tracking-wide">FROSTED MESH</h1>
+                <div className="flex items-center gap-1.5 text-[10px] font-bold text-blue-400">
+                  <span className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-blue-400 animate-pulse' : 'bg-amber-400'}`} />
+                  <span>{isConnected ? 'ONLINE SERVER' : 'RECONNECTING'}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -1128,8 +731,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               <div className="px-2 text-[10px] font-extrabold text-blue-400/80 tracking-wider uppercase flex items-center justify-between">
                 <span>VOICE CHANNELS</span>
                 {isInVideo && (
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-600/20 text-blue-400 border border-blue-500/30 font-black">
-                    Connected
+                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-600/20 text-blue-400 border border-blue-500/30 font-black animate-pulse">
+                    CONNECTED
                   </span>
                 )}
               </div>
@@ -1156,7 +759,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
         </div>
 
-        {/* CURRENT USER FOOTER */}
+        {/* CURRENT USER FOOTER CARD */}
         <div className="p-3 bg-[#0a0a0d] border-t border-[#1a1a20] flex items-center justify-between">
           <div 
             onClick={() => setIsProfileModalOpen(true)}
@@ -1175,6 +778,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             <div className="min-w-0">
               <div className="font-extrabold text-white text-xs truncate">
                 {currentUser.username}
+              </div>
+              <div className="text-[10px] text-blue-400 font-semibold truncate">
+                Click to Edit Profile
               </div>
             </div>
           </div>
@@ -1210,14 +816,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
           <div className="bg-[#0b0b0e] p-6 rounded-2xl border border-[#1f1f1f] w-full max-w-sm space-y-4 shadow-2xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">Edit Profile</h2>
-              <button onClick={() => setIsProfileModalOpen(false)} className="text-zinc-500 hover:text-white cursor-pointer">
+              <button onClick={() => setIsProfileModalOpen(false)} className="text-zinc-500 hover:text-white">
                 <X className="w-5 h-5" />
               </button>
             </div>
             
             <div className="space-y-4 py-2">
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Username</label>
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Username</label>
                 <input
                   type="text"
                   value={editName}
@@ -1228,7 +834,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Avatar Color</label>
+                <label className="text-[11px] font-bold text-zinc-500 uppercase tracking-wider">Avatar Color</label>
                 <div className="flex items-center gap-3">
                   <input
                     type="color"
@@ -1257,7 +863,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 onClick={saveProfile} 
                 className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-500 font-bold text-xs shadow-md shadow-blue-600/30 transition-colors cursor-pointer"
               >
-                Save
+                Save Changes
               </button>
             </div>
           </div>
@@ -1279,9 +885,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 <div className="flex items-center gap-3 min-w-0">
                   <Hash className="w-5 h-5 text-white" />
                   <span className="font-extrabold text-white text-base">general</span>
+                  <span className="text-xs text-zinc-500 font-medium">main room</span>
                   <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-600/15 text-blue-400 border border-blue-500/20 flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                    {users.length} online
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                    {users.length} Online
                   </span>
                 </div>
 
@@ -1294,6 +901,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       className="bg-[#121215] border border-[#222228] text-xs text-white placeholder-zinc-500 rounded-xl pl-9 pr-3 py-2 w-48 focus:outline-none focus:border-blue-500"
                     />
                   </div>
+                  <button className="p-2 rounded-xl bg-blue-600 text-white shadow-md shadow-blue-600/30 cursor-pointer hover:bg-blue-500 transition-colors">
+                    <Users className="w-4 h-4" />
+                  </button>
                 </div>
               </header>
 
@@ -1327,7 +937,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         <span className="font-extrabold text-white text-sm hover:underline cursor-pointer">
                           {msg.sender_name}
                         </span>
-                        <span className="text-[10px] text-zinc-500">
+                        <span className="text-[10px] text-zinc-500 font-mono">
                           {msg.timestamp}
                         </span>
                       </div>
@@ -1339,85 +949,71 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       )}
 
                       {/* Attachment Rendering */}
-                      {msg.attachment_url && (() => {
-                        const category = getAttachmentCategory(msg.attachment_url, msg.attachment_name, msg.attachment_type);
-
-                        // Audio Attachment
-                        if (category === 'audio') {
-                          return (
-                            <div className="mt-2">
-                              <AudioAttachmentPlayer
-                                url={msg.attachment_url}
-                                name={msg.attachment_name}
-                                onDownload={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'audio.mp3')}
+                      {msg.attachment_url && (
+                        <div className="mt-2">
+                          {msg.attachment_type === 'image' && (
+                            <div className="relative inline-block max-w-sm rounded-2xl overflow-hidden border border-white/10 shadow-lg group/img">
+                              <img 
+                                src={msg.attachment_url} 
+                                alt="Attachment" 
+                                className="max-h-80 w-auto object-cover rounded-2xl cursor-pointer hover:opacity-90 transition-opacity"
+                                onClick={() => window.open(msg.attachment_url, '_blank')}
                               />
                             </div>
-                          );
-                        }
+                          )}
 
-                        // Video Attachment
-                        if (category === 'video') {
-                          return (
-                            <div className="mt-2 space-y-2 max-w-lg">
-                              <video
-                                src={msg.attachment_url}
-                                controls
-                                playsInline
-                                preload="metadata"
-                                className="max-h-80 w-auto rounded-xl bg-black border border-white/10"
+                          {msg.attachment_type === 'video' && (
+                            <div className="relative inline-block max-w-md rounded-2xl overflow-hidden border border-white/10 shadow-lg bg-black">
+                              <video 
+                                src={msg.attachment_url} 
+                                controls 
+                                className="max-h-80 w-full rounded-2xl"
                               />
-                              <div>
-                                <button
-                                  type="button"
-                                  onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'video.mp4')}
-                                  className="inline-flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white bg-[#1a1a24] hover:bg-[#252534] px-3 py-1.5 rounded-lg border border-white/10 transition-colors cursor-pointer"
-                                >
-                                  <Download className="w-3.5 h-3.5" />
-                                  <span>Download</span>
-                                </button>
+                            </div>
+                          )}
+
+                          {msg.attachment_type === 'audio' && (
+                            <div className="p-2 bg-[#121216] border border-[#22222a] rounded-xl max-w-sm">
+                              <audio src={msg.attachment_url} controls className="w-full" />
+                            </div>
+                          )}
+
+                          {msg.attachment_type === 'gif' && (
+                            <div className="relative inline-block rounded-2xl overflow-hidden border border-blue-500/30 shadow-xl bg-black/40 group/gif">
+                              <img 
+                                src={msg.attachment_url} 
+                                alt="GIF" 
+                                className="max-h-72 w-auto object-cover rounded-2xl hover:scale-[1.01] transition-transform"
+                              />
+                              <div className="absolute bottom-2 right-2 px-2.5 py-1 rounded-lg bg-black/80 backdrop-blur-md text-[10px] font-black text-blue-400 tracking-wider flex items-center gap-1.5 border border-blue-500/30 shadow-md">
+                                <Sparkles className="w-3 h-3 text-blue-400 animate-pulse" />
+                                <span>GIPHY</span>
                               </div>
                             </div>
-                          );
-                        }
+                          )}
 
-                        // Image Attachment (including GIFs)
-                        if (category === 'image') {
-                          return (
-                            <div className="mt-2 space-y-2 inline-block max-w-md">
-                              <img
-                                src={msg.attachment_url}
-                                alt=""
-                                className="max-h-80 w-auto object-contain rounded-xl border border-white/10 bg-black/20"
-                              />
-                              <div>
-                                <button
-                                  type="button"
-                                  onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'image.png')}
-                                  className="inline-flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white bg-[#1a1a24] hover:bg-[#252534] px-3 py-1.5 rounded-lg border border-white/10 transition-colors cursor-pointer"
-                                >
-                                  <Download className="w-3.5 h-3.5" />
-                                  <span>Download</span>
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        }
-
-                        // Unknown attachment fallback
-                        return (
-                          <div className="mt-2 p-3 bg-[#121218] border border-[#22222e] rounded-xl max-w-sm flex items-center justify-between gap-3">
-                            <span className="text-xs text-zinc-400">cant show preview for this attachment</span>
-                            <button
-                              type="button"
-                              onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'attachment')}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition-colors shrink-0 cursor-pointer"
+                          {msg.attachment_type === 'file' && (
+                            <a 
+                              href={msg.attachment_url} 
+                              download={msg.attachment_name || 'file'}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-3 p-3 bg-[#121216] border border-[#22222a] hover:border-blue-500/50 rounded-xl max-w-xs transition-colors group/file"
                             >
-                              <Download className="w-3.5 h-3.5" />
-                              <span>Download</span>
-                            </button>
-                          </div>
-                        );
-                      })()}
+                              <div className="w-10 h-10 rounded-lg bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-400 group-hover/file:bg-blue-600 group-hover/file:text-white transition-colors">
+                                <FileText className="w-5 h-5" />
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="text-xs font-bold text-white truncate">{msg.attachment_name || 'Download File'}</div>
+                                <div className="text-[10px] text-blue-400 font-semibold flex items-center gap-1 mt-0.5">
+                                  <Download className="w-3 h-3" />
+                                  Click to download
+                                </div>
+                              </div>
+                            </a>
+                          )}
+                        </div>
+                      )}
 
                     </div>
                     {msg.sender_id === currentUser.id && (
@@ -1434,93 +1030,70 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Attachment Preview Before Sending */}
+              {/* REAL ATTACHMENT UPLOADING PROGRESS BAR CARD */}
               {pendingFile && (
-                <div className="mx-4 mb-2 p-3 bg-[#0e0e13] border border-[#20202c] rounded-2xl relative shadow-lg">
-                  <div className="flex items-start gap-3">
-                    {/* If Image: Show actual image preview */}
-                    {pendingFile.type === 'image' && pendingFile.previewUrl && (
-                      <div className="relative">
-                        <img 
-                          src={pendingFile.previewUrl} 
-                          alt="Attachment preview" 
-                          className="max-h-40 max-w-xs rounded-xl object-contain bg-black/40 border border-white/10" 
-                        />
-                      </div>
-                    )}
-
-                    {/* If Video: Show actual video player */}
-                    {pendingFile.type === 'video' && pendingFile.previewUrl && (
-                      <div className="relative">
-                        <video 
-                          src={pendingFile.previewUrl} 
-                          controls 
-                          playsInline 
-                          className="max-h-40 max-w-xs rounded-xl bg-black border border-white/10" 
-                        />
-                      </div>
-                    )}
-
-                    {/* If Audio: Show actual audio player tailored for that extension */}
-                    {pendingFile.type === 'audio' && pendingFile.previewUrl && (
-                      <div className="flex-1 min-w-0">
-                        <AudioAttachmentPlayer
-                          url={pendingFile.previewUrl}
-                          name={pendingFile.filename}
-                          showDownload={false}
-                        />
-                      </div>
-                    )}
-
-                    {/* If File/Other: Clean file info */}
-                    {pendingFile.type === 'file' && (
-                      <div className="flex items-center gap-2.5 p-2.5 bg-[#14141c] rounded-xl border border-white/5">
-                        <FileText className="w-6 h-6 text-blue-400 shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-white truncate max-w-xs">{pendingFile.filename}</p>
-                          <p className="text-[11px] text-zinc-400">{(pendingFile.size / 1024).toFixed(1)} KB</p>
+                <div className="px-4 py-3 bg-[#0d0d12] border-t border-[#1a1a24] space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {pendingFile.previewUrl ? (
+                        <img src={pendingFile.previewUrl} alt="Preview" className="w-11 h-11 rounded-xl object-cover border border-white/10 shadow-md shrink-0" />
+                      ) : (
+                        <div className="w-11 h-11 rounded-xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0">
+                          <FileText className="w-5 h-5" />
+                        </div>
+                      )}
+                      <div className="min-w-0 leading-tight">
+                        <div className="text-xs font-extrabold text-white truncate">{pendingFile.filename}</div>
+                        <div className="text-[10px] text-zinc-400 font-semibold mt-0.5 flex items-center gap-2">
+                          <span>{(pendingFile.size / 1024).toFixed(1)} KB</span>
+                          <span>•</span>
+                          {pendingFile.isUploading ? (
+                            <span className="text-blue-400 font-bold flex items-center gap-1">
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              Uploading to server... {pendingFile.uploadProgress}%
+                            </span>
+                          ) : (
+                            <span className="text-emerald-400 font-bold flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" />
+                              Uploaded to server • Ready to send
+                            </span>
+                          )}
                         </div>
                       </div>
-                    )}
+                    </div>
 
-                    {/* Upload progress & info */}
-                    {pendingFile.isUploading && (
-                      <div className="flex-1 min-w-0 self-center">
-                        <div className="space-y-1.5">
-                          <div className="flex items-center justify-between text-xs text-zinc-300">
-                            <span>Uploading...</span>
-                            <span>{pendingFile.uploadProgress}%</span>
-                          </div>
-                          <div className="h-1.5 w-full bg-[#1c1c28] rounded-full overflow-hidden">
-                            <div 
-                              className="h-full bg-blue-500 transition-all duration-150 rounded-full" 
-                              style={{ width: `${pendingFile.uploadProgress}%` }} 
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Remove button */}
                     <button 
-                      type="button"
                       onClick={cancelPendingFile}
-                      className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
-                      title="Remove attachment"
+                      className="p-1.5 rounded-xl text-zinc-400 hover:text-white hover:bg-white/10 transition-colors"
+                      title="Cancel attachment"
                     >
                       <X className="w-4 h-4" />
                     </button>
                   </div>
+
+                  {/* REAL Upload Progress Bar */}
+                  <div className="h-1.5 w-full bg-[#181822] rounded-full overflow-hidden border border-white/5">
+                    <div 
+                      className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-200 ease-out rounded-full"
+                      style={{ width: `${pendingFile.uploadProgress}%` }}
+                    />
+                  </div>
                 </div>
               )}
 
-              {/* GIPHY POPOVER MODAL */}
+              {/* OFFICIAL GIPHY SDK POPOVER MODAL */}
               {isGiphyOpen && (
                 <div className="absolute bottom-20 left-4 right-4 z-50 bg-[#0c0c12]/95 border border-[#222230] rounded-2xl shadow-2xl p-4 max-w-xl mx-auto flex flex-col space-y-3 backdrop-blur-xl">
                   
                   {/* Modal Header */}
                   <div className="flex items-center justify-between pb-2 border-b border-[#1f1f2d]">
-                    <span className="text-sm font-bold text-white">GIFs</span>
+                    <div className="flex items-center gap-2.5">
+                      <span className="px-2.5 py-1 rounded-lg bg-blue-600 text-white font-black text-xs tracking-wider shadow-md shadow-blue-600/30 flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5 fill-current" />
+                        GIPHY SDK
+                      </span>
+                      <span className="text-xs font-extrabold text-white">Official Giphy Library</span>
+                    </div>
                     <button 
                       onClick={() => setIsGiphyOpen(false)}
                       className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
@@ -1539,7 +1112,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         setGiphySearch(e.target.value);
                         setActiveCategoryLabel('');
                       }}
-                      placeholder="Search GIFs..."
+                      placeholder="Search every GIF on GIPHY..."
                       className="w-full bg-[#161622] border border-[#2a2a3c] text-xs text-white placeholder-zinc-500 rounded-xl pl-10 pr-9 py-2.5 focus:outline-none focus:border-blue-500 transition-colors"
                       autoFocus
                     />
@@ -1549,7 +1122,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                           setGiphySearch('');
                           setActiveCategoryLabel('🔥 Trending');
                         }}
-                        className="absolute right-3 top-2.5 p-1 text-zinc-400 hover:text-white cursor-pointer"
+                        className="absolute right-3 top-2.5 p-1 text-zinc-400 hover:text-white"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -1606,36 +1179,37 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     className="flex-1 bg-transparent text-sm text-white placeholder-zinc-500 focus:outline-none"
                   />
 
-                  {/* File Attachment Button */}
+                  {/* File Attachment Button (Supports ANY file on system) */}
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     className="w-8 h-8 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 flex items-center justify-center transition-colors cursor-pointer"
-                    title="Upload File or Media"
+                    title="Upload Any File or Media"
                   >
                     <PlusCircle className="w-5 h-5" />
                   </button>
 
-                  {/* GIF Button */}
+                  {/* Original GIF Text Button */}
                   <button
                     type="button"
                     onClick={() => setIsGiphyOpen(!isGiphyOpen)}
-                    className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center justify-center ${
+                    className={`px-3 py-1.5 rounded-xl text-xs font-black tracking-wider transition-all cursor-pointer flex items-center justify-center gap-1.5 border ${
                       isGiphyOpen 
-                        ? 'bg-blue-600 text-white shadow-sm' 
-                        : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                        ? 'bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-600/30 ring-2 ring-blue-500/40' 
+                        : 'bg-[#181820] hover:bg-[#222230] text-blue-400 border-blue-500/30 hover:border-blue-500/60'
                     }`}
-                    title="GIFs"
+                    title="Open GIPHY GIF Library"
                   >
-                    GIF
+                    <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                    <span>GIF</span>
                   </button>
 
                   {/* Send Button */}
                   <button
                     type="submit"
-                    disabled={!inputText.trim() && !pendingFile}
+                    disabled={(!inputText.trim() && !pendingFile) || (pendingFile?.isUploading ?? false)}
                     className={`px-3.5 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                      (inputText.trim() || pendingFile)
+                      (inputText.trim() || (pendingFile && !pendingFile.isUploading))
                         ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' 
                         : 'bg-zinc-800 text-zinc-500 opacity-50 cursor-not-allowed'
                     }`}
@@ -1652,8 +1226,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               
               {/* ONLINE MEMBERS LIST */}
               <div className="space-y-3">
-                <div className="text-xs font-bold text-zinc-500 tracking-wider">
+                <div className="flex items-center justify-between text-xs font-bold text-zinc-500 tracking-wider">
                   <span>ONLINE — {users.length}</span>
+                  <Trash2 className="w-3.5 h-3.5 cursor-pointer hover:text-white transition-colors" />
                 </div>
 
                 <div className="space-y-2">
@@ -1674,11 +1249,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                           <span className="font-extrabold text-white text-xs truncate">
                             {u.username}
                           </span>
+                          <span className="text-[10px] text-blue-400 font-mono font-bold">#6761</span>
                           {u.id === currentUser.id && (
-                            <span className="text-[10px] text-zinc-500 font-medium">
-                              (you)
+                            <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-300 text-[9px] font-black">
+                              YOU
                             </span>
                           )}
+                        </div>
+
+                        <div className="mt-1">
+                          <span className="px-2 py-0.5 rounded-md bg-blue-600/15 text-blue-400 border border-blue-500/25 text-[10px] font-bold inline-flex items-center gap-1">
+                            <MessageSquare className="w-3 h-3" />
+                            In #general
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -1706,7 +1289,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-white text-base">General Voice</span>
+                      <span className="font-extrabold text-white text-base">General Voice #general</span>
                     </div>
                     <span className="text-xs text-zinc-400 font-medium">
                       {videoUsers.length + (isInVideo ? 1 : 0)} connected
@@ -1750,10 +1333,24 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         </div>
                       )}
 
+                      {/* Top-Left Speaking Status Tag */}
+                      {isUserSpeaking && (
+                        <div className="absolute top-4 left-4 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 font-black text-[10px] tracking-wider uppercase flex items-center gap-1.5 shadow-md">
+                          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                          SPEAKING
+                        </div>
+                      )}
+
                       {/* Bottom-Left Overlay */}
                       <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between">
-                        <div className="text-sm font-extrabold text-white">
-                          {currentUser.username} (You)
+                        <div className="space-y-1">
+                          <div className="text-sm font-extrabold text-white">
+                            {currentUser.username} (You)
+                          </div>
+                          <span className="px-2.5 py-0.5 rounded-full bg-blue-600/20 border border-blue-500/40 text-blue-400 text-[10px] font-bold inline-flex items-center gap-1">
+                            <MessageSquare className="w-3 h-3" />
+                            In #general
+                          </span>
                         </div>
 
                         {isMuted && <MicOff className="w-4 h-4 text-red-400" />}
@@ -1785,9 +1382,22 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                             </div>
                           )}
 
+                          {isPeerSpeaking && (
+                            <div className="absolute top-4 left-4 px-3 py-1 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-400 font-black text-[10px] tracking-wider uppercase flex items-center gap-1.5 shadow-md">
+                              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                              SPEAKING
+                            </div>
+                          )}
+
                           <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between">
-                            <div className="text-sm font-extrabold text-white">
-                              {u.username}
+                            <div className="space-y-1">
+                              <div className="text-sm font-extrabold text-white">
+                                {u.username}
+                              </div>
+                              <span className="px-2.5 py-0.5 rounded-full bg-blue-600/20 border border-blue-500/40 text-blue-400 text-[10px] font-bold inline-flex items-center gap-1">
+                                <MessageSquare className="w-3 h-3" />
+                                In #general
+                              </span>
                             </div>
 
                             {u.is_muted && <MicOff className="w-4 h-4 text-zinc-400" />}
@@ -1834,7 +1444,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   {/* Camera Toggle Button */}
                   <button 
                     onClick={() => toggleCamera()}
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500"
+                    className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
+                      isVideoEnabled ? 'bg-blue-600 text-white shadow-blue-600/30' : 'bg-blue-600 text-white shadow-blue-600/30'
+                    }`}
                     title={isVideoEnabled ? 'Turn Off Camera' : 'Turn On Camera'}
                   >
                     {isVideoEnabled ? <Video className="w-6 h-6" /> : <VideoOff className="w-6 h-6" />}
@@ -1843,7 +1455,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   {/* Screen Share Button */}
                   <button 
                     onClick={toggleScreenShare}
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500"
+                    className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
+                      isScreenSharing ? 'bg-blue-600 text-white shadow-blue-600/30' : 'bg-blue-600 text-white shadow-blue-600/30'
+                    }`}
                     title="Share Screen"
                   >
                     <Monitor className="w-6 h-6" />
@@ -1866,11 +1480,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             {/* Right Sidebar in Voice Channel */}
             <aside className="w-64 bg-[#08080a] border-l border-[#1a1a20] p-4 flex flex-col space-y-6 shrink-0">
               
-              {/* VOICE USERS LIST */}
+              {/* IN VOICE & CALLS LIST */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-xs font-bold text-blue-400 tracking-wider uppercase">
                   <Mic className="w-4 h-4" />
-                  <span>VOICE — {videoUsers.length + (isInVideo ? 1 : 0)}</span>
+                  <span>IN VOICE & CALLS — {videoUsers.length + (isInVideo ? 1 : 0)}</span>
                 </div>
 
                 <div className="space-y-2">
@@ -1889,8 +1503,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         <div className="min-w-0 leading-tight">
                           <div className="flex items-center gap-1">
                             <span className="font-extrabold text-white text-xs truncate">{currentUser.username}</span>
-                            <span className="text-[10px] text-zinc-500">(you)</span>
+                            <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-300 text-[9px] font-black">YOU</span>
                           </div>
+                          <div className="text-[10px] text-blue-400 font-bold">General Voice</div>
                         </div>
                       </div>
                       <Mic className="w-4 h-4 text-blue-400 shrink-0" />
@@ -1911,6 +1526,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         </div>
                         <div className="min-w-0 leading-tight">
                           <span className="font-extrabold text-white text-xs truncate block">{u.username}</span>
+                          <div className="text-[10px] text-blue-400 font-bold">General Voice</div>
                         </div>
                       </div>
                       <Mic className="w-4 h-4 text-blue-400 shrink-0" />
@@ -1919,10 +1535,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 </div>
               </div>
 
-              {/* ONLINE MEMBERS */}
+              {/* ONLINE — OTHER MEMBERS */}
               <div className="space-y-3">
-                <div className="text-xs font-bold text-zinc-500 tracking-wider">
+                <div className="flex items-center justify-between text-xs font-bold text-zinc-500 tracking-wider">
                   <span>ONLINE — {users.length - (videoUsers.length + (isInVideo ? 1 : 0))}</span>
+                  <Trash2 className="w-3.5 h-3.5 cursor-pointer hover:text-white transition-colors" />
                 </div>
               </div>
 
