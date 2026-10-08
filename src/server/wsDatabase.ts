@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
+import Redis from 'ioredis';
 
 export interface DbUser {
   id: string;
@@ -85,9 +86,24 @@ class InMemoryDatabase {
 export function initWebSocketDatabase(server: Server) {
   const wss = new WebSocketServer({ server, path: '/ws-db' });
   const db = new InMemoryDatabase();
+  const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+  const sub = redis.duplicate();
   
+  // Track which instance/user is in which room
+  const userToRoom = new Map<string, string>();
   // Track multiple sockets per user ID (for multi-tab support)
   const userIdToSockets = new Map<string, Set<WebSocket>>();
+
+  // Subscribe to room channels
+  sub.subscribe('voice-general');
+  sub.on('message', (channel, message) => {
+    // Broadcast audio data to all users in this channel connected to THIS instance
+    wss.clients.forEach((client) => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(message); 
+        }
+    });
+  });
 
   function broadcastTable(tableName: string, data: any) {
     const payload = JSON.stringify({
@@ -133,6 +149,11 @@ export function initWebSocketDatabase(server: Server) {
     }));
 
     ws.on('message', (raw) => {
+      if (Buffer.isBuffer(raw)) {
+          // Handle binary audio chunk
+          redis.publish('voice-general', raw);
+          return;
+      }
       try {
         const msg = JSON.parse(raw.toString());
 

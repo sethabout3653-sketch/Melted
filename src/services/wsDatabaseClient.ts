@@ -256,6 +256,12 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     }
   }, []);
 
+  const sendAudioChunk = useCallback((chunk: ArrayBuffer) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(chunk);
+    }
+  }, []);
+
   const callUser = useCallback((targetUserId: string, callType: 'audio' | 'video') => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       const u = currentUserRef.current;
@@ -279,6 +285,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     registerUser,
     callUser,
     sendRtcSignal,
+    sendAudioChunk,
     setRtcSignalHandler,
     setUserCallHandler,
     setMediaHandlers,
