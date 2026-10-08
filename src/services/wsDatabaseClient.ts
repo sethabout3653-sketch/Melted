@@ -13,7 +13,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
   const [isConnected, setIsConnected] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<any>(null);
+  const reconnectTimeoutRef = useRef<number>(2000);
   const pingIntervalRef = useRef<any>(null);
 
   // Use a ref for currentUser to avoid reconnecting when only username/avatar changes
@@ -144,15 +144,16 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
         setIsConnected(false);
         stopHeartbeat();
         wsRef.current = null;
-        if (!reconnectTimeoutRef.current) {
-          reconnectTimeoutRef.current = setTimeout(() => {
-            reconnectTimeoutRef.current = null;
-            connect();
-          }, 2000);
-        }
+        const timeout = reconnectTimeoutRef.current;
+        console.log(`[WS DB Client] Disconnected, reconnecting in ${timeout}ms...`);
+        setTimeout(() => {
+          reconnectTimeoutRef.current = Math.min(timeout * 1.5, 10000);
+          connect();
+        }, timeout);
       };
 
-      ws.onerror = () => {
+      ws.onerror = (err) => {
+        console.error('[WS DB Client] WebSocket error:', err);
         ws.close();
       };
     } catch (err) {

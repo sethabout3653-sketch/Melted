@@ -295,66 +295,81 @@ export function initWebSocketDatabase(server: Server) {
 
         switch (msg.type) {
           case 'SQL_QUERY': {
-            if (msg.table === 'users') {
-              ws.send(JSON.stringify({
-                type: 'SQL_RESULT',
-                requestId: msg.requestId,
-                rows: db.selectUsers(msg.where),
-              }));
-            } else if (msg.table === 'messages') {
-              ws.send(JSON.stringify({
-                type: 'SQL_RESULT',
-                requestId: msg.requestId,
-                rows: db.selectMessages(msg.channelId || 'text-general'),
-              }));
+            console.log(`[WebSocket DB] SQL_QUERY: ${msg.table} where=${JSON.stringify(msg.where || {})}`);
+            try {
+              if (msg.table === 'users') {
+                ws.send(JSON.stringify({
+                  type: 'SQL_RESULT',
+                  requestId: msg.requestId,
+                  rows: db.selectUsers(msg.where),
+                }));
+              } else if (msg.table === 'messages') {
+                ws.send(JSON.stringify({
+                  type: 'SQL_RESULT',
+                  requestId: msg.requestId,
+                  rows: db.selectMessages(msg.channelId || 'text-general'),
+                }));
+              }
+            } catch (err) {
+              console.error(`[WebSocket DB] SQL_QUERY error:`, err);
             }
             break;
           }
 
           case 'SQL_INSERT': {
-            if (msg.table === 'messages') {
-              const newMsg: DbMessage = {
-                id: 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-                channel_id: msg.row.channel_id || 'text-general',
-                sender_id: msg.row.sender_id,
-                sender_name: msg.row.sender_name,
-                avatar_color: msg.row.avatar_color || '#0066ff',
-                content: msg.row.content || '',
-                attachment_url: msg.row.attachment_url,
-                attachment_type: msg.row.attachment_type,
-                attachment_name: msg.row.attachment_name,
-                timestamp: msg.row.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                created_at: Date.now(),
-              };
-              db.insertMessage(newMsg);
-              broadcastTable('messages', db.selectAllMessages());
+            console.log(`[WebSocket DB] SQL_INSERT: ${msg.table}`);
+            try {
+              if (msg.table === 'messages') {
+                const newMsg: DbMessage = {
+                  id: 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+                  channel_id: msg.row.channel_id || 'text-general',
+                  sender_id: msg.row.sender_id,
+                  sender_name: msg.row.sender_name,
+                  avatar_color: msg.row.avatar_color || '#0066ff',
+                  content: msg.row.content || '',
+                  attachment_url: msg.row.attachment_url,
+                  attachment_type: msg.row.attachment_type,
+                  attachment_name: msg.row.attachment_name,
+                  timestamp: msg.row.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  created_at: Date.now(),
+                };
+                db.insertMessage(newMsg);
+                broadcastTable('messages', db.selectAllMessages());
+              }
+            } catch (err) {
+              console.error(`[WebSocket DB] SQL_INSERT error:`, err);
             }
             break;
           }
 
           case 'SQL_UPDATE': {
-            if (msg.table === 'users') {
-              const user = db.getUser(msg.id);
-              if (user) {
-                const oldChannel = user.current_channel;
-                const updated: DbUser = {
-                  ...user,
-                  ...msg.set,
-                  updated_at: Date.now(),
-                };
-                db.upsertUser(updated);
-                broadcastTable('users', db.selectUsers());
+            console.log(`[WebSocket DB] SQL_UPDATE: ${msg.table} id=${msg.id}`);
+            try {
+              if (msg.table === 'users') {
+                const user = db.getUser(msg.id);
+                if (user) {
+                  const oldChannel = user.current_channel;
+                  const updated: DbUser = {
+                    ...user,
+                    ...msg.set,
+                    updated_at: Date.now(),
+                  };
+                  db.upsertUser(updated);
+                  broadcastTable('users', db.selectUsers());
 
-                // Detect channel media transitions
-                if (msg.set.current_channel && msg.set.current_channel !== oldChannel) {
-                  if (msg.set.current_channel === 'voice-general' || msg.set.current_channel === 'video-general') {
-                    broadcastMediaPresence('USER_JOINED_MEDIA', msg.id, msg.set.current_channel);
-                  }
-                  if (oldChannel === 'voice-general' || oldChannel === 'video-general') {
-                    broadcastMediaPresence('USER_LEFT_MEDIA', msg.id, oldChannel);
+                  // Detect channel media transitions
+                  if (msg.set.current_channel && msg.set.current_channel !== oldChannel) {
+                    if (msg.set.current_channel === 'voice-general' || msg.set.current_channel === 'video-general') {
+                      broadcastMediaPresence('USER_JOINED_MEDIA', msg.id, msg.set.current_channel);
+                    }
+                    if (oldChannel === 'voice-general' || oldChannel === 'video-general') {
+                      broadcastMediaPresence('USER_LEFT_MEDIA', msg.id, oldChannel);
+                    }
                   }
                 }
               }
+            } catch (err) {
+              console.error(`[WebSocket DB] SQL_UPDATE error:`, err);
             }
             break;
           }
