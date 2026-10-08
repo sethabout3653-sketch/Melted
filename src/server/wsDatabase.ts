@@ -13,6 +13,7 @@ export interface DbUser {
   is_deafened: boolean;
   has_video: boolean;
   is_screen_sharing: boolean;
+  is_vertical?: boolean;
   updated_at: number;
 }
 
@@ -55,6 +56,7 @@ class WebSocketDatabase {
         is_deafened INTEGER NOT NULL DEFAULT 0,
         has_video INTEGER NOT NULL DEFAULT 0,
         is_screen_sharing INTEGER NOT NULL DEFAULT 0,
+        is_vertical INTEGER NOT NULL DEFAULT 0,
         updated_at INTEGER NOT NULL
       );
 
@@ -76,6 +78,11 @@ class WebSocketDatabase {
       CREATE INDEX IF NOT EXISTS idx_messages_channel_id ON messages(channel_id);
     `);
 
+    // Ensure is_vertical column exists on existing databases
+    try {
+      this.db.exec('ALTER TABLE users ADD COLUMN is_vertical INTEGER NOT NULL DEFAULT 0;');
+    } catch {}
+
     // Reset transient users on server restart to keep presence accurate
     this.db.exec("DELETE FROM users WHERE current_channel = 'offline' OR updated_at < " + (Date.now() - 3600000));
   }
@@ -92,6 +99,7 @@ class WebSocketDatabase {
       is_deafened: Boolean(r.is_deafened),
       has_video: Boolean(r.has_video),
       is_screen_sharing: Boolean(r.is_screen_sharing),
+      is_vertical: Boolean(r.is_vertical),
       updated_at: Number(r.updated_at),
     }));
     if (!where) return list;
@@ -113,6 +121,7 @@ class WebSocketDatabase {
       is_deafened: Boolean(row.is_deafened),
       has_video: Boolean(row.has_video),
       is_screen_sharing: Boolean(row.is_screen_sharing),
+      is_vertical: Boolean(row.is_vertical),
       updated_at: Number(row.updated_at),
     };
   }
@@ -121,8 +130,8 @@ class WebSocketDatabase {
     const stmt = this.db.prepare(`
       INSERT INTO users (
         id, username, avatar_color, current_channel,
-        is_speaking, is_muted, is_deafened, has_video, is_screen_sharing, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        is_speaking, is_muted, is_deafened, has_video, is_screen_sharing, is_vertical, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         username = excluded.username,
         avatar_color = excluded.avatar_color,
@@ -132,6 +141,7 @@ class WebSocketDatabase {
         is_deafened = excluded.is_deafened,
         has_video = excluded.has_video,
         is_screen_sharing = excluded.is_screen_sharing,
+        is_vertical = excluded.is_vertical,
         updated_at = excluded.updated_at
     `);
     stmt.run(
@@ -144,6 +154,7 @@ class WebSocketDatabase {
       user.is_deafened ? 1 : 0,
       user.has_video ? 1 : 0,
       user.is_screen_sharing ? 1 : 0,
+      user.is_vertical ? 1 : 0,
       Date.now()
     );
   }
@@ -361,6 +372,7 @@ export function initWebSocketDatabase(server: Server) {
                 is_deafened: Boolean(msg.user.is_deafened),
                 has_video: Boolean(msg.user.has_video),
                 is_screen_sharing: Boolean(msg.user.is_screen_sharing),
+                is_vertical: Boolean(msg.user.is_vertical),
                 updated_at: Date.now(),
               });
               broadcastTable('users', db.selectUsers());

@@ -6,23 +6,10 @@ const RTC_CONFIG: RTCConfiguration = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun3.l.google.com:19302' },
+    { urls: 'stun:stun4.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
     { urls: 'stun:stun.relay.metered.ca:80' },
-    {
-      urls: 'turn:standard.relay.metered.ca:80',
-      username: 'e713606f33230a169b51ee21',
-      credential: 'fWc00dvyjWp+O3f3',
-    },
-    {
-      urls: 'turn:standard.relay.metered.ca:443',
-      username: 'e713606f33230a169b51ee21',
-      credential: 'fWc00dvyjWp+O3f3',
-    },
-    {
-      urls: 'turn:standard.relay.metered.ca:443?transport=tcp',
-      username: 'e713606f33230a169b51ee21',
-      credential: 'fWc00dvyjWp+O3f3',
-    },
   ],
   iceTransportPolicy: 'all',
   iceCandidatePoolSize: 10,
@@ -32,7 +19,8 @@ interface UseWebRTCProps {
   currentUserId: string;
   activeChannel: 'text-general' | 'voice-general' | 'video-general';
   localAudioStream: MediaStream | null;
-  localVideoStream: MediaStream | null;
+  localCameraStream: MediaStream | null;
+  localScreenStream: MediaStream | null;
   peers: DbUser[];
   sendRtcSignal: (targetUserId: string, signal: any) => void;
   setRtcSignalHandler: (fn: (fromUserId: string, signal: any) => void) => void;
@@ -46,13 +34,17 @@ export function useWebRTC({
   currentUserId,
   activeChannel,
   localAudioStream,
-  localVideoStream,
+  localCameraStream,
+  localScreenStream,
   peers,
   sendRtcSignal,
   setRtcSignalHandler,
   setMediaHandlers,
 }: UseWebRTCProps) {
-  const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({});
+  // Remote Media Streams
+  const [remoteCameraStreams, setRemoteCameraStreams] = useState<Record<string, MediaStream>>({});
+  const [remoteScreenStreams, setRemoteScreenStreams] = useState<Record<string, MediaStream>>({});
+  const [remoteStreams, setRemoteStreams] = useState<Record<string, MediaStream>>({}); // Combined for audio playback
   const [remoteSpeaking, setRemoteSpeaking] = useState<Record<string, boolean>>({});
 
   // Active Peer Connections: peerId -> RTCPeerConnection
@@ -61,6 +53,8 @@ export function useWebRTC({
   const candidateQueues = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   // Pending making-offer lock
   const isMakingOffer = useRef<Map<string, boolean>>(new Map());
+  // Track manifest per peer (track IDs for camera vs screen)
+  const peerTrackManifests = useRef<Map<string, { cameraTrackId?: string | null; screenTrackId?: string | null }>>(new Map());
 
   // Web Audio Analysers for decibel detection
   const remoteAudioCtxRef = useRef<AudioContext | null>(null);
@@ -71,9 +65,11 @@ export function useWebRTC({
 
   // Latest stream references
   const localAudioRef = useRef<MediaStream | null>(localAudioStream);
-  const localVideoRef = useRef<MediaStream | null>(localVideoStream);
+  const localCameraRef = useRef<MediaStream | null>(localCameraStream);
+  const localScreenRef = useRef<MediaStream | null>(localScreenStream);
   localAudioRef.current = localAudioStream;
-  localVideoRef.current = localVideoStream;
+  localCameraRef.current = localCameraStream;
+  localScreenRef.current = localScreenStream;
 
   // Clean up a single peer connection
   const closePeer = useCallback((peerId: string) => {
@@ -88,7 +84,22 @@ export function useWebRTC({
     }
     candidateQueues.current.delete(peerId);
     isMakingOffer.current.delete(peerId);
+    peerTrackManifests.current.delete(peerId);
     remoteAnalysers.current.delete(peerId);
+
+    setRemoteCameraStreams((prev) => {
+      if (!prev[peerId]) return prev;
+      const copy = { ...prev };
+      delete copy[peerId];
+      return copy;
+    });
+
+    setRemoteScreenStreams((prev) => {
+      if (!prev[peerId]) return prev;
+      const copy = { ...prev };
+      delete copy[peerId];
+      return copy;
+    });
 
     setRemoteStreams((prev) => {
       if (!prev[peerId]) return prev;
@@ -117,9 +128,12 @@ export function useWebRTC({
     peerConnections.current.clear();
     candidateQueues.current.clear();
     isMakingOffer.current.clear();
+    peerTrackManifests.current.clear();
     remoteAnalysers.current.clear();
-    setRemoteStreams((prev) => (Object.keys(prev).length === 0 ? prev : {}));
-    setRemoteSpeaking((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+    setRemoteCameraStreams({});
+    setRemoteScreenStreams({});
+    setRemoteStreams({});
+    setRemoteSpeaking({});
   }, []);
 
   // Attach remote audio track to analyser to detect speech decibels
@@ -145,48 +159,124 @@ export function useWebRTC({
     }
   }, []);
 
-  // Sync track attachments to a peer connection safely via transceivers
+  // Sync track attachments to a peer connection safely via dedicated transceivers
   const updateTracksForPeer = useCallback((pc: RTCPeerConnection) => {
     const audioTrack = localAudioRef.current?.getAudioTracks()[0] || null;
-    const videoTrack = activeChannel === 'video-general' ? (localVideoRef.current?.getVideoTracks()[0] || null) : null;
+    const cameraTrack = localCameraRef.current?.getVideoTracks()[0] || null;
+    const screenTrack = localScreenRef.current?.getVideoTracks()[0] || null;
 
     const transceivers = pc.getTransceivers();
     const audioTransceiver = transceivers.find((t) => t.receiver.track.kind === 'audio');
-    const videoTransceiver = transceivers.find((t) => t.receiver.track.kind === 'video');
+    const videoTransceivers = transceivers.filter((t) => t.receiver.track.kind === 'video');
+    const cameraTransceiver = videoTransceivers[0];
+    const screenTransceiver = videoTransceivers[1];
 
+    // Audio Transceiver
     if (audioTransceiver) {
-      if (audioTrack && audioTransceiver.direction !== 'sendrecv') {
-        audioTransceiver.direction = 'sendrecv';
-      }
       if (audioTransceiver.sender.track !== audioTrack) {
         audioTransceiver.sender.replaceTrack(audioTrack).catch((err) => {
           console.warn('[WebRTC] replaceTrack audio warning:', err);
         });
       }
-    } else if (audioTrack) {
-      pc.addTrack(audioTrack);
     }
 
-    if (videoTransceiver) {
-      if (videoTrack) {
-        if (videoTransceiver.direction !== 'sendrecv') {
-          console.log('[WebRTC] Setting video transceiver direction to sendrecv');
-          videoTransceiver.direction = 'sendrecv';
-        }
-      } else {
-        if (videoTransceiver.direction !== 'recvonly') {
-          videoTransceiver.direction = 'recvonly';
-        }
-      }
-      if (videoTransceiver.sender.track !== videoTrack) {
-        videoTransceiver.sender.replaceTrack(videoTrack).catch((err) => {
-          console.warn('[WebRTC] replaceTrack video warning:', err);
+    // Camera Video Transceiver (Index 0)
+    if (cameraTransceiver) {
+      if (cameraTransceiver.sender.track !== cameraTrack) {
+        cameraTransceiver.sender.replaceTrack(cameraTrack).catch((err) => {
+          console.warn('[WebRTC] replaceTrack camera warning:', err);
         });
       }
-    } else if (videoTrack) {
-      pc.addTrack(videoTrack);
     }
-  }, [activeChannel]);
+
+    // Screen Share Video Transceiver (Index 1)
+    if (screenTransceiver) {
+      if (screenTransceiver.sender.track !== screenTrack) {
+        screenTransceiver.sender.replaceTrack(screenTrack).catch((err) => {
+          console.warn('[WebRTC] replaceTrack screen warning:', err);
+        });
+      }
+    }
+  }, []);
+
+  // Helper to sync all live receiver tracks into state for a peer
+  const syncRemoteTracksForPeer = useCallback((peerId: string, pc: RTCPeerConnection) => {
+    const audioTracks: MediaStreamTrack[] = [];
+    let cameraTrack: MediaStreamTrack | null = null;
+    let screenTrack: MediaStreamTrack | null = null;
+
+    const transceivers = pc.getTransceivers();
+    const audioTransceiver = transceivers.find((t) => t.receiver.track.kind === 'audio');
+    const videoTransceivers = transceivers.filter((t) => t.receiver.track.kind === 'video');
+
+    if (audioTransceiver?.receiver?.track && audioTransceiver.receiver.track.readyState === 'live') {
+      audioTracks.push(audioTransceiver.receiver.track);
+      setupRemoteAudioAnalysis(peerId, audioTransceiver.receiver.track);
+    }
+
+    const manifest = peerTrackManifests.current.get(peerId);
+
+    videoTransceivers.forEach((t, idx) => {
+      const track = t.receiver?.track;
+      if (!track || track.readyState !== 'live') return;
+
+      track.onunmute = () => syncRemoteTracksForPeer(peerId, pc);
+      track.onmute = () => syncRemoteTracksForPeer(peerId, pc);
+
+      // Identify track by manifest ID if available, else by transceiver index
+      if (manifest?.screenTrackId && track.id === manifest.screenTrackId) {
+        screenTrack = track;
+      } else if (manifest?.cameraTrackId && track.id === manifest.cameraTrackId) {
+        cameraTrack = track;
+      } else if (idx === 1) {
+        screenTrack = track;
+      } else {
+        cameraTrack = track;
+      }
+    });
+
+    // Update Camera Stream
+    if (cameraTrack && !(cameraTrack as MediaStreamTrack).muted) {
+      setRemoteCameraStreams((prev) => ({
+        ...prev,
+        [peerId]: new MediaStream([cameraTrack!]),
+      }));
+    } else {
+      setRemoteCameraStreams((prev) => {
+        if (!prev[peerId]) return prev;
+        const copy = { ...prev };
+        delete copy[peerId];
+        return copy;
+      });
+    }
+
+    // Update Screen Share Stream
+    if (screenTrack && !(screenTrack as MediaStreamTrack).muted) {
+      setRemoteScreenStreams((prev) => ({
+        ...prev,
+        [peerId]: new MediaStream([screenTrack!]),
+      }));
+    } else {
+      setRemoteScreenStreams((prev) => {
+        if (!prev[peerId]) return prev;
+        const copy = { ...prev };
+        delete copy[peerId];
+        return copy;
+      });
+    }
+
+    // Combined stream for audio player
+    const allTracks: MediaStreamTrack[] = [...audioTracks];
+    if (cameraTrack) allTracks.push(cameraTrack);
+    if (screenTrack) allTracks.push(screenTrack);
+
+    if (allTracks.length > 0) {
+      setRemoteStreams((prev) => ({
+        ...prev,
+        [peerId]: new MediaStream(allTracks),
+      }));
+    }
+  }, [setupRemoteAudioAnalysis]);
 
   // Create or get RTCPeerConnection
   const getOrCreatePeerConnection = useCallback((peerId: string): RTCPeerConnection => {
@@ -202,13 +292,13 @@ export function useWebRTC({
     pc = new RTCPeerConnection(RTC_CONFIG);
     peerConnections.current.set(peerId, pc);
 
-    // Always initialize audio transceiver with sendrecv so voice connects immediately
+    // Initialize 3 dedicated transceivers in fixed order:
+    // 0: Audio (sendrecv)
     pc.addTransceiver('audio', { direction: 'sendrecv' });
-
-    // Video transceiver if activeChannel is video-general
-    if (activeChannel === 'video-general') {
-      pc.addTransceiver('video', { direction: 'sendrecv' });
-    }
+    // 1: Camera Video (sendrecv)
+    pc.addTransceiver('video', { direction: 'sendrecv' });
+    // 2: Screen Video (sendrecv)
+    pc.addTransceiver('video', { direction: 'sendrecv' });
 
     // Initial track assignment
     updateTracksForPeer(pc);
@@ -234,11 +324,11 @@ export function useWebRTC({
       }
     };
 
-    // Track handler - create fresh MediaStream instance so React updates listeners
+    // Track handler
     pc.ontrack = (event) => {
-      console.log(`[WebRTC] ontrack received for peer ${peerId}, kind: ${event.track.kind}`);
       const incomingTrack = event.track;
-      
+      console.log(`[WebRTC] ontrack received for peer ${peerId}, kind: ${incomingTrack.kind}`);
+
       incomingTrack.onunmute = () => {
         syncRemoteTracksForPeer(peerId, pc);
       };
@@ -246,19 +336,10 @@ export function useWebRTC({
         syncRemoteTracksForPeer(peerId, pc);
       };
 
-      setRemoteStreams((prev) => {
-        const existing = prev[peerId];
-        let tracks: MediaStreamTrack[] = [];
-        if (existing) {
-          tracks = existing.getTracks().filter((t) => t.id !== incomingTrack.id);
-        }
-        tracks.push(incomingTrack);
-        const newStream = new MediaStream(tracks);
-        return { ...prev, [peerId]: newStream };
-      });
+      syncRemoteTracksForPeer(peerId, pc);
 
-      if (event.track.kind === 'audio') {
-        setupRemoteAudioAnalysis(peerId, event.track);
+      if (incomingTrack.kind === 'audio') {
+        setupRemoteAudioAnalysis(peerId, incomingTrack);
       }
     };
 
@@ -275,30 +356,7 @@ export function useWebRTC({
     };
 
     return pc;
-  }, [sendRtcSignal, closePeer, setupRemoteAudioAnalysis, updateTracksForPeer, activeChannel, currentUserId]);
-
-  // Helper to sync all live receiver tracks into remoteStreams for a peer
-  const syncRemoteTracksForPeer = useCallback((peerId: string, pc: RTCPeerConnection) => {
-    const tracks: MediaStreamTrack[] = [];
-    pc.getTransceivers().forEach((t) => {
-      const track = t.receiver?.track;
-      if (track && track.readyState === 'live') {
-        tracks.push(track);
-        track.onunmute = () => {
-          syncRemoteTracksForPeer(peerId, pc);
-        };
-        track.onmute = () => {
-          syncRemoteTracksForPeer(peerId, pc);
-        };
-      }
-    });
-
-    if (tracks.length > 0) {
-      setRemoteStreams((prev) => {
-        return { ...prev, [peerId]: new MediaStream(tracks) };
-      });
-    }
-  }, []);
+  }, [sendRtcSignal, closePeer, setupRemoteAudioAnalysis, updateTracksForPeer, syncRemoteTracksForPeer, currentUserId]);
 
   // Handle incoming signaling messages
   const handleIncomingSignal = useCallback(async (fromUserId: string, signal: any) => {
@@ -307,7 +365,24 @@ export function useWebRTC({
     try {
       const pc = getOrCreatePeerConnection(fromUserId);
 
+      // Track manifest update
+      if (signal.type === 'track_manifest') {
+        peerTrackManifests.current.set(fromUserId, {
+          cameraTrackId: signal.cameraTrackId,
+          screenTrackId: signal.screenTrackId,
+        });
+        syncRemoteTracksForPeer(fromUserId, pc);
+        return;
+      }
+
       if (signal.type === 'offer') {
+        if (signal.cameraTrackId !== undefined || signal.screenTrackId !== undefined) {
+          peerTrackManifests.current.set(fromUserId, {
+            cameraTrackId: signal.cameraTrackId,
+            screenTrackId: signal.screenTrackId,
+          });
+        }
+
         const remoteDesc = signal.description || { type: 'offer', sdp: signal.sdp };
         const isPolite = currentUserId < fromUserId;
         const offerCollision = pc.signalingState !== 'stable' || isMakingOffer.current.get(fromUserId);
@@ -339,6 +414,9 @@ export function useWebRTC({
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
 
+        const cameraTrack = localCameraRef.current?.getVideoTracks()[0];
+        const screenTrack = localScreenRef.current?.getVideoTracks()[0];
+
         sendRtcSignal(fromUserId, {
           type: 'answer',
           sdp: pc.localDescription?.sdp,
@@ -346,8 +424,17 @@ export function useWebRTC({
             type: pc.localDescription?.type,
             sdp: pc.localDescription?.sdp,
           },
+          cameraTrackId: cameraTrack?.id || null,
+          screenTrackId: screenTrack?.id || null,
         });
       } else if (signal.type === 'answer') {
+        if (signal.cameraTrackId !== undefined || signal.screenTrackId !== undefined) {
+          peerTrackManifests.current.set(fromUserId, {
+            cameraTrackId: signal.cameraTrackId,
+            screenTrackId: signal.screenTrackId,
+          });
+        }
+
         const remoteDesc = signal.description || { type: 'answer', sdp: signal.sdp };
         if (pc.signalingState === 'have-local-offer') {
           await pc.setRemoteDescription(new RTCSessionDescription(remoteDesc));
@@ -376,9 +463,7 @@ export function useWebRTC({
 
   // Initiate offer to a peer
   const initiateOffer = useCallback(async (peerId: string) => {
-    console.log(`[WebRTC] Starting initiateOffer for peer: ${peerId}`);
     if (isMakingOffer.current.get(peerId)) {
-      console.log(`[WebRTC] Already making offer to peer: ${peerId}`);
       return;
     }
     try {
@@ -392,8 +477,10 @@ export function useWebRTC({
         offerToReceiveVideo: true,
       });
       await pc.setLocalDescription(offer);
-      
-      console.log(`[WebRTC] Offer created and set for peer: ${peerId}`);
+
+      const cameraTrack = localCameraRef.current?.getVideoTracks()[0];
+      const screenTrack = localScreenRef.current?.getVideoTracks()[0];
+
       sendRtcSignal(peerId, {
         type: 'offer',
         sdp: pc.localDescription?.sdp,
@@ -401,13 +488,15 @@ export function useWebRTC({
           type: pc.localDescription?.type,
           sdp: pc.localDescription?.sdp,
         },
+        cameraTrackId: cameraTrack?.id || null,
+        screenTrackId: screenTrack?.id || null,
       });
     } catch (err) {
       console.warn('[WebRTC] offer creation warning:', err);
     } finally {
       isMakingOffer.current.set(peerId, false);
     }
-  }, [activeChannel, getOrCreatePeerConnection, updateTracksForPeer, sendRtcSignal]);
+  }, [getOrCreatePeerConnection, updateTracksForPeer, sendRtcSignal]);
 
   const handleIncomingSignalRef = useRef(handleIncomingSignal);
   handleIncomingSignalRef.current = handleIncomingSignal;
@@ -466,25 +555,44 @@ export function useWebRTC({
       const isConnected = existing && (existing.connectionState === 'connected' || existing.connectionState === 'connecting');
       if (!isConnected) {
         if (currentUserId > peer.id) {
-          console.log(`[WebRTC] Sync effect initiating offer to peer: ${peer.id}`);
           initiateOffer(peer.id);
+        } else {
+          // If polite peer hasn't connected after a brief window, initiate as fallback
+          setTimeout(() => {
+            const currentPc = peerConnections.current.get(peer.id);
+            if (!currentPc || currentPc.connectionState === 'new' || currentPc.connectionState === 'disconnected') {
+              initiateOfferRef.current(peer.id);
+            }
+          }, 2000);
         }
       }
     });
   }, [peerIdsStr, isMediaChannel, currentUserId, initiateOffer, closePeer, closeAllPeers, peers]);
 
-  // Update tracks across all active peer connections when local streams change
+  // Update tracks and broadcast track manifest across all active peer connections when local streams change
   useEffect(() => {
     if (!isMediaChannel) return;
 
+    const cameraTrack = localCameraRef.current?.getVideoTracks()[0];
+    const screenTrack = localScreenRef.current?.getVideoTracks()[0];
+
     peerConnections.current.forEach((pc, peerId) => {
       updateTracksForPeer(pc);
+
+      // Broadcast manifest so peer knows which track is camera and which is screen
+      sendRtcSignal(peerId, {
+        type: 'track_manifest',
+        cameraTrackId: cameraTrack?.id || null,
+        screenTrackId: screenTrack?.id || null,
+        hasCamera: !!cameraTrack,
+        hasScreen: !!screenTrack,
+      });
+
       if (pc.signalingState === 'stable') {
-        console.log(`[WebRTC] Stream track state changed, renegotiating with peer ${peerId}`);
         initiateOfferRef.current(peerId);
       }
     });
-  }, [localAudioStream, localVideoStream, isMediaChannel, updateTracksForPeer]);
+  }, [localAudioStream, localCameraStream, localScreenStream, isMediaChannel, updateTracksForPeer, sendRtcSignal]);
 
   // Volume decibel analyzer for speaking indicator
   useEffect(() => {
@@ -540,6 +648,8 @@ export function useWebRTC({
   }, [closeAllPeers]);
 
   return {
+    remoteCameraStreams,
+    remoteScreenStreams,
     remoteStreams,
     remoteSpeaking,
     closePeer,

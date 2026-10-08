@@ -434,8 +434,9 @@ const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened:
 // Remote Video Player
 const RemoteVideoPlayer: React.FC<{ 
   stream: MediaStream | undefined;
+  isScreenSharing?: boolean;
   onOrientationChange?: (isVertical: boolean) => void;
-}> = ({ stream, onOrientationChange }) => {
+}> = ({ stream, isScreenSharing, onOrientationChange }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -466,7 +467,8 @@ const RemoteVideoPlayer: React.FC<{
         playsInline
         onLoadedMetadata={handleMetadata}
         onResize={handleMetadata}
-        className="w-full h-full object-contain bg-black rounded-3xl"
+        onTimeUpdate={handleMetadata}
+        className={`w-full h-full ${isScreenSharing ? 'object-contain' : 'object-cover'} bg-black rounded-3xl`}
       />
     </div>
   );
@@ -508,7 +510,8 @@ const LocalVideoPlayer: React.FC<{
         playsInline
         onLoadedMetadata={handleMetadata}
         onResize={handleMetadata}
-        className={`w-full h-full object-contain bg-black rounded-3xl ${isScreenSharing ? '' : 'transform scale-x-[-1]'}`}
+        onTimeUpdate={handleMetadata}
+        className={`w-full h-full ${isScreenSharing ? 'object-contain' : 'object-cover'} bg-black rounded-3xl ${isScreenSharing ? '' : 'transform scale-x-[-1]'}`}
       />
     </div>
   );
@@ -595,9 +598,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
 
-  // Local Reactive Media Streams
+  // Local Reactive Media Streams: separate Camera and Screen Share
   const [localAudioStream, setLocalAudioStream] = useState<MediaStream | null>(null);
-  const [activeVideoStream, setActiveVideoStream] = useState<MediaStream | null>(null);
+  const [localCameraStream, setLocalCameraStream] = useState<MediaStream | null>(null);
+  const [localScreenStream, setLocalScreenStream] = useState<MediaStream | null>(null);
 
   // Camera orientation states (vertical portrait vs horizontal widescreen)
   const [peerOrientations, setPeerOrientations] = useState<Record<string, boolean>>({});
@@ -675,16 +679,44 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     return voiceUsers;
   }, [voiceUsers, isMediaActive]);
 
-  const { remoteStreams, remoteSpeaking } = useWebRTC({
+  const {
+    remoteCameraStreams,
+    remoteScreenStreams,
+    remoteStreams,
+    remoteSpeaking,
+  } = useWebRTC({
     currentUserId: currentUser.id,
     activeChannel: isMediaActive ? 'video-general' : 'text-general',
     localAudioStream: outgoingAudioStream || localAudioStream,
-    localVideoStream: activeVideoStream,
+    localCameraStream: isVideoEnabled ? localCameraStream : null,
+    localScreenStream: isScreenSharing ? localScreenStream : null,
     peers: activePeers,
     sendRtcSignal,
     setRtcSignalHandler,
     setMediaHandlers,
   });
+
+  // Listen for device orientation changes (mobile rotation portrait/landscape)
+  useEffect(() => {
+    const handleOrientation = () => {
+      if (cameraStreamRef.current) {
+        const track = cameraStreamRef.current.getVideoTracks()[0];
+        const settings = track?.getSettings?.();
+        const isVert = settings?.height && settings?.width
+          ? settings.height > settings.width
+          : window.innerHeight > window.innerWidth;
+        setIsLocalVertical(isVert);
+        updateUser({ is_vertical: isVert });
+      }
+    };
+
+    window.addEventListener('resize', handleOrientation);
+    window.addEventListener('orientationchange', handleOrientation);
+    return () => {
+      window.removeEventListener('resize', handleOrientation);
+      window.removeEventListener('orientationchange', handleOrientation);
+    };
+  }, [updateUser]);
 
   // Sync scroll to bottom on new messages
   useEffect(() => {
@@ -850,13 +882,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       setMicError('Could not access microphone.');
     }
 
+    let isVert = false;
     if (withVideo) {
       setIsCameraStarting(true);
       try {
         videoStream = await captureUserCamera();
         cameraStreamRef.current = videoStream;
-        setActiveVideoStream(videoStream);
+        setLocalCameraStream(videoStream);
         setIsVideoEnabled(true);
+
+        const track = videoStream.getVideoTracks()[0];
+        const s = track?.getSettings?.();
+        isVert = s?.height && s?.width ? s.height > s.width : window.innerHeight > window.innerWidth;
+        setIsLocalVertical(isVert);
       } catch (err: any) {
         setCameraError('Could not access camera.');
         setIsVideoEnabled(false);
@@ -871,6 +909,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     updateUser({
       current_channel: 'video-general',
       has_video: !!videoStream,
+      is_vertical: isVert,
       is_speaking: false,
       is_muted: false,
       is_deafened: false,
@@ -884,10 +923,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         cameraStreamRef.current.getTracks().forEach((track) => track.stop());
         cameraStreamRef.current = null;
       }
+      setLocalCameraStream(null);
       setIsVideoEnabled(false);
-      if (!isScreenSharing) {
-        setActiveVideoStream(null);
-      }
       updateUser({ has_video: false });
     } else {
       setIsCameraStarting(true);
@@ -895,11 +932,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       try {
         const stream = await captureUserCamera();
         cameraStreamRef.current = stream;
+        setLocalCameraStream(stream);
         setIsVideoEnabled(true);
-        if (!isScreenSharing) {
-          setActiveVideoStream(stream);
-        }
-        updateUser({ has_video: true });
+
+        const track = stream.getVideoTracks()[0];
+        const s = track?.getSettings?.();
+        const isVert = s?.height && s?.width ? s.height > s.width : window.innerHeight > window.innerWidth;
+        setIsLocalVertical(isVert);
+
+        updateUser({ has_video: true, is_vertical: isVert });
       } catch (err: any) {
         setCameraError('Camera access denied or unavailable.');
         setIsVideoEnabled(false);
@@ -916,9 +957,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         screenStreamRef.current.getTracks().forEach((t) => t.stop());
         screenStreamRef.current = null;
       }
+      setLocalScreenStream(null);
       setIsScreenSharing(false);
-      setActiveVideoStream(cameraStreamRef.current || null);
-      updateUser({ is_screen_sharing: false, has_video: isVideoEnabled });
+      updateUser({ is_screen_sharing: false });
     } else {
       try {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
@@ -931,14 +972,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         });
 
         screenStreamRef.current = screenStream;
+        setLocalScreenStream(screenStream);
         setIsScreenSharing(true);
-        setActiveVideoStream(screenStream);
-        updateUser({ is_screen_sharing: true, has_video: true });
+        updateUser({ is_screen_sharing: true });
 
         screenStream.getVideoTracks()[0].onended = () => {
+          if (screenStreamRef.current) {
+            screenStreamRef.current.getTracks().forEach((t) => t.stop());
+            screenStreamRef.current = null;
+          }
+          setLocalScreenStream(null);
           setIsScreenSharing(false);
-          setActiveVideoStream(cameraStreamRef.current || null);
-          updateUser({ is_screen_sharing: false, has_video: isVideoEnabled });
+          updateUser({ is_screen_sharing: false });
         };
       } catch {
         // Screen share dismissed
@@ -962,7 +1007,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     }
 
     setLocalAudioStream(null);
-    setActiveVideoStream(null);
+    setLocalCameraStream(null);
+    setLocalScreenStream(null);
     setIsInVideo(false);
     setIsVideoEnabled(false);
     setIsScreenSharing(false);
@@ -1887,37 +1933,20 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 {isInVideo ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-5xl">
                     
-                    {/* Local User Tile */}
+                    {/* Local User Camera / Avatar Tile */}
                     <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
-                      isLocalVertical && isVideoEnabled && !isScreenSharing ? 'aspect-[9/16] max-w-[280px] sm:max-w-[320px] mx-auto w-full' : 'aspect-video w-full'
+                      isLocalVertical && isVideoEnabled ? 'aspect-[9/16] max-w-[280px] sm:max-w-[320px] mx-auto w-full' : 'aspect-video w-full'
                     } ${
                       isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
                     }`}>
-                      {isScreenSharing ? (
-                        <div className="flex flex-col items-center justify-center text-center p-6 space-y-3 z-10 w-full h-full bg-[#0e0e14]">
-                          <div className="w-14 h-14 rounded-2xl bg-blue-600/20 border border-blue-500/40 text-blue-400 flex items-center justify-center shadow-lg shadow-blue-600/20">
-                            <Monitor className="w-7 h-7" />
-                          </div>
-                          <div className="space-y-1">
-                            <h4 className="text-white font-extrabold text-sm tracking-wide">
-                              You're sharing your screen
-                            </h4>
-                            <p className="text-[11px] text-zinc-400">
-                              Participants can see your screen in real time
-                            </p>
-                          </div>
-                          <button
-                            onClick={toggleScreenShare}
-                            className="px-3.5 py-1.5 rounded-xl bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 text-xs font-bold transition-all cursor-pointer"
-                          >
-                            Stop Sharing
-                          </button>
-                        </div>
-                      ) : isVideoEnabled && activeVideoStream ? (
+                      {isVideoEnabled && localCameraStream ? (
                         <LocalVideoPlayer 
-                          stream={activeVideoStream} 
+                          stream={localCameraStream} 
                           isScreenSharing={false}
-                          onOrientationChange={(isVert) => setIsLocalVertical(isVert)}
+                          onOrientationChange={(isVert) => {
+                            setIsLocalVertical(isVert);
+                            updateUser({ is_vertical: isVert });
+                          }}
                         />
                       ) : (
                         <div className="relative flex items-center justify-center">
@@ -1933,56 +1962,136 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       )}
 
                       {/* Bottom-Left Overlay */}
-                      <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between">
-                        <div className="text-sm font-extrabold text-white">
-                          {currentUser.username} (You)
+                      <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-10">
+                        <div className="text-sm font-extrabold text-white flex items-center gap-2">
+                          <span>{currentUser.username} (You)</span>
+                          {isVideoEnabled && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-600/60 text-blue-200">Camera</span>}
                         </div>
 
                         {isMuted && <MicOff className="w-4 h-4 text-red-400" />}
                       </div>
                     </div>
 
+                    {/* Local User Screen Share Tile (SEPARATE TILE) */}
+                    {isScreenSharing && localScreenStream && (
+                      <div className="relative rounded-3xl overflow-hidden bg-[#0c0c10] border border-blue-500/40 shadow-2xl aspect-video w-full flex flex-col items-center justify-center screenshare-container group">
+                        <LocalVideoPlayer 
+                          stream={localScreenStream} 
+                          isScreenSharing={true}
+                        />
+
+                        {/* Top Badges Overlay */}
+                        <div className="absolute top-3 inset-x-3 flex items-center justify-between z-10">
+                          <div className="px-2.5 py-1 rounded-lg bg-black/70 backdrop-blur border border-white/10 text-white text-xs font-bold flex items-center gap-1.5">
+                            <Monitor className="w-3.5 h-3.5 text-blue-400" />
+                            <span>Your Screen Share</span>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-black text-[10px] font-black uppercase tracking-wider">
+                            ● LIVE
+                          </span>
+                        </div>
+
+                        {/* Bottom Overlay with Stop Sharing */}
+                        <div className="absolute inset-x-0 bottom-0 p-3.5 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex items-center justify-between z-10">
+                          <span className="text-xs text-zinc-300 font-medium">Viewing real-time stream</span>
+                          <button
+                            onClick={toggleScreenShare}
+                            className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-bold transition-all shadow-lg cursor-pointer"
+                          >
+                            Stop Sharing
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Remote Peers Tiles */}
                     {voiceUsers.map((u: any) => {
-                      const stream = remoteStreams[u.id];
+                      const peerCamStream = remoteCameraStreams[u.id] || (u.has_video && !u.is_screen_sharing ? remoteStreams[u.id] : undefined);
+                      const peerScreenStream = remoteScreenStreams[u.id] || (u.is_screen_sharing ? remoteStreams[u.id] : undefined);
+                      
                       const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
-                      const hasPeerVideo = stream && stream.getVideoTracks().some((t) => t.enabled && t.readyState === 'live');
-                      const isPeerVertical = peerOrientations[u.id];
+                      const hasPeerVideo = Boolean(u.has_video || (peerCamStream && peerCamStream.getVideoTracks().some((t) => t.readyState === 'live')));
+                      const isPeerVertical = Boolean(u.is_vertical || peerOrientations[u.id]);
 
                       return (
-                        <div key={u.id} className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
-                          isPeerVertical && hasPeerVideo ? 'aspect-[9/16] max-w-[280px] sm:max-w-[320px] mx-auto w-full' : 'aspect-video w-full'
-                        } ${
-                          isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
-                        }`}>
-                          {hasPeerVideo ? (
-                            <RemoteVideoPlayer 
-                              stream={stream} 
-                              onOrientationChange={(isVert) => {
-                                setPeerOrientations((prev) => ({ ...prev, [u.id]: isVert }));
-                              }}
-                            />
-                          ) : (
-                            <div className="relative flex items-center justify-center">
-                              <div 
-                                className={`w-28 h-28 rounded-full flex items-center justify-center text-3xl font-black text-black shadow-2xl transition-all ${
-                                  isPeerSpeaking ? 'ring-4 ring-amber-500 shadow-[0_0_30px_#f59e0b]' : 'ring-2 ring-white/10'
-                                }`}
-                                style={{ backgroundColor: u.avatar_color || '#0066ff' }}
-                              >
-                                {u.username.slice(0, 2).toUpperCase()}
+                        <React.Fragment key={u.id}>
+                          {/* Peer Camera / Avatar Tile */}
+                          <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                            isPeerVertical && hasPeerVideo ? 'aspect-[9/16] max-w-[280px] sm:max-w-[320px] mx-auto w-full' : 'aspect-video w-full'
+                          } ${
+                            isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
+                          }`}>
+                            {hasPeerVideo ? (
+                              <RemoteVideoPlayer 
+                                stream={peerCamStream || remoteStreams[u.id]} 
+                                isScreenSharing={false}
+                                onOrientationChange={(isVert) => {
+                                  setPeerOrientations((prev) => ({ ...prev, [u.id]: isVert }));
+                                }}
+                              />
+                            ) : (
+                              <div className="relative flex items-center justify-center">
+                                <div 
+                                  className={`w-28 h-28 rounded-full flex items-center justify-center text-3xl font-black text-black shadow-2xl transition-all ${
+                                    isPeerSpeaking ? 'ring-4 ring-amber-500 shadow-[0_0_30px_#f59e0b]' : 'ring-2 ring-white/10'
+                                  }`}
+                                  style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+                                >
+                                  {u.username.slice(0, 2).toUpperCase()}
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-10">
+                              <div className="text-sm font-extrabold text-white flex items-center gap-2">
+                                <span>{u.username}</span>
+                                {hasPeerVideo && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-600/60 text-blue-200">Camera</span>}
+                              </div>
+
+                              {u.is_muted && <MicOff className="w-4 h-4 text-zinc-400" />}
+                            </div>
+                          </div>
+
+                          {/* Peer Screen Share Tile (SEPARATE TILE) */}
+                          {u.is_screen_sharing && (
+                            <div className="relative rounded-3xl overflow-hidden bg-[#0c0c10] border border-blue-500/40 shadow-2xl aspect-video w-full flex flex-col items-center justify-center screenshare-container group">
+                              <RemoteVideoPlayer 
+                                stream={peerScreenStream || remoteStreams[u.id]} 
+                                isScreenSharing={true}
+                              />
+
+                              {/* Top Badges Overlay */}
+                              <div className="absolute top-3 inset-x-3 flex items-center justify-between z-10">
+                                <div className="px-2.5 py-1 rounded-lg bg-black/70 backdrop-blur border border-white/10 text-white text-xs font-bold flex items-center gap-1.5">
+                                  <Monitor className="w-3.5 h-3.5 text-blue-400" />
+                                  <span>{u.username}'s Screen</span>
+                                </div>
+                                <span className="px-2 py-0.5 rounded-full bg-emerald-500 text-black text-[10px] font-black uppercase tracking-wider">
+                                  ● LIVE
+                                </span>
+                              </div>
+
+                              <div className="absolute inset-x-0 bottom-0 p-3.5 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex items-center justify-between z-10">
+                                <span className="text-xs text-zinc-300 font-medium">{u.username} is presenting</span>
+                                <button
+                                  onClick={(e) => {
+                                    const container = (e.currentTarget as HTMLElement).closest('.screenshare-container');
+                                    if (container) {
+                                      if (document.fullscreenElement) {
+                                        document.exitFullscreen().catch(() => {});
+                                      } else {
+                                        container.requestFullscreen().catch(() => {});
+                                      }
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-all cursor-pointer"
+                                >
+                                  Fullscreen
+                                </button>
                               </div>
                             </div>
                           )}
-
-                          <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between">
-                            <div className="text-sm font-extrabold text-white">
-                              {u.username}
-                            </div>
-
-                            {u.is_muted && <MicOff className="w-4 h-4 text-zinc-400" />}
-                          </div>
-                        </div>
+                        </React.Fragment>
                       );
                     })}
 
