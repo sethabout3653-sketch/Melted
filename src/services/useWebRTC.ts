@@ -368,7 +368,7 @@ export function useWebRTC({
         if (currentUserId > peerId) {
           setTimeout(() => {
             initiateOfferRef.current(peerId);
-          }, 1500);
+          }, 200);
         }
       }
     };
@@ -596,7 +596,7 @@ export function useWebRTC({
             if (!currentPc || currentPc.connectionState === 'new' || currentPc.connectionState === 'disconnected') {
               initiateOfferRef.current(peer.id);
             }
-          }, 2000);
+          }, 300);
         }
       }
     });
