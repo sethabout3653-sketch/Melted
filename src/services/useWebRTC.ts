@@ -226,6 +226,13 @@ export function useWebRTC({
       console.log(`[WebRTC] ontrack received for peer ${peerId}, kind: ${event.track.kind}`);
       const incomingTrack = event.track;
       
+      incomingTrack.onunmute = () => {
+        syncRemoteTracksForPeer(peerId, pc);
+      };
+      incomingTrack.onmute = () => {
+        syncRemoteTracksForPeer(peerId, pc);
+      };
+
       setRemoteStreams((prev) => {
         const existing = prev[peerId];
         let tracks: MediaStreamTrack[] = [];
@@ -257,6 +264,29 @@ export function useWebRTC({
     return pc;
   }, [sendRtcSignal, closePeer, setupRemoteAudioAnalysis, updateTracksForPeer, activeChannel, currentUserId]);
 
+  // Helper to sync all live receiver tracks into remoteStreams for a peer
+  const syncRemoteTracksForPeer = useCallback((peerId: string, pc: RTCPeerConnection) => {
+    const tracks: MediaStreamTrack[] = [];
+    pc.getTransceivers().forEach((t) => {
+      const track = t.receiver?.track;
+      if (track && track.readyState === 'live') {
+        tracks.push(track);
+        track.onunmute = () => {
+          syncRemoteTracksForPeer(peerId, pc);
+        };
+        track.onmute = () => {
+          syncRemoteTracksForPeer(peerId, pc);
+        };
+      }
+    });
+
+    if (tracks.length > 0) {
+      setRemoteStreams((prev) => {
+        return { ...prev, [peerId]: new MediaStream(tracks) };
+      });
+    }
+  }, []);
+
   // Handle incoming signaling messages
   const handleIncomingSignal = useCallback(async (fromUserId: string, signal: any) => {
     if (!signal) return;
@@ -281,6 +311,7 @@ export function useWebRTC({
         }
 
         await pc.setRemoteDescription(new RTCSessionDescription(remoteDesc));
+        syncRemoteTracksForPeer(fromUserId, pc);
 
         // Drain candidate queue
         const queue = candidateQueues.current.get(fromUserId) || [];
@@ -307,6 +338,7 @@ export function useWebRTC({
         const remoteDesc = signal.description || { type: 'answer', sdp: signal.sdp };
         if (pc.signalingState === 'have-local-offer') {
           await pc.setRemoteDescription(new RTCSessionDescription(remoteDesc));
+          syncRemoteTracksForPeer(fromUserId, pc);
 
           // Drain candidate queue
           const queue = candidateQueues.current.get(fromUserId) || [];
@@ -327,7 +359,7 @@ export function useWebRTC({
     } catch (err) {
       console.warn('[WebRTC] signal warning:', err);
     }
-  }, [getOrCreatePeerConnection, sendRtcSignal, updateTracksForPeer, currentUserId]);
+  }, [getOrCreatePeerConnection, sendRtcSignal, updateTracksForPeer, currentUserId, syncRemoteTracksForPeer]);
 
   // Initiate offer to a peer
   const initiateOffer = useCallback(async (peerId: string) => {
@@ -432,8 +464,12 @@ export function useWebRTC({
   useEffect(() => {
     if (!isMediaChannel) return;
 
-    peerConnections.current.forEach((pc) => {
+    peerConnections.current.forEach((pc, peerId) => {
       updateTracksForPeer(pc);
+      if (pc.signalingState === 'stable') {
+        console.log(`[WebRTC] Stream track state changed, renegotiating with peer ${peerId}`);
+        initiateOfferRef.current(peerId);
+      }
     });
   }, [localAudioStream, localVideoStream, isMediaChannel, updateTracksForPeer]);
 

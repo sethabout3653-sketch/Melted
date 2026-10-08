@@ -432,7 +432,10 @@ const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened:
 };
 
 // Remote Video Player
-const RemoteVideoPlayer: React.FC<{ stream: MediaStream | undefined }> = ({ stream }) => {
+const RemoteVideoPlayer: React.FC<{ 
+  stream: MediaStream | undefined;
+  onOrientationChange?: (isVertical: boolean) => void;
+}> = ({ stream, onOrientationChange }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -444,35 +447,70 @@ const RemoteVideoPlayer: React.FC<{ stream: MediaStream | undefined }> = ({ stre
     }
   }, [stream]);
 
+  const handleMetadata = () => {
+    if (videoRef.current) {
+      const { videoWidth, videoHeight } = videoRef.current;
+      if (videoWidth && videoHeight) {
+        const isVert = videoHeight > videoWidth;
+        onOrientationChange?.(isVert);
+      }
+    }
+  };
+
   return (
-    <video
-      ref={videoRef}
-      autoPlay
-      playsInline
-      className="w-full h-full object-cover bg-black rounded-3xl"
-    />
+    <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden rounded-3xl">
+      <video
+        ref={videoRef}
+        autoPlay
+        muted
+        playsInline
+        onLoadedMetadata={handleMetadata}
+        onResize={handleMetadata}
+        className="w-full h-full object-contain bg-black rounded-3xl"
+      />
+    </div>
   );
 };
 
 // Local Video Player
-const LocalVideoPlayer: React.FC<{ stream: MediaStream | null }> = ({ stream }) => {
+const LocalVideoPlayer: React.FC<{ 
+  stream: MediaStream | null; 
+  isScreenSharing?: boolean;
+  onOrientationChange?: (isVertical: boolean) => void;
+}> = ({ stream, isScreenSharing, onOrientationChange }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
     if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
+      if (videoRef.current.srcObject !== stream) {
+        videoRef.current.srcObject = stream;
+      }
       videoRef.current.play().catch(() => {});
     }
   }, [stream]);
 
+  const handleMetadata = () => {
+    if (videoRef.current) {
+      const { videoWidth, videoHeight } = videoRef.current;
+      if (videoWidth && videoHeight) {
+        const isVert = videoHeight > videoWidth;
+        onOrientationChange?.(isVert);
+      }
+    }
+  };
+
   return (
-    <video
-      ref={videoRef}
-      autoPlay
-      muted
-      playsInline
-      className="w-full h-full object-cover bg-black rounded-3xl transform scale-x-[-1]"
-    />
+    <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden rounded-3xl">
+      <video
+        ref={videoRef}
+        autoPlay
+        muted
+        playsInline
+        onLoadedMetadata={handleMetadata}
+        onResize={handleMetadata}
+        className={`w-full h-full object-contain bg-black rounded-3xl ${isScreenSharing ? '' : 'transform scale-x-[-1]'}`}
+      />
+    </div>
   );
 };
 
@@ -560,6 +598,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   // Local Reactive Media Streams
   const [localAudioStream, setLocalAudioStream] = useState<MediaStream | null>(null);
   const [activeVideoStream, setActiveVideoStream] = useState<MediaStream | null>(null);
+
+  // Camera orientation states (vertical portrait vs horizontal widescreen)
+  const [peerOrientations, setPeerOrientations] = useState<Record<string, boolean>>({});
+  const [isLocalVertical, setIsLocalVertical] = useState(false);
 
   // Media Stream refs
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -719,6 +761,32 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     }
   }, [localAudioStream, isMuted, isMicTesting]);
 
+  // Camera capture helper that adapts to mobile vertical portrait vs desktop widescreen
+  const captureUserCamera = async (): Promise<MediaStream> => {
+    const isMobileDevice = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (window.innerWidth < 768);
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: isMobileDevice
+          ? {
+              facingMode: 'user',
+              width: { ideal: 1080 },
+              height: { ideal: 1920 },
+            }
+          : {
+              facingMode: 'user',
+              width: { ideal: 1280 },
+              height: { ideal: 720 },
+            },
+        audio: false,
+      });
+    } catch {
+      return await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user' },
+        audio: false,
+      });
+    }
+  };
+
   // Join Voice Channel
   const joinVoiceChannel = async (withVideo: boolean = false) => {
     setMicError(null);
@@ -730,9 +798,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     try {
       audioStream = await navigator.mediaDevices.getUserMedia({
         audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          echoCancellation: { ideal: true },
+          noiseSuppression: { ideal: true },
+          autoGainControl: { ideal: true },
+          channelCount: 1,
         },
         video: false,
       });
@@ -747,15 +816,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     if (withVideo) {
       setIsCameraStarting(true);
       try {
-        videoStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: 'user',
-          },
-          audio: false,
-        });
-
+        videoStream = await captureUserCamera();
         cameraStreamRef.current = videoStream;
         setActiveVideoStream(videoStream);
         setIsVideoEnabled(true);
@@ -795,15 +856,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       setIsCameraStarting(true);
       setCameraError(null);
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: 'user',
-          },
-          audio: false,
-        });
-
+        const stream = await captureUserCamera();
         cameraStreamRef.current = stream;
         setIsVideoEnabled(true);
         if (!isScreenSharing) {
@@ -833,7 +886,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       try {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
-          audio: true,
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            suppressLocalAudioPlayback: true,
+          } as any,
         });
 
         screenStreamRef.current = screenStream;
@@ -1794,11 +1851,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-5xl">
                     
                     {/* Local User Tile */}
-                    <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 aspect-video flex flex-col items-center justify-center shadow-2xl ${
+                    <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                      isLocalVertical && isVideoEnabled ? 'aspect-[9/16] max-w-[280px] sm:max-w-[320px] mx-auto w-full' : 'aspect-video w-full'
+                    } ${
                       isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
                     }`}>
                       {isVideoEnabled && activeVideoStream ? (
-                        <LocalVideoPlayer stream={activeVideoStream} />
+                        <LocalVideoPlayer 
+                          stream={activeVideoStream} 
+                          isScreenSharing={isScreenSharing}
+                          onOrientationChange={(isVert) => setIsLocalVertical(isVert)}
+                        />
                       ) : (
                         <div className="relative flex items-center justify-center">
                           <div 
@@ -1827,13 +1890,21 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       const stream = remoteStreams[u.id];
                       const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
                       const hasPeerVideo = stream && stream.getVideoTracks().some((t) => t.enabled && t.readyState === 'live');
+                      const isPeerVertical = peerOrientations[u.id];
 
                       return (
-                        <div key={u.id} className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 aspect-video flex flex-col items-center justify-center shadow-2xl ${
+                        <div key={u.id} className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                          isPeerVertical && hasPeerVideo ? 'aspect-[9/16] max-w-[280px] sm:max-w-[320px] mx-auto w-full' : 'aspect-video w-full'
+                        } ${
                           isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
                         }`}>
                           {hasPeerVideo ? (
-                            <RemoteVideoPlayer stream={stream} />
+                            <RemoteVideoPlayer 
+                              stream={stream} 
+                              onOrientationChange={(isVert) => {
+                                setPeerOrientations((prev) => ({ ...prev, [u.id]: isVert }));
+                              }}
+                            />
                           ) : (
                             <div className="relative flex items-center justify-center">
                               <div 
