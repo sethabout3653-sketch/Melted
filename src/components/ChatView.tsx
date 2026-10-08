@@ -613,6 +613,52 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
   const [micError, setMicError] = useState<string | null>(null);
 
+  // Mixed outgoing audio stream (microphone + crystal-clear screen share audio, without looping back to local speakers)
+  const [outgoingAudioStream, setOutgoingAudioStream] = useState<MediaStream | null>(null);
+  const audioMixerContextRef = useRef<AudioContext | null>(null);
+
+  useEffect(() => {
+    const screenAudioTracks = screenStreamRef.current?.getAudioTracks() || [];
+    const hasScreenAudio = screenAudioTracks.length > 0;
+
+    if (!hasScreenAudio) {
+      setOutgoingAudioStream(localAudioStream);
+      return;
+    }
+
+    try {
+      if (!audioMixerContextRef.current || audioMixerContextRef.current.state === 'closed') {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        audioMixerContextRef.current = new AudioCtx();
+      }
+      const ctx = audioMixerContextRef.current;
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+
+      const dest = ctx.createMediaStreamDestination();
+
+      if (localAudioStream && localAudioStream.getAudioTracks().length > 0) {
+        const micSource = ctx.createMediaStreamSource(localAudioStream);
+        micSource.connect(dest);
+      }
+
+      const screenSource = ctx.createMediaStreamSource(new MediaStream([screenAudioTracks[0]]));
+      // NOTE: Connect ONLY to dest (transmitted over WebRTC to other peers).
+      // DO NOT connect to ctx.destination (local speakers), so the sharing user hears ZERO echo!
+      screenSource.connect(dest);
+
+      setOutgoingAudioStream(dest.stream);
+
+      screenAudioTracks[0].onended = () => {
+        setOutgoingAudioStream(localAudioStream);
+      };
+    } catch (err) {
+      console.warn('Audio mixer note:', err);
+      setOutgoingAudioStream(localAudioStream);
+    }
+  }, [localAudioStream, isScreenSharing]);
+
   // Connected peers in voice and video channels
   const voiceUsers = useMemo(() => {
     return users.filter(
@@ -632,7 +678,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const { remoteStreams, remoteSpeaking } = useWebRTC({
     currentUserId: currentUser.id,
     activeChannel: isMediaActive ? 'video-general' : 'text-general',
-    localAudioStream,
+    localAudioStream: outgoingAudioStream || localAudioStream,
     localVideoStream: activeVideoStream,
     peers: activePeers,
     sendRtcSignal,
@@ -763,25 +809,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
   // Camera capture helper that adapts to mobile vertical portrait vs desktop widescreen
   const captureUserCamera = async (): Promise<MediaStream> => {
-    const isMobileDevice = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) || (window.innerWidth < 768);
     try {
       return await navigator.mediaDevices.getUserMedia({
-        video: isMobileDevice
-          ? {
-              facingMode: 'user',
-              width: { ideal: 1080 },
-              height: { ideal: 1920 },
-            }
-          : {
-              facingMode: 'user',
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-            },
+        video: {
+          facingMode: 'user',
+        },
         audio: false,
       });
     } catch {
       return await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' },
+        video: true,
         audio: false,
       });
     }
@@ -1852,14 +1889,34 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     
                     {/* Local User Tile */}
                     <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
-                      isLocalVertical && isVideoEnabled ? 'aspect-[9/16] max-w-[280px] sm:max-w-[320px] mx-auto w-full' : 'aspect-video w-full'
+                      isLocalVertical && isVideoEnabled && !isScreenSharing ? 'aspect-[9/16] max-w-[280px] sm:max-w-[320px] mx-auto w-full' : 'aspect-video w-full'
                     } ${
                       isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
                     }`}>
-                      {isVideoEnabled && activeVideoStream ? (
+                      {isScreenSharing ? (
+                        <div className="flex flex-col items-center justify-center text-center p-6 space-y-3 z-10 w-full h-full bg-[#0e0e14]">
+                          <div className="w-14 h-14 rounded-2xl bg-blue-600/20 border border-blue-500/40 text-blue-400 flex items-center justify-center shadow-lg shadow-blue-600/20">
+                            <Monitor className="w-7 h-7" />
+                          </div>
+                          <div className="space-y-1">
+                            <h4 className="text-white font-extrabold text-sm tracking-wide">
+                              You're sharing your screen
+                            </h4>
+                            <p className="text-[11px] text-zinc-400">
+                              Participants can see your screen in real time
+                            </p>
+                          </div>
+                          <button
+                            onClick={toggleScreenShare}
+                            className="px-3.5 py-1.5 rounded-xl bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-500/30 text-xs font-bold transition-all cursor-pointer"
+                          >
+                            Stop Sharing
+                          </button>
+                        </div>
+                      ) : isVideoEnabled && activeVideoStream ? (
                         <LocalVideoPlayer 
                           stream={activeVideoStream} 
-                          isScreenSharing={isScreenSharing}
+                          isScreenSharing={false}
                           onOrientationChange={(isVert) => setIsLocalVertical(isVert)}
                         />
                       ) : (

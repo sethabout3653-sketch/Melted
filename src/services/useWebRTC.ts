@@ -155,6 +155,9 @@ export function useWebRTC({
     const videoTransceiver = transceivers.find((t) => t.receiver.track.kind === 'video');
 
     if (audioTransceiver) {
+      if (audioTrack && audioTransceiver.direction !== 'sendrecv') {
+        audioTransceiver.direction = 'sendrecv';
+      }
       if (audioTransceiver.sender.track !== audioTrack) {
         audioTransceiver.sender.replaceTrack(audioTrack).catch((err) => {
           console.warn('[WebRTC] replaceTrack audio warning:', err);
@@ -165,6 +168,16 @@ export function useWebRTC({
     }
 
     if (videoTransceiver) {
+      if (videoTrack) {
+        if (videoTransceiver.direction !== 'sendrecv') {
+          console.log('[WebRTC] Setting video transceiver direction to sendrecv');
+          videoTransceiver.direction = 'sendrecv';
+        }
+      } else {
+        if (videoTransceiver.direction !== 'recvonly') {
+          videoTransceiver.direction = 'recvonly';
+        }
+      }
       if (videoTransceiver.sender.track !== videoTrack) {
         videoTransceiver.sender.replaceTrack(videoTrack).catch((err) => {
           console.warn('[WebRTC] replaceTrack video warning:', err);
@@ -376,7 +389,7 @@ export function useWebRTC({
 
       const offer = await pc.createOffer({
         offerToReceiveAudio: true,
-        offerToReceiveVideo: activeChannel === 'video-general',
+        offerToReceiveVideo: true,
       });
       await pc.setLocalDescription(offer);
       
