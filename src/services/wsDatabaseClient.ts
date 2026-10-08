@@ -256,21 +256,6 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     }
   }, []);
 
-  const sendAudioChunk = useCallback((chunk: ArrayBuffer) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(chunk);
-    }
-  }, []);
-
-  const joinRoom = useCallback((room: string) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'JOIN_ROOM',
-        room,
-      }));
-    }
-  }, []);
-
   const callUser = useCallback((targetUserId: string, callType: 'audio' | 'video') => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       const u = currentUserRef.current;
@@ -293,9 +278,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     deleteMessage,
     registerUser,
     callUser,
-    joinRoom,
     sendRtcSignal,
-    sendAudioChunk,
     setRtcSignalHandler,
     setUserCallHandler,
     setMediaHandlers,
