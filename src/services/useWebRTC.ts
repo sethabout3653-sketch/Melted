@@ -336,12 +336,9 @@ export function useWebRTC({
 
     pc.oniceconnectionstatechange = () => {
       console.log(`[WebRTC] Peer ${peerId} iceConnectionState:`, pc.iceConnectionState);
-      if (pc.iceConnectionState === 'failed') {
-        try {
-          pc.restartIce?.();
-        } catch (err) {
-          console.warn('[WebRTC] restartIce error:', err);
-        }
+      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+        console.log(`[WebRTC] Peer ${peerId} connection failed/disconnected, closing connection to force recreation.`);
+        closePeer(peerId);
       }
     };
 
@@ -382,9 +379,11 @@ export function useWebRTC({
   // Handle incoming signaling messages
   const handleIncomingSignal = useCallback(async (fromUserId: string, signal: any) => {
     if (!signal) return;
+    console.log(`[WebRTC] Received signal type ${signal.type} from ${fromUserId}`);
 
     try {
       const pc = getOrCreatePeerConnection(fromUserId);
+      console.log(`[WebRTC] Peer connection state for ${fromUserId}: ${pc.signalingState}`);
 
       // Track manifest update
       if (signal.type === 'track_manifest') {
