@@ -13,7 +13,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
   const [isConnected, setIsConnected] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<number>(2000);
+  const reconnectTimeoutRef = useRef<number>(500);
   const pingIntervalRef = useRef<any>(null);
 
   // Use a ref for currentUser to avoid reconnecting when only username/avatar changes
@@ -45,14 +45,14 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
   const startHeartbeat = useCallback(() => {
     if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
     
-    // Cloudflare Pages / Workers WebSocket 100s timeout prevention ping (sent every 25s)
+    // Cloudflare Pages / Workers WebSocket 100s timeout prevention ping (sent every 15s)
     pingIntervalRef.current = setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         try {
           wsRef.current.send(JSON.stringify({ type: 'PING', timestamp: Date.now() }));
         } catch {}
       }
-    }, 25000);
+    }, 15000);
   }, []);
 
   const stopHeartbeat = useCallback(() => {

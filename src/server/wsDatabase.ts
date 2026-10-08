@@ -472,14 +472,14 @@ export function initWebSocketDatabase(server: Server) {
       }
     });
 
-    // Cloudflare 100s timeout prevention: Server-side periodic ping every 30 seconds
+    // Cloudflare 100s timeout prevention: Server-side periodic ping every 20 seconds
     const serverHeartbeatInterval = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
         try {
           ws.send(JSON.stringify({ type: 'PING', timestamp: Date.now() }));
         } catch {}
       }
-    }, 30000);
+    }, 20000);
 
     ws.on('close', () => {
       clearInterval(serverHeartbeatInterval);
