@@ -349,14 +349,14 @@ window.addEventListener('message',function(e){
 });
 
 import http from 'http';
-import { initWebSocketDatabase } from './src/server/wsDatabase';
+import { initSocketIoDatabase } from './src/server/socketIoDatabase';
 
 // Serve frontend: Vite dev middlewares in development, static files in production
 async function startServer() {
   const server = http.createServer(app);
 
-  // Initialize PostgreSQL-like WebSocket Database on /ws-db
-  initWebSocketDatabase(server);
+  // Initialize Socket.io Database on /ws-db
+  initSocketIoDatabase(server);
 
   if (!IS_PROD) {
     const { createServer: createViteServer } = await import('vite');
