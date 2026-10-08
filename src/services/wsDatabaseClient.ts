@@ -190,8 +190,8 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
   }, []);
 
   // SQL-like INSERT
-  const insertMessage = useCallback((content: string, channelId: string = 'text-general') => {
-    if (!content.trim()) return;
+  const insertMessage = useCallback((content: string, channelId: string = 'text-general', attachment?: { url: string; type: 'image' | 'video' | 'audio' | 'file' | 'gif' | string; name?: string }) => {
+    if (!content.trim() && !attachment) return;
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       const u = currentUserRef.current;
       wsRef.current.send(JSON.stringify({
@@ -203,6 +203,9 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
           sender_name: u.username,
           avatar_color: u.avatar_color,
           content: content.trim(),
+          attachment_url: attachment?.url,
+          attachment_type: attachment?.type,
+          attachment_name: attachment?.name,
           timestamp: 'Today at ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       }));

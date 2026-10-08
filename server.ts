@@ -9,7 +9,91 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const IS_PROD = process.env.NODE_ENV === 'production';
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+import fs from 'fs';
+
+// Ensure uploads directory exists for persistent local file hosting
+const uploadsDir = path.resolve(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', '*');
+  next();
+}, express.static(uploadsDir));
+
+// File Upload Endpoint
+app.post('/api/upload', (req, res) => {
+  try {
+    const { filename, base64Data, mimeType } = req.body;
+    if (!filename || !base64Data) {
+      return res.status(400).json({ error: 'Missing filename or base64 file data' });
+    }
+
+    const cleanBase64 = base64Data.replace(/^data:[^;]+;base64,/, '');
+    const buffer = Buffer.from(cleanBase64, 'base64');
+
+    const safeName = `${Date.now()}_${filename.replace(/[^a-zA-Z0-9_.-]/g, '_')}`;
+    const filePath = path.join(uploadsDir, safeName);
+
+    fs.writeFileSync(filePath, buffer);
+
+    const publicUrl = `/uploads/${safeName}`;
+    res.json({
+      success: true,
+      url: publicUrl,
+      filename,
+      size: buffer.length,
+      mimeType: mimeType || 'application/octet-stream',
+    });
+  } catch (err: any) {
+    console.error('File upload error:', err);
+    res.status(500).json({ error: 'Failed to upload file to server', message: err?.message });
+  }
+});
+
+// File Download Endpoint
+app.get('/api/download', async (req, res) => {
+  try {
+    const fileUrl = (req.query.url as string) || '';
+    const rawFilename = (req.query.filename as string) || 'download';
+    const filename = path.basename(rawFilename).replace(/[^\w.-]/g, '_') || 'download';
+
+    if (!fileUrl) {
+      return res.status(400).send('Missing url parameter');
+    }
+
+    if (fileUrl.startsWith('/uploads/')) {
+      const safeBasename = path.basename(fileUrl);
+      const localPath = path.join(uploadsDir, safeBasename);
+      if (fs.existsSync(localPath)) {
+        return res.download(localPath, filename);
+      }
+    }
+
+    const extRes = await fetch(fileUrl);
+    if (!extRes.ok) {
+      return res.status(extRes.status).send('Failed to fetch remote attachment');
+    }
+
+    const contentType = extRes.headers.get('content-type') || 'application/octet-stream';
+    const arrayBuffer = await extRes.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(filename)}"`);
+    res.setHeader('Content-Length', buffer.length.toString());
+    res.send(buffer);
+  } catch (err: any) {
+    console.error('Download endpoint error:', err);
+    res.status(500).send('Failed to download file');
+  }
+});
 
 // 14-Minute Self-Ping Keep-Alive for Render
 const FOURTEEN_MINUTES_MS = 14 * 60 * 1000;
@@ -48,6 +132,26 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
     service: 'Melted - Unblocked Arcade',
   });
+});
+
+// Giphy Search & Trending API Proxy (Supports full Giphy library, limit=50, pagination)
+app.get('/api/giphy/search', async (req, res) => {
+  const query = (req.query.q as string) || '';
+  const limit = (req.query.limit as string) || '50';
+  const offset = (req.query.offset as string) || '0';
+  const apiKey = process.env.GIPHY_API_KEY || 'sXpGFDGZs0Dv1mmNFvYaGUvYwKX0PWIh';
+
+  const endpoint = !query.trim() || query === 'trending'
+    ? `https://api.giphy.com/v1/gifs/trending?api_key=${apiKey}&limit=${limit}&offset=${offset}`
+    : `https://api.giphy.com/v1/gifs/search?api_key=${apiKey}&q=${encodeURIComponent(query)}&limit=${limit}&offset=${offset}`;
+
+  try {
+    const response = await fetch(endpoint);
+    const data = await response.json();
+    res.json(data);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to fetch Giphy GIFs', message: err?.message });
+  }
 });
 
 // Proxy game files to guarantee 100% reliable iframe loading

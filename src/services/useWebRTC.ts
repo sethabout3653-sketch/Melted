@@ -102,8 +102,8 @@ export function useWebRTC({
     candidateQueues.current.clear();
     isMakingOffer.current.clear();
     remoteAnalysers.current.clear();
-    setRemoteStreams({});
-    setRemoteSpeaking({});
+    setRemoteStreams((prev) => (Object.keys(prev).length === 0 ? prev : {}));
+    setRemoteSpeaking((prev) => (Object.keys(prev).length === 0 ? prev : {}));
   }, []);
 
   // Attach remote audio track to analyser to detect speech decibels
@@ -336,30 +336,43 @@ export function useWebRTC({
     }
   }, [activeChannel, getOrCreatePeerConnection, updateTracksForPeer, sendRtcSignal]);
 
+  const handleIncomingSignalRef = useRef(handleIncomingSignal);
+  handleIncomingSignalRef.current = handleIncomingSignal;
+
+  const initiateOfferRef = useRef(initiateOffer);
+  initiateOfferRef.current = initiateOffer;
+
+  const closePeerRef = useRef(closePeer);
+  closePeerRef.current = closePeer;
+
   // Register WebSocket Signal Handlers
   useEffect(() => {
     setRtcSignalHandler((fromUserId, signal) => {
-      handleIncomingSignal(fromUserId, signal);
+      handleIncomingSignalRef.current(fromUserId, signal);
     });
 
     setMediaHandlers(
       (userId, channel) => {
         if (isMediaChannel && userId !== currentUserId) {
           console.log(`[WebRTC] Peer ${userId} joined ${channel}. Initiating call immediately.`);
-          initiateOffer(userId);
+          initiateOfferRef.current(userId);
         }
       },
       (userId) => {
         console.log(`[WebRTC] Peer ${userId} left media.`);
-        closePeer(userId);
+        closePeerRef.current(userId);
       }
     );
-  }, [setRtcSignalHandler, setMediaHandlers, handleIncomingSignal, isMediaChannel, currentUserId, initiateOffer, closePeer]);
+  }, [setRtcSignalHandler, setMediaHandlers, isMediaChannel, currentUserId]);
+
+  const peerIdsStr = peers.map((p) => p.id).sort().join(',');
 
   // Synchronize peer connections with current channel peers
   useEffect(() => {
     if (!isMediaChannel) {
-      closeAllPeers();
+      if (peerConnections.current.size > 0) {
+        closeAllPeers();
+      }
       return;
     }
 
@@ -383,7 +396,7 @@ export function useWebRTC({
         }
       }
     });
-  }, [peers, isMediaChannel, currentUserId, initiateOffer, closePeer, closeAllPeers]);
+  }, [peerIdsStr, isMediaChannel, currentUserId, initiateOffer, closePeer, closeAllPeers]);
 
   // Update tracks across all active peer connections when local streams change
   useEffect(() => {
