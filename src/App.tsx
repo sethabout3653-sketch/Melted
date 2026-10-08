@@ -240,7 +240,9 @@ export default function App() {
   const hasMore = visibleCount < filteredGames.length;
 
   return (
-    <div className="min-h-screen bg-[#050505] text-[#f4f4f5] flex flex-col font-sans selection:bg-[#0066ff] selection:text-white">
+    <div className={`bg-[#050505] text-[#f4f4f5] flex flex-col font-sans selection:bg-[#0066ff] selection:text-white ${
+      currentTab === 'chat' ? 'h-screen h-[100dvh] overflow-hidden' : 'min-h-screen'
+    }`}>
       <FrostedLoadingScreen isLoading={isCatalogLoading} />
       
       {/* Top Navigation Bar: Sleek Black and Electric Blue */}
@@ -273,7 +275,9 @@ export default function App() {
 
       {/* Main View: Either Discord Chat OR Games Catalog */}
       {currentTab === 'chat' ? (
-        <ChatView globalChat={globalChat} />
+        <div className="flex-1 w-full h-[calc(100vh-64px)] overflow-hidden">
+          <ChatView globalChat={globalChat} />
+        </div>
       ) : (
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
           

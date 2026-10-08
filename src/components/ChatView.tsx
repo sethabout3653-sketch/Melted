@@ -23,7 +23,8 @@ import {
   Pause,
   Volume2,
   VolumeX,
-  Music
+  Music,
+  Menu
 } from 'lucide-react';
 import { GiphyFetch } from '@giphy/js-fetch-api';
 import { useWebRTC } from '../services/useWebRTC';
@@ -439,16 +440,7 @@ const RemoteVideoPlayer: React.FC<{
 }> = ({ stream, isScreenSharing, onOrientationChange }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  useEffect(() => {
-    if (videoRef.current && stream) {
-      if (videoRef.current.srcObject !== stream) {
-        videoRef.current.srcObject = stream;
-      }
-      videoRef.current.play().catch(() => {});
-    }
-  }, [stream]);
-
-  const handleMetadata = () => {
+  const handleMetadata = useCallback(() => {
     if (videoRef.current) {
       const { videoWidth, videoHeight } = videoRef.current;
       if (videoWidth && videoHeight) {
@@ -456,7 +448,31 @@ const RemoteVideoPlayer: React.FC<{
         onOrientationChange?.(isVert);
       }
     }
-  };
+  }, [onOrientationChange]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (stream && stream.getVideoTracks().length > 0) {
+      if (video.srcObject !== stream) {
+        video.srcObject = stream;
+      }
+      video.play().catch(() => {});
+
+      const track = stream.getVideoTracks()[0];
+      const onTrackActive = () => {
+        video.play().catch(() => {});
+        handleMetadata();
+      };
+      track.addEventListener('unmute', onTrackActive);
+      return () => {
+        track.removeEventListener('unmute', onTrackActive);
+      };
+    } else {
+      video.srcObject = null;
+    }
+  }, [stream, handleMetadata]);
 
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden rounded-3xl">
@@ -470,6 +486,14 @@ const RemoteVideoPlayer: React.FC<{
         onTimeUpdate={handleMetadata}
         className={`w-full h-full ${isScreenSharing ? 'object-contain' : 'object-cover'} bg-black rounded-3xl`}
       />
+      {(!stream || stream.getVideoTracks().length === 0) && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-xs text-zinc-400 gap-2">
+          <div className="w-7 h-7 rounded-full border-2 border-blue-500 border-t-transparent animate-spin" />
+          <span className="text-[11px] font-bold tracking-wide">
+            {isScreenSharing ? 'Connecting to screen...' : 'Connecting camera...'}
+          </span>
+        </div>
+      )}
     </div>
   );
 };
@@ -482,16 +506,7 @@ const LocalVideoPlayer: React.FC<{
 }> = ({ stream, isScreenSharing, onOrientationChange }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
-  useEffect(() => {
-    if (videoRef.current && stream) {
-      if (videoRef.current.srcObject !== stream) {
-        videoRef.current.srcObject = stream;
-      }
-      videoRef.current.play().catch(() => {});
-    }
-  }, [stream]);
-
-  const handleMetadata = () => {
+  const handleMetadata = useCallback(() => {
     if (videoRef.current) {
       const { videoWidth, videoHeight } = videoRef.current;
       if (videoWidth && videoHeight) {
@@ -499,7 +514,21 @@ const LocalVideoPlayer: React.FC<{
         onOrientationChange?.(isVert);
       }
     }
-  };
+  }, [onOrientationChange]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    if (stream && stream.getVideoTracks().length > 0) {
+      if (video.srcObject !== stream) {
+        video.srcObject = stream;
+      }
+      video.play().catch(() => {});
+    } else {
+      video.srcObject = null;
+    }
+  }, [stream]);
 
   return (
     <div className="relative w-full h-full flex items-center justify-center bg-black overflow-hidden rounded-3xl">
@@ -565,6 +594,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const [isGiphyOpen, setIsGiphyOpen] = useState(false);
   const [giphySearch, setGiphySearch] = useState('');
   const [activeCategoryLabel, setActiveCategoryLabel] = useState('🔥 Trending');
+
+  // Mobile Responsive Drawer & Member List States
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [showMemberList, setShowMemberList] = useState(false);
 
   // Call & Audio Level States
   const [audioLevel, setAudioLevel] = useState<number>(0);
@@ -1243,8 +1276,22 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   };
 
   return (
-    <div className="flex h-screen bg-[#08080a] text-zinc-100 font-sans antialiased overflow-hidden select-none">
+    <div className="flex-1 w-full min-h-0 bg-[#08080a] text-zinc-100 font-sans antialiased overflow-hidden select-none flex flex-col md:flex-row relative h-full">
       
+      {/* Mobile Backdrops */}
+      {isMobileSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/70 backdrop-blur-xs z-40 md:hidden" 
+          onClick={() => setIsMobileSidebarOpen(false)} 
+        />
+      )}
+      {showMemberList && (
+        <div 
+          className="fixed inset-0 bg-black/70 backdrop-blur-xs z-40 xl:hidden" 
+          onClick={() => setShowMemberList(false)} 
+        />
+      )}
+
       {/* Hidden Global File Input */}
       <input 
         type="file" 
@@ -1264,7 +1311,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       ))}
 
       {/* LEFT NAVIGATION SIDEBAR */}
-      <aside className="w-64 bg-[#0c0c0f] border-r border-[#1a1a20] flex flex-col justify-between shrink-0">
+      <aside className={`fixed inset-y-0 left-0 z-50 w-72 bg-[#0c0c0f] border-r border-[#1a1a20] flex flex-col justify-between shadow-2xl transition-transform duration-300 md:relative md:translate-x-0 md:w-64 md:z-auto md:shadow-none shrink-0 ${
+        isMobileSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'
+      }`}>
         <div className="p-4 space-y-6">
           
           {/* Header Branding */}
@@ -1278,6 +1327,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-blue-400' : 'bg-amber-400'}`} />
               </div>
             </div>
+            <button
+              onClick={() => setIsMobileSidebarOpen(false)}
+              className="md:hidden p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 cursor-pointer"
+              title="Close menu"
+            >
+              <X className="w-5 h-5" />
+            </button>
           </div>
 
           {/* CHANNELS SECTION */}
@@ -1290,7 +1346,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               </div>
 
               <button
-                onClick={() => handleChannelSelect('text-general')}
+                onClick={() => {
+                  handleChannelSelect('text-general');
+                  setIsMobileSidebarOpen(false);
+                }}
                 className={`w-full px-3 py-2.5 rounded-xl flex items-center justify-between transition-all cursor-pointer ${
                   activeChannel === 'text-general'
                     ? 'bg-blue-600 text-white font-extrabold shadow-md shadow-blue-600/20'
@@ -1319,7 +1378,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               </div>
 
               <button
-                onClick={() => handleChannelSelect('video-general')}
+                onClick={() => {
+                  handleChannelSelect('video-general');
+                  setIsMobileSidebarOpen(false);
+                }}
                 className={`w-full px-3 py-2.5 rounded-xl flex items-center justify-between transition-all cursor-pointer ${
                   activeChannel === 'video-general'
                     ? 'bg-blue-600 text-white font-extrabold shadow-md shadow-blue-600/20'
@@ -1459,25 +1521,43 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             <div className="flex-1 flex flex-col min-w-0 relative">
               
               {/* Top Header */}
-              <header className="h-14 px-4 border-b border-[#1a1a20] flex items-center justify-between bg-[#08080a] shrink-0">
-                <div className="flex items-center gap-3 min-w-0">
-                  <Hash className="w-5 h-5 text-white" />
+              <header className="h-14 px-3 sm:px-4 border-b border-[#1a1a20] flex items-center justify-between bg-[#08080a] shrink-0">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  <button
+                    onClick={() => setIsMobileSidebarOpen(true)}
+                    className="md:hidden p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 transition-colors"
+                    title="Channels"
+                  >
+                    <Menu className="w-5 h-5" />
+                  </button>
+                  <Hash className="w-5 h-5 text-white shrink-0" />
                   <span className="font-extrabold text-white text-base">general</span>
-                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-600/15 text-blue-400 border border-blue-500/20 flex items-center gap-1.5">
+                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-600/15 text-blue-400 border border-blue-500/20 flex items-center gap-1.5 shrink-0">
                     <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
                     {users.length} online
                   </span>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="relative">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="relative hidden sm:block">
                     <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-2.5" />
                     <input 
                       type="text" 
                       placeholder="Search messages"
-                      className="bg-[#121215] border border-[#222228] text-xs text-white placeholder-zinc-500 rounded-xl pl-9 pr-3 py-2 w-48 focus:outline-none focus:border-blue-500"
+                      className="bg-[#121215] border border-[#222228] text-xs text-white placeholder-zinc-500 rounded-xl pl-9 pr-3 py-2 w-36 md:w-48 focus:outline-none focus:border-blue-500"
                     />
                   </div>
+                  <button
+                    onClick={() => setShowMemberList(!showMemberList)}
+                    className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                      showMemberList 
+                        ? 'bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-600/30' 
+                        : 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10'
+                    }`}
+                    title="Toggle Member List"
+                  >
+                    <Users className="w-4 h-4" />
+                  </button>
                 </div>
               </header>
 
@@ -1850,8 +1930,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             </div>
 
             {/* Right Sidebar: Member List */}
-            <aside className="w-64 bg-[#08080a] border-l border-[#1a1a20] p-4 flex flex-col space-y-6 shrink-0">
+            <aside className={`${
+              showMemberList ? 'fixed inset-y-0 right-0 z-50 w-64 shadow-2xl bg-[#08080a]' : 'hidden xl:flex'
+            } w-64 bg-[#08080a] border-l border-[#1a1a20] p-4 flex flex-col space-y-6 shrink-0`}>
               
+              {showMemberList && (
+                <div className="flex items-center justify-between pb-2 border-b border-[#18181f] xl:hidden">
+                  <span className="text-xs font-bold text-white">Online Members</span>
+                  <button onClick={() => setShowMemberList(false)} className="p-1 rounded-lg text-zinc-400 hover:text-white cursor-pointer">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
               {/* ONLINE MEMBERS LIST */}
               <div className="space-y-3">
                 <div className="text-xs font-bold text-zinc-500 tracking-wider">
@@ -1901,37 +1992,60 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             <div className="flex-1 flex flex-col bg-[#050507] relative overflow-hidden">
               
               {/* Top Header */}
-              <div className="px-6 py-3.5 border-b border-[#1a1a20] bg-[#08080a] flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
+              <div className="px-4 sm:px-6 py-3.5 border-b border-[#1a1a20] bg-[#08080a] flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <button
+                    onClick={() => setIsMobileSidebarOpen(true)}
+                    className="md:hidden p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 transition-colors"
+                    title="Channels"
+                  >
+                    <Menu className="w-5 h-5" />
+                  </button>
+                  <div className="w-9 h-9 rounded-xl bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
                     <Mic className="w-5 h-5" />
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-white text-base">General Voice</span>
+                      <span className="font-extrabold text-white text-sm sm:text-base">General Voice</span>
                     </div>
-                    <span className="text-xs text-zinc-400 font-medium">
+                    <span className="text-[11px] sm:text-xs text-zinc-400 font-medium">
                       {voiceUsers.length + (isInVideo ? 1 : 0)} connected
                     </span>
                   </div>
                 </div>
 
-                <button
-                  onClick={toggleScreenShare}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border transition-all cursor-pointer ${
-                    isScreenSharing ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white/5 border-white/10 hover:bg-white/10 text-zinc-200'
-                  }`}
-                >
-                  <Monitor className="w-4 h-4" />
-                  <span>{isScreenSharing ? 'Stop Screen' : 'Share Screen'}</span>
-                </button>
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <button
+                    onClick={toggleScreenShare}
+                    className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border transition-all cursor-pointer ${
+                      isScreenSharing 
+                        ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/30' 
+                        : 'bg-white/5 border-white/10 hover:bg-white/10 text-zinc-200'
+                    }`}
+                  >
+                    <Monitor className="w-4 h-4" />
+                    <span className="hidden xs:inline">{isScreenSharing ? 'Stop Screen' : 'Share Screen'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => setShowMemberList(!showMemberList)}
+                    className={`p-2 rounded-xl border transition-all cursor-pointer ${
+                      showMemberList 
+                        ? 'bg-blue-600 text-white border-blue-500 shadow-md shadow-blue-600/30' 
+                        : 'bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10'
+                    }`}
+                    title="Toggle Member List"
+                  >
+                    <Users className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               {/* Voice / Video Stage Grid */}
-              <div className="flex-1 p-6 pb-28 flex items-center justify-center overflow-y-auto">
+              <div className="flex-1 p-3 sm:p-6 pb-28 flex items-center justify-center overflow-y-auto w-full">
                 
                 {isInVideo ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-5xl">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 w-full max-w-6xl">
                     
                     {/* Local User Camera / Avatar Tile */}
                     <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
@@ -1974,7 +2088,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                     {/* Local User Screen Share Tile (SEPARATE TILE) */}
                     {isScreenSharing && localScreenStream && (
-                      <div className="relative rounded-3xl overflow-hidden bg-[#0c0c10] border border-blue-500/40 shadow-2xl aspect-video w-full flex flex-col items-center justify-center screenshare-container group">
+                      <div className="relative rounded-3xl overflow-hidden bg-[#0c0c10] border border-blue-500/40 shadow-2xl aspect-video w-full col-span-1 sm:col-span-2 lg:col-span-2 flex flex-col items-center justify-center screenshare-container group">
                         <LocalVideoPlayer 
                           stream={localScreenStream} 
                           isScreenSharing={true}
@@ -2006,11 +2120,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                     {/* Remote Peers Tiles */}
                     {voiceUsers.map((u: any) => {
-                      const peerCamStream = remoteCameraStreams[u.id] || (u.has_video && !u.is_screen_sharing ? remoteStreams[u.id] : undefined);
-                      const peerScreenStream = remoteScreenStreams[u.id] || (u.is_screen_sharing ? remoteStreams[u.id] : undefined);
+                      const peerCamStream = remoteCameraStreams[u.id];
+                      const peerScreenStream = remoteScreenStreams[u.id];
                       
                       const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
-                      const hasPeerVideo = Boolean(u.has_video || (peerCamStream && peerCamStream.getVideoTracks().some((t) => t.readyState === 'live')));
+                      const hasPeerVideo = Boolean(u.has_video && peerCamStream && peerCamStream.getVideoTracks().length > 0);
                       const isPeerVertical = Boolean(u.is_vertical || peerOrientations[u.id]);
 
                       return (
@@ -2023,7 +2137,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                           }`}>
                             {hasPeerVideo ? (
                               <RemoteVideoPlayer 
-                                stream={peerCamStream || remoteStreams[u.id]} 
+                                stream={peerCamStream} 
                                 isScreenSharing={false}
                                 onOrientationChange={(isVert) => {
                                   setPeerOrientations((prev) => ({ ...prev, [u.id]: isVert }));
@@ -2035,9 +2149,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                                   className={`w-28 h-28 rounded-full flex items-center justify-center text-3xl font-black text-black shadow-2xl transition-all ${
                                     isPeerSpeaking ? 'ring-4 ring-amber-500 shadow-[0_0_30px_#f59e0b]' : 'ring-2 ring-white/10'
                                   }`}
-                                  style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+                                  style={{ 
+                                    backgroundColor: u.avatar_color || '#0066ff',
+                                    backgroundImage: u.avatar_url ? `url(${u.avatar_url})` : undefined,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center'
+                                  }}
                                 >
-                                  {u.username.slice(0, 2).toUpperCase()}
+                                  {!u.avatar_url && u.username.slice(0, 2).toUpperCase()}
                                 </div>
                               </div>
                             )}
@@ -2054,9 +2173,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                           {/* Peer Screen Share Tile (SEPARATE TILE) */}
                           {u.is_screen_sharing && (
-                            <div className="relative rounded-3xl overflow-hidden bg-[#0c0c10] border border-blue-500/40 shadow-2xl aspect-video w-full flex flex-col items-center justify-center screenshare-container group">
+                            <div className="relative rounded-3xl overflow-hidden bg-[#0c0c10] border border-blue-500/40 shadow-2xl aspect-video w-full col-span-1 sm:col-span-2 lg:col-span-2 flex flex-col items-center justify-center screenshare-container group">
                               <RemoteVideoPlayer 
-                                stream={peerScreenStream || remoteStreams[u.id]} 
+                                stream={peerScreenStream} 
                                 isScreenSharing={true}
                               />
 
@@ -2117,44 +2236,44 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
               {/* Floating Bottom In-Call Control Bar */}
               {isInVideo && (
-                <div className="absolute bottom-6 inset-x-0 flex items-center justify-center gap-4 z-30">
+                <div className="absolute bottom-4 sm:bottom-6 inset-x-0 flex items-center justify-center gap-3 sm:gap-4 z-30">
                   
                   {/* Mic Button */}
                   <button 
                     onClick={toggleMute}
-                    className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
+                    className={`w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
                       isMuted ? 'bg-red-600 text-white shadow-red-600/30' : 'bg-blue-600 text-white shadow-blue-600/30'
                     }`}
                     title={isMuted ? 'Unmute Mic' : 'Mute Mic'}
                   >
-                    {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
+                    {isMuted ? <MicOff className="w-5 h-5 sm:w-6 sm:h-6" /> : <Mic className="w-5 h-5 sm:w-6 sm:h-6" />}
                   </button>
 
                   {/* Camera Toggle Button */}
                   <button 
                     onClick={() => toggleCamera()}
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500"
+                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500"
                     title={isVideoEnabled ? 'Turn Off Camera' : 'Turn On Camera'}
                   >
-                    {isVideoEnabled ? <Video className="w-6 h-6" /> : <VideoOff className="w-6 h-6" />}
+                    {isVideoEnabled ? <Video className="w-5 h-5 sm:w-6 sm:h-6" /> : <VideoOff className="w-5 h-5 sm:w-6 sm:h-6" />}
                   </button>
 
                   {/* Screen Share Button */}
                   <button 
                     onClick={toggleScreenShare}
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500"
+                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500"
                     title="Share Screen"
                   >
-                    <Monitor className="w-6 h-6" />
+                    <Monitor className="w-5 h-5 sm:w-6 sm:h-6" />
                   </button>
 
                   {/* Disconnect Button */}
                   <button 
                     onClick={stopVoiceChannel}
-                    className="w-14 h-14 rounded-2xl bg-red-600 text-white flex items-center justify-center shadow-lg shadow-red-600/30 hover:bg-red-700 transition-all cursor-pointer"
+                    className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-red-600 text-white flex items-center justify-center shadow-lg shadow-red-600/30 hover:bg-red-700 transition-all cursor-pointer"
                     title="Disconnect"
                   >
-                    <PhoneOff className="w-6 h-6" />
+                    <PhoneOff className="w-5 h-5 sm:w-6 sm:h-6" />
                   </button>
 
                 </div>
@@ -2163,7 +2282,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             </div>
 
             {/* Right Sidebar in Voice Channel */}
-            <aside className="w-64 bg-[#08080a] border-l border-[#1a1a20] p-4 flex flex-col space-y-6 shrink-0">
+            <aside className={`${
+              showMemberList ? 'fixed inset-y-0 right-0 z-50 w-64 shadow-2xl bg-[#08080a]' : 'hidden xl:flex'
+            } w-64 bg-[#08080a] border-l border-[#1a1a20] p-4 flex flex-col space-y-6 shrink-0`}>
+              
+              {showMemberList && (
+                <div className="flex items-center justify-between pb-2 border-b border-[#18181f] xl:hidden">
+                  <span className="text-xs font-bold text-white">Voice Members</span>
+                  <button onClick={() => setShowMemberList(false)} className="p-1 rounded-lg text-zinc-400 hover:text-white cursor-pointer">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
               
               {/* VOICE USERS LIST */}
               <div className="space-y-3">

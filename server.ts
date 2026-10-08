@@ -156,6 +156,20 @@ app.get('/api/giphy/search', async (req, res) => {
 
 // Proxy game files to guarantee 100% reliable iframe loading
 // Fetches from RawGitHack first, with resilient fallback to GitHub Raw if Cloudflare restricts it
+app.get('/api/lumin.min.js', async (req, res) => {
+  try {
+    const response = await fetch('https://cdn.jsdelivr.net/gh/luminsdk/script@latest/lumin.min.js');
+    if (!response.ok) throw new Error('Failed to fetch from CDN');
+    const buffer = await response.arrayBuffer();
+    res.setHeader('Content-Type', 'application/javascript');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(Buffer.from(buffer));
+  } catch (err) {
+    res.status(500).send('/* Lumin SDK Load Error */');
+  }
+});
+
+// Proxy game files to guarantee 100% reliable iframe loading
 app.get('/api/raw/:filename', async (req, res) => {
   let filename = req.params.filename;
   if (!filename) {

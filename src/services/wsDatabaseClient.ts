@@ -7,7 +7,7 @@ export interface RtcSignalPayload {
   signal: any;
 }
 
-export function useWebSocketDatabase(currentUser: { id: string; username: string; avatar_color: string }) {
+export function useWebSocketDatabase(currentUser: { id: string; username: string; avatar_color: string; avatar_url?: string }) {
   const [users, setUsers] = useState<DbUser[]>([]);
   const [messages, setMessages] = useState<DbMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
@@ -85,6 +85,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
             id: u.id,
             username: u.username,
             avatar_color: u.avatar_color,
+            avatar_url: u.avatar_url || null,
             current_channel: 'text-general',
             is_speaking: false,
             is_muted: false,
@@ -202,6 +203,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
           sender_id: u.id,
           sender_name: u.username,
           avatar_color: u.avatar_color,
+          sender_avatar_url: u.avatar_url || null,
           content: content.trim(),
           attachment_url: attachment?.url,
           attachment_type: attachment?.type,
@@ -223,12 +225,13 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     }
   }, []);
 
-  const registerUser = useCallback((user: { id: string; username: string; avatar_color: string }) => {
+  const registerUser = useCallback((user: { id: string; username: string; avatar_color: string; avatar_url?: string }) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: 'REGISTER_USER',
         user: {
           ...user,
+          avatar_url: user.avatar_url || null,
           current_channel: 'text-general',
           is_speaking: false,
           is_muted: false,
