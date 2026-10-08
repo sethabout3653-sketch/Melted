@@ -29,32 +29,13 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
         {/* Left Column: Spotlight details */}
         <div className="lg:col-span-7 space-y-4">
           
-          {/* Tag row */}
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0066ff]/15 border border-[#0066ff]/30 text-[#60a5fa] text-xs font-bold uppercase tracking-wider">
-              <Zap className="w-3.5 h-3.5 fill-[#0066ff] text-[#0066ff]" /> Featured Title
-            </span>
-            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#18181b] border border-[#27272a] text-zinc-300 text-xs font-medium">
-              Instant Play
-            </span>
-            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-[#18181b] border border-[#27272a] text-zinc-300 text-xs font-medium">
-              <ShieldCheck className="w-3 h-3 text-[#0066ff]" /> Unblocked
-            </span>
-          </div>
-
           {/* Heading */}
           <div>
             <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight font-heading leading-tight">
               {activeGame.name}
             </h2>
             <div className="flex items-center gap-2 text-xs sm:text-sm text-zinc-400 mt-2 font-medium">
-              <span>{activeGame.author ? `By ${activeGame.author}` : 'Arcade Archive'}</span>
-              <span>·</span>
-              <span className="flex items-center text-[#60a5fa] font-semibold gap-1">
-                <Star className="w-3.5 h-3.5 fill-[#0066ff] text-[#0066ff]" /> 4.9
-              </span>
-              <span>·</span>
-              <span className="text-zinc-400">Arcade Library</span>
+              <span>{activeGame.author ? `By ${activeGame.author}` : activeGame.category}</span>
             </div>
           </div>
 

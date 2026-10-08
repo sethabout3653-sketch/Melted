@@ -255,12 +255,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   <h3 className="font-extrabold text-white text-sm sm:text-base truncate font-heading">
                     {game.name}
                   </h3>
-                  <span className="hidden sm:inline-flex px-2 py-0.5 rounded-full bg-[#0066ff]/15 text-[#3b82f6] border border-[#0066ff]/30 text-[10px] font-bold uppercase tracking-wider">
-                    {game.category.split(' ')[0]}
-                  </span>
                 </div>
                 <div className="text-[11px] text-zinc-400 truncate">
-                  {game.author ? `By ${game.author}` : 'Arcade Title'}
+                  {game.author ? `By ${game.author}` : game.category}
                 </div>
               </div>
             </div>

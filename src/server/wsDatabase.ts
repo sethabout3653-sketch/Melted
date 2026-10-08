@@ -22,7 +22,7 @@ export interface DbMessage {
   avatar_color: string;
   content: string;
   attachment_url?: string;
-  attachment_type?: 'image' | 'file' | 'gif';
+  attachment_type?: 'image' | 'video' | 'audio' | 'gif' | 'file' | string;
   attachment_name?: string;
   timestamp: string;
   created_at: number;
@@ -146,7 +146,10 @@ export function initWebSocketDatabase(server: Server) {
                 sender_id: msg.row.sender_id,
                 sender_name: msg.row.sender_name,
                 avatar_color: msg.row.avatar_color || '#0066ff',
-                content: msg.row.content,
+                content: msg.row.content || '',
+                attachment_url: msg.row.attachment_url,
+                attachment_type: msg.row.attachment_type,
+                attachment_name: msg.row.attachment_name,
                 timestamp: msg.row.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
                 created_at: Date.now(),
               };

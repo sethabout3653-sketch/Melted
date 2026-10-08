@@ -190,7 +190,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
   }, []);
 
   // SQL-like INSERT
-  const insertMessage = useCallback((content: string, channelId: string = 'text-general', attachment?: { url: string; type: 'image' | 'file' | 'gif'; name?: string }) => {
+  const insertMessage = useCallback((content: string, channelId: string = 'text-general', attachment?: { url: string; type: 'image' | 'video' | 'audio' | 'file' | 'gif' | string; name?: string }) => {
     if (!content.trim() && !attachment) return;
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       const u = currentUserRef.current;

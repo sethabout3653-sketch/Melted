@@ -89,13 +89,6 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
               }`}
             />
           </button>
-
-            {/* Featured badge */}
-            {game.featured ? (
-              <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-full bg-[#0066ff] text-white text-[9px] font-black uppercase tracking-wider shadow-sm flex items-center gap-1 font-heading">
-                <Flame className="w-2.5 h-2.5 fill-white text-white" /> Hot
-              </div>
-            ) : null}
         </div>
 
         {/* Title & Metadata */}
