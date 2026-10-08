@@ -400,14 +400,32 @@ const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened:
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    if (audioRef.current && stream) {
-      if (audioRef.current.srcObject !== stream) {
-        audioRef.current.srcObject = stream;
-      }
-      audioRef.current.muted = isDeafened;
-      audioRef.current.volume = Math.max(0, Math.min(1, volume));
-      audioRef.current.play().catch(() => {});
+    const el = audioRef.current;
+    if (!el || !stream) return;
+
+    if (el.srcObject !== stream) {
+      el.srcObject = stream;
     }
+    el.muted = isDeafened;
+    el.volume = Math.max(0, Math.min(1, volume));
+
+    const tryPlay = () => {
+      el.play().catch(() => {});
+    };
+
+    tryPlay();
+
+    const onUserGesture = () => {
+      tryPlay();
+    };
+
+    window.addEventListener('click', onUserGesture, { once: true });
+    window.addEventListener('keydown', onUserGesture, { once: true });
+
+    return () => {
+      window.removeEventListener('click', onUserGesture);
+      window.removeEventListener('keydown', onUserGesture);
+    };
   }, [stream, isDeafened, volume]);
 
   return <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />;
@@ -553,19 +571,25 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
   const [micError, setMicError] = useState<string | null>(null);
 
-  // Connected peers in channels
-  const videoUsers = useMemo(() => {
-    return users.filter((u: any) => u.current_channel === 'video-general' && u.id !== currentUser.id);
+  // Connected peers in voice and video channels
+  const voiceUsers = useMemo(() => {
+    return users.filter(
+      (u: any) =>
+        (u.current_channel === 'video-general' || u.current_channel === 'voice-general') &&
+        u.id !== currentUser.id
+    );
   }, [users, currentUser.id]);
 
+  const isMediaActive = activeChannel === 'video-general' || isInVideo;
+
   const activePeers = useMemo(() => {
-    if (activeChannel !== 'video-general' && !isInVideo) return [];
-    return videoUsers;
-  }, [videoUsers, activeChannel, isInVideo]);
+    if (!isMediaActive) return [];
+    return voiceUsers;
+  }, [voiceUsers, isMediaActive]);
 
   const { remoteStreams, remoteSpeaking } = useWebRTC({
     currentUserId: currentUser.id,
-    activeChannel: (activeChannel === 'video-general' || isInVideo) ? 'video-general' : 'text-general',
+    activeChannel: isMediaActive ? 'video-general' : 'text-general',
     localAudioStream,
     localVideoStream: activeVideoStream,
     peers: activePeers,
@@ -1090,11 +1114,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         accept="*"
       />
 
-      {/* Render Remote WebRTC Peer Audio Elements */}
-      {videoUsers.map((u: any) => (
+      {/* Render Remote WebRTC Peer Audio Elements for all active streams */}
+      {Object.entries(remoteStreams).map(([peerId, stream]) => (
         <RemoteAudioPlayer
-          key={u.id}
-          stream={remoteStreams[u.id]}
+          key={peerId}
+          stream={stream}
           isDeafened={isDeafened}
         />
       ))}
@@ -1167,7 +1191,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   <span className="text-xs">General Voice</span>
                 </div>
                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-600/20 text-blue-400 font-bold border border-blue-500/30">
-                  {videoUsers.length + (isInVideo ? 1 : 0)}
+                  {voiceUsers.length + (isInVideo ? 1 : 0)}
                 </span>
               </button>
             </div>
@@ -1747,7 +1771,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       <span className="font-extrabold text-white text-base">General Voice</span>
                     </div>
                     <span className="text-xs text-zinc-400 font-medium">
-                      {videoUsers.length + (isInVideo ? 1 : 0)} connected
+                      {voiceUsers.length + (isInVideo ? 1 : 0)} connected
                     </span>
                   </div>
                 </div>
@@ -1799,7 +1823,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     </div>
 
                     {/* Remote Peers Tiles */}
-                    {videoUsers.map((u: any) => {
+                    {voiceUsers.map((u: any) => {
                       const stream = remoteStreams[u.id];
                       const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
                       const hasPeerVideo = stream && stream.getVideoTracks().some((t) => t.enabled && t.readyState === 'live');
@@ -1908,7 +1932,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-xs font-bold text-blue-400 tracking-wider uppercase">
                   <Mic className="w-4 h-4" />
-                  <span>VOICE — {videoUsers.length + (isInVideo ? 1 : 0)}</span>
+                  <span>VOICE — {voiceUsers.length + (isInVideo ? 1 : 0)}</span>
                 </div>
 
                 <div className="space-y-2">
@@ -1935,7 +1959,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     </div>
                   )}
 
-                  {videoUsers.map((u: any) => (
+                  {voiceUsers.map((u: any) => (
                     <div key={u.id} className="p-2.5 rounded-2xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-between">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="relative shrink-0">
@@ -1960,7 +1984,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               {/* ONLINE MEMBERS */}
               <div className="space-y-3">
                 <div className="text-xs font-bold text-zinc-500 tracking-wider">
-                  <span>ONLINE — {users.length - (videoUsers.length + (isInVideo ? 1 : 0))}</span>
+                  <span>ONLINE — {users.length - (voiceUsers.length + (isInVideo ? 1 : 0))}</span>
                 </div>
               </div>
 
