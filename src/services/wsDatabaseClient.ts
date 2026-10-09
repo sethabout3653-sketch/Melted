@@ -45,10 +45,13 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     const socket = io({ 
       path: '/ws-db',
       reconnection: true,
-      reconnectionAttempts: 10,
-      reconnectionDelay: 500,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
+      reconnectionAttempts: 20,
+      reconnectionDelay: 100,
+      reconnectionDelayMax: 1000,
+      timeout: 10000,
+      // Aggressive heartbeat as requested
+      pingInterval: 100,
+      pingTimeout: 1000,
     });
     socketRef.current = socket;
 

@@ -28,6 +28,7 @@ interface UseWebRTCProps {
     onJoined: (userId: string, channel: string) => void,
     onLeft: (userId: string, channel: string) => void
   ) => void;
+  isConnected: boolean;
 }
 
 export function useWebRTC({
@@ -40,6 +41,7 @@ export function useWebRTC({
   sendRtcSignal,
   setRtcSignalHandler,
   setMediaHandlers,
+  isConnected,
 }: UseWebRTCProps) {
   // Remote Media Streams
   const [remoteCameraStreams, setRemoteCameraStreams] = useState<Record<string, MediaStream>>({});
@@ -566,12 +568,14 @@ export function useWebRTC({
 
   // Synchronize peer connections with current channel peers
   useEffect(() => {
-    if (!isMediaChannel) {
+    if (!isMediaChannel || !isConnected) {
       if (peerConnections.current.size > 0) {
         closeAllPeers();
       }
       return;
     }
+    
+    console.log(`[WebRTC] Synchronizing peers, isConnected: ${isConnected}`);
 
     const peerIds = new Set(peers.map((p) => p.id));
 
@@ -603,7 +607,7 @@ export function useWebRTC({
         }
       }
     });
-  }, [peerIdsStr, isMediaChannel, currentUserId, initiateOffer, closePeer, closeAllPeers, peers]);
+  }, [peerIdsStr, isMediaChannel, currentUserId, initiateOffer, closePeer, closeAllPeers, peers, isConnected]);
 
   // Update tracks and broadcast track manifest across all active peer connections when local streams change
   useEffect(() => {

@@ -727,6 +727,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     sendRtcSignal,
     setRtcSignalHandler,
     setMediaHandlers,
+    isConnected,
   });
 
   // Listen for device orientation changes (mobile rotation portrait/landscape)
