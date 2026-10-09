@@ -588,12 +588,15 @@ export function useWebRTC({
       const isConnected = existing && (existing.connectionState === 'connected' || existing.connectionState === 'connecting');
       if (!isConnected) {
         if (currentUserId > peer.id) {
+          console.log(`[WebRTC] Initiating offer to peer ${peer.id} (caller)`);
           initiateOffer(peer.id);
         } else {
+          console.log(`[WebRTC] Waiting for offer from peer ${peer.id} (callee)`);
           // If polite peer hasn't connected after a brief window, initiate as fallback
           setTimeout(() => {
             const currentPc = peerConnections.current.get(peer.id);
             if (!currentPc || currentPc.connectionState === 'new' || currentPc.connectionState === 'disconnected') {
+              console.log(`[WebRTC] Fallback: initiating offer to peer ${peer.id}`);
               initiateOfferRef.current(peer.id);
             }
           }, 300);

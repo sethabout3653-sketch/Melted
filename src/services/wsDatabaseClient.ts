@@ -42,7 +42,14 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
   }, []);
 
   useEffect(() => {
-    const socket = io({ path: '/ws-db' });
+    const socket = io({ 
+      path: '/ws-db',
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
+    });
     socketRef.current = socket;
 
     socket.on('connect', () => {

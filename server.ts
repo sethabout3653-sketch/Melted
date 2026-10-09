@@ -206,7 +206,7 @@ app.get('/api/raw/:filename', async (req, res) => {
 
     // Desktop Spoofing, GPU Acceleration, Inactivity Wake-Up, & Batch Save Sync for School Chromebooks
     const desktopSpoof = `<script>(function(){try{
-var u='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+var u='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36';
 Object.defineProperty(navigator,'userAgent',{get:function(){return u},configurable:true});
 Object.defineProperty(navigator,'platform',{get:function(){return'Win32'},configurable:true});
 Object.defineProperty(navigator,'vendor',{get:function(){return'Google Inc.'},configurable:true});
