@@ -64,7 +64,8 @@ export default function App() {
   const { isGameCached, cacheProgress, cachedIds } = useGameCache(allGames);
 
   // Global Chat and Notifications
-  const globalChat = useGlobalChat({ isChatTabActive: currentTab === 'chat' });
+  const chatOptions = useMemo(() => ({ isChatTabActive: currentTab === 'chat' }), [currentTab]);
+  const globalChat = useGlobalChat(chatOptions);
 
   useEffect(() => {
     if (currentTab === 'chat' && globalChat.activeNotification) {

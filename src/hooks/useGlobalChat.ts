@@ -177,9 +177,17 @@ export function useGlobalChat(options?: { isChatTabActive?: boolean }) {
     }
   }, [messages, currentUser.id, isChatTabActive]);
 
+  const setCurrentUserPersisted = useCallback((user: typeof currentUser) => {
+    localStorage.setItem('frosted_chat_user_id', user.id);
+    localStorage.setItem('frosted_chat_username', user.username);
+    localStorage.setItem('frosted_chat_usercolor', user.avatar_color);
+    localStorage.setItem('frosted_chat_user_avatar', user.avatar_url || '');
+    setCurrentUser(user);
+  }, []);
+
   return {
     currentUser,
-    setCurrentUser,
+    setCurrentUser: setCurrentUserPersisted,
     incomingCall,
     outgoingCall,
     activeNotification,
