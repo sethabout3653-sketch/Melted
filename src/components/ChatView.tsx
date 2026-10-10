@@ -1806,8 +1806,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 aspect-video flex flex-col items-center justify-center shadow-2xl ${
                       isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
                     }`}>
-                      {isVideoEnabled && activeVideoStream ? (
-                        <LocalVideoPlayer stream={activeVideoStream} />
+                      {isVideoEnabled && cameraStreamRef.current ? (
+                        <LocalVideoPlayer stream={cameraStreamRef.current} />
                       ) : isCameraStarting ? (
                         <div className="w-full h-full flex items-center justify-center bg-[#1a1a20] rounded-3xl text-xs text-zinc-400">
                           Camera starting...
@@ -1830,10 +1830,21 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         <div className="text-sm font-extrabold text-white">
                           {currentUser.username} (You)
                         </div>
-
-                        {isMuted && <MicOff className="w-4 h-4 text-red-400" />}
+                        <div className="flex gap-1.5">
+                          {isMuted && <MicOff className="w-4 h-4 text-red-400" />}
+                        </div>
                       </div>
                     </div>
+
+                    {/* Local Screen Share Tile */}
+                    {isScreenSharing && screenStreamRef.current && (
+                        <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-white/10 aspect-video shadow-2xl">
+                          <RemoteVideoPlayer stream={screenStreamRef.current} isCameraStarting={false} />
+                           <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between">
+                            <div className="text-sm font-extrabold text-white">Your Screen</div>
+                          </div>
+                        </div>
+                    )}
 
                     {/* Remote Peers Tiles */}
                     {voiceUsers.map((u: any) => {
