@@ -16,6 +16,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
   const reconnectTimeoutRef = useRef<any>(null);
   const pingIntervalRef = useRef<any>(null);
   const connectionAttemptRef = useRef(0);
+  const wsUrlRef = useRef<string>('');
 
   const currentUserRef = useRef(currentUser);
   currentUserRef.current = currentUser;
@@ -62,8 +63,18 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     }
   }, []);
 
+  // Build WebSocket URL - works across localhost, IP, and domain
+  const getWebSocketUrl = useCallback(() => {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    const wsUrl = `${protocol}//${host}/ws-db`;
+    console.log('[WS] Computed URL:', wsUrl);
+    return wsUrl;
+  }, []);
+
   const connect = useCallback(() => {
     if (wsRef.current && (wsRef.current.readyState === WebSocket.CONNECTING || wsRef.current.readyState === WebSocket.OPEN)) {
+      console.log('[WS] Already connected or connecting');
       return;
     }
 
@@ -71,21 +82,23 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     connectionAttemptRef.current++;
 
     try {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws-db`;
+      const wsUrl = getWebSocketUrl();
+      wsUrlRef.current = wsUrl;
       
+      console.log('[WS] Attempting WebSocket connection to:', wsUrl);
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       const connectionTimeout = setTimeout(() => {
         if (ws.readyState === WebSocket.CONNECTING) {
+          console.warn('[WS] Connection timeout (5s), closing');
           ws.close();
         }
       }, 5000);
 
       ws.onopen = () => {
         clearTimeout(connectionTimeout);
-        console.log('[WS] Connected');
+        console.log('[WS] Connected successfully');
         connectionAttemptRef.current = 0;
         setIsConnected(true);
         startHeartbeat();
@@ -108,6 +121,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
               is_screen_sharing: false,
             },
           }));
+          console.log('[WS] User registered:', u.id);
         } catch (e) {
           console.warn('[WS] Register failed:', e);
         }
@@ -125,6 +139,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
           }
           
           if (msg.type === 'DB_INIT') {
+            console.log('[WS] Received DB_INIT with', msg.tables?.users?.length || 0, 'users');
             if (msg.tables?.users && Array.isArray(msg.tables.users)) {
               setUsers(msg.tables.users);
             }
@@ -133,8 +148,10 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
             }
           } else if (msg.type === 'DB_SYNC') {
             if (msg.table === 'users' && Array.isArray(msg.data)) {
+              console.log('[WS] DB_SYNC users:', msg.data.length);
               setUsers(msg.data);
             } else if (msg.table === 'messages' && Array.isArray(msg.data)) {
+              console.log('[WS] DB_SYNC messages:', msg.data.length);
               setMessages(msg.data);
             }
           } else if (msg.type === 'RTC_SIGNAL') {
@@ -160,12 +177,13 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
       };
 
       ws.onclose = () => {
-        console.log('[WS] Closed');
+        console.log('[WS] Closed, will reconnect');
         setIsConnected(false);
         stopHeartbeat();
         wsRef.current = null;
         
         const delayMs = Math.min(500 + connectionAttemptRef.current * 300, 5000);
+        console.log('[WS] Reconnecting in', delayMs, 'ms');
         if (!reconnectTimeoutRef.current) {
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectTimeoutRef.current = null;
@@ -190,7 +208,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
         }, delayMs);
       }
     }
-  }, [startHeartbeat, stopHeartbeat]);
+  }, [getWebSocketUrl, startHeartbeat, stopHeartbeat]);
 
   useEffect(() => {
     connect();
