@@ -238,28 +238,38 @@ const RemoteVideoPlayer: React.FC<{
 }> = ({ stream, username, avatarColor, onOrientationChange }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isVertical, setIsVertical] = useState(false);
+
+  const checkOrientation = useCallback(() => {
+    const video = videoRef.current;
+    if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+      const vertical = video.videoHeight > video.videoWidth;
+      onOrientationChange?.(vertical);
+      setIsLoaded(true);
+    }
+  }, [onOrientationChange]);
 
   useEffect(() => {
     setIsLoaded(false);
     const video = videoRef.current;
-    if (video && stream) {
-      if (video.srcObject !== stream) {
+    if (video) {
+      if (stream && video.srcObject !== stream) {
         video.srcObject = stream;
       }
-      video.play().catch(() => {});
+      if (stream) {
+        video.play().catch(() => {});
+      }
     }
-  }, [stream]);
 
-  const checkOrientation = () => {
-    const video = videoRef.current;
-    if (video && video.videoWidth > 0 && video.videoHeight > 0) {
-      const vertical = video.videoHeight > video.videoWidth;
-      setIsVertical(vertical);
-      onOrientationChange?.(vertical);
-      setIsLoaded(true);
-    }
-  };
+    // Interval to detect when mobile camera video frames/dimensions are ready
+    const interval = setInterval(() => {
+      const vid = videoRef.current;
+      if (vid && vid.videoWidth > 0 && vid.videoHeight > 0) {
+        checkOrientation();
+      }
+    }, 150);
+
+    return () => clearInterval(interval);
+  }, [stream, checkOrientation]);
 
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-black">
@@ -280,7 +290,7 @@ const RemoteVideoPlayer: React.FC<{
         </div>
       )}
 
-      {/* Video element (muted prevents iOS autoplay restriction) */}
+      {/* Video element */}
       <video
         ref={videoRef}
         autoPlay
@@ -289,27 +299,13 @@ const RemoteVideoPlayer: React.FC<{
         onLoadedMetadata={checkOrientation}
         onLoadedData={checkOrientation}
         onCanPlay={checkOrientation}
+        onPlaying={checkOrientation}
+        onTimeUpdate={checkOrientation}
+        onResize={checkOrientation}
         className={`w-full h-full object-cover rounded-3xl transition-opacity duration-300 ${
           isLoaded ? 'opacity-100' : 'opacity-0'
         }`}
       />
-
-      {/* Camera Orientation Indicator Badge */}
-      {isLoaded && (
-        <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-semibold text-zinc-200 shadow-sm pointer-events-none">
-          {isVertical ? (
-            <>
-              <Smartphone className="w-3 h-3 text-cyan-400 shrink-0" />
-              <span>Vertical (Mobile)</span>
-            </>
-          ) : (
-            <>
-              <Monitor className="w-3 h-3 text-blue-400 shrink-0" />
-              <span>Horizontal</span>
-            </>
-          )}
-        </div>
-      )}
     </div>
   );
 };
@@ -322,28 +318,37 @@ const LocalVideoPlayer: React.FC<{
 }> = ({ stream, isLoading, onOrientationChange }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isVertical, setIsVertical] = useState(false);
+
+  const checkOrientation = useCallback(() => {
+    const video = videoRef.current;
+    if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+      const vertical = video.videoHeight > video.videoWidth;
+      onOrientationChange?.(vertical);
+      setIsLoaded(true);
+    }
+  }, [onOrientationChange]);
 
   useEffect(() => {
     setIsLoaded(false);
     const video = videoRef.current;
-    if (video && stream) {
-      if (video.srcObject !== stream) {
+    if (video) {
+      if (stream && video.srcObject !== stream) {
         video.srcObject = stream;
       }
-      video.play().catch(() => {});
+      if (stream) {
+        video.play().catch(() => {});
+      }
     }
-  }, [stream]);
 
-  const checkOrientation = () => {
-    const video = videoRef.current;
-    if (video && video.videoWidth > 0 && video.videoHeight > 0) {
-      const vertical = video.videoHeight > video.videoWidth;
-      setIsVertical(vertical);
-      onOrientationChange?.(vertical);
-      setIsLoaded(true);
-    }
-  };
+    const interval = setInterval(() => {
+      const vid = videoRef.current;
+      if (vid && vid.videoWidth > 0 && vid.videoHeight > 0) {
+        checkOrientation();
+      }
+    }, 150);
+
+    return () => clearInterval(interval);
+  }, [stream, checkOrientation]);
 
   const showLoading = isLoading || !isLoaded;
 
@@ -359,7 +364,7 @@ const LocalVideoPlayer: React.FC<{
             </div>
           </div>
           <p className="text-xs font-bold text-white tracking-wide">Starting Camera</p>
-          <p className="text-[11px] text-zinc-400 mt-0.5">Detecting camera orientation...</p>
+          <p className="text-[11px] text-zinc-400 mt-0.5">Initializing video stream...</p>
         </div>
       )}
 
@@ -372,27 +377,13 @@ const LocalVideoPlayer: React.FC<{
         onLoadedMetadata={checkOrientation}
         onLoadedData={checkOrientation}
         onCanPlay={checkOrientation}
+        onPlaying={checkOrientation}
+        onTimeUpdate={checkOrientation}
+        onResize={checkOrientation}
         className={`w-full h-full object-cover rounded-3xl transform scale-x-[-1] transition-opacity duration-300 ${
           isLoaded && !isLoading ? 'opacity-100' : 'opacity-0'
         }`}
       />
-
-      {/* Camera Orientation Indicator Badge */}
-      {isLoaded && !isLoading && (
-        <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-semibold text-zinc-200 shadow-sm pointer-events-none">
-          {isVertical ? (
-            <>
-              <Smartphone className="w-3 h-3 text-cyan-400 shrink-0" />
-              <span>Vertical (Mobile)</span>
-            </>
-          ) : (
-            <>
-              <Monitor className="w-3 h-3 text-blue-400 shrink-0" />
-              <span>Horizontal</span>
-            </>
-          )}
-        </div>
-      )}
     </div>
   );
 };
@@ -1706,6 +1697,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         if (category === 'image') {
                           return (
                             <div className="mt-2 space-y-2 inline-block max-w-md">
+                              {msg.attachment_name && (
+                                <p className="text-xs font-semibold text-white truncate">
+                                  {msg.attachment_name}
+                                </p>
+                              )}
                               <img
                                 src={msg.attachment_url}
                                 alt=""
@@ -2155,29 +2151,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     
                     {/* Local User Tile */}
                     <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
-                      isVideoEnabled && activeVideoStream && localIsVertical 
+                      (isVideoEnabled || isCameraStarting) && localIsVertical 
                         ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
                         : 'aspect-video w-full max-w-[500px]'
                     } ${
                       isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
                     }`}>
-                      {isVideoEnabled && activeVideoStream ? (
+                      {isVideoEnabled || isCameraStarting ? (
                         <LocalVideoPlayer 
                           stream={activeVideoStream} 
                           isLoading={isCameraStarting} 
                           onOrientationChange={setLocalIsVertical} 
                         />
-                      ) : isCameraStarting ? (
-                        <div className="absolute inset-0 bg-[#0e0e14] flex flex-col items-center justify-center p-4 z-10 animate-in fade-in duration-200">
-                          <div className="relative flex items-center justify-center mb-3">
-                            <div className="absolute w-16 h-16 rounded-full bg-blue-500/20 animate-ping" />
-                            <div className="w-14 h-14 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shadow-lg shadow-blue-600/20">
-                              <Video className="w-7 h-7 text-blue-400 animate-pulse" />
-                            </div>
-                          </div>
-                          <p className="text-xs font-bold text-white tracking-wide">Starting Camera</p>
-                          <p className="text-[11px] text-zinc-400 mt-0.5">Detecting camera orientation...</p>
-                        </div>
                       ) : (
                         <div className="relative flex items-center justify-center">
                           <div 
@@ -2206,37 +2191,24 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       const stream = remoteStreams[u.id];
                       const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
                       const hasPeerVideo = stream && stream.getVideoTracks().some((t) => t.enabled && t.readyState === 'live');
-                      const isPeerTileVertical = hasPeerVideo && (peerOrientations[u.id] || false);
+                      const shouldShowVideo = hasPeerVideo || u.has_video;
+                      const isPeerTileVertical = (peerOrientations[u.id] || false);
 
                       return (
                         <div key={u.id} className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
-                          isPeerTileVertical 
+                          shouldShowVideo && isPeerTileVertical 
                             ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
                             : 'aspect-video w-full max-w-[500px]'
                         } ${
                           isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
                         }`}>
-                          {hasPeerVideo ? (
+                          {shouldShowVideo ? (
                             <RemoteVideoPlayer 
                               stream={stream} 
                               username={u.username}
                               avatarColor={u.avatar_color}
                               onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [u.id]: vert }))}
                             />
-                          ) : u.has_video ? (
-                            <div className="absolute inset-0 bg-[#0e0e14] flex flex-col items-center justify-center p-4 z-10 animate-in fade-in duration-200">
-                              <div className="relative flex items-center justify-center mb-3">
-                                <div className="absolute w-16 h-16 rounded-full bg-blue-500/20 animate-ping" />
-                                <div 
-                                  className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-base font-black shadow-lg shadow-blue-500/10"
-                                  style={{ backgroundColor: u.avatar_color || '#0066ff' }}
-                                >
-                                  <Video className="w-7 h-7 text-white animate-pulse" />
-                                </div>
-                              </div>
-                              <p className="text-xs font-bold text-white tracking-wide">Connecting Camera</p>
-                              <p className="text-[11px] text-zinc-400 mt-0.5">{u.username}&apos;s stream initializing...</p>
-                            </div>
                           ) : (
                             <div className="relative flex items-center justify-center">
                               <div 

@@ -66,32 +66,8 @@ export default function App() {
   // Global Chat and Notifications
   const globalChat = useGlobalChat();
 
-  // Multi-Device Adaptation System (Mobile, Console, PC, Desktop)
-  const deviceInfo = useDeviceAdaptation({
-    onTabToggle: () => {
-      setCurrentTab((prev) => (prev === 'games' ? 'chat' : 'games'));
-    },
-    onClose: () => {
-      if (activeGame) {
-        setActiveGame(null);
-      }
-    },
-    onSearch: () => {
-      setCurrentTab('games');
-      const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement;
-      searchInput?.focus();
-    },
-    onSurprise: () => {
-      // Trigger random game from catalog
-      try {
-        const available = allGames.length > 0 ? allGames : getAllGames();
-        if (available.length > 0) {
-          const rand = available[Math.floor(Math.random() * available.length)];
-          setActiveGame(rand);
-        }
-      } catch {}
-    },
-  });
+  // Multi-Device Adaptation System (Mobile, Tablet, Desktop)
+  const deviceInfo = useDeviceAdaptation();
 
   // Master Catalog Load: Instant local boot + background 1,169+ Lumin catalog sync
   useEffect(() => {

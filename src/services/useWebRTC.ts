@@ -147,8 +147,8 @@ export function useWebRTC({
 
   // Sync track attachments to a peer connection safely via transceivers
   const updateTracksForPeer = useCallback((pc: RTCPeerConnection) => {
-    const audioTrack = localAudioRef.current?.getAudioTracks()[0] || null;
-    const videoTrack = activeChannel === 'video-general' ? (localVideoRef.current?.getVideoTracks()[0] || null) : null;
+    const audioTrack = localAudioRef.current?.getAudioTracks().find((t) => t.readyState === 'live') || null;
+    const videoTrack = localVideoRef.current?.getVideoTracks().find((t) => t.readyState === 'live') || null;
 
     const transceivers = pc.getTransceivers();
     const audioTransceiver = transceivers.find((t) => t.receiver.track.kind === 'audio');
@@ -176,7 +176,7 @@ export function useWebRTC({
     } else if (videoTrack) {
       pc.addTrack(videoTrack);
     }
-  }, [activeChannel]);
+  }, []);
 
   // Create or get RTCPeerConnection
   const getOrCreatePeerConnection = useCallback((peerId: string): RTCPeerConnection => {
@@ -353,7 +353,7 @@ export function useWebRTC({
 
       const offer = await pc.createOffer({
         offerToReceiveAudio: true,
-        offerToReceiveVideo: activeChannel === 'video-general',
+        offerToReceiveVideo: isMediaChannel,
       });
       await pc.setLocalDescription(offer);
       

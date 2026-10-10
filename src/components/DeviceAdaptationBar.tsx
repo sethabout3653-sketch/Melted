@@ -1,5 +1,5 @@
 import React from 'react';
-import { Gamepad2, MessageSquare, Heart, Shuffle, Search, X } from 'lucide-react';
+import { Gamepad2, MessageSquare, Heart, Shuffle } from 'lucide-react';
 import { DeviceAdaptationInfo } from '../hooks/useDeviceAdaptation';
 
 interface DeviceAdaptationBarProps {
@@ -25,47 +25,10 @@ export const DeviceAdaptationBar: React.FC<DeviceAdaptationBarProps> = ({
   onlineCount = 0,
   isConnected = false,
 }) => {
-  const { isConsole, hasGamepad, gamepadName, isMobile } = deviceInfo;
+  const { isMobile } = deviceInfo;
 
   return (
     <>
-      {/* Console & Controller HUD Prompts Bar */}
-      {(isConsole || hasGamepad) && (
-        <aside 
-          aria-label="Controller Navigation Help"
-          className="fixed top-16 inset-x-0 z-30 bg-[#0c0c10]/95 backdrop-blur-md border-b border-blue-500/30 px-4 py-1.5 flex items-center justify-between text-[11px] text-zinc-300 font-medium shadow-lg animate-in slide-in-from-top-2 duration-200"
-        >
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-            <Gamepad2 className="w-4 h-4 text-blue-400" />
-            <span className="font-bold text-white">Console Controller Mode</span>
-            {gamepadName && (
-              <span className="hidden sm:inline text-zinc-400 truncate max-w-[200px]">
-                ({gamepadName})
-              </span>
-            )}
-          </div>
-
-          <div className="flex items-center gap-3 font-mono text-[10px] text-zinc-400 overflow-x-auto no-scrollbar">
-            <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-white font-bold">LB / RB</kbd> Tabs
-            </span>
-            <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-blue-400 font-bold">A</kbd> Select
-            </span>
-            <span className="flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-red-400 font-bold">B</kbd> Back
-            </span>
-            <span className="hidden sm:flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-blue-300 font-bold">X</kbd> Search
-            </span>
-            <span className="hidden md:flex items-center gap-1">
-              <kbd className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-amber-400 font-bold">Y</kbd> Surprise
-            </span>
-          </div>
-        </aside>
-      )}
-
       {/* Mobile Ergonomic Bottom Navigation Bar */}
       {isMobile && (
         <nav 
@@ -146,3 +109,4 @@ export const DeviceAdaptationBar: React.FC<DeviceAdaptationBarProps> = ({
     </>
   );
 };
+
