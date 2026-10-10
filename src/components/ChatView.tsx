@@ -432,7 +432,7 @@ const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened:
 };
 
 // Remote Video Player
-const RemoteVideoPlayer: React.FC<{ stream: MediaStream | undefined }> = ({ stream }) => {
+const RemoteVideoPlayer: React.FC<{ stream: MediaStream | undefined; isCameraStarting?: boolean }> = ({ stream, isCameraStarting }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   useEffect(() => {
@@ -444,12 +444,20 @@ const RemoteVideoPlayer: React.FC<{ stream: MediaStream | undefined }> = ({ stre
     }
   }, [stream]);
 
+  if (isCameraStarting) {
+    return (
+      <div className="w-full h-full flex items-center justify-center bg-[#1a1a20] rounded-3xl text-xs text-zinc-400">
+        Camera starting...
+      </div>
+    );
+  }
+
   return (
     <video
       ref={videoRef}
       autoPlay
       playsInline
-      className="w-full h-full object-cover bg-black rounded-3xl"
+      className="w-full h-full object-contain bg-black rounded-3xl"
     />
   );
 };
@@ -471,7 +479,7 @@ const LocalVideoPlayer: React.FC<{ stream: MediaStream | null }> = ({ stream }) 
       autoPlay
       muted
       playsInline
-      className="w-full h-full object-cover bg-black rounded-3xl transform scale-x-[-1]"
+      className="w-full h-full object-contain bg-black rounded-3xl transform scale-x-[-1]"
     />
   );
 };
@@ -496,15 +504,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     isConnected,
   } = globalChat;
 
-  const [activeChannel, setActiveChannel] = useState<'text-general' | 'voice-general' | 'video-general'>('text-general');
-  const [protectedNetwork, setProtectedNetwork] = useState(() => {
-    return localStorage.getItem('frosted_protected_network') === 'true';
-  });
-  const toggleProtectedNetwork = () => {
-    const next = !protectedNetwork;
-    setProtectedNetwork(next);
-    localStorage.setItem('frosted_protected_network', String(next));
-  };
+  const [activeChannel, setActiveChannel] = useState<'text-general' | 'video-general'>('text-general');
   const [inputText, setInputText] = useState('');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [editName, setEditName] = useState('');
@@ -588,7 +588,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     );
   }, [users, currentUser.id]);
 
-  const isMediaActive = activeChannel === 'video-general' || activeChannel === 'voice-general' || isInVideo || localAudioStream !== null;
+  const isMediaActive = activeChannel === 'video-general' || isInVideo;
 
   const activePeers = useMemo(() => {
     if (!isMediaActive) return [];
@@ -597,11 +597,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
   const { remoteStreams, remoteSpeaking } = useWebRTC({
     currentUserId: currentUser.id,
-    activeChannel,
+    activeChannel: isMediaActive ? 'video-general' : 'text-general',
     localAudioStream,
     localVideoStream: activeVideoStream,
     peers: activePeers,
-    protectedNetwork,
     sendRtcSignal,
     setRtcSignalHandler,
     setMediaHandlers,
@@ -777,10 +776,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     }
 
     setIsInVideo(true);
-    setActiveChannel(withVideo ? 'video-general' : 'voice-general');
+    setActiveChannel('video-general');
 
     updateUser({
-      current_channel: withVideo ? 'video-general' : 'voice-general',
+      current_channel: 'video-general',
       has_video: !!videoStream,
       is_speaking: false,
       is_muted: false,
@@ -842,11 +841,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       try {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
           video: true,
-          audio: true,
+          audio: true, // Keep audio enabled for share, but handle echo in player
         });
 
         screenStreamRef.current = screenStream;
         setIsScreenSharing(true);
+        // User sees their own shared screen
         setActiveVideoStream(screenStream);
         updateUser({ is_screen_sharing: true, has_video: true });
 
@@ -905,11 +905,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     setIsDeafened(!isDeafened);
   };
 
-  const handleChannelSelect = (channel: 'text-general' | 'voice-general' | 'video-general') => {
+  const handleChannelSelect = (channel: 'text-general' | 'video-general') => {
     setActiveChannel(channel);
     updateUser({ current_channel: channel });
-    if ((channel === 'video-general' || channel === 'voice-general') && !isInVideo) {
-      joinVoiceChannel(channel === 'video-general');
+    if (channel === 'video-general' && !isInVideo) {
+      joinVoiceChannel(false);
     }
   };
 
@@ -1128,7 +1128,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         <RemoteAudioPlayer
           key={peerId}
           stream={stream}
-          isDeafened={isDeafened}
+          isDeafened={isDeafened || (isScreenSharing && peerId === currentUser.id)}
         />
       ))}
 
@@ -1188,22 +1188,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               </div>
 
               <button
-                onClick={() => handleChannelSelect('voice-general')}
-                className={`w-full px-3 py-2.5 rounded-xl flex items-center justify-between transition-all cursor-pointer ${
-                  activeChannel === 'voice-general'
-                    ? 'bg-blue-600 text-white font-extrabold shadow-md shadow-blue-600/20'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/5 font-semibold'
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Mic className="w-4 h-4 text-blue-400" />
-                  <span className="text-xs">General Voice (Audio)</span>
-                </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-600/20 text-blue-400 font-bold border border-blue-500/30">
-                  {voiceUsers.length + (isInVideo ? 1 : 0)}
-                </span>
-              </button>
-              <button
                 onClick={() => handleChannelSelect('video-general')}
                 className={`w-full px-3 py-2.5 rounded-xl flex items-center justify-between transition-all cursor-pointer ${
                   activeChannel === 'video-general'
@@ -1212,9 +1196,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Monitor className="w-4 h-4 text-emerald-400" />
-                  <span className="text-xs">General Video & Voice</span>
+                  <Mic className="w-4 h-4 text-blue-400" />
+                  <span className="text-xs">General Voice</span>
                 </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-600/20 text-blue-400 font-bold border border-blue-500/30">
+                  {voiceUsers.length + (isInVideo ? 1 : 0)}
+                </span>
               </button>
             </div>
 
@@ -1776,7 +1763,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         )}
 
         {/* VOICE & CALL ROOM VIEW */}
-        {(activeChannel === 'video-general' || activeChannel === 'voice-general') && (
+        {activeChannel === 'video-general' && (
           <div className="flex-1 flex overflow-hidden">
             
             {/* Main Stage Area */}
@@ -1821,6 +1808,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     }`}>
                       {isVideoEnabled && activeVideoStream ? (
                         <LocalVideoPlayer stream={activeVideoStream} />
+                      ) : isCameraStarting ? (
+                        <div className="w-full h-full flex items-center justify-center bg-[#1a1a20] rounded-3xl text-xs text-zinc-400">
+                          Camera starting...
+                        </div>
                       ) : (
                         <div className="relative flex items-center justify-center">
                           <div 
@@ -1855,7 +1846,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                           isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
                         }`}>
                           {hasPeerVideo ? (
-                            <RemoteVideoPlayer stream={stream} />
+                            <RemoteVideoPlayer stream={stream} isCameraStarting={false} />
                           ) : (
                             <div className="relative flex items-center justify-center">
                               <div 
@@ -1873,8 +1864,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                             <div className="text-sm font-extrabold text-white">
                               {u.username}
                             </div>
-
-                            {u.is_muted && <MicOff className="w-4 h-4 text-zinc-400" />}
+                            <div className="flex gap-1.5">
+                              {u.is_muted && <MicOff className="w-4 h-4 text-red-400" />}
+                              {!u.has_video && <VideoOff className="w-4 h-4 text-zinc-400" />}
+                            </div>
                           </div>
                         </div>
                       );
