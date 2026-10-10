@@ -23,7 +23,9 @@ import {
   Pause,
   Volume2,
   VolumeX,
-  Music
+  ShieldAlert,
+  ShieldCheck,
+  Check
 } from 'lucide-react';
 import { GiphyFetch } from '@giphy/js-fetch-api';
 import { useWebRTC } from '../services/useWebRTC';
@@ -50,73 +52,7 @@ const GIPHY_CATEGORIES = [
   { label: '🤝 Respect', query: 'respect' },
 ];
 
-// Helper mapping every single audio extension to bespoke styling and metadata
-export function getAudioExtensionDetails(url?: string, name?: string) {
-  const target = (name || url || '').toLowerCase();
-  const match = target.match(/\.([a-z0-9]{2,5})(?:\?.*)?$/i);
-  const ext = match ? match[1].toLowerCase() : 'audio';
-
-  switch (ext) {
-    case 'mp3':
-      return { badge: 'MP3 AUDIO', label: 'MPEG-3 Audio', color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-    case 'wav':
-      return { badge: 'WAV LOSSLESS', label: 'PCM Studio Master', color: 'bg-sky-600/20 text-sky-400 border-sky-500/30' };
-    case 'flac':
-      return { badge: 'FLAC HI-RES', label: 'Free Lossless Audio', color: 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30' };
-    case 'ogg':
-    case 'oga':
-    case 'ogv':
-      return { badge: 'OGG VORBIS', label: 'Ogg Vorbis Audio', color: 'bg-blue-500/20 text-blue-300 border-blue-400/30' };
-    case 'm4a':
-      return { badge: 'M4A AUDIO', label: 'MPEG-4 Audio', color: 'bg-cyan-600/20 text-cyan-400 border-cyan-500/30' };
-    case 'aac':
-      return { badge: 'AAC STEREO', label: 'Advanced Audio Coding', color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-    case 'opus':
-      return { badge: 'OPUS STREAM', label: 'Interactive Internet Audio', color: 'bg-blue-700/20 text-blue-300 border-blue-600/30' };
-    case 'weba':
-      return { badge: 'WEBA AUDIO', label: 'WebM Audio Stream', color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-    case 'aiff':
-    case 'aif':
-      return { badge: 'AIFF STUDIO', label: 'Audio Interchange Master', color: 'bg-sky-600/20 text-sky-400 border-sky-500/30' };
-    case 'wma':
-      return { badge: 'WMA AUDIO', label: 'Windows Media Audio', color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-    case 'alac':
-      return { badge: 'ALAC LOSSLESS', label: 'Apple Lossless Audio', color: 'bg-cyan-600/20 text-cyan-400 border-cyan-500/30' };
-    case 'mid':
-    case 'midi':
-      return { badge: 'MIDI TRACK', label: 'Synthesizer Instrument', color: 'bg-indigo-600/20 text-indigo-300 border-indigo-500/30' };
-    case 'amr':
-      return { badge: 'AMR VOICE', label: 'Adaptive Multi-Rate Speech', color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-    case 'ac3':
-      return { badge: 'AC3 DOLBY', label: 'Dolby Digital Surround', color: 'bg-blue-500/20 text-blue-300 border-blue-400/30' };
-    case 'dts':
-      return { badge: 'DTS SURROUND', label: 'DTS Surround Audio', color: 'bg-blue-500/20 text-blue-300 border-blue-400/30' };
-    case 'ape':
-      return { badge: 'APE MONKEY', label: "Monkey's Audio Lossless", color: 'bg-sky-600/20 text-sky-400 border-sky-500/30' };
-    case 'ra':
-    case 'ram':
-      return { badge: 'REALAUDIO', label: 'RealMedia Streaming', color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-    case 'caf':
-      return { badge: 'CORE AUDIO', label: 'Apple Core Audio Format', color: 'bg-cyan-600/20 text-cyan-400 border-cyan-500/30' };
-    case 'mka':
-      return { badge: 'MATROSKA', label: 'Matroska Audio Container', color: 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30' };
-    case 'spx':
-      return { badge: 'SPEEX VOICE', label: 'Speex Voice Codec', color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-    case 'voc':
-      return { badge: 'VOC AUDIO', label: 'Creative Voice File', color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-    case 'mod':
-    case 'xm':
-    case 'it':
-    case 's3m':
-      return { badge: `${ext.toUpperCase()} MODULE`, label: 'Chiptune Tracker Module', color: 'bg-indigo-600/20 text-indigo-400 border-indigo-500/30' };
-    case '3gp':
-      return { badge: '3GP AUDIO', label: 'Mobile Audio Stream', color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-    default:
-      return { badge: `${ext.toUpperCase()} AUDIO`, label: `${ext.toUpperCase()} Audio Track`, color: 'bg-blue-600/20 text-blue-400 border-blue-500/30' };
-  }
-}
-
-// Dedicated Audio Player Component tailored for every audio extension
+// Dedicated Audio Player Component
 const AudioAttachmentPlayer: React.FC<{
   url: string;
   name?: string;
@@ -124,61 +60,14 @@ const AudioAttachmentPlayer: React.FC<{
   showDownload?: boolean;
 }> = ({ url, name, onDownload, showDownload = true }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const analyserRef = useRef<AnalyserNode | null>(null);
-  const sourceRef = useRef<MediaElementAudioSourceNode | null>(null);
-  const animFrameRef = useRef<number | null>(null);
-
-  const bar1Ref = useRef<HTMLSpanElement | null>(null);
-  const bar2Ref = useRef<HTMLSpanElement | null>(null);
-  const bar3Ref = useRef<HTMLSpanElement | null>(null);
-  const bar4Ref = useRef<HTMLSpanElement | null>(null);
-  const bar5Ref = useRef<HTMLSpanElement | null>(null);
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
 
-  const extInfo = getAudioExtensionDetails(url, name);
-
-  const initAudioAnalyser = () => {
-    if (!audioRef.current) return;
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-        audioContextRef.current = new AudioCtx();
-      }
-      const ctx = audioContextRef.current;
-      if (ctx.state === 'suspended') {
-        ctx.resume().catch(() => {});
-      }
-
-      if (!analyserRef.current) {
-        const analyser = ctx.createAnalyser();
-        analyser.fftSize = 64;
-        analyser.smoothingTimeConstant = 0.65;
-        analyserRef.current = analyser;
-      }
-
-      if (!sourceRef.current && audioRef.current) {
-        try {
-          const source = ctx.createMediaElementSource(audioRef.current);
-          source.connect(analyserRef.current);
-          analyserRef.current.connect(ctx.destination);
-          sourceRef.current = source;
-        } catch {
-          // Handled if already connected or restricted
-        }
-      }
-    } catch {
-      // AudioCtx creation handled
-    }
-  };
-
   const togglePlay = () => {
     if (!audioRef.current) return;
-    initAudioAnalyser();
     if (isPlaying) {
       audioRef.current.pause();
     } else {
@@ -219,87 +108,8 @@ const AudioAttachmentPlayer: React.FC<{
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   };
 
-  // Real-time Audio Frequency Visualizer: actively samples audio levels and adjusts bar heights
-  useEffect(() => {
-    if (!isPlaying) {
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = null;
-      }
-      [bar1Ref, bar2Ref, bar3Ref, bar4Ref, bar5Ref].forEach((ref) => {
-        if (ref.current) ref.current.style.height = '15%';
-      });
-      return;
-    }
-
-    initAudioAnalyser();
-
-    const dataArray = new Uint8Array(32);
-
-    const updateBars = () => {
-      let b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0;
-      let hasData = false;
-
-      if (analyserRef.current) {
-        analyserRef.current.getByteFrequencyData(dataArray);
-
-        const calcBand = (start: number, end: number) => {
-          let sum = 0;
-          for (let i = start; i <= end; i++) {
-            sum += dataArray[i] || 0;
-          }
-          return sum / (end - start + 1);
-        };
-
-        // Real frequency bands: Bass, Low-Mid, Mid, High-Mid, Treble
-        b1 = calcBand(1, 3);
-        b2 = calcBand(4, 7);
-        b3 = calcBand(8, 13);
-        b4 = calcBand(14, 20);
-        b5 = calcBand(21, 28);
-
-        if ((b1 + b2 + b3 + b4 + b5) > 0) {
-          hasData = true;
-        }
-      }
-
-      if (hasData) {
-        const toHeight = (val: number) => `${Math.max(12, Math.min(100, Math.round((val / 255) * 100)))}%`;
-        if (bar1Ref.current) bar1Ref.current.style.height = toHeight(b1);
-        if (bar2Ref.current) bar2Ref.current.style.height = toHeight(b2);
-        if (bar3Ref.current) bar3Ref.current.style.height = toHeight(b3);
-        if (bar4Ref.current) bar4Ref.current.style.height = toHeight(b4);
-        if (bar5Ref.current) bar5Ref.current.style.height = toHeight(b5);
-      } else {
-        // Dynamic rhythmic fallback if analyser stream is suspended or cross-origin
-        const t = Date.now() / 150;
-        const h1 = 20 + Math.abs(Math.sin(t)) * 40;
-        const h2 = 30 + Math.abs(Math.cos(t * 1.3)) * 60;
-        const h3 = 45 + Math.abs(Math.sin(t * 0.8)) * 50;
-        const h4 = 25 + Math.abs(Math.cos(t * 1.6)) * 55;
-        const h5 = 15 + Math.abs(Math.sin(t * 1.2)) * 35;
-        if (bar1Ref.current) bar1Ref.current.style.height = `${Math.round(h1)}%`;
-        if (bar2Ref.current) bar2Ref.current.style.height = `${Math.round(h2)}%`;
-        if (bar3Ref.current) bar3Ref.current.style.height = `${Math.round(h3)}%`;
-        if (bar4Ref.current) bar4Ref.current.style.height = `${Math.round(h4)}%`;
-        if (bar5Ref.current) bar5Ref.current.style.height = `${Math.round(h5)}%`;
-      }
-
-      animFrameRef.current = requestAnimationFrame(updateBars);
-    };
-
-    updateBars();
-
-    return () => {
-      if (animFrameRef.current) {
-        cancelAnimationFrame(animFrameRef.current);
-        animFrameRef.current = null;
-      }
-    };
-  }, [isPlaying]);
-
   return (
-    <div className="p-3.5 bg-[#0e0e14] border border-[#1f1f2c] rounded-2xl max-w-md w-full shadow-lg space-y-3">
+    <div className="p-3 bg-[#0e0e14] border border-[#1f1f2c] rounded-2xl max-w-md w-full shadow-lg space-y-2">
       <audio
         ref={audioRef}
         src={url}
@@ -315,26 +125,12 @@ const AudioAttachmentPlayer: React.FC<{
         onLoadedMetadata={handleLoadedMetadata}
       />
 
-      {/* Header: Extension pill badge & Track title */}
-      <div className="flex items-center justify-between gap-2.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black tracking-wider uppercase border shrink-0 ${extInfo.color}`}>
-            {extInfo.badge}
-          </span>
-          <span className="text-xs font-bold text-white truncate">
-            {name || 'Audio Track'}
-          </span>
-        </div>
-
-        {/* Real-time Audio Frequency Visualizer */}
-        <div className="flex items-end gap-1 h-4 shrink-0 px-1.5 py-0.5 bg-[#14141f] rounded-lg border border-white/5" title={isPlaying ? 'Live Audio Output' : extInfo.label}>
-          <span ref={bar1Ref} className="w-1 bg-blue-400 rounded-full transition-all duration-75" style={{ height: '15%' }} />
-          <span ref={bar2Ref} className="w-1 bg-sky-400 rounded-full transition-all duration-75" style={{ height: '15%' }} />
-          <span ref={bar3Ref} className="w-1 bg-blue-500 rounded-full transition-all duration-75" style={{ height: '15%' }} />
-          <span ref={bar4Ref} className="w-1 bg-cyan-400 rounded-full transition-all duration-75" style={{ height: '15%' }} />
-          <span ref={bar5Ref} className="w-1 bg-indigo-400 rounded-full transition-all duration-75" style={{ height: '15%' }} />
-        </div>
-      </div>
+      {/* Attachment Name */}
+      {name && (
+        <p className="text-xs font-semibold text-white truncate max-w-full">
+          {name}
+        </p>
+      )}
 
       {/* Player Controls Bar */}
       <div className="flex items-center gap-3">
@@ -570,6 +366,117 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [micError, setMicError] = useState<string | null>(null);
+  const [micPermissionStatus, setMicPermissionStatus] = useState<'prompt' | 'granted' | 'denied' | 'unknown'>('unknown');
+  const [showMicPermissionModal, setShowMicPermissionModal] = useState(false);
+
+  // Probe browser microphone permission state
+  useEffect(() => {
+    if (navigator.permissions && navigator.permissions.query) {
+      navigator.permissions.query({ name: 'microphone' as any })
+        .then((status) => {
+          setMicPermissionStatus(status.state as any);
+          status.onchange = () => {
+            setMicPermissionStatus(status.state as any);
+          };
+        })
+        .catch(() => {
+          setMicPermissionStatus('prompt');
+        });
+    } else {
+      setMicPermissionStatus('prompt');
+    }
+  }, []);
+
+  // Explicit microphone permission requester with instant browser prompt
+  const requestMicrophonePermission = async (withVideo: boolean = false) => {
+    setMicError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
+
+      setMicPermissionStatus('granted');
+      setShowMicPermissionModal(false);
+      micStreamRef.current = stream;
+      setLocalAudioStream(stream);
+      setIsMuted(false);
+      setIsInVideo(true);
+      setActiveChannel('video-general');
+
+      updateUser({
+        current_channel: 'video-general',
+        activity: 'In General Voice',
+        has_video: false,
+        is_speaking: false,
+        is_muted: false,
+        is_deafened: false,
+      });
+
+      if (withVideo) {
+        toggleCamera();
+      }
+    } catch (err: any) {
+      console.warn('Microphone permission request result:', err);
+      setMicPermissionStatus('denied');
+      setMicError('Microphone permission was not allowed. Please click the site settings/lock icon in your browser URL bar to allow microphone access.');
+    }
+  };
+
+  // Helper rendering live presence activities (e.g. playing "Slope", searching games, in #general)
+  const renderUserActivity = (activity?: string) => {
+    if (!activity) return null;
+    const isPlaying = activity.startsWith('Playing');
+    const isSearching = activity.includes('Searching');
+    const isVoice = activity.includes('Voice');
+    const isChat = activity.includes('#general');
+
+    if (isPlaying) {
+      return (
+        <div className="flex items-center gap-1 text-[11px] text-emerald-400 font-semibold truncate mt-0.5" title={activity}>
+          <Gamepad2 className="w-3 h-3 text-emerald-400 shrink-0" />
+          <span className="truncate">{activity}</span>
+        </div>
+      );
+    }
+
+    if (isSearching) {
+      return (
+        <div className="flex items-center gap-1 text-[11px] text-amber-400 font-semibold truncate mt-0.5" title={activity}>
+          <Search className="w-3 h-3 text-amber-400 shrink-0" />
+          <span className="truncate">{activity}</span>
+        </div>
+      );
+    }
+
+    if (isVoice) {
+      return (
+        <div className="flex items-center gap-1 text-[11px] text-blue-400 font-semibold truncate mt-0.5" title={activity}>
+          <Mic className="w-3 h-3 text-blue-400 shrink-0" />
+          <span className="truncate">{activity}</span>
+        </div>
+      );
+    }
+
+    if (isChat) {
+      return (
+        <div className="flex items-center gap-1 text-[11px] text-zinc-400 font-medium truncate mt-0.5" title={activity}>
+          <MessageSquare className="w-3 h-3 text-zinc-500 shrink-0" />
+          <span className="truncate">{activity}</span>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex items-center gap-1 text-[11px] text-zinc-400 font-medium truncate mt-0.5" title={activity}>
+        <span className="truncate">{activity}</span>
+      </div>
+    );
+  };
 
   // Connected peers in voice and video channels
   const voiceUsers = useMemo(() => {
@@ -737,11 +644,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         video: false,
       });
 
+      setMicPermissionStatus('granted');
       micStreamRef.current = audioStream;
       setLocalAudioStream(audioStream);
       setIsMuted(false);
     } catch (err: any) {
-      setMicError('Could not access microphone.');
+      setMicPermissionStatus('denied');
+      setMicError('Could not access microphone. Please allow microphone permission.');
     }
 
     if (withVideo) {
@@ -772,6 +681,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
     updateUser({
       current_channel: 'video-general',
+      activity: 'In General Voice',
       has_video: !!videoStream,
       is_speaking: false,
       is_muted: false,
@@ -876,6 +786,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
     updateUser({
       current_channel: 'text-general',
+      activity: 'In #general',
       has_video: false,
       is_speaking: false,
       is_screen_sharing: false,
@@ -898,9 +809,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
   const handleChannelSelect = (channel: 'text-general' | 'video-general') => {
     setActiveChannel(channel);
-    updateUser({ current_channel: channel });
+    const newActivity = channel === 'video-general' ? 'In General Voice' : 'In #general';
+    updateUser({ current_channel: channel, activity: newActivity });
     if (channel === 'video-general' && !isInVideo) {
-      joinVoiceChannel(false);
+      if (micPermissionStatus === 'prompt') {
+        setShowMicPermissionModal(true);
+      } else {
+        joinVoiceChannel(false);
+      }
     }
   };
 
@@ -1103,7 +1019,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   };
 
   return (
-    <div className="flex h-screen bg-[#08080a] text-zinc-100 font-sans antialiased overflow-hidden select-none">
+    <div className="flex flex-1 min-h-0 h-full w-full bg-[#08080a] text-zinc-100 font-sans antialiased overflow-hidden select-none">
       
       {/* Hidden Global File Input */}
       <input 
@@ -1124,8 +1040,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       ))}
 
       {/* LEFT NAVIGATION SIDEBAR */}
-      <aside className="w-64 bg-[#0c0c0f] border-r border-[#1a1a20] flex flex-col justify-between shrink-0">
-        <div className="p-4 space-y-6">
+      <aside className="w-64 bg-[#0c0c0f] border-r border-[#1a1a20] flex flex-col justify-between shrink-0 overflow-hidden">
+        <div className="p-4 space-y-6 shrink-0">
           
           {/* Header Branding */}
           <div className="flex items-center justify-between pb-2 border-b border-[#18181f]">
@@ -1201,7 +1117,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         </div>
 
         {/* CURRENT USER FOOTER */}
-        <div className="p-3 bg-[#0a0a0d] border-t border-[#1a1a20] flex items-center justify-between">
+        <div className="p-3 bg-[#0a0a0d] border-t border-[#1a1a20] flex items-center justify-between shrink-0">
           <div 
             onClick={() => setIsProfileModalOpen(true)}
             className="flex items-center gap-2.5 min-w-0 cursor-pointer p-1.5 rounded-xl hover:bg-white/5 transition-colors flex-1"
@@ -1308,15 +1224,58 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         </div>
       )}
 
+      {/* Microphone Permission Request Modal */}
+      {showMicPermissionModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 select-none">
+          <div className="bg-[#0b0b0e] p-6 rounded-3xl border border-[#232330] w-full max-w-sm space-y-4 shadow-2xl text-center">
+            <div className="w-16 h-16 rounded-2xl bg-blue-600/15 border border-blue-500/30 text-blue-400 flex items-center justify-center mx-auto shadow-lg shadow-blue-600/20">
+              <Mic className="w-8 h-8" />
+            </div>
+
+            <div className="space-y-1">
+              <h2 className="text-lg font-black text-white">Microphone Access</h2>
+              <p className="text-xs text-zinc-400 leading-relaxed">
+                Frosted Voice Chat requires permission to access your microphone so other players can hear you talk.
+              </p>
+            </div>
+
+            {micError && (
+              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-300 text-left flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <span>{micError}</span>
+              </div>
+            )}
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowMicPermissionModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-[#1c1c20] hover:bg-[#25252e] text-zinc-300 hover:text-white font-bold text-xs transition-colors cursor-pointer"
+              >
+                Not Now
+              </button>
+              <button
+                type="button"
+                onClick={() => requestMicrophonePermission(false)}
+                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs shadow-md shadow-blue-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Check className="w-4 h-4" />
+                <span>Allow Microphone</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col bg-[#050507] min-w-0 relative">
+      <main className="flex-1 flex flex-col bg-[#050507] min-w-0 min-h-0 relative overflow-hidden">
         
         {/* TEXT CHANNEL VIEW */}
         {activeChannel === 'text-general' && (
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 min-h-0 flex overflow-hidden">
             
             {/* Center Chat Messages Column */}
-            <div className="flex-1 flex flex-col min-w-0 relative">
+            <div className="flex-1 min-h-0 flex flex-col min-w-0 relative overflow-hidden">
               
               {/* Top Header */}
               <header className="h-14 px-4 border-b border-[#1a1a20] flex items-center justify-between bg-[#08080a] shrink-0">
@@ -1341,8 +1300,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 </div>
               </header>
 
-              {/* Chat Scroll Area */}
-              <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Chat Scroll Area (Messages) */}
+              <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
                 
                 {/* Channel Welcome Banner */}
                 <div className="space-y-3 pb-6 border-b border-[#1a1a20]">
@@ -1403,6 +1362,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         if (category === 'video') {
                           return (
                             <div className="mt-2 space-y-2 max-w-lg">
+                              {msg.attachment_name && (
+                                <p className="text-xs font-semibold text-white truncate">
+                                  {msg.attachment_name}
+                                </p>
+                              )}
                               <video
                                 src={msg.attachment_url}
                                 controls
@@ -1450,7 +1414,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         // Unknown attachment fallback
                         return (
                           <div className="mt-2 p-3 bg-[#121218] border border-[#22222e] rounded-xl max-w-sm flex items-center justify-between gap-3">
-                            <span className="text-xs text-zinc-400">cant show preview for this attachment</span>
+                            <span className="text-xs font-semibold text-white truncate max-w-[200px]">
+                              {msg.attachment_name || 'Attachment'}
+                            </span>
                             <button
                               type="button"
                               onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'attachment')}
@@ -1480,7 +1446,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
               {/* Attachment Preview Before Sending */}
               {pendingFile && (
-                <div className="mx-4 mb-2 p-3 bg-[#0e0e13] border border-[#20202c] rounded-2xl relative shadow-lg">
+                <div className="shrink-0 mx-4 mb-2 p-3 bg-[#0e0e13] border border-[#20202c] rounded-2xl relative shadow-lg">
                   <div className="flex items-start gap-3">
                     {/* If Image: Show actual image preview */}
                     {pendingFile.type === 'image' && pendingFile.previewUrl && (
@@ -1658,7 +1624,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               )}
 
               {/* Message Input Box */}
-              <div className="p-4 pt-0">
+              <div className="p-4 pt-0 shrink-0">
                 <form onSubmit={handleSendMessage} className="bg-[#121215] border border-[#222228] focus-within:border-blue-500 rounded-2xl px-4 py-3 flex items-center gap-3 transition-colors shadow-lg">
                   <input
                     type="text"
@@ -1710,42 +1676,45 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             </div>
 
             {/* Right Sidebar: Member List */}
-            <aside className="w-64 bg-[#08080a] border-l border-[#1a1a20] p-4 flex flex-col space-y-6 shrink-0">
+            <aside className="w-64 bg-[#08080a] border-l border-[#1a1a20] p-4 flex flex-col shrink-0 overflow-hidden">
               
-              {/* ONLINE MEMBERS LIST */}
-              <div className="space-y-3">
+              {/* ONLINE MEMBERS HEADER */}
+              <div className="shrink-0 pb-3 flex items-center justify-between border-b border-[#14141a]">
                 <div className="text-xs font-bold text-zinc-500 tracking-wider">
                   <span>ONLINE — {users.length}</span>
                 </div>
+              </div>
 
-                <div className="space-y-2">
-                  {users.map((u: any) => (
-                    <div key={u.id} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-white/[0.03] transition-colors">
-                      <div className="relative shrink-0">
-                        <div 
-                          className="w-8 h-8 rounded-full text-black font-extrabold flex items-center justify-center text-xs"
-                          style={{ backgroundColor: u.avatar_color || '#0066ff' }}
-                        >
-                          {u.username.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
+              {/* ONLY ONLINE LIST IS SCROLLABLE */}
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pt-3 pr-1">
+                {users.map((u: any) => (
+                  <div key={u.id} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] transition-colors">
+                    <div className="relative shrink-0">
+                      <div 
+                        className="w-9 h-9 rounded-full text-black font-extrabold flex items-center justify-center text-xs shadow-sm"
+                        style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+                      >
+                        {u.username.slice(0, 2).toUpperCase()}
                       </div>
-
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <span className="font-extrabold text-white text-xs truncate">
-                            {u.username}
-                          </span>
-                          {u.id === currentUser.id && (
-                            <span className="text-[10px] text-zinc-500 font-medium">
-                              (you)
-                            </span>
-                          )}
-                        </div>
-                      </div>
+                      <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                     </div>
-                  ))}
-                </div>
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-extrabold text-white text-xs truncate">
+                          {u.username}
+                        </span>
+                        {u.id === currentUser.id && (
+                          <span className="text-[10px] text-zinc-500 font-medium shrink-0">
+                            (you)
+                          </span>
+                        )}
+                      </div>
+                      {/* Live User Presence Activity */}
+                      {renderUserActivity(u.activity || (u.current_channel === 'video-general' ? 'In General Voice' : 'In #general'))}
+                    </div>
+                  </div>
+                ))}
               </div>
 
             </aside>
@@ -1755,10 +1724,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
         {/* VOICE & CALL ROOM VIEW */}
         {activeChannel === 'video-general' && (
-          <div className="flex-1 flex overflow-hidden">
+          <div className="flex-1 min-h-0 flex overflow-hidden">
             
             {/* Main Stage Area */}
-            <div className="flex-1 flex flex-col bg-[#050507] relative overflow-hidden">
+            <div className="flex-1 min-h-0 flex flex-col bg-[#050507] relative overflow-hidden">
               
               {/* Top Header */}
               <div className="px-6 py-3.5 border-b border-[#1a1a20] bg-[#08080a] flex items-center justify-between shrink-0">
@@ -1788,7 +1757,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               </div>
 
               {/* Voice / Video Stage Grid */}
-              <div className="flex-1 p-6 pb-28 flex items-center justify-center overflow-y-auto">
+              <div className="flex-1 min-h-0 p-6 pb-28 flex items-center justify-center overflow-hidden">
                 
                 {isInVideo ? (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-5xl">
@@ -1861,18 +1830,43 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   </div>
                 ) : (
                   /* Join Prompt Card when not connected */
-                  <div className="text-center space-y-4 max-w-sm">
+                  <div className="text-center space-y-5 max-w-md bg-[#0d0d12] border border-[#20202c] p-8 rounded-3xl shadow-2xl">
                     <div className="w-20 h-20 rounded-3xl bg-blue-600/15 border border-blue-500/30 text-blue-400 flex items-center justify-center mx-auto shadow-xl shadow-blue-600/20">
                       <Mic className="w-10 h-10" />
                     </div>
-                    <h2 className="text-2xl font-black text-white">General Voice</h2>
-                    <p className="text-xs text-zinc-400">Join to talk with voice, turn your camera on/off, or share screen in real-time.</p>
-                    <button 
-                      onClick={() => joinVoiceChannel(false)}
-                      className="px-8 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-sm shadow-lg shadow-blue-600/30 transition-all cursor-pointer"
-                    >
-                      Connect to Voice
-                    </button>
+                    <div className="space-y-1.5">
+                      <h2 className="text-2xl font-black text-white">General Voice</h2>
+                      <p className="text-xs text-zinc-400 max-w-sm mx-auto leading-relaxed">
+                        Talk with players with crystal-clear voice, share your camera, or stream gameplay with low latency.
+                      </p>
+                    </div>
+
+                    {micError ? (
+                      <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-start gap-2.5 text-left text-xs text-red-300">
+                        <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-bold">Microphone access required</p>
+                          <p className="text-[11px] text-red-300/80 mt-0.5">
+                            Please click the permissions/lock icon in your browser URL bar and allow microphone.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-3 bg-blue-600/10 border border-blue-500/20 rounded-2xl flex items-center justify-center gap-2 text-xs text-blue-300 font-semibold">
+                        <ShieldCheck className="w-4 h-4 text-blue-400" />
+                        <span>Requires microphone permission</span>
+                      </div>
+                    )}
+
+                    <div className="pt-2">
+                      <button 
+                        onClick={() => requestMicrophonePermission(false)}
+                        className="w-full py-3.5 px-6 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-sm shadow-xl shadow-blue-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        <Mic className="w-4 h-4" />
+                        <span>Allow Microphone & Join Voice</span>
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -1926,15 +1920,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             </div>
 
             {/* Right Sidebar in Voice Channel */}
-            <aside className="w-64 bg-[#08080a] border-l border-[#1a1a20] p-4 flex flex-col space-y-6 shrink-0">
+            <aside className="w-64 bg-[#08080a] border-l border-[#1a1a20] p-4 flex flex-col shrink-0 overflow-hidden">
               
               {/* VOICE USERS LIST */}
-              <div className="space-y-3">
+              <div className="shrink-0 pb-3 border-b border-[#14141a]">
                 <div className="flex items-center gap-2 text-xs font-bold text-blue-400 tracking-wider uppercase">
                   <Mic className="w-4 h-4" />
                   <span>VOICE — {voiceUsers.length + (isInVideo ? 1 : 0)}</span>
                 </div>
+              </div>
 
+              {/* SCROLLABLE ONLINE & VOICE MEMBERS */}
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pt-3 pr-1">
                 <div className="space-y-2">
                   {isInVideo && (
                     <div className="p-2.5 rounded-2xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-between">
@@ -1953,6 +1950,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                             <span className="font-extrabold text-white text-xs truncate">{currentUser.username}</span>
                             <span className="text-[10px] text-zinc-500">(you)</span>
                           </div>
+                          {renderUserActivity('In General Voice')}
                         </div>
                       </div>
                       <Mic className="w-4 h-4 text-blue-400 shrink-0" />
@@ -1973,18 +1971,36 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         </div>
                         <div className="min-w-0 leading-tight">
                           <span className="font-extrabold text-white text-xs truncate block">{u.username}</span>
+                          {renderUserActivity(u.activity || 'In General Voice')}
                         </div>
                       </div>
                       <Mic className="w-4 h-4 text-blue-400 shrink-0" />
                     </div>
                   ))}
                 </div>
-              </div>
 
-              {/* ONLINE MEMBERS */}
-              <div className="space-y-3">
-                <div className="text-xs font-bold text-zinc-500 tracking-wider">
-                  <span>ONLINE — {users.length - (voiceUsers.length + (isInVideo ? 1 : 0))}</span>
+                {/* ONLINE MEMBERS IN VOICE */}
+                <div className="space-y-2 pt-2 border-t border-[#14141a]">
+                  <div className="text-xs font-bold text-zinc-500 tracking-wider">
+                    <span>ONLINE — {Math.max(0, users.length - (voiceUsers.length + (isInVideo ? 1 : 0)))}</span>
+                  </div>
+                  {users.filter((u: any) => u.id !== currentUser.id && !voiceUsers.some((vu: any) => vu.id === u.id)).map((u: any) => (
+                    <div key={u.id} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-white/[0.03] transition-colors">
+                      <div className="relative shrink-0">
+                        <div 
+                          className="w-7 h-7 rounded-full text-black font-extrabold flex items-center justify-center text-[10px]"
+                          style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+                        >
+                          {u.username.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-blue-500 border-2 border-[#08080a]" />
+                      </div>
+                      <div className="min-w-0 flex-1 leading-tight">
+                        <span className="font-bold text-zinc-300 text-xs truncate block">{u.username}</span>
+                        {renderUserActivity(u.activity || 'In #general')}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 

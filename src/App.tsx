@@ -7,6 +7,7 @@ import { GamePlayer } from './components/GamePlayer';
 import { ChatView } from './components/ChatView';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { FrostedLoadingScreen } from './components/FrostedLoadingScreen';
+import { InAppNotificationToast } from './components/InAppNotificationToast';
 import { fetchGames, getAllGames, resolveGameUrl } from './services/gameService';
 import { fetchLuminGames, getInitialLuminGames } from './services/luminService';
 import { useCloak, launchAboutBlank } from './hooks/useCloak';
@@ -239,8 +240,51 @@ export default function App() {
   const visibleGames = filteredGames.slice(0, visibleCount);
   const hasMore = visibleCount < filteredGames.length;
 
+  // Real-time Presence Activity status (e.g. playing "Slope", searching games, in #general)
+  const currentActivity = useMemo(() => {
+    if (activeGame) {
+      return `Playing "${activeGame.name}"`;
+    }
+    if (deferredQuery.trim()) {
+      return 'Searching games';
+    }
+    if (currentTab === 'chat') {
+      return 'In #general';
+    }
+    if (selectedCategory === 'Favorites') {
+      return 'Viewing Favorites';
+    }
+    if (selectedCategory !== 'All') {
+      return `Browsing ${selectedCategory}`;
+    }
+    return 'Browsing games';
+  }, [activeGame, deferredQuery, currentTab, selectedCategory]);
+
+  useEffect(() => {
+    if (globalChat.updateUser && globalChat.isConnected) {
+      globalChat.updateUser({ activity: currentActivity });
+    }
+  }, [currentActivity, globalChat.updateUser, globalChat.isConnected]);
+
+  // Prevent outer window scrolling when inside chat tab so only chat messages & online list can scroll
+  useEffect(() => {
+    if (currentTab === 'chat') {
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    };
+  }, [currentTab]);
+
   return (
-    <div className="min-h-screen bg-[#050505] text-[#f4f4f5] flex flex-col font-sans selection:bg-[#0066ff] selection:text-white">
+    <div className={`bg-[#050505] text-[#f4f4f5] flex flex-col font-sans selection:bg-[#0066ff] selection:text-white ${
+      currentTab === 'chat' ? 'h-screen h-[100dvh] max-h-screen overflow-hidden' : 'min-h-screen'
+    }`}>
       <FrostedLoadingScreen isLoading={isCatalogLoading} />
       
       {/* Top Navigation Bar: Sleek Black and Electric Blue */}
@@ -273,7 +317,9 @@ export default function App() {
 
       {/* Main View: Either Discord Chat OR Games Catalog */}
       {currentTab === 'chat' ? (
-        <ChatView globalChat={globalChat} />
+        <div className="flex-1 min-h-0 w-full overflow-hidden flex flex-col">
+          <ChatView globalChat={globalChat} />
+        </div>
       ) : (
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
           
@@ -509,6 +555,15 @@ export default function App() {
           onToggleFavorite={handleToggleFavorite}
         />
       )}
+
+      {/* Global In-App Message Notification Toast - visible on every screen and over games */}
+      <InAppNotificationToast
+        notification={globalChat.activeNotification}
+        onDismiss={globalChat.dismissNotification}
+        onOpenChat={() => {
+          setCurrentTab('chat');
+        }}
+      />
 
     </div>
   );

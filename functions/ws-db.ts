@@ -11,6 +11,7 @@ interface EdgeUser {
   is_deafened: boolean;
   has_video: boolean;
   is_screen_sharing: boolean;
+  activity?: string;
   updated_at: number;
 }
 
@@ -119,6 +120,7 @@ export async function onRequest(context: { request: Request }): Promise<Response
               is_deafened: Boolean(msg.user.is_deafened),
               has_video: Boolean(msg.user.has_video),
               is_screen_sharing: Boolean(msg.user.is_screen_sharing),
+              activity: msg.user.activity ? String(msg.user.activity) : '',
               updated_at: Date.now(),
             });
 

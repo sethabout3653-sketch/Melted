@@ -9,6 +9,51 @@ export interface ActiveCall {
   callType: 'audio' | 'video';
 }
 
+export interface InAppNotification {
+  id: string;
+  sender_name: string;
+  avatar_color: string;
+  content: string;
+  timestamp: string;
+  attachment_type?: string;
+  attachment_name?: string;
+  channel_id: string;
+}
+
+// Pure Web Audio API chime generator - guaranteed zero-latency playback across all browsers
+export function playNotificationSound() {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+
+    // Harmonic Chime Note 1: E5 (659.25 Hz)
+    const osc1 = ctx.createOscillator();
+    const gain1 = ctx.createGain();
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(659.25, now);
+    gain1.gain.setValueAtTime(0.18, now);
+    gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+    osc1.connect(gain1);
+    gain1.connect(ctx.destination);
+    osc1.start(now);
+    osc1.stop(now + 0.28);
+
+    // Harmonic Chime Note 2: B5 (987.77 Hz)
+    const osc2 = ctx.createOscillator();
+    const gain2 = ctx.createGain();
+    osc2.type = 'sine';
+    osc2.frequency.setValueAtTime(987.77, now + 0.08);
+    gain2.gain.setValueAtTime(0.22, now + 0.08);
+    gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.38);
+    osc2.connect(gain2);
+    gain2.connect(ctx.destination);
+    osc2.start(now + 0.08);
+    osc2.stop(now + 0.38);
+  } catch {}
+}
+
 export function useGlobalChat() {
   const [currentUser, setCurrentUser] = useState(() => {
     const savedId = localStorage.getItem('frosted_chat_user_id') || ('u_' + Math.random().toString(36).substr(2, 6));
@@ -33,6 +78,13 @@ export function useGlobalChat() {
   // Call state
   const [incomingCall, setIncomingCall] = useState<ActiveCall | null>(null);
   const [outgoingCall, setOutgoingCall] = useState<ActiveCall | null>(null);
+
+  // In-app message notification state
+  const [activeNotification, setActiveNotification] = useState<InAppNotification | null>(null);
+
+  const dismissNotification = useCallback(() => {
+    setActiveNotification(null);
+  }, []);
 
   // Sync user profile with server when user connects or profile attributes change (prevents infinite loop!)
   useEffect(() => {
@@ -85,7 +137,7 @@ export function useGlobalChat() {
     setOutgoingCall(null);
   }, []);
 
-  // Message notifications
+  // Message notifications: Play chime, trigger in-app notification UI on any page, and browser notification
   useEffect(() => {
     if (messages.length === 0) return;
     const lastMessage = messages[messages.length - 1];
@@ -94,15 +146,24 @@ export function useGlobalChat() {
       lastMessageId.current = lastMessage.id;
       
       if (lastMessage.sender_id !== currentUser.id) {
-        try {
-          const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3');
-          audio.volume = 0.4;
-          audio.play().catch(() => {});
-        } catch {}
+        // Play instant Web Audio API chime
+        playNotificationSound();
+
+        // Trigger in-app notification UI visible across all pages & game view
+        setActiveNotification({
+          id: lastMessage.id,
+          sender_name: lastMessage.sender_name,
+          avatar_color: lastMessage.avatar_color,
+          content: lastMessage.content,
+          timestamp: lastMessage.timestamp,
+          attachment_type: lastMessage.attachment_type,
+          attachment_name: lastMessage.attachment_name,
+          channel_id: lastMessage.channel_id,
+        });
 
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           new Notification('New Message', {
-            body: `${lastMessage.sender_name}: ${lastMessage.content}`,
+            body: `${lastMessage.sender_name}: ${lastMessage.content || (lastMessage.attachment_type ? `Sent an ${lastMessage.attachment_type}` : 'Sent a file')}`,
             icon: '/apple-touch-icon.png'
           });
         }
@@ -115,6 +176,8 @@ export function useGlobalChat() {
     setCurrentUser,
     incomingCall,
     outgoingCall,
+    activeNotification,
+    dismissNotification,
     initiateCall,
     dismissIncomingCall,
     dismissOutgoingCall,
