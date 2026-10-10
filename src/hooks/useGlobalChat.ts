@@ -75,7 +75,7 @@ export function useGlobalChat(options?: { isChatTabActive?: boolean }) {
   });
 
   const chat = useWebSocketDatabase(currentUser);
-  const { messages, setUserCallHandler, isConnected, registerUser, callUser: rawCallUser } = chat;
+  const { messages, setUserCallHandler, isConnected, registerUser, callUser: rawCallUser, updateUser } = chat;
 
   const lastMessageId = useRef<string | null>(null);
   const registeredKeyRef = useRef<string>('');
@@ -97,8 +97,14 @@ export function useGlobalChat(options?: { isChatTabActive?: boolean }) {
     if (isConnected && registeredKeyRef.current !== userKey) {
       registeredKeyRef.current = userKey;
       registerUser(currentUser);
+      // Also update the database immediately so all peers see the new profile picture
+      updateUser({
+        username: currentUser.username,
+        avatar_color: currentUser.avatar_color,
+        avatar_url: currentUser.avatar_url || '',
+      });
     }
-  }, [isConnected, currentUser.id, currentUser.username, currentUser.avatar_color, currentUser.avatar_url, registerUser]);
+  }, [isConnected, currentUser.id, currentUser.username, currentUser.avatar_color, currentUser.avatar_url, registerUser, updateUser]);
 
   // Handle incoming call events from relay server
   useEffect(() => {
@@ -182,8 +188,17 @@ export function useGlobalChat(options?: { isChatTabActive?: boolean }) {
     localStorage.setItem('frosted_chat_username', user.username);
     localStorage.setItem('frosted_chat_usercolor', user.avatar_color);
     localStorage.setItem('frosted_chat_user_avatar', user.avatar_url || '');
+    
+    // Update server immediately when profile changes
+    updateUser({
+      username: user.username,
+      avatar_color: user.avatar_color,
+      avatar_url: user.avatar_url || '',
+    });
+    registerUser(user);
+    
     setCurrentUser(user);
-  }, []);
+  }, [updateUser, registerUser]);
 
   return {
     currentUser,
