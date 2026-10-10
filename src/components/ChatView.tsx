@@ -517,6 +517,30 @@ const ScreenSharePlayer: React.FC<{
   );
 };
 
+// Reusable Avatar component supporting custom image PFP and fallback color/initials
+const UserAvatar: React.FC<{
+  username: string;
+  avatarColor?: string;
+  avatarUrl?: string;
+  className?: string;
+}> = ({ username, avatarColor, avatarUrl, className = 'w-10 h-10 text-xs' }) => {
+  if (avatarUrl && avatarUrl.trim()) {
+    return (
+      <div className={`rounded-full overflow-hidden shrink-0 flex items-center justify-center bg-zinc-800 ${className}`}>
+        <img src={avatarUrl} alt={username} className="w-full h-full object-cover" />
+      </div>
+    );
+  }
+  return (
+    <div 
+      className={`rounded-full flex items-center justify-center font-black text-black shrink-0 ${className}`}
+      style={{ backgroundColor: avatarColor || '#0066ff' }}
+    >
+      {(username || 'User').slice(0, 2).toUpperCase()}
+    </div>
+  );
+};
+
 export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const {
     currentUser,
@@ -542,6 +566,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
+  const [editAvatarUrl, setEditAvatarUrl] = useState('');
 
   // Attachment Uploading States with Real Progress
   const [pendingFile, setPendingFile] = useState<{
@@ -573,15 +598,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   useEffect(() => {
     setEditName(currentUser.username);
     setEditColor(currentUser.avatar_color || '#0066ff');
-  }, [currentUser.username, currentUser.avatar_color]);
+    setEditAvatarUrl(currentUser.avatar_url || '');
+  }, [currentUser.username, currentUser.avatar_color, currentUser.avatar_url]);
 
   const saveProfile = () => {
-    const updatedUser = { ...currentUser, username: editName, avatar_color: editColor };
+    const updatedUser = { ...currentUser, username: editName, avatar_color: editColor, avatar_url: editAvatarUrl };
     setCurrentUser(updatedUser);
     localStorage.setItem('frosted_chat_username', editName);
     localStorage.setItem('frosted_chat_usercolor', editColor);
+    localStorage.setItem('frosted_chat_user_avatar', editAvatarUrl);
     
-    updateUser({ username: editName, avatar_color: editColor });
+    updateUser({ username: editName, avatar_color: editColor, avatar_url: editAvatarUrl });
     registerUser(updatedUser);
     
     setIsProfileModalOpen(false);
@@ -1625,20 +1652,47 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Avatar Color</label>
-                <div className="flex items-center gap-3">
+                <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Avatar URL or Upload</label>
+                <div className="flex gap-2">
                   <input
-                    type="color"
-                    value={editColor}
-                    onChange={(e) => setEditColor(e.target.value)}
-                    className="w-12 h-12 bg-transparent border-none p-0 cursor-pointer"
+                    type="text"
+                    value={editAvatarUrl}
+                    onChange={(e) => setEditAvatarUrl(e.target.value)}
+                    className="flex-1 bg-[#121215] border border-[#222226] rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                    placeholder="https://example.com/avatar.png"
                   />
-                  <div 
-                    className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-black text-black"
-                    style={{ backgroundColor: editColor }}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => setEditAvatarUrl(e.target?.result as string);
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className="hidden"
+                    id="avatar-upload"
+                  />
+                  <label
+                    htmlFor="avatar-upload"
+                    className="px-4 py-2.5 bg-[#1c1c1f] hover:bg-[#25252a] text-zinc-300 hover:text-white font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center justify-center"
                   >
-                    {editName.slice(0, 2).toUpperCase()}
-                  </div>
+                    Upload
+                  </label>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Avatar Preview</label>
+                <div className="flex items-center gap-3">
+                  <UserAvatar 
+                    username={editName} 
+                    avatarColor={editColor} 
+                    avatarUrl={editAvatarUrl} 
+                    className="w-12 h-12 text-sm"
+                  />
                 </div>
               </div>
             </div>
@@ -1777,12 +1831,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 {/* Messages List */}
                 {messages.map((msg: any) => (
                   <div key={msg.id} className="flex items-start gap-3.5 group hover:bg-white/[0.02] -mx-4 px-4 py-1.5 rounded-xl transition-colors">
-                    <div 
-                      className="w-10 h-10 rounded-full text-black font-extrabold flex items-center justify-center shrink-0 text-xs shadow-sm"
-                      style={{ backgroundColor: msg.avatar_color || '#0066ff' }}
-                    >
-                      {msg.sender_name.slice(0, 2).toUpperCase()}
-                    </div>
+                    <UserAvatar 
+                      username={msg.sender_name}
+                      avatarColor={msg.avatar_color}
+                      avatarUrl={msg.avatar_url}
+                      className="w-10 h-10 text-xs"
+                    />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-2">
                         <span className="font-extrabold text-white text-sm hover:underline cursor-pointer">
@@ -2359,14 +2413,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
                       }`}>
                         <div className="relative flex items-center justify-center">
-                          <div 
-                            className={`w-28 h-28 rounded-full flex items-center justify-center text-3xl font-black text-black shadow-2xl transition-all ${
-                              isUserSpeaking ? 'ring-4 ring-amber-500 shadow-[0_0_30px_#f59e0b]' : 'ring-2 ring-white/10'
-                            }`}
-                            style={{ backgroundColor: currentUser.avatar_color || '#0066ff' }}
-                          >
-                            {currentUser.username.slice(0, 2).toUpperCase()}
-                          </div>
+                          <UserAvatar 
+                            username={currentUser.username}
+                            avatarColor={currentUser.avatar_color}
+                            avatarUrl={currentUser.avatar_url}
+                            className="w-28 h-28 text-3xl"
+                          />
                         </div>
                         <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
                           <div className="text-sm font-extrabold text-white">

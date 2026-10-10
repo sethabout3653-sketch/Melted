@@ -13,6 +13,7 @@ export interface InAppNotification {
   id: string;
   sender_name: string;
   avatar_color: string;
+  avatar_url?: string;
   content: string;
   timestamp: string;
   attachment_type?: string;
@@ -60,13 +61,16 @@ export function useGlobalChat(options?: { isChatTabActive?: boolean }) {
     const savedId = localStorage.getItem('frosted_chat_user_id') || ('u_' + Math.random().toString(36).substr(2, 6));
     const savedName = localStorage.getItem('frosted_chat_username') || ('Player_' + Math.floor(100 + Math.random() * 900));
     const savedColor = localStorage.getItem('frosted_chat_usercolor') || '#0066ff';
+    const savedAvatarUrl = localStorage.getItem('frosted_chat_user_avatar') || '';
     localStorage.setItem('frosted_chat_user_id', savedId);
     localStorage.setItem('frosted_chat_username', savedName);
     localStorage.setItem('frosted_chat_usercolor', savedColor);
+    localStorage.setItem('frosted_chat_user_avatar', savedAvatarUrl);
     return {
       id: savedId,
       username: savedName,
       avatar_color: savedColor,
+      avatar_url: savedAvatarUrl,
     };
   });
 
@@ -89,12 +93,12 @@ export function useGlobalChat(options?: { isChatTabActive?: boolean }) {
 
   // Sync user profile with server when user connects or profile attributes change (prevents infinite loop!)
   useEffect(() => {
-    const userKey = `${currentUser.id}:${currentUser.username}:${currentUser.avatar_color}`;
+    const userKey = `${currentUser.id}:${currentUser.username}:${currentUser.avatar_color}:${currentUser.avatar_url || ''}`;
     if (isConnected && registeredKeyRef.current !== userKey) {
       registeredKeyRef.current = userKey;
       registerUser(currentUser);
     }
-  }, [isConnected, currentUser.id, currentUser.username, currentUser.avatar_color, registerUser]);
+  }, [isConnected, currentUser.id, currentUser.username, currentUser.avatar_color, currentUser.avatar_url, registerUser]);
 
   // Handle incoming call events from relay server
   useEffect(() => {
@@ -155,6 +159,7 @@ export function useGlobalChat(options?: { isChatTabActive?: boolean }) {
           id: lastMessage.id,
           sender_name: lastMessage.sender_name,
           avatar_color: lastMessage.avatar_color,
+          avatar_url: lastMessage.avatar_url,
           content: lastMessage.content,
           timestamp: lastMessage.timestamp,
           attachment_type: lastMessage.attachment_type,

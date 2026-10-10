@@ -7,6 +7,7 @@ export interface DbUser {
   id: string;
   username: string;
   avatar_color: string;
+  avatar_url?: string;
   current_channel: 'text-general' | 'voice-general' | 'video-general' | 'offline';
   is_speaking: boolean;
   is_muted: boolean;
@@ -23,6 +24,7 @@ export interface DbMessage {
   sender_id: string;
   sender_name: string;
   avatar_color: string;
+  avatar_url?: string;
   content: string;
   attachment_url?: string;
   attachment_type?: 'image' | 'video' | 'audio' | 'gif' | 'file' | string;
@@ -50,6 +52,7 @@ class WebSocketDatabase {
         id TEXT PRIMARY KEY,
         username TEXT NOT NULL,
         avatar_color TEXT NOT NULL,
+        avatar_url TEXT DEFAULT '',
         current_channel TEXT NOT NULL,
         is_speaking INTEGER NOT NULL DEFAULT 0,
         is_muted INTEGER NOT NULL DEFAULT 0,
@@ -66,6 +69,7 @@ class WebSocketDatabase {
         sender_id TEXT NOT NULL,
         sender_name TEXT NOT NULL,
         avatar_color TEXT NOT NULL,
+        avatar_url TEXT DEFAULT '',
         content TEXT NOT NULL,
         attachment_url TEXT,
         attachment_type TEXT,
@@ -81,6 +85,12 @@ class WebSocketDatabase {
     try {
       this.db.exec("ALTER TABLE users ADD COLUMN activity TEXT DEFAULT '';");
     } catch {}
+    try {
+      this.db.exec("ALTER TABLE users ADD COLUMN avatar_url TEXT DEFAULT '';");
+    } catch {}
+    try {
+      this.db.exec("ALTER TABLE messages ADD COLUMN avatar_url TEXT DEFAULT '';");
+    } catch {}
 
     // Reset transient users on server restart to keep presence accurate
     this.db.exec("DELETE FROM users WHERE current_channel = 'offline' OR updated_at < " + (Date.now() - 3600000));
@@ -92,6 +102,7 @@ class WebSocketDatabase {
       id: String(r.id),
       username: String(r.username),
       avatar_color: String(r.avatar_color),
+      avatar_url: r.avatar_url ? String(r.avatar_url) : '',
       current_channel: r.current_channel as any,
       is_speaking: Boolean(r.is_speaking),
       is_muted: Boolean(r.is_muted),
@@ -114,6 +125,7 @@ class WebSocketDatabase {
       id: String(row.id),
       username: String(row.username),
       avatar_color: String(row.avatar_color),
+      avatar_url: row.avatar_url ? String(row.avatar_url) : '',
       current_channel: row.current_channel as any,
       is_speaking: Boolean(row.is_speaking),
       is_muted: Boolean(row.is_muted),
@@ -128,12 +140,13 @@ class WebSocketDatabase {
   public upsertUser(user: DbUser) {
     const stmt = this.db.prepare(`
       INSERT INTO users (
-        id, username, avatar_color, current_channel,
+        id, username, avatar_color, avatar_url, current_channel,
         is_speaking, is_muted, is_deafened, has_video, is_screen_sharing, activity, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         username = excluded.username,
         avatar_color = excluded.avatar_color,
+        avatar_url = excluded.avatar_url,
         current_channel = excluded.current_channel,
         is_speaking = excluded.is_speaking,
         is_muted = excluded.is_muted,
@@ -147,6 +160,7 @@ class WebSocketDatabase {
       user.id,
       user.username,
       user.avatar_color,
+      user.avatar_url || '',
       user.current_channel,
       user.is_speaking ? 1 : 0,
       user.is_muted ? 1 : 0,
@@ -165,9 +179,9 @@ class WebSocketDatabase {
   public insertMessage(msg: DbMessage) {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO messages (
-        id, channel_id, sender_id, sender_name, avatar_color,
+        id, channel_id, sender_id, sender_name, avatar_color, avatar_url,
         content, attachment_url, attachment_type, attachment_name, timestamp, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
       msg.id,
@@ -175,6 +189,7 @@ class WebSocketDatabase {
       msg.sender_id,
       msg.sender_name,
       msg.avatar_color,
+      msg.avatar_url || '',
       msg.content,
       msg.attachment_url ?? null,
       msg.attachment_type ?? null,
@@ -192,6 +207,7 @@ class WebSocketDatabase {
       sender_id: String(r.sender_id),
       sender_name: String(r.sender_name),
       avatar_color: String(r.avatar_color),
+      avatar_url: r.avatar_url ? String(r.avatar_url) : '',
       content: String(r.content),
       attachment_url: r.attachment_url ?? undefined,
       attachment_type: r.attachment_type ?? undefined,
@@ -209,6 +225,7 @@ class WebSocketDatabase {
       sender_id: String(r.sender_id),
       sender_name: String(r.sender_name),
       avatar_color: String(r.avatar_color),
+      avatar_url: r.avatar_url ? String(r.avatar_url) : '',
       content: String(r.content),
       attachment_url: r.attachment_url ?? undefined,
       attachment_type: r.attachment_type ?? undefined,
@@ -365,6 +382,7 @@ export function initWebSocketDatabase(server: Server) {
                 id: uId,
                 username: msg.user.username,
                 avatar_color: msg.user.avatar_color || '#0066ff',
+                avatar_url: msg.user.avatar_url || '',
                 current_channel: msg.user.current_channel || 'text-general',
                 is_speaking: Boolean(msg.user.is_speaking),
                 is_muted: Boolean(msg.user.is_muted),

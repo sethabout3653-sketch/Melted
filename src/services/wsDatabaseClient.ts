@@ -7,7 +7,7 @@ export interface RtcSignalPayload {
   signal: any;
 }
 
-export function useWebSocketDatabase(currentUser: { id: string; username: string; avatar_color: string; activity?: string }) {
+export function useWebSocketDatabase(currentUser: { id: string; username: string; avatar_color: string; avatar_url?: string; activity?: string }) {
   const [users, setUsers] = useState<DbUser[]>([]);
   const [messages, setMessages] = useState<DbMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
@@ -85,6 +85,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
             id: u.id,
             username: u.username,
             avatar_color: u.avatar_color,
+            avatar_url: u.avatar_url || '',
             activity: u.activity || '',
             current_channel: 'text-general',
             is_speaking: false,
@@ -203,6 +204,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
           sender_id: u.id,
           sender_name: u.username,
           avatar_color: u.avatar_color,
+          avatar_url: u.avatar_url || '',
           content: content.trim(),
           attachment_url: attachment?.url,
           attachment_type: attachment?.type,
@@ -224,23 +226,24 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     }
   }, []);
 
-  const registerUser = useCallback((user: { id: string; username: string; avatar_color: string; activity?: string }) => {
+  const registerUser = useCallback((user: { id: string; username: string; avatar_color: string; avatar_url?: string; activity?: string }) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      const existingUser = users.find(u => u.id === user.id);
       wsRef.current.send(JSON.stringify({
         type: 'REGISTER_USER',
         user: {
           ...user,
-          activity: user.activity || '',
-          current_channel: 'text-general',
-          is_speaking: false,
-          is_muted: false,
-          is_deafened: false,
-          has_video: false,
-          is_screen_sharing: false,
+          activity: user.activity || existingUser?.activity || '',
+          current_channel: existingUser?.current_channel || 'text-general',
+          is_speaking: existingUser?.is_speaking || false,
+          is_muted: existingUser?.is_muted || false,
+          is_deafened: existingUser?.is_deafened || false,
+          has_video: existingUser?.has_video || false,
+          is_screen_sharing: existingUser?.is_screen_sharing || false,
         },
       }));
     }
-  }, []);
+  }, [users]);
 
   // Send WebRTC Signal
   const sendRtcSignal = useCallback((targetUserId: string, signal: any) => {
