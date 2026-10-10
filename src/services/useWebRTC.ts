@@ -3,12 +3,18 @@ import { DbUser } from '../server/wsDatabase';
 
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [
-    // Standard STUN servers for NAT traversal
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
-    // TURN over TLS on port 443 (encrypted)
+    { urls: 'stun:stun2.l.google.com:19302' },
+    { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:stun.relay.metered.ca:80' },
     {
-      urls: 'turns:standard.relay.metered.ca:443',
+      urls: 'turn:standard.relay.metered.ca:80',
+      username: 'e713606f33230a169b51ee21',
+      credential: 'fWc00dvyjWp+O3f3',
+    },
+    {
+      urls: 'turn:standard.relay.metered.ca:443',
       username: 'e713606f33230a169b51ee21',
       credential: 'fWc00dvyjWp+O3f3',
     },
