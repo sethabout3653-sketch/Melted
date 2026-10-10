@@ -243,7 +243,7 @@ class WebSocketDatabase {
 export function initWebSocketDatabase(server: Server) {
   const wss = new WebSocketServer({ server, path: '/ws-db' });
   const db = new WebSocketDatabase();
-  
+
   // Track multiple sockets per user ID (for multi-tab support)
   const userIdToSockets = new Map<string, Set<WebSocket>>();
 
@@ -372,7 +372,7 @@ export function initWebSocketDatabase(server: Server) {
             if (msg.user && typeof msg.user.id === 'string') {
               const uId: string = msg.user.id;
               boundUserId = uId;
-              
+
               if (!userIdToSockets.has(uId)) {
                 userIdToSockets.set(uId, new Set());
               }
@@ -398,6 +398,23 @@ export function initWebSocketDatabase(server: Server) {
                 broadcastMediaPresence('USER_JOINED_MEDIA', uId, msg.user.current_channel);
               }
             }
+            break;
+          }
+
+          case 'MEDIA_STATE_SIGNAL': {
+            if (!msg.fromUserId || !msg.mediaType || !msg.state) break;
+            const user = db.getUser(msg.fromUserId);
+            if (!user) break;
+
+            const nextUser: DbUser = {
+              ...user,
+              has_video: msg.mediaType === 'camera' ? msg.state === 'on' : user.has_video,
+              is_screen_sharing: msg.mediaType === 'screen' ? msg.state === 'on' : user.is_screen_sharing,
+              updated_at: Date.now(),
+            };
+
+            db.upsertUser(nextUser);
+            broadcastTable('users', db.selectUsers());
             break;
           }
 
