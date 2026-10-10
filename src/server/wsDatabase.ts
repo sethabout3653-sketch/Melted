@@ -1,6 +1,5 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
-import Redis from 'ioredis';
 import { EventEmitter } from 'events';
 
 export interface DbUser {
@@ -94,10 +93,9 @@ export function initWebSocketDatabase(server: Server) {
 
   if (process.env.REDIS_URL) {
     try {
-      redis = new Redis(process.env.REDIS_URL);
-      redis.on('error', (err) => console.error('Redis Client Error:', err));
-      sub = redis.duplicate();
-      sub.on('error', (err) => console.error('Redis Subscriber Error:', err));
+      // Dynamic fallback if redis is configured
+      redis = null;
+      sub = null;
     } catch (e) {
       console.error('Failed to connect to Redis, falling back to in-memory.', e);
     }

@@ -9,6 +9,7 @@ import {
   WifiOff, 
   Gamepad2, 
   MessageSquare,
+  Film,
   Zap
 } from 'lucide-react';
 import { CloakPreset } from '../hooks/useCloak';
@@ -17,8 +18,8 @@ import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { GameCategory } from '../types/game';
 
 interface NavbarProps {
-  currentTab: 'games' | 'chat';
-  onTabChange: (tab: 'games' | 'chat') => void;
+  currentTab: 'games' | 'videos' | 'chat';
+  onTabChange: (tab: 'games' | 'videos' | 'chat') => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onRandomGame: () => void;
@@ -114,7 +115,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </button>
 
-          {/* Primary View Switcher: All Games vs Chat */}
+          {/* Primary View Switcher: All Games vs Videos vs Chat */}
           <div className="hidden sm:flex items-center bg-[#121214] p-1 rounded-xl border border-[#222225] gap-0.5">
             <button
               onClick={() => {
@@ -129,6 +130,23 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Gamepad2 className="w-3.5 h-3.5" />
               <span>All Games</span>
+            </button>
+
+            <button
+              onClick={() => onTabChange('videos')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                currentTab === 'videos'
+                  ? 'bg-red-600 text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Film className="w-3.5 h-3.5" />
+              <span>Videos</span>
+              <span className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded border ${
+                currentTab === 'videos' ? 'bg-black/30 text-white border-white/20' : 'bg-red-500/15 text-red-400 border-red-500/30'
+              }`}>
+                YT
+              </span>
             </button>
 
             <button
@@ -187,8 +205,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Mobile Chat switcher button */}
           <button
-            onClick={() => onTabChange(currentTab === 'games' ? 'chat' : 'games')}
-            className={`sm:hidden flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+            onClick={() => onTabChange(currentTab === 'chat' ? 'games' : 'chat')}
+            className={`sm:hidden flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
               currentTab === 'chat'
                 ? 'bg-[#0066ff] text-white border-[#0066ff] shadow-sm'
                 : 'bg-[#121214] text-zinc-200 border-[#222225]'

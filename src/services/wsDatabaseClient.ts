@@ -49,10 +49,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
       reconnectionDelay: 100,
       reconnectionDelayMax: 1000,
       timeout: 10000,
-      // Aggressive heartbeat as requested
-      pingInterval: 100,
-      pingTimeout: 1000,
-    });
+    } as any);
     socketRef.current = socket;
 
     socket.on('connect', () => {
