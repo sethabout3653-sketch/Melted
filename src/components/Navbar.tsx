@@ -114,7 +114,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </div>
           </button>
 
-          {/* Primary View Switcher: All Games vs Chat */}
+          {/* Primary View Switcher: All Games vs Videos vs Chat */}
           <div className="hidden sm:flex items-center bg-[#121214] p-1 rounded-xl border border-[#222225] gap-0.5">
             <button
               onClick={() => {
@@ -130,6 +130,8 @@ export const Navbar: React.FC<NavbarProps> = ({
               <Gamepad2 className="w-3.5 h-3.5" />
               <span>All Games</span>
             </button>
+
+
 
             <button
               onClick={() => onTabChange('chat')}
@@ -187,8 +189,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Mobile Chat switcher button */}
           <button
-            onClick={() => onTabChange(currentTab === 'games' ? 'chat' : 'games')}
-            className={`sm:hidden flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
+            onClick={() => onTabChange(currentTab === 'chat' ? 'games' : 'chat')}
+            className={`sm:hidden flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
               currentTab === 'chat'
                 ? 'bg-[#0066ff] text-white border-[#0066ff] shadow-sm'
                 : 'bg-[#121214] text-zinc-200 border-[#222225]'

@@ -4,7 +4,7 @@
     <script>
       (function(){
         try {
-          var winUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+          var winUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/154.0.0.0 Safari/537.36';
           Object.defineProperty(navigator, 'userAgent', { get: function() { return winUA; }, configurable: true });
           Object.defineProperty(navigator, 'platform', { get: function() { return 'Win32'; }, configurable: true });
           Object.defineProperty(navigator, 'vendor', { get: function() { return 'Google Inc.'; }, configurable: true });
@@ -13,8 +13,8 @@
               get: function() {
                 return {
                   brands: [
-                    { brand: 'Chromium', version: '124' },
-                    { brand: 'Google Chrome', version: '124' }
+                    { brand: 'Chromium', version: '154' },
+                    { brand: 'Google Chrome', version: '154' }
                   ],
                   mobile: false,
                   platform: 'Windows',
@@ -48,8 +48,30 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link id="dynamic-favicon" rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%230066FF'/><path d='M30 65 Q50 25 70 65 Q60 80 50 65 Q40 80 30 65 Z' fill='%23FFF'/></svg>" />
-    <!-- Lumin SDK for Headless Game Catalog -->
-    <script src="https://cdn.jsdelivr.net/gh/luminsdk/script@latest/lumin.min.js"></script>
+    <!-- Lumin SDK Loader -->
+    <script>
+      (function() {
+        var sources = [
+          "/api/lumin.min.js",
+          "https://cdn.jsdelivr.net/gh/luminsdk/script@latest/lumin.min.js",
+          "https://unpkg.com/luminsdk@latest/dist/lumin.min.js",
+          "https://raw.githubusercontent.com/luminsdk/script/main/lumin.min.js"
+        ];
+        
+        function loadNext(index) {
+          if (index >= sources.length) {
+            console.warn("All Lumin SDK sources failed.");
+            return;
+          }
+          var script = document.createElement('script');
+          script.src = sources[index];
+          script.onerror = function() { loadNext(index + 1); };
+          document.head.appendChild(script);
+        }
+        
+        loadNext(0);
+      })();
+    </script>
   </head>
   <body class="bg-[#050505] text-[#f1f3f9] antialiased selection:bg-[#0066ff] selection:text-white">
     <div id="root"></div>

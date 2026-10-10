@@ -21,6 +21,8 @@ import {
   ArrowRight,
   Gamepad2,
   MessageSquare,
+  Play,
+  Pause,
   Zap
 } from 'lucide-react';
 
@@ -240,7 +242,9 @@ export default function App() {
   const hasMore = visibleCount < filteredGames.length;
 
   return (
-    <div className="min-h-screen bg-[#050505] text-[#f4f4f5] flex flex-col font-sans selection:bg-[#0066ff] selection:text-white">
+    <div className={`bg-[#050505] text-[#f4f4f5] flex flex-col font-sans selection:bg-[#0066ff] selection:text-white ${
+      currentTab === 'chat' ? 'h-screen h-[100dvh] overflow-hidden' : 'min-h-screen'
+    }`}>
       <FrostedLoadingScreen isLoading={isCatalogLoading} />
       
       {/* Top Navigation Bar: Sleek Black and Electric Blue */}
@@ -271,9 +275,11 @@ export default function App() {
         isConnected={globalChat.isConnected}
       />
 
-      {/* Main View: Either Discord Chat OR Games Catalog */}
+      {/* Main View: Chat OR Games Catalog */}
       {currentTab === 'chat' ? (
-        <ChatView globalChat={globalChat} />
+        <div className="flex-1 w-full h-[calc(100vh-64px)] overflow-hidden">
+          <ChatView globalChat={globalChat} />
+        </div>
       ) : (
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
           
@@ -449,10 +455,10 @@ export default function App() {
                 </ul>
               </div>
 
-              {/* Community & Stealth */}
+              {/* Community & Media */}
               <div className="space-y-2">
                 <div className="text-xs font-bold uppercase tracking-wider text-zinc-300">
-                  Community & Stealth
+                  Media & Community
                 </div>
                 <ul className="space-y-1.5 text-xs text-zinc-400">
                   <li>
@@ -493,6 +499,7 @@ export default function App() {
         </footer>
       )}
 
+
       {/* Floating Offline Notification */}
       <OfflineIndicator
         cachedCount={cachedIds.size}
@@ -509,6 +516,39 @@ export default function App() {
           onToggleFavorite={handleToggleFavorite}
         />
       )}
+
+      {/* Mobile Bottom Navigation Bar (Visible only on mobile screens < 640px) */}
+      <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#09090b]/95 backdrop-blur-md border-t border-[#1f1f23] px-3 py-2 flex items-center justify-around shadow-2xl">
+        <button
+          onClick={() => {
+            setCurrentTab('games');
+            if (showFavoritesOnly) setShowFavoritesOnly(false);
+          }}
+          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-[11px] font-bold transition-colors cursor-pointer ${
+            currentTab === 'games' ? 'text-[#0066ff]' : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          <Gamepad2 className="w-5 h-5" />
+          <span>Games</span>
+        </button>
+
+
+
+        <button
+          onClick={() => setCurrentTab('chat')}
+          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-[11px] font-bold transition-colors cursor-pointer ${
+            currentTab === 'chat' ? 'text-[#0066ff]' : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          <div className="relative">
+            <MessageSquare className="w-5 h-5" />
+            {globalChat.users.length > 0 && (
+              <span className="absolute -top-1 -right-2 w-2 h-2 rounded-full bg-blue-500 ring-2 ring-black" />
+            )}
+          </div>
+          <span>Chat</span>
+        </button>
+      </nav>
 
     </div>
   );

@@ -496,7 +496,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     isConnected,
   } = globalChat;
 
-  const [activeChannel, setActiveChannel] = useState<'text-general' | 'video-general'>('text-general');
+  const [activeChannel, setActiveChannel] = useState<'text-general' | 'voice-general' | 'video-general'>('text-general');
+  const [protectedNetwork, setProtectedNetwork] = useState(() => {
+    return localStorage.getItem('frosted_protected_network') === 'true';
+  });
+  const toggleProtectedNetwork = () => {
+    const next = !protectedNetwork;
+    setProtectedNetwork(next);
+    localStorage.setItem('frosted_protected_network', String(next));
+  };
   const [inputText, setInputText] = useState('');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [editName, setEditName] = useState('');
@@ -580,7 +588,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     );
   }, [users, currentUser.id]);
 
-  const isMediaActive = activeChannel === 'video-general' || isInVideo;
+  const isMediaActive = activeChannel === 'video-general' || activeChannel === 'voice-general' || isInVideo || localAudioStream !== null;
 
   const activePeers = useMemo(() => {
     if (!isMediaActive) return [];
@@ -589,10 +597,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
   const { remoteStreams, remoteSpeaking } = useWebRTC({
     currentUserId: currentUser.id,
-    activeChannel: isMediaActive ? 'video-general' : 'text-general',
+    activeChannel,
     localAudioStream,
     localVideoStream: activeVideoStream,
     peers: activePeers,
+    protectedNetwork,
     sendRtcSignal,
     setRtcSignalHandler,
     setMediaHandlers,
@@ -768,10 +777,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     }
 
     setIsInVideo(true);
-    setActiveChannel('video-general');
+    setActiveChannel(withVideo ? 'video-general' : 'voice-general');
 
     updateUser({
-      current_channel: 'video-general',
+      current_channel: withVideo ? 'video-general' : 'voice-general',
       has_video: !!videoStream,
       is_speaking: false,
       is_muted: false,
@@ -896,11 +905,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     setIsDeafened(!isDeafened);
   };
 
-  const handleChannelSelect = (channel: 'text-general' | 'video-general') => {
+  const handleChannelSelect = (channel: 'text-general' | 'voice-general' | 'video-general') => {
     setActiveChannel(channel);
     updateUser({ current_channel: channel });
-    if (channel === 'video-general' && !isInVideo) {
-      joinVoiceChannel(false);
+    if ((channel === 'video-general' || channel === 'voice-general') && !isInVideo) {
+      joinVoiceChannel(channel === 'video-general');
     }
   };
 
@@ -1179,6 +1188,22 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               </div>
 
               <button
+                onClick={() => handleChannelSelect('voice-general')}
+                className={`w-full px-3 py-2.5 rounded-xl flex items-center justify-between transition-all cursor-pointer ${
+                  activeChannel === 'voice-general'
+                    ? 'bg-blue-600 text-white font-extrabold shadow-md shadow-blue-600/20'
+                    : 'text-zinc-400 hover:text-white hover:bg-white/5 font-semibold'
+                }`}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Mic className="w-4 h-4 text-blue-400" />
+                  <span className="text-xs">General Voice (Audio)</span>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-600/20 text-blue-400 font-bold border border-blue-500/30">
+                  {voiceUsers.length + (isInVideo ? 1 : 0)}
+                </span>
+              </button>
+              <button
                 onClick={() => handleChannelSelect('video-general')}
                 className={`w-full px-3 py-2.5 rounded-xl flex items-center justify-between transition-all cursor-pointer ${
                   activeChannel === 'video-general'
@@ -1187,12 +1212,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 }`}
               >
                 <div className="flex items-center gap-2.5">
-                  <Mic className="w-4 h-4 text-blue-400" />
-                  <span className="text-xs">General Voice</span>
+                  <Monitor className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs">General Video & Voice</span>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-600/20 text-blue-400 font-bold border border-blue-500/30">
-                  {voiceUsers.length + (isInVideo ? 1 : 0)}
-                </span>
               </button>
             </div>
 
@@ -1754,7 +1776,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         )}
 
         {/* VOICE & CALL ROOM VIEW */}
-        {activeChannel === 'video-general' && (
+        {(activeChannel === 'video-general' || activeChannel === 'voice-general') && (
           <div className="flex-1 flex overflow-hidden">
             
             {/* Main Stage Area */}
