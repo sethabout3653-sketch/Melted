@@ -596,15 +596,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const [audioLevel, setAudioLevel] = useState<number>(0);
   const [isMicTesting, setIsMicTesting] = useState(false);
 
-  // Auto-stop local screen share if another user starts sharing to prevent lag
-  useEffect(() => {
-    const isSomeoneElseSharing = voiceUsers.some(u => u.id !== currentUser.id && u.is_screen_sharing);
-    if (isSomeoneElseSharing && isScreenSharing) {
-      console.log('[ScreenShare] Another user started sharing, stopping local screen share');
-      toggleScreenShare();
-    }
-  }, [voiceUsers, isScreenSharing, currentUser.id]);
-
   useEffect(() => {
     setEditName(currentUser.username);
     setEditColor(currentUser.avatar_color || '#0066ff');
@@ -638,8 +629,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       return await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'user',
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
         },
         audio: false,
       });
