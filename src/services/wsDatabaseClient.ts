@@ -15,11 +15,9 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
 
   const socketRef = useRef<Socket | null>(null);
 
-  // Use a ref for currentUser to avoid reconnecting when only username/avatar changes
   const currentUserRef = useRef(currentUser);
   currentUserRef.current = currentUser;
 
-  // Callbacks for WebRTC signaling
   const onRtcSignalRef = useRef<((fromUserId: string, signal: any) => void) | null>(null);
   const onUserCallRef = useRef<((fromUserId: string, fromUserName: string, callType: 'audio' | 'video') => void) | null>(null);
   const onUserJoinedMediaRef = useRef<((userId: string, channel: string) => void) | null>(null);
@@ -76,8 +74,8 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     });
 
     socket.on('DB_INIT', (data) => {
-      setUsers(data.users);
-      setMessages(data.messages);
+      if (data?.users) setUsers(data.users);
+      if (data?.messages) setMessages(data.messages);
     });
 
     socket.on('DB_SYNC', (data) => {
@@ -101,8 +99,38 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
       if (onUserLeftMediaRef.current) onUserLeftMediaRef.current(msg.userId, msg.channel);
     });
 
+    // Server-Sent Events (SSE) fallback / redundancy event stream as requested
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource('/api/events');
+      eventSource.addEventListener('DB_SYNC', (event: any) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.table === 'users') setUsers(data.data);
+          else if (data.table === 'messages') setMessages(data.data);
+        } catch {}
+      });
+      eventSource.addEventListener('USER_JOINED_MEDIA', (event: any) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (onUserJoinedMediaRef.current && data.userId && data.channel) {
+            onUserJoinedMediaRef.current(data.userId, data.channel);
+          }
+        } catch {}
+      });
+      eventSource.addEventListener('USER_LEFT_MEDIA', (event: any) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (onUserLeftMediaRef.current && data.userId && data.channel) {
+            onUserLeftMediaRef.current(data.userId, data.channel);
+          }
+        } catch {}
+      });
+    } catch (e) {}
+
     return () => {
       socket.disconnect();
+      if (eventSource) eventSource.close();
     };
   }, []);
 
@@ -182,4 +210,3 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     ws: socketRef.current,
   };
 }
-

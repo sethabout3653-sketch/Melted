@@ -1,0 +1,47 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Application user profile and state",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "User unique ID" },
+        "username": { "type": "string", "description": "Username" },
+        "avatar_color": { "type": "string", "description": "Avatar background color" },
+        "avatar_url": { "type": "string", "description": "Avatar image URL" },
+        "current_channel": { "type": "string", "description": "Active channel" },
+        "is_speaking": { "type": "boolean", "description": "Speaking state" },
+        "is_muted": { "type": "boolean", "description": "Muted state" },
+        "is_deafened": { "type": "boolean", "description": "Deafened state" },
+        "has_video": { "type": "boolean", "description": "Video state" },
+        "is_screen_sharing": { "type": "boolean", "description": "Screen sharing state" }
+      },
+      "required": ["id", "username"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Chat message",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Message ID" },
+        "channel_id": { "type": "string", "description": "Channel ID" },
+        "sender_id": { "type": "string", "description": "Sender user ID" },
+        "sender_name": { "type": "string", "description": "Sender username" },
+        "avatar_color": { "type": "string", "description": "Sender avatar color" },
+        "content": { "type": "string", "description": "Message content" },
+        "created_at": { "type": "number", "description": "Timestamp" }
+      },
+      "required": ["id", "channel_id", "sender_id", "content"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles collection"
+    },
+    "messages/{messageId}": {
+      "schema": { "$ref": "#/entities/Message" },
+      "description": "Chat messages collection"
+    }
+  }
+}
