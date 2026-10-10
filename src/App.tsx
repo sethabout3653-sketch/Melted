@@ -13,6 +13,8 @@ import { fetchLuminGames, getInitialLuminGames } from './services/luminService';
 import { useCloak, launchAboutBlank } from './hooks/useCloak';
 import { useGameCache } from './hooks/useGameCache';
 import { useGlobalChat } from './hooks/useGlobalChat';
+import { useDeviceAdaptation } from './hooks/useDeviceAdaptation';
+import { DeviceAdaptationBar } from './components/DeviceAdaptationBar';
 import { GameItem, GameCategory } from './types/game';
 import { 
   Snowflake, 
@@ -63,6 +65,33 @@ export default function App() {
 
   // Global Chat and Notifications
   const globalChat = useGlobalChat();
+
+  // Multi-Device Adaptation System (Mobile, Console, PC, Desktop)
+  const deviceInfo = useDeviceAdaptation({
+    onTabToggle: () => {
+      setCurrentTab((prev) => (prev === 'games' ? 'chat' : 'games'));
+    },
+    onClose: () => {
+      if (activeGame) {
+        setActiveGame(null);
+      }
+    },
+    onSearch: () => {
+      setCurrentTab('games');
+      const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement;
+      searchInput?.focus();
+    },
+    onSurprise: () => {
+      // Trigger random game from catalog
+      try {
+        const available = allGames.length > 0 ? allGames : getAllGames();
+        if (available.length > 0) {
+          const rand = available[Math.floor(Math.random() * available.length)];
+          setActiveGame(rand);
+        }
+      } catch {}
+    },
+  });
 
   // Master Catalog Load: Instant local boot + background 1,169+ Lumin catalog sync
   useEffect(() => {
@@ -315,13 +344,30 @@ export default function App() {
         isConnected={globalChat.isConnected}
       />
 
+      {/* Multi-Device Adaptation Bar (Console Gamepad HUD & Mobile Bottom Navigation) */}
+      <DeviceAdaptationBar
+        deviceInfo={deviceInfo}
+        currentTab={currentTab}
+        onTabChange={setCurrentTab}
+        favoritesCount={favorites.length}
+        showFavoritesOnly={showFavoritesOnly}
+        onToggleFavoritesOnly={() => {
+          setShowFavoritesOnly(!showFavoritesOnly);
+          if (!showFavoritesOnly) setSelectedCategory('Favorites');
+          else setSelectedCategory('All');
+        }}
+        onRandomGame={handleRandomGame}
+        onlineCount={globalChat.users.length}
+        isConnected={globalChat.isConnected}
+      />
+
       {/* Main View: Either Discord Chat OR Games Catalog */}
       {currentTab === 'chat' ? (
-        <div className="flex-1 min-h-0 w-full overflow-hidden flex flex-col">
+        <div className={`flex-1 min-h-0 w-full overflow-hidden flex flex-col ${deviceInfo.isMobile ? 'pb-16' : ''}`}>
           <ChatView globalChat={globalChat} />
         </div>
       ) : (
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+        <main className={`flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 ${deviceInfo.isMobile ? 'pb-24' : ''}`}>
           
           {/* Hero Spotlight: Shown on default landing */}
           {!searchQuery && selectedCategory === 'All' && !showFavoritesOnly && (
@@ -389,8 +435,8 @@ export default function App() {
               </button>
             </div>
           ) : (
-            /* Game Grid */
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+            /* Game Grid: Responsive 2-columns on mobile, 3 on tablet, 4-5 on desktop & console */
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-5">
               {visibleGames.map((game) => (
                 <GameCard
                   key={game.id}

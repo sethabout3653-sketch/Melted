@@ -11,9 +11,11 @@ import {
   PlusCircle, 
   Search, 
   Monitor, 
+  Smartphone,
   RotateCw, 
   AlertCircle, 
   X, 
+  Menu,
   Users, 
   Gamepad2, 
   MessageSquare, 
@@ -227,48 +229,171 @@ const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened:
   return <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />;
 };
 
-// Remote Video Player
-const RemoteVideoPlayer: React.FC<{ stream: MediaStream | undefined }> = ({ stream }) => {
+// Remote Video Player with loading screen & orientation detection
+const RemoteVideoPlayer: React.FC<{ 
+  stream: MediaStream | undefined;
+  username: string;
+  avatarColor?: string;
+  onOrientationChange?: (isVertical: boolean) => void;
+}> = ({ stream, username, avatarColor, onOrientationChange }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isVertical, setIsVertical] = useState(false);
 
   useEffect(() => {
-    if (videoRef.current && stream) {
-      if (videoRef.current.srcObject !== stream) {
-        videoRef.current.srcObject = stream;
+    setIsLoaded(false);
+    const video = videoRef.current;
+    if (video && stream) {
+      if (video.srcObject !== stream) {
+        video.srcObject = stream;
       }
-      videoRef.current.play().catch(() => {});
+      video.play().catch(() => {});
     }
   }, [stream]);
 
+  const checkOrientation = () => {
+    const video = videoRef.current;
+    if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+      const vertical = video.videoHeight > video.videoWidth;
+      setIsVertical(vertical);
+      onOrientationChange?.(vertical);
+      setIsLoaded(true);
+    }
+  };
+
   return (
-    <video
-      ref={videoRef}
-      autoPlay
-      playsInline
-      className="w-full h-full object-cover bg-black rounded-3xl"
-    />
+    <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-black">
+      {/* Loading Screen UI before video media arrives and renders */}
+      {!isLoaded && (
+        <div className="absolute inset-0 bg-[#0e0e14] flex flex-col items-center justify-center p-4 z-10 animate-in fade-in duration-200">
+          <div className="relative flex items-center justify-center mb-3">
+            <div className="absolute w-16 h-16 rounded-full bg-blue-500/20 animate-ping" />
+            <div 
+              className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-base font-black shadow-lg shadow-blue-500/10"
+              style={{ backgroundColor: avatarColor || '#0066ff' }}
+            >
+              <Video className="w-7 h-7 text-white animate-pulse" />
+            </div>
+          </div>
+          <p className="text-xs font-bold text-white tracking-wide">Connecting Camera</p>
+          <p className="text-[11px] text-zinc-400 mt-0.5">{username}&apos;s stream initializing...</p>
+        </div>
+      )}
+
+      {/* Video element (muted prevents iOS autoplay restriction) */}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        onLoadedMetadata={checkOrientation}
+        onLoadedData={checkOrientation}
+        onCanPlay={checkOrientation}
+        className={`w-full h-full object-cover rounded-3xl transition-opacity duration-300 ${
+          isLoaded ? 'opacity-100' : 'opacity-0'
+        }`}
+      />
+
+      {/* Camera Orientation Indicator Badge */}
+      {isLoaded && (
+        <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-semibold text-zinc-200 shadow-sm pointer-events-none">
+          {isVertical ? (
+            <>
+              <Smartphone className="w-3 h-3 text-cyan-400 shrink-0" />
+              <span>Vertical (Mobile)</span>
+            </>
+          ) : (
+            <>
+              <Monitor className="w-3 h-3 text-blue-400 shrink-0" />
+              <span>Horizontal</span>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 };
 
-// Local Video Player
-const LocalVideoPlayer: React.FC<{ stream: MediaStream | null }> = ({ stream }) => {
+// Local Video Player with loading screen & orientation detection
+const LocalVideoPlayer: React.FC<{ 
+  stream: MediaStream | null;
+  isLoading?: boolean;
+  onOrientationChange?: (isVertical: boolean) => void;
+}> = ({ stream, isLoading, onOrientationChange }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+  const [isVertical, setIsVertical] = useState(false);
 
   useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-      videoRef.current.play().catch(() => {});
+    setIsLoaded(false);
+    const video = videoRef.current;
+    if (video && stream) {
+      if (video.srcObject !== stream) {
+        video.srcObject = stream;
+      }
+      video.play().catch(() => {});
     }
   }, [stream]);
 
+  const checkOrientation = () => {
+    const video = videoRef.current;
+    if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+      const vertical = video.videoHeight > video.videoWidth;
+      setIsVertical(vertical);
+      onOrientationChange?.(vertical);
+      setIsLoaded(true);
+    }
+  };
+
+  const showLoading = isLoading || !isLoaded;
+
   return (
-    <video
-      ref={videoRef}
-      autoPlay
-      muted
-      playsInline
-      className="w-full h-full object-cover bg-black rounded-3xl transform scale-x-[-1]"
-    />
+    <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-black">
+      {/* Loading Screen UI before local camera shows media */}
+      {showLoading && (
+        <div className="absolute inset-0 bg-[#0e0e14] flex flex-col items-center justify-center p-4 z-10 animate-in fade-in duration-200">
+          <div className="relative flex items-center justify-center mb-3">
+            <div className="absolute w-16 h-16 rounded-full bg-blue-500/20 animate-ping" />
+            <div className="w-14 h-14 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shadow-lg shadow-blue-600/20">
+              <Video className="w-7 h-7 text-blue-400 animate-pulse" />
+            </div>
+          </div>
+          <p className="text-xs font-bold text-white tracking-wide">Starting Camera</p>
+          <p className="text-[11px] text-zinc-400 mt-0.5">Detecting camera orientation...</p>
+        </div>
+      )}
+
+      {/* Local Video Stream with mirror preview */}
+      <video
+        ref={videoRef}
+        autoPlay
+        muted
+        playsInline
+        onLoadedMetadata={checkOrientation}
+        onLoadedData={checkOrientation}
+        onCanPlay={checkOrientation}
+        className={`w-full h-full object-cover rounded-3xl transform scale-x-[-1] transition-opacity duration-300 ${
+          isLoaded && !isLoading ? 'opacity-100' : 'opacity-0'
+        }`}
+      />
+
+      {/* Camera Orientation Indicator Badge */}
+      {isLoaded && !isLoading && (
+        <div className="absolute top-3 right-3 z-20 flex items-center gap-1.5 px-2 py-1 rounded-lg bg-black/60 backdrop-blur-md border border-white/10 text-[10px] font-semibold text-zinc-200 shadow-sm pointer-events-none">
+          {isVertical ? (
+            <>
+              <Smartphone className="w-3 h-3 text-cyan-400 shrink-0" />
+              <span>Vertical (Mobile)</span>
+            </>
+          ) : (
+            <>
+              <Monitor className="w-3 h-3 text-blue-400 shrink-0" />
+              <span>Horizontal</span>
+            </>
+          )}
+        </div>
+      )}
+    </div>
   );
 };
 
@@ -346,12 +471,47 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const [isInVideo, setIsInVideo] = useState(false);
   const [isCameraStarting, setIsCameraStarting] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [localIsVertical, setLocalIsVertical] = useState(false);
+  const [peerOrientations, setPeerOrientations] = useState<Record<string, boolean>>({});
+
+  // Mobile-compatible camera streamer with automatic resolution/facingMode fallbacks
+  const acquireCameraStream = async (): Promise<MediaStream> => {
+    // 1. Mobile-friendly: facingMode 'user'
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user',
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
+        audio: false,
+      });
+    } catch {
+      // 2. Mobile fallback without width/height constraints (prevents iOS/Android orientation overconstraint)
+      try {
+        return await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' },
+          audio: false,
+        });
+      } catch {
+        // 3. Permissive generic video fallback for webviews
+        return await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
+    }
+  };
 
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
   const [isVideoEnabled, setIsVideoEnabled] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
+
+  // Mobile Drawer toggles for adapting to mobile devices
+  const [isMobileChannelsOpen, setIsMobileChannelsOpen] = useState(false);
+  const [isMobileMembersOpen, setIsMobileMembersOpen] = useState(false);
 
   // Local Reactive Media Streams
   const [localAudioStream, setLocalAudioStream] = useState<MediaStream | null>(null);
@@ -656,14 +816,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     if (withVideo) {
       setIsCameraStarting(true);
       try {
-        videoStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: 'user',
-          },
-          audio: false,
-        });
+        videoStream = await acquireCameraStream();
 
         cameraStreamRef.current = videoStream;
         setActiveVideoStream(videoStream);
@@ -705,14 +858,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       setIsCameraStarting(true);
       setCameraError(null);
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            facingMode: 'user',
-          },
-          audio: false,
-        });
+        const stream = await acquireCameraStream();
 
         cameraStreamRef.current = stream;
         setIsVideoEnabled(true);
@@ -1039,8 +1185,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         />
       ))}
 
-      {/* LEFT NAVIGATION SIDEBAR */}
-      <aside className="w-64 bg-[#0c0c0f] border-r border-[#1a1a20] flex flex-col justify-between shrink-0 overflow-hidden">
+      {/* LEFT NAVIGATION SIDEBAR - Desktop view */}
+      <aside className="hidden md:flex w-64 bg-[#0c0c0f] border-r border-[#1a1a20] flex-col justify-between shrink-0 overflow-hidden">
         <div className="p-4 space-y-6 shrink-0">
           
           {/* Header Branding */}
@@ -1164,6 +1310,153 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
       </aside>
 
+      {/* LEFT NAVIGATION DRAWER - Mobile overlay */}
+      {isMobileChannelsOpen && (
+        <div className="fixed inset-0 z-50 md:hidden flex animate-in fade-in duration-200">
+          <div 
+            className="fixed inset-0 bg-black/75 backdrop-blur-sm"
+            onClick={() => setIsMobileChannelsOpen(false)}
+          />
+          <aside className="relative w-72 max-w-[85vw] h-full bg-[#0c0c0f] border-r border-[#1a1a20] flex flex-col justify-between z-10 shadow-2xl animate-in slide-in-from-left duration-200">
+            <div className="p-4 space-y-6 shrink-0">
+              
+              {/* Header Branding with Close Button */}
+              <div className="flex items-center justify-between pb-2 border-b border-[#18181f]">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-sm shadow-lg shadow-blue-600/30">
+                    <Gamepad2 className="w-5 h-5" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="font-black text-white text-sm tracking-wide">Frosted</h1>
+                    <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-blue-400' : 'bg-amber-400'}`} />
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsMobileChannelsOpen(false)}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* CHANNELS SECTION */}
+              <div className="space-y-4">
+                
+                {/* Text Channels */}
+                <div className="space-y-1">
+                  <div className="px-2 text-[10px] font-extrabold text-blue-400/80 tracking-wider uppercase">
+                    TEXT CHANNELS
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      handleChannelSelect('text-general');
+                      setIsMobileChannelsOpen(false);
+                    }}
+                    className={`w-full px-3 py-2.5 rounded-xl flex items-center justify-between transition-all cursor-pointer ${
+                      activeChannel === 'text-general'
+                        ? 'bg-blue-600 text-white font-extrabold shadow-md shadow-blue-600/20'
+                        : 'text-zinc-400 hover:text-white hover:bg-white/5 font-semibold'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Hash className="w-4 h-4" />
+                      <span className="text-xs">general</span>
+                    </div>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/30 font-bold">
+                      {messages.length}
+                    </span>
+                  </button>
+                </div>
+
+                {/* Voice Channels */}
+                <div className="space-y-1">
+                  <div className="px-2 text-[10px] font-extrabold text-blue-400/80 tracking-wider uppercase flex items-center justify-between">
+                    <span>VOICE CHANNELS</span>
+                    {isInVideo && (
+                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-600/20 text-blue-400 border border-blue-500/30 font-black">
+                        Connected
+                      </span>
+                    )}
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      handleChannelSelect('video-general');
+                      setIsMobileChannelsOpen(false);
+                    }}
+                    className={`w-full px-3 py-2.5 rounded-xl flex items-center justify-between transition-all cursor-pointer ${
+                      activeChannel === 'video-general'
+                        ? 'bg-blue-600 text-white font-extrabold shadow-md shadow-blue-600/20'
+                        : 'text-zinc-400 hover:text-white hover:bg-white/5 font-semibold'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Mic className="w-4 h-4 text-blue-400" />
+                      <span className="text-xs">General Voice</span>
+                    </div>
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-600/20 text-blue-400 font-bold border border-blue-500/30">
+                      {voiceUsers.length + (isInVideo ? 1 : 0)}
+                    </span>
+                  </button>
+                </div>
+
+              </div>
+
+            </div>
+
+            {/* CURRENT USER FOOTER */}
+            <div className="p-3 bg-[#0a0a0d] border-t border-[#1a1a20] flex items-center justify-between shrink-0">
+              <div 
+                onClick={() => setIsProfileModalOpen(true)}
+                className="flex items-center gap-2.5 min-w-0 cursor-pointer p-1.5 rounded-xl hover:bg-white/5 transition-colors flex-1"
+              >
+                <div className="relative shrink-0">
+                  <div 
+                    className="w-9 h-9 rounded-full text-black font-extrabold flex items-center justify-center text-xs shadow-md"
+                    style={{ backgroundColor: currentUser.avatar_color || '#0066ff' }}
+                  >
+                    {currentUser.username.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#0a0a0d]" />
+                </div>
+
+                <div className="min-w-0">
+                  <div className="font-extrabold text-white text-xs truncate">
+                    {currentUser.username}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={toggleMute}
+                  className={`p-1.5 rounded-lg hover:bg-[#17171a] transition-colors cursor-pointer ${
+                    isMuted ? 'text-red-400 bg-red-500/10' : 'hover:text-white text-zinc-400'
+                  }`}
+                  title={isMuted ? 'Unmute' : 'Mute'}
+                >
+                  {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                </button>
+
+                <button
+                  onClick={toggleDeafen}
+                  className={`p-1.5 rounded-lg hover:bg-[#17171a] transition-colors cursor-pointer ${
+                    isDeafened ? 'text-amber-400' : 'hover:text-white text-zinc-400'
+                  }`}
+                  title={isDeafened ? 'Undeafen' : 'Deafen'}
+                >
+                  <Headphones className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+          </aside>
+        </div>
+      )}
+
       {/* Profile Edit Modal */}
       {isProfileModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -1278,25 +1571,46 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             <div className="flex-1 min-h-0 flex flex-col min-w-0 relative overflow-hidden">
               
               {/* Top Header */}
-              <header className="h-14 px-4 border-b border-[#1a1a20] flex items-center justify-between bg-[#08080a] shrink-0">
-                <div className="flex items-center gap-3 min-w-0">
-                  <Hash className="w-5 h-5 text-white" />
-                  <span className="font-extrabold text-white text-base">general</span>
-                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-600/15 text-blue-400 border border-blue-500/20 flex items-center gap-1.5">
+              <header className="h-14 px-3 sm:px-4 border-b border-[#1a1a20] flex items-center justify-between bg-[#08080a] shrink-0 gap-2">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  {/* Mobile Channels button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileChannelsOpen(true)}
+                    className="md:hidden p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                    title="Open Channels"
+                  >
+                    <Menu className="w-5 h-5" />
+                  </button>
+
+                  <Hash className="w-5 h-5 text-white shrink-0" />
+                  <span className="font-extrabold text-white text-sm sm:text-base truncate">general</span>
+                  <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-blue-600/15 text-blue-400 border border-blue-500/20 flex items-center gap-1.5 shrink-0">
                     <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
-                    {users.length} online
+                    <span>{users.length} online</span>
                   </span>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="relative">
+                <div className="flex items-center gap-2">
+                  <div className="relative hidden sm:block">
                     <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-2.5" />
                     <input 
                       type="text" 
                       placeholder="Search messages"
-                      className="bg-[#121215] border border-[#222228] text-xs text-white placeholder-zinc-500 rounded-xl pl-9 pr-3 py-2 w-48 focus:outline-none focus:border-blue-500"
+                      className="bg-[#121215] border border-[#222228] text-xs text-white placeholder-zinc-500 rounded-xl pl-9 pr-3 py-2 w-36 sm:w-48 focus:outline-none focus:border-blue-500"
                     />
                   </div>
+
+                  {/* Mobile / Tablet Members drawer toggle button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileMembersOpen(true)}
+                    className="lg:hidden p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+                    title="View Members"
+                  >
+                    <Users className="w-4 h-4" />
+                    <span className="hidden xs:inline text-[11px] text-zinc-400">{users.length}</span>
+                  </button>
                 </div>
               </header>
 
@@ -1675,8 +1989,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
             </div>
 
-            {/* Right Sidebar: Member List */}
-            <aside className="w-64 bg-[#08080a] border-l border-[#1a1a20] p-4 flex flex-col shrink-0 overflow-hidden">
+            {/* Right Sidebar: Member List - Desktop */}
+            <aside className="hidden lg:flex w-64 bg-[#08080a] border-l border-[#1a1a20] p-4 flex-col shrink-0 overflow-hidden">
               
               {/* ONLINE MEMBERS HEADER */}
               <div className="shrink-0 pb-3 flex items-center justify-between border-b border-[#14141a]">
@@ -1719,6 +2033,60 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
             </aside>
 
+            {/* Mobile / Tablet Members Drawer Overlay */}
+            {isMobileMembersOpen && (
+              <div className="fixed inset-0 z-50 lg:hidden flex justify-end animate-in fade-in duration-200">
+                <div 
+                  className="fixed inset-0 bg-black/75 backdrop-blur-sm"
+                  onClick={() => setIsMobileMembersOpen(false)}
+                />
+                <aside className="relative w-72 max-w-[85vw] h-full bg-[#08080a] border-l border-[#1a1a20] p-4 flex flex-col z-10 shadow-2xl animate-in slide-in-from-right duration-200">
+                  <div className="shrink-0 pb-3 flex items-center justify-between border-b border-[#14141a]">
+                    <div className="text-xs font-bold text-zinc-500 tracking-wider">
+                      <span>ONLINE — {users.length}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsMobileMembersOpen(false)}
+                      className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pt-3 pr-1">
+                    {users.map((u: any) => (
+                      <div key={u.id} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] transition-colors">
+                        <div className="relative shrink-0">
+                          <div 
+                            className="w-9 h-9 rounded-full text-black font-extrabold flex items-center justify-center text-xs shadow-sm"
+                            style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+                          >
+                            {u.username.slice(0, 2).toUpperCase()}
+                          </div>
+                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-extrabold text-white text-xs truncate">
+                              {u.username}
+                            </span>
+                            {u.id === currentUser.id && (
+                              <span className="text-[10px] text-zinc-500 font-medium shrink-0">
+                                (you)
+                              </span>
+                            )}
+                          </div>
+                          {renderUserActivity(u.activity || (u.current_channel === 'video-general' ? 'In General Voice' : 'In #general'))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </aside>
+              </div>
+            )}
+
           </div>
         )}
 
@@ -1730,44 +2098,86 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             <div className="flex-1 min-h-0 flex flex-col bg-[#050507] relative overflow-hidden">
               
               {/* Top Header */}
-              <div className="px-6 py-3.5 border-b border-[#1a1a20] bg-[#08080a] flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-400">
-                    <Mic className="w-5 h-5" />
+              <div className="px-4 sm:px-6 py-3.5 border-b border-[#1a1a20] bg-[#08080a] flex items-center justify-between shrink-0 gap-2">
+                <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                  {/* Mobile Channels button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileChannelsOpen(true)}
+                    className="md:hidden p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                    title="Open Channels"
+                  >
+                    <Menu className="w-5 h-5" />
+                  </button>
+
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+                    <Mic className="w-4 h-4 sm:w-5 sm:h-5" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-white text-base">General Voice</span>
+                      <span className="font-extrabold text-white text-sm sm:text-base truncate">General Voice</span>
                     </div>
-                    <span className="text-xs text-zinc-400 font-medium">
+                    <span className="text-[11px] sm:text-xs text-zinc-400 font-medium truncate block">
                       {voiceUsers.length + (isInVideo ? 1 : 0)} connected
                     </span>
                   </div>
                 </div>
 
-                <button
-                  onClick={toggleScreenShare}
-                  className={`px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-2 border transition-all cursor-pointer ${
-                    isScreenSharing ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white/5 border-white/10 hover:bg-white/10 text-zinc-200'
-                  }`}
-                >
-                  <Monitor className="w-4 h-4" />
-                  <span>{isScreenSharing ? 'Stop Screen' : 'Share Screen'}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={toggleScreenShare}
+                    className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 sm:gap-2 border transition-all cursor-pointer ${
+                      isScreenSharing ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white/5 border-white/10 hover:bg-white/10 text-zinc-200'
+                    }`}
+                  >
+                    <Monitor className="w-4 h-4" />
+                    <span className="hidden sm:inline">{isScreenSharing ? 'Stop Screen' : 'Share Screen'}</span>
+                  </button>
+
+                  {/* Mobile / Tablet Members drawer toggle button */}
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileMembersOpen(true)}
+                    className="lg:hidden p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+                    title="View Members"
+                  >
+                    <Users className="w-4 h-4" />
+                    <span className="hidden xs:inline text-[11px] text-zinc-400">{voiceUsers.length + (isInVideo ? 1 : 0)}</span>
+                  </button>
+                </div>
               </div>
 
               {/* Voice / Video Stage Grid */}
               <div className="flex-1 min-h-0 p-6 pb-28 flex items-center justify-center overflow-hidden">
                 
                 {isInVideo ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full max-w-5xl">
+                  <div className="flex flex-wrap items-center justify-center gap-6 w-full max-w-6xl max-h-full overflow-y-auto p-2">
                     
                     {/* Local User Tile */}
-                    <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 aspect-video flex flex-col items-center justify-center shadow-2xl ${
+                    <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                      isVideoEnabled && activeVideoStream && localIsVertical 
+                        ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
+                        : 'aspect-video w-full max-w-[500px]'
+                    } ${
                       isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
                     }`}>
                       {isVideoEnabled && activeVideoStream ? (
-                        <LocalVideoPlayer stream={activeVideoStream} />
+                        <LocalVideoPlayer 
+                          stream={activeVideoStream} 
+                          isLoading={isCameraStarting} 
+                          onOrientationChange={setLocalIsVertical} 
+                        />
+                      ) : isCameraStarting ? (
+                        <div className="absolute inset-0 bg-[#0e0e14] flex flex-col items-center justify-center p-4 z-10 animate-in fade-in duration-200">
+                          <div className="relative flex items-center justify-center mb-3">
+                            <div className="absolute w-16 h-16 rounded-full bg-blue-500/20 animate-ping" />
+                            <div className="w-14 h-14 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shadow-lg shadow-blue-600/20">
+                              <Video className="w-7 h-7 text-blue-400 animate-pulse" />
+                            </div>
+                          </div>
+                          <p className="text-xs font-bold text-white tracking-wide">Starting Camera</p>
+                          <p className="text-[11px] text-zinc-400 mt-0.5">Detecting camera orientation...</p>
+                        </div>
                       ) : (
                         <div className="relative flex items-center justify-center">
                           <div 
@@ -1782,7 +2192,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       )}
 
                       {/* Bottom-Left Overlay */}
-                      <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between">
+                      <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
                         <div className="text-sm font-extrabold text-white">
                           {currentUser.username} (You)
                         </div>
@@ -1796,13 +2206,37 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       const stream = remoteStreams[u.id];
                       const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
                       const hasPeerVideo = stream && stream.getVideoTracks().some((t) => t.enabled && t.readyState === 'live');
+                      const isPeerTileVertical = hasPeerVideo && (peerOrientations[u.id] || false);
 
                       return (
-                        <div key={u.id} className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 aspect-video flex flex-col items-center justify-center shadow-2xl ${
+                        <div key={u.id} className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                          isPeerTileVertical 
+                            ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
+                            : 'aspect-video w-full max-w-[500px]'
+                        } ${
                           isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
                         }`}>
                           {hasPeerVideo ? (
-                            <RemoteVideoPlayer stream={stream} />
+                            <RemoteVideoPlayer 
+                              stream={stream} 
+                              username={u.username}
+                              avatarColor={u.avatar_color}
+                              onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [u.id]: vert }))}
+                            />
+                          ) : u.has_video ? (
+                            <div className="absolute inset-0 bg-[#0e0e14] flex flex-col items-center justify-center p-4 z-10 animate-in fade-in duration-200">
+                              <div className="relative flex items-center justify-center mb-3">
+                                <div className="absolute w-16 h-16 rounded-full bg-blue-500/20 animate-ping" />
+                                <div 
+                                  className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-base font-black shadow-lg shadow-blue-500/10"
+                                  style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+                                >
+                                  <Video className="w-7 h-7 text-white animate-pulse" />
+                                </div>
+                              </div>
+                              <p className="text-xs font-bold text-white tracking-wide">Connecting Camera</p>
+                              <p className="text-[11px] text-zinc-400 mt-0.5">{u.username}&apos;s stream initializing...</p>
+                            </div>
                           ) : (
                             <div className="relative flex items-center justify-center">
                               <div 
@@ -1816,7 +2250,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                             </div>
                           )}
 
-                          <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between">
+                          <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
                             <div className="text-sm font-extrabold text-white">
                               {u.username}
                             </div>
@@ -1872,55 +2306,55 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
               </div>
 
-              {/* Floating Bottom In-Call Control Bar */}
+              {/* Floating Bottom In-Call Control Bar - Adapts to Mobile, Console, and Desktop */}
               {isInVideo && (
-                <div className="absolute bottom-6 inset-x-0 flex items-center justify-center gap-4 z-30">
-                  
-                  {/* Mic Button */}
-                  <button 
-                    onClick={toggleMute}
-                    className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
-                      isMuted ? 'bg-red-600 text-white shadow-red-600/30' : 'bg-blue-600 text-white shadow-blue-600/30'
-                    }`}
-                    title={isMuted ? 'Unmute Mic' : 'Mute Mic'}
-                  >
-                    {isMuted ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-                  </button>
+                <div className="absolute bottom-4 sm:bottom-6 inset-x-0 flex items-center justify-center gap-2 sm:gap-4 z-30 px-3 pointer-events-auto">
+                  <div className="flex items-center gap-2.5 sm:gap-4 bg-black/85 backdrop-blur-md p-2 rounded-2xl sm:rounded-3xl border border-white/10 shadow-2xl">
+                    {/* Mic Button */}
+                    <button 
+                      onClick={toggleMute}
+                      className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
+                        isMuted ? 'bg-red-600 text-white shadow-red-600/30' : 'bg-blue-600 text-white shadow-blue-600/30'
+                      }`}
+                      title={isMuted ? 'Unmute Mic' : 'Mute Mic'}
+                    >
+                      {isMuted ? <MicOff className="w-5 h-5 sm:w-6 sm:h-6" /> : <Mic className="w-5 h-5 sm:w-6 sm:h-6" />}
+                    </button>
 
-                  {/* Camera Toggle Button */}
-                  <button 
-                    onClick={() => toggleCamera()}
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500"
-                    title={isVideoEnabled ? 'Turn Off Camera' : 'Turn On Camera'}
-                  >
-                    {isVideoEnabled ? <Video className="w-6 h-6" /> : <VideoOff className="w-6 h-6" />}
-                  </button>
+                    {/* Camera Toggle Button */}
+                    <button 
+                      onClick={() => toggleCamera()}
+                      className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500"
+                      title={isVideoEnabled ? 'Turn Off Camera' : 'Turn On Camera'}
+                    >
+                      {isVideoEnabled ? <Video className="w-5 h-5 sm:w-6 sm:h-6" /> : <VideoOff className="w-5 h-5 sm:w-6 sm:h-6" />}
+                    </button>
 
-                  {/* Screen Share Button */}
-                  <button 
-                    onClick={toggleScreenShare}
-                    className="w-14 h-14 rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500"
-                    title="Share Screen"
-                  >
-                    <Monitor className="w-6 h-6" />
-                  </button>
+                    {/* Screen Share Button */}
+                    <button 
+                      onClick={toggleScreenShare}
+                      className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500"
+                      title="Share Screen"
+                    >
+                      <Monitor className="w-5 h-5 sm:w-6 sm:h-6" />
+                    </button>
 
-                  {/* Disconnect Button */}
-                  <button 
-                    onClick={stopVoiceChannel}
-                    className="w-14 h-14 rounded-2xl bg-red-600 text-white flex items-center justify-center shadow-lg shadow-red-600/30 hover:bg-red-700 transition-all cursor-pointer"
-                    title="Disconnect"
-                  >
-                    <PhoneOff className="w-6 h-6" />
-                  </button>
-
+                    {/* Disconnect Button */}
+                    <button 
+                      onClick={stopVoiceChannel}
+                      className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-red-600 text-white flex items-center justify-center shadow-lg shadow-red-600/30 hover:bg-red-700 transition-all cursor-pointer"
+                      title="Disconnect"
+                    >
+                      <PhoneOff className="w-5 h-5 sm:w-6 sm:h-6" />
+                    </button>
+                  </div>
                 </div>
               )}
 
             </div>
 
-            {/* Right Sidebar in Voice Channel */}
-            <aside className="w-64 bg-[#08080a] border-l border-[#1a1a20] p-4 flex flex-col shrink-0 overflow-hidden">
+            {/* Right Sidebar in Voice Channel - Desktop */}
+            <aside className="hidden lg:flex w-64 bg-[#08080a] border-l border-[#1a1a20] p-4 flex-col shrink-0 overflow-hidden">
               
               {/* VOICE USERS LIST */}
               <div className="shrink-0 pb-3 border-b border-[#14141a]">
@@ -2005,6 +2439,103 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               </div>
 
             </aside>
+
+            {/* Mobile / Tablet Members Drawer Overlay for Voice Channel */}
+            {isMobileMembersOpen && (
+              <div className="fixed inset-0 z-50 lg:hidden flex justify-end animate-in fade-in duration-200">
+                <div 
+                  className="fixed inset-0 bg-black/75 backdrop-blur-sm"
+                  onClick={() => setIsMobileMembersOpen(false)}
+                />
+                <aside className="relative w-72 max-w-[85vw] h-full bg-[#08080a] border-l border-[#1a1a20] p-4 flex flex-col z-10 shadow-2xl animate-in slide-in-from-right duration-200">
+                  <div className="shrink-0 pb-3 flex items-center justify-between border-b border-[#14141a]">
+                    <div className="flex items-center gap-2 text-xs font-bold text-blue-400 tracking-wider uppercase">
+                      <Mic className="w-4 h-4" />
+                      <span>VOICE — {voiceUsers.length + (isInVideo ? 1 : 0)}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsMobileMembersOpen(false)}
+                      className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pt-3 pr-1">
+                    <div className="space-y-2">
+                      {isInVideo && (
+                        <div className="p-2.5 rounded-2xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-between">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="relative shrink-0">
+                              <div 
+                                className="w-8 h-8 rounded-full text-black font-extrabold flex items-center justify-center text-xs"
+                                style={{ backgroundColor: currentUser.avatar_color || '#0066ff' }}
+                              >
+                                {currentUser.username.slice(0, 2).toUpperCase()}
+                              </div>
+                              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
+                            </div>
+                            <div className="min-w-0 leading-tight">
+                              <div className="flex items-center gap-1">
+                                <span className="font-extrabold text-white text-xs truncate">{currentUser.username}</span>
+                                <span className="text-[10px] text-zinc-500">(you)</span>
+                              </div>
+                              {renderUserActivity('In General Voice')}
+                            </div>
+                          </div>
+                          <Mic className="w-4 h-4 text-blue-400 shrink-0" />
+                        </div>
+                      )}
+
+                      {voiceUsers.map((u: any) => (
+                        <div key={u.id} className="p-2.5 rounded-2xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-between">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div className="relative shrink-0">
+                              <div 
+                                className="w-8 h-8 rounded-full text-black font-extrabold flex items-center justify-center text-xs"
+                                style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+                              >
+                                {u.username.slice(0, 2).toUpperCase()}
+                              </div>
+                              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
+                            </div>
+                            <div className="min-w-0 leading-tight">
+                              <span className="font-extrabold text-white text-xs truncate block">{u.username}</span>
+                              {renderUserActivity(u.activity || 'In General Voice')}
+                            </div>
+                          </div>
+                          <Mic className="w-4 h-4 text-blue-400 shrink-0" />
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="space-y-2 pt-2 border-t border-[#14141a]">
+                      <div className="text-xs font-bold text-zinc-500 tracking-wider">
+                        <span>ONLINE — {Math.max(0, users.length - (voiceUsers.length + (isInVideo ? 1 : 0)))}</span>
+                      </div>
+                      {users.filter((u: any) => u.id !== currentUser.id && !voiceUsers.some((vu: any) => vu.id === u.id)).map((u: any) => (
+                        <div key={u.id} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-white/[0.03] transition-colors">
+                          <div className="relative shrink-0">
+                            <div 
+                              className="w-7 h-7 rounded-full text-black font-extrabold flex items-center justify-center text-[10px]"
+                              style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+                            >
+                              {u.username.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-blue-500 border-2 border-[#08080a]" />
+                          </div>
+                          <div className="min-w-0 flex-1 leading-tight">
+                            <span className="font-bold text-zinc-300 text-xs truncate block">{u.username}</span>
+                            {renderUserActivity(u.activity || 'In #general')}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </aside>
+              </div>
+            )}
 
           </div>
         )}

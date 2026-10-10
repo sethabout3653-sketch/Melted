@@ -224,22 +224,22 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
   return (
     <div className={`fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-md animate-in fade-in duration-150 ${
-      isFullscreen ? 'p-0' : 'p-2 sm:p-4 lg:p-6'
+      isFullscreen ? 'p-0' : 'p-0 sm:p-4 lg:p-6'
     }`}>
       
-      {/* Outer Game Theater Frame: Pure edge-to-edge in fullscreen */}
+      {/* Outer Game Theater Frame: Edge-to-edge on mobile, theater framed on desktop */}
       <div 
         ref={containerRef}
         className={`relative flex flex-col w-full bg-black overflow-hidden transition-all ${
           isFullscreen 
             ? 'h-screen w-screen border-none rounded-none' 
-            : 'max-w-6xl h-[88vh] max-h-[850px] bg-[#0a0a0a] border border-[#222225] rounded-2xl shadow-2xl'
+            : 'max-w-6xl h-full sm:h-[88vh] max-h-[100dvh] sm:max-h-[850px] bg-[#0a0a0a] border-0 sm:border border-[#222225] rounded-none sm:rounded-2xl shadow-2xl'
         }`}
       >
         
         {/* Top Header Bar: ONLY shown when NOT fullscreen */}
         {!isFullscreen && (
-          <div className="flex items-center justify-between px-4 py-3 bg-[#111113] border-b border-[#222225] select-none gap-2 shrink-0">
+          <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 bg-[#111113] border-b border-[#222225] select-none gap-2 shrink-0">
             
             {/* Left info */}
             <div className="flex items-center gap-3 min-w-0">

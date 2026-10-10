@@ -165,6 +165,9 @@ export function useWebRTC({
     }
 
     if (videoTransceiver) {
+      if (videoTrack && videoTransceiver.direction !== 'sendrecv') {
+        videoTransceiver.direction = 'sendrecv';
+      }
       if (videoTransceiver.sender.track !== videoTrack) {
         videoTransceiver.sender.replaceTrack(videoTrack).catch((err) => {
           console.warn('[WebRTC] replaceTrack video warning:', err);
@@ -192,10 +195,8 @@ export function useWebRTC({
     // Always initialize audio transceiver with sendrecv so voice connects immediately
     pc.addTransceiver('audio', { direction: 'sendrecv' });
 
-    // Video transceiver if activeChannel is video-general
-    if (activeChannel === 'video-general') {
-      pc.addTransceiver('video', { direction: 'sendrecv' });
-    }
+    // Always initialize video transceiver with sendrecv so camera connects immediately on mobile & desktop
+    pc.addTransceiver('video', { direction: 'sendrecv' });
 
     // Initial track assignment
     updateTracksForPeer(pc);
@@ -226,16 +227,24 @@ export function useWebRTC({
       console.log(`[WebRTC] ontrack received for peer ${peerId}, kind: ${event.track.kind}`);
       const incomingTrack = event.track;
       
-      setRemoteStreams((prev) => {
-        const existing = prev[peerId];
-        let tracks: MediaStreamTrack[] = [];
-        if (existing) {
-          tracks = existing.getTracks().filter((t) => t.id !== incomingTrack.id);
-        }
-        tracks.push(incomingTrack);
-        const newStream = new MediaStream(tracks);
-        return { ...prev, [peerId]: newStream };
-      });
+      const updateStreamTracks = () => {
+        setRemoteStreams((prev) => {
+          const existing = prev[peerId];
+          let tracks: MediaStreamTrack[] = [];
+          if (existing) {
+            tracks = existing.getTracks().filter((t) => t.id !== incomingTrack.id);
+          }
+          if (incomingTrack.readyState === 'live') {
+            tracks.push(incomingTrack);
+          }
+          return { ...prev, [peerId]: new MediaStream(tracks) };
+        });
+      };
+
+      updateStreamTracks();
+      incomingTrack.onunmute = updateStreamTracks;
+      incomingTrack.onmute = updateStreamTracks;
+      incomingTrack.onended = updateStreamTracks;
 
       if (event.track.kind === 'audio') {
         setupRemoteAudioAnalysis(peerId, event.track);
@@ -432,8 +441,11 @@ export function useWebRTC({
   useEffect(() => {
     if (!isMediaChannel) return;
 
-    peerConnections.current.forEach((pc) => {
+    peerConnections.current.forEach((pc, peerId) => {
       updateTracksForPeer(pc);
+      if (pc.signalingState === 'stable') {
+        initiateOfferRef.current(peerId);
+      }
     });
   }, [localAudioStream, localVideoStream, isMediaChannel, updateTracksForPeer]);
 
