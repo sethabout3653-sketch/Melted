@@ -868,7 +868,10 @@ window.addEventListener('message',function(e){
 });
 
 import http from 'http';
-import { initSocketIoDatabase } from './src/server/socketIoDatabase';
+import { initSocketIoDatabase, handleSseEvents } from './src/server/socketIoDatabase';
+
+// Server-Sent Events (SSE) Endpoint
+app.get('/api/events', handleSseEvents);
 
 // Serve frontend: Vite dev middlewares in development, static files in production
 async function startServer() {

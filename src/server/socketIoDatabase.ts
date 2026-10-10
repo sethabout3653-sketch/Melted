@@ -1,5 +1,6 @@
 import { Server as SocketIOServer } from 'socket.io';
 import type { Server as HTTPServer } from 'http';
+import type { Request, Response } from 'express';
 import pkg from 'pg';
 const { Pool } = pkg;
 
@@ -7,6 +8,43 @@ const { Pool } = pkg;
 const connectionString = process.env.DATABASE_URL;
 let dbPool: pkg.Pool | null = null;
 let isPostgresConnected = false;
+
+// SSE Clients Registry
+const sseClients = new Set<Response>();
+
+export function handleSseEvents(req: Request, res: Response) {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.flushHeaders?.();
+
+  // Send initial connected event
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', timestamp: Date.now(), postgresConnected: isPostgresConnected })}\n\n`);
+
+  sseClients.add(res);
+
+  // Keep alive heartbeat every 15s
+  const heartbeat = setInterval(() => {
+    res.write(`:\n\n`);
+  }, 15000);
+
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    sseClients.delete(res);
+  });
+}
+
+function broadcastSse(event: string, data: any) {
+  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+  for (const client of sseClients) {
+    try {
+      client.write(payload);
+    } catch (err) {
+      sseClients.delete(client);
+    }
+  }
+}
 
 if (connectionString) {
   dbPool = new Pool({
@@ -152,7 +190,7 @@ export function initSocketIoDatabase(server: HTTPServer) {
   });
   
   const db = new InMemoryDatabase();
-  const tableSubscriptions: Map<string, Set<string>> = new Map(); // table -> Set of socket IDs
+  const tableSubscriptions: Map<string, Set<string>> = new Map();
 
   io.on('connection', (socket) => {
     let boundUserId: string | null = null;
@@ -166,7 +204,6 @@ export function initSocketIoDatabase(server: HTTPServer) {
       postgresConnected: isPostgresConnected,
     });
 
-    // Handle Supabase/Render JSON WebSocket router protocol messages
     socket.on('MESSAGE', async (msg: any) => {
       try {
         if (!msg || !msg.type) return;
@@ -198,7 +235,6 @@ export function initSocketIoDatabase(server: HTTPServer) {
             };
             db.insertMessage(newMsg);
 
-            // Persist to Postgres if available
             if (isPostgresConnected && dbPool) {
               await dbPool.query(
                 `INSERT INTO app_messages (id, channel_id, sender_id, sender_name, avatar_color, sender_avatar_url, content, attachment_url, attachment_type, attachment_name, timestamp, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) ON CONFLICT (id) DO NOTHING`,
@@ -207,6 +243,7 @@ export function initSocketIoDatabase(server: HTTPServer) {
             }
 
             io.emit('DB_SYNC', { table: 'messages', data: db.selectAllMessages() });
+            broadcastSse('DB_SYNC', { table: 'messages', data: db.selectAllMessages() });
           }
         }
       } catch (err: any) {
@@ -256,6 +293,7 @@ export function initSocketIoDatabase(server: HTTPServer) {
         }
 
         io.emit('DB_SYNC', { table: 'messages', data: db.selectAllMessages() });
+        broadcastSse('DB_SYNC', { table: 'messages', data: db.selectAllMessages() });
       }
     });
 
@@ -275,13 +313,16 @@ export function initSocketIoDatabase(server: HTTPServer) {
           }
 
           io.emit('DB_SYNC', { table: 'users', data: db.selectUsers() });
+          broadcastSse('DB_SYNC', { table: 'users', data: db.selectUsers() });
 
           if (msg.set.current_channel && msg.set.current_channel !== oldChannel) {
             if (['voice-general', 'video-general'].includes(msg.set.current_channel)) {
               io.emit('USER_JOINED_MEDIA', { userId: msg.id, channel: msg.set.current_channel });
+              broadcastSse('USER_JOINED_MEDIA', { userId: msg.id, channel: msg.set.current_channel });
             }
             if (['voice-general', 'video-general'].includes(oldChannel)) {
               io.emit('USER_LEFT_MEDIA', { userId: msg.id, channel: oldChannel });
+              broadcastSse('USER_LEFT_MEDIA', { userId: msg.id, channel: oldChannel });
             }
           }
         }
@@ -295,6 +336,7 @@ export function initSocketIoDatabase(server: HTTPServer) {
           await dbPool.query('DELETE FROM app_messages WHERE id = $1', [msg.id]).catch(() => {});
         }
         io.emit('DB_SYNC', { table: 'messages', data: db.selectAllMessages() });
+        broadcastSse('DB_SYNC', { table: 'messages', data: db.selectAllMessages() });
       }
     });
 
@@ -327,9 +369,11 @@ export function initSocketIoDatabase(server: HTTPServer) {
       }
 
       io.emit('DB_SYNC', { table: 'users', data: db.selectUsers() });
+      broadcastSse('DB_SYNC', { table: 'users', data: db.selectUsers() });
 
       if (['voice-general', 'video-general'].includes(msg.user.current_channel)) {
         io.emit('USER_JOINED_MEDIA', { userId: uId, channel: msg.user.current_channel });
+        broadcastSse('USER_JOINED_MEDIA', { userId: uId, channel: msg.user.current_channel });
       }
     });
 
@@ -357,9 +401,11 @@ export function initSocketIoDatabase(server: HTTPServer) {
         const user = db.getUser(boundUserId);
         if (user && ['voice-general', 'video-general'].includes(user.current_channel)) {
           io.emit('USER_LEFT_MEDIA', { userId: boundUserId, channel: user.current_channel });
+          broadcastSse('USER_LEFT_MEDIA', { userId: boundUserId, channel: user.current_channel });
         }
         db.deleteUser(boundUserId);
         io.emit('DB_SYNC', { table: 'users', data: db.selectUsers() });
+        broadcastSse('DB_SYNC', { table: 'users', data: db.selectUsers() });
       }
     });
   });
