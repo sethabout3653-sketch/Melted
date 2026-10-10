@@ -241,7 +241,7 @@ const RemoteVideoPlayer: React.FC<{
 
   const checkOrientation = useCallback(() => {
     const video = videoRef.current;
-    if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+    if (video && (video.videoWidth > 0 || video.readyState >= 2)) {
       const vertical = video.videoHeight > video.videoWidth;
       onOrientationChange?.(vertical);
       setIsLoaded(true);
@@ -252,23 +252,37 @@ const RemoteVideoPlayer: React.FC<{
     setIsLoaded(false);
     const video = videoRef.current;
     if (video) {
-      if (stream && video.srcObject !== stream) {
-        video.srcObject = stream;
-      }
       if (stream) {
-        video.play().catch(() => {});
+        if (video.srcObject !== stream) {
+          video.srcObject = stream;
+        }
+        video.play().catch((err) => {
+          console.warn('[RemoteVideo] play error:', err);
+        });
+      } else {
+        video.srcObject = null;
       }
     }
 
-    // Interval to detect when mobile camera video frames/dimensions are ready
-    const interval = setInterval(() => {
+    const check = () => {
       const vid = videoRef.current;
-      if (vid && vid.videoWidth > 0 && vid.videoHeight > 0) {
+      if (vid && (vid.videoWidth > 0 || vid.readyState >= 2)) {
         checkOrientation();
       }
-    }, 150);
+    };
 
-    return () => clearInterval(interval);
+    check();
+    const interval = setInterval(check, 100);
+    const fallbackTimer = setTimeout(() => {
+      if (stream) {
+        setIsLoaded(true);
+      }
+    }, 600);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(fallbackTimer);
+    };
   }, [stream, checkOrientation]);
 
   return (
@@ -321,7 +335,7 @@ const LocalVideoPlayer: React.FC<{
 
   const checkOrientation = useCallback(() => {
     const video = videoRef.current;
-    if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+    if (video && (video.videoWidth > 0 || video.readyState >= 2)) {
       const vertical = video.videoHeight > video.videoWidth;
       onOrientationChange?.(vertical);
       setIsLoaded(true);
@@ -332,22 +346,37 @@ const LocalVideoPlayer: React.FC<{
     setIsLoaded(false);
     const video = videoRef.current;
     if (video) {
-      if (stream && video.srcObject !== stream) {
-        video.srcObject = stream;
-      }
       if (stream) {
-        video.play().catch(() => {});
+        if (video.srcObject !== stream) {
+          video.srcObject = stream;
+        }
+        video.play().catch((err) => {
+          console.warn('[LocalVideo] play error:', err);
+        });
+      } else {
+        video.srcObject = null;
       }
     }
 
-    const interval = setInterval(() => {
+    const check = () => {
       const vid = videoRef.current;
-      if (vid && vid.videoWidth > 0 && vid.videoHeight > 0) {
+      if (vid && (vid.videoWidth > 0 || vid.readyState >= 2)) {
         checkOrientation();
       }
-    }, 150);
+    };
 
-    return () => clearInterval(interval);
+    check();
+    const interval = setInterval(check, 100);
+    const fallbackTimer = setTimeout(() => {
+      if (stream) {
+        setIsLoaded(true);
+      }
+    }, 600);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(fallbackTimer);
+    };
   }, [stream, checkOrientation]);
 
   const showLoading = isLoading || !isLoaded;
@@ -506,7 +535,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
   // Local Reactive Media Streams
   const [localAudioStream, setLocalAudioStream] = useState<MediaStream | null>(null);
-  const [activeVideoStream, setActiveVideoStream] = useState<MediaStream | null>(null);
+  const [activeCameraStream, setActiveCameraStream] = useState<MediaStream | null>(null);
+  const [activeScreenStream, setActiveScreenStream] = useState<MediaStream | null>(null);
+
+  const localVideoStream = useMemo(() => {
+    if (isScreenSharing && activeScreenStream) return activeScreenStream;
+    if (isVideoEnabled && activeCameraStream) return activeCameraStream;
+    return null;
+  }, [isScreenSharing, activeScreenStream, isVideoEnabled, activeCameraStream]);
 
   // Media Stream refs
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -649,7 +685,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     currentUserId: currentUser.id,
     activeChannel: isMediaActive ? 'video-general' : 'text-general',
     localAudioStream,
-    localVideoStream: activeVideoStream,
+    localVideoStream,
     peers: activePeers,
     sendRtcSignal,
     setRtcSignalHandler,
@@ -810,7 +846,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         videoStream = await acquireCameraStream();
 
         cameraStreamRef.current = videoStream;
-        setActiveVideoStream(videoStream);
+        setActiveCameraStream(videoStream);
         setIsVideoEnabled(true);
       } catch (err: any) {
         setCameraError('Could not access camera.');
@@ -841,9 +877,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         cameraStreamRef.current = null;
       }
       setIsVideoEnabled(false);
-      if (!isScreenSharing) {
-        setActiveVideoStream(null);
-      }
+      setActiveCameraStream(null);
       updateUser({ has_video: false });
     } else {
       setIsCameraStarting(true);
@@ -852,10 +886,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         const stream = await acquireCameraStream();
 
         cameraStreamRef.current = stream;
+        setActiveCameraStream(stream);
         setIsVideoEnabled(true);
-        if (!isScreenSharing) {
-          setActiveVideoStream(stream);
-        }
         updateUser({ has_video: true });
       } catch (err: any) {
         setCameraError('Camera access denied or unavailable.');
@@ -874,8 +906,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         screenStreamRef.current = null;
       }
       setIsScreenSharing(false);
-      setActiveVideoStream(cameraStreamRef.current || null);
-      updateUser({ is_screen_sharing: false, has_video: isVideoEnabled });
+      setActiveScreenStream(null);
+      updateUser({ is_screen_sharing: false });
     } else {
       try {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
@@ -884,14 +916,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         });
 
         screenStreamRef.current = screenStream;
+        setActiveScreenStream(screenStream);
         setIsScreenSharing(true);
-        setActiveVideoStream(screenStream);
-        updateUser({ is_screen_sharing: true, has_video: true });
+        updateUser({ is_screen_sharing: true });
 
         screenStream.getVideoTracks()[0].onended = () => {
           setIsScreenSharing(false);
-          setActiveVideoStream(cameraStreamRef.current || null);
-          updateUser({ is_screen_sharing: false, has_video: isVideoEnabled });
+          setActiveScreenStream(null);
+          updateUser({ is_screen_sharing: false });
         };
       } catch {
         // Screen share dismissed
@@ -915,7 +947,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     }
 
     setLocalAudioStream(null);
-    setActiveVideoStream(null);
+    setActiveCameraStream(null);
+    setActiveScreenStream(null);
     setIsInVideo(false);
     setIsVideoEnabled(false);
     setIsScreenSharing(false);
@@ -2149,21 +2182,48 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 {isInVideo ? (
                   <div className="flex flex-wrap items-center justify-center gap-6 w-full max-w-6xl max-h-full overflow-y-auto p-2">
                     
-                    {/* Local User Tile */}
-                    <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
-                      (isVideoEnabled || isCameraStarting) && localIsVertical 
-                        ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
-                        : 'aspect-video w-full max-w-[500px]'
-                    } ${
-                      isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
-                    }`}>
-                      {isVideoEnabled || isCameraStarting ? (
+                    {/* Local User Camera Tile */}
+                    {(isVideoEnabled || isCameraStarting) && (
+                      <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                        localIsVertical ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' : 'aspect-video w-full max-w-[500px]'
+                      } ${
+                        isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
+                      }`}>
                         <LocalVideoPlayer 
-                          stream={activeVideoStream} 
+                          stream={activeCameraStream} 
                           isLoading={isCameraStarting} 
                           onOrientationChange={setLocalIsVertical} 
                         />
-                      ) : (
+                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                          <div className="text-sm font-extrabold text-white">
+                            {currentUser.username} (Camera)
+                          </div>
+                          {isMuted && <MicOff className="w-4 h-4 text-red-400" />}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Local User Screen Share Tile (Separate Screen) */}
+                    {isScreenSharing && (
+                      <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/40 shadow-[0_0_30px_rgba(0,102,255,0.2)] transition-all duration-300 flex flex-col items-center justify-center aspect-video w-full max-w-[500px]">
+                        <LocalVideoPlayer 
+                          stream={activeScreenStream} 
+                          isLoading={false} 
+                        />
+                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                          <div className="text-sm font-extrabold text-white flex items-center gap-2">
+                            <Monitor className="w-4 h-4 text-blue-400" />
+                            <span>{currentUser.username}&apos;s Screen (You)</span>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Default Avatar Tile if neither camera nor screen share is active */}
+                    {!isVideoEnabled && !isCameraStarting && !isScreenSharing && (
+                      <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px] ${
+                        isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
+                      }`}>
                         <div className="relative flex items-center justify-center">
                           <div 
                             className={`w-28 h-28 rounded-full flex items-center justify-center text-3xl font-black text-black shadow-2xl transition-all ${
@@ -2174,17 +2234,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                             {currentUser.username.slice(0, 2).toUpperCase()}
                           </div>
                         </div>
-                      )}
-
-                      {/* Bottom-Left Overlay */}
-                      <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
-                        <div className="text-sm font-extrabold text-white">
-                          {currentUser.username} (You)
+                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                          <div className="text-sm font-extrabold text-white">
+                            {currentUser.username} (You)
+                          </div>
+                          {isMuted && <MicOff className="w-4 h-4 text-red-400" />}
                         </div>
-
-                        {isMuted && <MicOff className="w-4 h-4 text-red-400" />}
                       </div>
-                    </div>
+                    )}
 
                     {/* Remote Peers Tiles */}
                     {voiceUsers.map((u: any) => {
@@ -2296,7 +2353,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     {/* Camera Toggle Button */}
                     <button 
                       onClick={() => toggleCamera()}
-                      className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500"
+                      className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
+                        isVideoEnabled 
+                          ? 'bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500' 
+                          : 'bg-white/10 text-zinc-300 border border-white/10 hover:bg-white/20 hover:text-white'
+                      }`}
                       title={isVideoEnabled ? 'Turn Off Camera' : 'Turn On Camera'}
                     >
                       {isVideoEnabled ? <Video className="w-5 h-5 sm:w-6 sm:h-6" /> : <VideoOff className="w-5 h-5 sm:w-6 sm:h-6" />}
