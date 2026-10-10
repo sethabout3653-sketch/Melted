@@ -173,8 +173,30 @@ export function useWebRTC({
           console.warn('[WebRTC] replaceTrack video warning:', err);
         });
       }
+      if (videoTrack) {
+        try {
+          videoTrack.contentHint = 'motion';
+          const params = videoTransceiver.sender.getParameters();
+          if (params.encodings && params.encodings.length > 0) {
+            params.encodings[0].maxBitrate = 6000000; // 6 Mbps for zero-lag 60fps screen sharing
+            params.encodings[0].maxFramerate = 60;
+            videoTransceiver.sender.setParameters(params).catch(() => {});
+          }
+        } catch {}
+      }
     } else if (videoTrack) {
-      pc.addTrack(videoTrack);
+      try {
+        videoTrack.contentHint = 'motion';
+      } catch {}
+      const sender = pc.addTrack(videoTrack);
+      try {
+        const params = sender.getParameters();
+        if (params.encodings && params.encodings.length > 0) {
+          params.encodings[0].maxBitrate = 6000000;
+          params.encodings[0].maxFramerate = 60;
+          sender.setParameters(params).catch(() => {});
+        }
+      } catch {}
     }
   }, []);
 

@@ -1021,7 +1021,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     } else {
       try {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
+          video: {
+            frameRate: { ideal: 60, max: 60 },
+            width: { max: 1920, ideal: 1920 },
+            height: { max: 1080, ideal: 1080 },
+          },
           audio: true,
         });
 
