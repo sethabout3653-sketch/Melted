@@ -67,7 +67,6 @@ import {
   getDiscoverYouTubeMusic,
   getFriendVibeMessage,
 } from './src/server/invidiousService';
-import { getX8rrMediaStreamUrl } from './src/server/x8rrMusicService';
 import {
   searchVideos,
   getTrendingVideos,
@@ -868,17 +867,14 @@ window.addEventListener('message',function(e){
 });
 
 import http from 'http';
-import { initSocketIoDatabase, handleSseEvents } from './src/server/socketIoDatabase';
-
-// Server-Sent Events (SSE) Endpoint
-app.get('/api/events', handleSseEvents);
+import { initWebSocketDatabase } from './src/server/wsDatabase';
 
 // Serve frontend: Vite dev middlewares in development, static files in production
 async function startServer() {
   const server = http.createServer(app);
 
-  // Initialize Socket.io Database on /ws-db
-  initSocketIoDatabase(server);
+  // Initialize the WebSocket database server on /ws-db.
+  initWebSocketDatabase(server);
 
   if (!IS_PROD) {
     const { createServer: createViteServer } = await import('vite');

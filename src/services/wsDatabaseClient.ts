@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { DbUser, DbMessage } from '../server/socketIoDatabase';
+import type { DbUser, DbMessage } from '../server/wsDatabase';
 
 export interface RtcSignalPayload {
   fromUserId: string;
