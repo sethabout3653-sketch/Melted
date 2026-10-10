@@ -193,9 +193,10 @@ const AudioAttachmentPlayer: React.FC<{
   );
 };
 
-// Dedicated audio player for WebRTC voice peers
+// Dedicated audio player for WebRTC voice peers with Web Audio Ear-Protection Limiter
 const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened: boolean; volume?: number }> = ({ stream, isDeafened, volume = 1 }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
     const el = audioRef.current;
@@ -206,6 +207,34 @@ const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened:
     }
     el.muted = isDeafened;
     el.volume = Math.max(0, Math.min(1, volume));
+
+    // Web Audio Peak Limiter & Compressor to prevent ear-breaking loud spikes
+    try {
+      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        audioCtxRef.current = new AudioCtx();
+      }
+      const ctx = audioCtxRef.current;
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+
+      if (!(el as any).__sourceNode && ctx) {
+        const source = ctx.createMediaStreamSource(stream);
+        const compressor = ctx.createDynamicsCompressor();
+        compressor.threshold.setValueAtTime(-18, ctx.currentTime);
+        compressor.knee.setValueAtTime(3, ctx.currentTime);
+        compressor.ratio.setValueAtTime(12, ctx.currentTime);
+        compressor.attack.setValueAtTime(0.003, ctx.currentTime);
+        compressor.release.setValueAtTime(0.25, ctx.currentTime);
+
+        source.connect(compressor);
+        compressor.connect(ctx.destination);
+        (el as any).__sourceNode = source;
+      }
+    } catch (e) {
+      console.warn('[RemoteAudio] compressor warning:', e);
+    }
 
     const tryPlay = () => {
       el.play().catch(() => {});
@@ -417,6 +446,77 @@ const LocalVideoPlayer: React.FC<{
   );
 };
 
+// Dedicated Screen Share Player (unmirrored, contain fit for crisp screen sharing)
+const ScreenSharePlayer: React.FC<{ 
+  stream: MediaStream | null;
+}> = ({ stream }) => {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    setIsLoaded(false);
+    const video = videoRef.current;
+    if (video) {
+      if (stream) {
+        if (video.srcObject !== stream) {
+          video.srcObject = stream;
+        }
+        video.play().catch((err) => {
+          console.warn('[ScreenSharePlayer] play error:', err);
+        });
+      } else {
+        video.srcObject = null;
+      }
+    }
+
+    const check = () => {
+      const vid = videoRef.current;
+      if (vid && (vid.videoWidth > 0 || vid.readyState >= 2)) {
+        setIsLoaded(true);
+      }
+    };
+
+    check();
+    const interval = setInterval(check, 100);
+    const fallbackTimer = setTimeout(() => {
+      if (stream) {
+        setIsLoaded(true);
+      }
+    }, 600);
+
+    return () => {
+      clearInterval(interval);
+      clearTimeout(fallbackTimer);
+    };
+  }, [stream]);
+
+  return (
+    <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-black">
+      {!isLoaded && (
+        <div className="absolute inset-0 bg-[#0e0e14] flex flex-col items-center justify-center p-4 z-10 animate-in fade-in duration-200">
+          <div className="relative flex items-center justify-center mb-3">
+            <div className="absolute w-16 h-16 rounded-full bg-blue-500/20 animate-ping" />
+            <div className="w-14 h-14 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shadow-lg shadow-blue-600/20">
+              <Monitor className="w-7 h-7 text-blue-400 animate-pulse" />
+            </div>
+          </div>
+          <p className="text-xs font-bold text-white tracking-wide">Starting Screen Share</p>
+          <p className="text-[11px] text-zinc-400 mt-0.5">Broadcasting screen stream...</p>
+        </div>
+      )}
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        className={`w-full h-full object-contain rounded-3xl transition-opacity duration-300 ${
+          isLoaded ? 'opacity-100' : 'opacity-0'
+        }`}
+      />
+    </div>
+  );
+};
+
 export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const {
     currentUser,
@@ -583,7 +683,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-        },
+          googEchoCancellation: true,
+          googNoiseSuppression: true,
+          googAutoGainControl: true,
+          googHighpassFilter: true,
+          latencyHint: 'interactive',
+        } as MediaTrackConstraints,
         video: false,
       });
 
@@ -827,7 +932,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-        },
+          googEchoCancellation: true,
+          googNoiseSuppression: true,
+          googAutoGainControl: true,
+          googHighpassFilter: true,
+          latencyHint: 'interactive',
+        } as MediaTrackConstraints,
         video: false,
       });
 
@@ -2206,9 +2316,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     {/* Local User Screen Share Tile (Separate Screen) */}
                     {isScreenSharing && (
                       <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/40 shadow-[0_0_30px_rgba(0,102,255,0.2)] transition-all duration-300 flex flex-col items-center justify-center aspect-video w-full max-w-[500px]">
-                        <LocalVideoPlayer 
+                        <ScreenSharePlayer 
                           stream={activeScreenStream} 
-                          isLoading={false} 
                         />
                         <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
                           <div className="text-sm font-extrabold text-white flex items-center gap-2">
