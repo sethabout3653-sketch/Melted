@@ -1286,10 +1286,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     const gifUrl = gif.images?.original?.url || gif.images?.downsized_medium?.url || gif.images?.fixed_height?.url;
     if (!gifUrl) return;
     
+    let gifName = gif.title ? gif.title.trim().replace(/[^a-zA-Z0-9 _-]/g, '') : 'giphy';
+    if (!gifName) gifName = 'giphy';
+    if (!gifName.toLowerCase().endsWith('.gif')) {
+      gifName += '.gif';
+    }
+
     insertMessage('', activeChannel, {
       url: gifUrl,
       type: 'image',
-      name: 'gif.gif',
+      name: gifName,
     });
     setIsGiphyOpen(false);
   };
@@ -2320,9 +2326,24 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     {/* Local User Screen Share Tile (Separate Screen) */}
                     {isScreenSharing && (
                       <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/40 shadow-[0_0_30px_rgba(0,102,255,0.2)] transition-all duration-300 flex flex-col items-center justify-center aspect-video w-full max-w-[500px]">
-                        <ScreenSharePlayer 
-                          stream={activeScreenStream} 
-                        />
+                        <div className="flex flex-col items-center justify-center p-6 text-center space-y-3 z-10">
+                          <div className="relative flex items-center justify-center">
+                            <div className="absolute w-20 h-20 rounded-full bg-blue-500/20 animate-ping" />
+                            <div className="w-16 h-16 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shadow-xl shadow-blue-600/20">
+                              <Monitor className="w-8 h-8 text-blue-400 animate-pulse" />
+                            </div>
+                          </div>
+                          <div>
+                            <p className="text-sm font-extrabold text-white tracking-wide">You are sharing your screen</p>
+                            <p className="text-[11px] text-zinc-400 mt-0.5">Broadcasting live with zero local lag</p>
+                          </div>
+                          <button
+                            onClick={toggleScreenShare}
+                            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer font-heading pointer-events-auto"
+                          >
+                            Stop Sharing
+                          </button>
+                        </div>
                         <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
                           <div className="text-sm font-extrabold text-white flex items-center gap-2">
                             <Monitor className="w-4 h-4 text-blue-400" />

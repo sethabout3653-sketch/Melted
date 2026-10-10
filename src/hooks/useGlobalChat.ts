@@ -54,7 +54,8 @@ export function playNotificationSound() {
   } catch {}
 }
 
-export function useGlobalChat() {
+export function useGlobalChat(options?: { isChatTabActive?: boolean }) {
+  const { isChatTabActive = false } = options || {};
   const [currentUser, setCurrentUser] = useState(() => {
     const savedId = localStorage.getItem('frosted_chat_user_id') || ('u_' + Math.random().toString(36).substr(2, 6));
     const savedName = localStorage.getItem('frosted_chat_username') || ('Player_' + Math.floor(100 + Math.random() * 900));
@@ -145,7 +146,7 @@ export function useGlobalChat() {
     if (lastMessage.id !== lastMessageId.current) {
       lastMessageId.current = lastMessage.id;
       
-      if (lastMessage.sender_id !== currentUser.id) {
+      if (lastMessage.sender_id !== currentUser.id && !isChatTabActive) {
         // Play instant Web Audio API chime
         playNotificationSound();
 
@@ -169,7 +170,7 @@ export function useGlobalChat() {
         }
       }
     }
-  }, [messages, currentUser.id]);
+  }, [messages, currentUser.id, isChatTabActive]);
 
   return {
     currentUser,
