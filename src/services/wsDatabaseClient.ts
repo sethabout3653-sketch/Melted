@@ -257,6 +257,18 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     }
   }, []);
 
+  // Broadcast media toggle state change to all peers
+  const sendMediaStateSignal = useCallback((mediaType: 'camera' | 'screen', state: 'on' | 'off') => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'MEDIA_STATE_SIGNAL',
+        fromUserId: currentUserRef.current.id,
+        mediaType,
+        state,
+      }));
+    }
+  }, []);
+
   const callUser = useCallback((targetUserId: string, callType: 'audio' | 'video') => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       const u = currentUserRef.current;
@@ -280,6 +292,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     registerUser,
     callUser,
     sendRtcSignal,
+    sendMediaStateSignal,
     setRtcSignalHandler,
     setUserCallHandler,
     setMediaHandlers,

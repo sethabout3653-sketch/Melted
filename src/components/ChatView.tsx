@@ -554,6 +554,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     sendRtcSignal,
     setRtcSignalHandler,
     setMediaHandlers,
+    sendMediaStateSignal,
     incomingCall,
     outgoingCall,
     dismissIncomingCall,
@@ -595,6 +596,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const [audioLevel, setAudioLevel] = useState<number>(0);
   const [isMicTesting, setIsMicTesting] = useState(false);
 
+  // Auto-stop local screen share if another user starts sharing to prevent lag
+  useEffect(() => {
+    const isSomeoneElseSharing = voiceUsers.some(u => u.id !== currentUser.id && u.is_screen_sharing);
+    if (isSomeoneElseSharing && isScreenSharing) {
+      console.log('[ScreenShare] Another user started sharing, stopping local screen share');
+      toggleScreenShare();
+    }
+  }, [voiceUsers, isScreenSharing, currentUser.id]);
+
   useEffect(() => {
     setEditName(currentUser.username);
     setEditColor(currentUser.avatar_color || '#0066ff');
@@ -628,8 +638,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       return await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'user',
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
         },
         audio: false,
       });
@@ -978,14 +988,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     }
 
     if (withVideo) {
+      console.log('[Camera] Joining channel with video');
       setIsCameraStarting(true);
       try {
         videoStream = await acquireCameraStream();
+        console.log('[Camera] Camera stream acquired in joinVoiceChannel');
 
         cameraStreamRef.current = videoStream;
         setActiveCameraStream(videoStream);
         setIsVideoEnabled(true);
       } catch (err: any) {
+        console.error('[Camera] Camera access error in joinVoiceChannel:', err);
         setCameraError('Could not access camera.');
         setIsVideoEnabled(false);
       } finally {
@@ -1009,6 +1022,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   // Toggle Camera
   const toggleCamera = async () => {
     if (isVideoEnabled) {
+      console.log('[Camera] Disabling camera');
+      sendMediaStateSignal('camera', 'off');
       if (cameraStreamRef.current) {
         cameraStreamRef.current.getTracks().forEach((track) => track.stop());
         cameraStreamRef.current = null;
@@ -1017,18 +1032,23 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       setActiveCameraStream(null);
       updateUser({ has_video: false });
     } else {
+      console.log('[Camera] Enabling camera');
+      sendMediaStateSignal('camera', 'on');
       setIsCameraStarting(true);
       setCameraError(null);
       try {
         const stream = await acquireCameraStream();
+        console.log('[Camera] Camera stream acquired');
 
         cameraStreamRef.current = stream;
         setActiveCameraStream(stream);
         setIsVideoEnabled(true);
         updateUser({ has_video: true });
       } catch (err: any) {
+        console.error('[Camera] Camera access error:', err);
         setCameraError('Camera access denied or unavailable.');
         setIsVideoEnabled(false);
+        sendMediaStateSignal('camera', 'off');
       } finally {
         setIsCameraStarting(false);
       }
@@ -1045,6 +1065,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       setIsScreenSharing(false);
       setActiveScreenStream(null);
       updateUser({ is_screen_sharing: false });
+      sendMediaStateSignal('screen', 'off');
     } else {
       try {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
@@ -1060,14 +1081,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         setActiveScreenStream(screenStream);
         setIsScreenSharing(true);
         updateUser({ is_screen_sharing: true });
+        sendMediaStateSignal('screen', 'on');
 
         screenStream.getVideoTracks()[0].onended = () => {
           setIsScreenSharing(false);
           setActiveScreenStream(null);
           updateUser({ is_screen_sharing: false });
+          sendMediaStateSignal('screen', 'off');
         };
       } catch {
         // Screen share dismissed
+        sendMediaStateSignal('screen', 'off');
       }
     }
   };
@@ -2357,7 +2381,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   <div className="flex flex-wrap items-center justify-center gap-6 w-full max-w-6xl max-h-full overflow-y-auto p-2">
                     
                     {/* Local User Camera Tile */}
-                    {(isVideoEnabled || isCameraStarting) && (
+                    {(isVideoEnabled || (isCameraStarting && !cameraError)) && (
                       <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
                         localIsVertical ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' : 'aspect-video w-full max-w-[500px]'
                       } ${
@@ -2438,13 +2462,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       const isPeerTileVertical = (peerOrientations[u.id] || false);
 
                       return (
-                        <div key={u.id} className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
-                          shouldShowVideo && isPeerTileVertical 
-                            ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
-                            : 'aspect-video w-full max-w-[500px]'
-                        } ${
-                          isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
-                        }`}>
+                        <React.Fragment key={u.id}>
+                          <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                            shouldShowVideo && isPeerTileVertical 
+                              ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
+                              : 'aspect-video w-full max-w-[500px]'
+                          } ${
+                            isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
+                          }`}>
                           {shouldShowVideo ? (
                             <RemoteVideoPlayer 
                               stream={stream} 
@@ -2473,6 +2498,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                             {u.is_muted && <MicOff className="w-4 h-4 text-zinc-400" />}
                           </div>
                         </div>
+                        
+                        {u.is_screen_sharing && (
+                            <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/40 shadow-[0_0_30px_rgba(0,102,255,0.2)] transition-all duration-300 flex flex-col items-center justify-center aspect-video w-full max-w-[500px]">
+                                <ScreenSharePlayer stream={stream} />
+                                <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                                    <div className="text-sm font-extrabold text-white flex items-center gap-2">
+                                        <Monitor className="w-4 h-4 text-blue-400" />
+                                        <span>{u.username}&apos;s Screen</span>
+                                    </div>
+                                </div>
+                            </div>
+                          )}
+                        </React.Fragment>
                       );
                     })}
 
