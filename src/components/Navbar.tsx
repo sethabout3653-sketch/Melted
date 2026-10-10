@@ -9,7 +9,6 @@ import {
   WifiOff, 
   Gamepad2, 
   MessageSquare,
-  Film,
   Zap
 } from 'lucide-react';
 import { CloakPreset } from '../hooks/useCloak';
@@ -18,8 +17,8 @@ import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { GameCategory } from '../types/game';
 
 interface NavbarProps {
-  currentTab: 'games' | 'videos' | 'chat';
-  onTabChange: (tab: 'games' | 'videos' | 'chat') => void;
+  currentTab: 'games' | 'chat';
+  onTabChange: (tab: 'games' | 'chat') => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onRandomGame: () => void;
@@ -132,22 +131,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>All Games</span>
             </button>
 
-            <button
-              onClick={() => onTabChange('videos')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                currentTab === 'videos'
-                  ? 'bg-red-600 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Film className="w-3.5 h-3.5" />
-              <span>Videos</span>
-              <span className={`text-[10px] font-extrabold px-1.5 py-0.2 rounded border ${
-                currentTab === 'videos' ? 'bg-black/30 text-white border-white/20' : 'bg-red-500/15 text-red-400 border-red-500/30'
-              }`}>
-                YT
-              </span>
-            </button>
+
 
             <button
               onClick={() => onTabChange('chat')}

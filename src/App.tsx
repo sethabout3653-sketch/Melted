@@ -5,7 +5,6 @@ import { CategoryFilter } from './components/CategoryFilter';
 import { GameCard } from './components/GameCard';
 import { GamePlayer } from './components/GamePlayer';
 import { ChatView } from './components/ChatView';
-import { VideosView } from './components/VideosView';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { FrostedLoadingScreen } from './components/FrostedLoadingScreen';
 import { fetchGames, getAllGames, resolveGameUrl } from './services/gameService';
@@ -24,14 +23,13 @@ import {
   MessageSquare,
   Play,
   Pause,
-  Zap,
-  Film
+  Zap
 } from 'lucide-react';
 
 const PAGE_SIZE = 36;
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'games' | 'videos' | 'chat'>('games');
+  const [currentTab, setCurrentTab] = useState<'games' | 'chat'>('games');
   const [searchQuery, setSearchQuery] = useState('');
   const deferredQuery = useDeferredValue(searchQuery);
 
@@ -277,14 +275,10 @@ export default function App() {
         isConnected={globalChat.isConnected}
       />
 
-      {/* Main View: Videos View OR Discord Chat OR Games Catalog */}
+      {/* Main View: Chat OR Games Catalog */}
       {currentTab === 'chat' ? (
         <div className="flex-1 w-full h-[calc(100vh-64px)] overflow-hidden">
           <ChatView globalChat={globalChat} />
-        </div>
-      ) : currentTab === 'videos' ? (
-        <div className="flex-1 w-full min-h-[calc(100vh-64px)]">
-          <VideosView />
         </div>
       ) : (
         <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -468,12 +462,6 @@ export default function App() {
                 </div>
                 <ul className="space-y-1.5 text-xs text-zinc-400">
                   <li>
-                    <button onClick={() => setCurrentTab('videos')} className="hover:text-red-500 transition-colors cursor-pointer flex items-center gap-1.5 text-zinc-300">
-                      <Film className="w-3.5 h-3.5 text-red-500" />
-                      <span>YouTube Videos & Downloader</span>
-                    </button>
-                  </li>
-                  <li>
                     <button onClick={() => setCurrentTab('chat')} className="hover:text-[#0066ff] transition-colors cursor-pointer flex items-center gap-1.5 text-zinc-300">
                       <MessageSquare className="w-3.5 h-3.5 text-[#0066ff]" />
                       <span>Community Chat</span>
@@ -544,15 +532,7 @@ export default function App() {
           <span>Games</span>
         </button>
 
-        <button
-          onClick={() => setCurrentTab('videos')}
-          className={`flex flex-col items-center gap-1 px-3 py-1 rounded-xl text-[11px] font-bold transition-colors cursor-pointer ${
-            currentTab === 'videos' ? 'text-red-500' : 'text-zinc-400 hover:text-zinc-200'
-          }`}
-        >
-          <Film className="w-5 h-5" />
-          <span>Videos</span>
-        </button>
+
 
         <button
           onClick={() => setCurrentTab('chat')}
