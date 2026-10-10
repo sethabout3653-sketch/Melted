@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { io, Socket } from 'socket.io-client';
-import { DbUser, DbMessage } from '../server/socketIoDatabase';
+import { DbUser, DbMessage } from '../server/wsDatabase';
 
 export interface RtcSignalPayload {
   fromUserId: string;
@@ -8,16 +7,20 @@ export interface RtcSignalPayload {
   signal: any;
 }
 
-export function useWebSocketDatabase(currentUser: { id: string; username: string; avatar_color: string; avatar_url?: string }) {
+export function useWebSocketDatabase(currentUser: { id: string; username: string; avatar_color: string }) {
   const [users, setUsers] = useState<DbUser[]>([]);
   const [messages, setMessages] = useState<DbMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
 
-  const socketRef = useRef<Socket | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
+  const reconnectTimeoutRef = useRef<any>(null);
+  const pingIntervalRef = useRef<any>(null);
 
+  // Use a ref for currentUser to avoid reconnecting when only username/avatar changes
   const currentUserRef = useRef(currentUser);
   currentUserRef.current = currentUser;
 
+  // Callbacks for WebRTC signaling
   const onRtcSignalRef = useRef<((fromUserId: string, signal: any) => void) | null>(null);
   const onUserCallRef = useRef<((fromUserId: string, fromUserName: string, callType: 'audio' | 'video') => void) | null>(null);
   const onUserJoinedMediaRef = useRef<((userId: string, channel: string) => void) | null>(null);
@@ -39,26 +42,193 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     onUserLeftMediaRef.current = onLeft;
   }, []);
 
-  useEffect(() => {
-    const socket = io({ 
-      path: '/ws-db',
-      reconnection: true,
-      reconnectionAttempts: 20,
-      reconnectionDelay: 100,
-      reconnectionDelayMax: 1000,
-      timeout: 10000,
-    } as any);
-    socketRef.current = socket;
+  const startHeartbeat = useCallback(() => {
+    if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
+    
+    // Cloudflare Pages / Workers WebSocket 100s timeout prevention ping (sent every 25s)
+    pingIntervalRef.current = setInterval(() => {
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        try {
+          wsRef.current.send(JSON.stringify({ type: 'PING', timestamp: Date.now() }));
+        } catch {}
+      }
+    }, 25000);
+  }, []);
 
-    socket.on('connect', () => {
-      setIsConnected(true);
+  const stopHeartbeat = useCallback(() => {
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = null;
+    }
+  }, []);
+
+  const connect = useCallback(() => {
+    if (wsRef.current && (wsRef.current.readyState === WebSocket.CONNECTING || wsRef.current.readyState === WebSocket.OPEN)) {
+      return;
+    }
+
+    try {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws-db`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setIsConnected(true);
+        startHeartbeat();
+
+        // Register current user
+        const u = currentUserRef.current;
+        ws.send(JSON.stringify({
+          type: 'REGISTER_USER',
+          user: {
+            id: u.id,
+            username: u.username,
+            avatar_color: u.avatar_color,
+            current_channel: 'text-general',
+            is_speaking: false,
+            is_muted: false,
+            is_deafened: false,
+            has_video: false,
+            is_screen_sharing: false,
+          },
+        }));
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'PING') {
+            if (ws.readyState === WebSocket.OPEN) {
+              ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
+            }
+            return;
+          }
+          if (msg.type === 'PONG') {
+            // Heartbeat acknowledged by Cloudflare / Node server
+            return;
+          }
+          if (msg.type === 'DB_INIT') {
+            if (msg.tables.users) setUsers(msg.tables.users);
+            if (msg.tables.messages) setMessages(msg.tables.messages);
+          } else if (msg.type === 'DB_SYNC') {
+            if (msg.table === 'users') {
+              setUsers(msg.data);
+            } else if (msg.table === 'messages') {
+              setMessages(msg.data);
+            }
+          } else if (msg.type === 'RTC_SIGNAL') {
+            if (onRtcSignalRef.current) {
+              onRtcSignalRef.current(msg.fromUserId, msg.signal);
+            }
+          } else if (msg.type === 'USER_CALL') {
+            if (onUserCallRef.current) {
+              onUserCallRef.current(msg.fromUserId, msg.fromUserName, msg.callType);
+            }
+          } else if (msg.type === 'USER_JOINED_MEDIA') {
+            if (onUserJoinedMediaRef.current) {
+              onUserJoinedMediaRef.current(msg.userId, msg.channel);
+            }
+          } else if (msg.type === 'USER_LEFT_MEDIA') {
+            if (onUserLeftMediaRef.current) {
+              onUserLeftMediaRef.current(msg.userId, msg.channel);
+            }
+          }
+        } catch (err) {
+          console.error('[WS DB Client] parse error:', err);
+        }
+      };
+
+      ws.onclose = () => {
+        setIsConnected(false);
+        stopHeartbeat();
+        wsRef.current = null;
+        if (!reconnectTimeoutRef.current) {
+          reconnectTimeoutRef.current = setTimeout(() => {
+            reconnectTimeoutRef.current = null;
+            connect();
+          }, 2000);
+        }
+      };
+
+      ws.onerror = () => {
+        ws.close();
+      };
+    } catch (err) {
+      console.warn('[WS DB Client] connection error, will retry:', err);
+      stopHeartbeat();
+      if (!reconnectTimeoutRef.current) {
+        reconnectTimeoutRef.current = setTimeout(() => {
+          reconnectTimeoutRef.current = null;
+          connect();
+        }, 3000);
+      }
+    }
+  }, [startHeartbeat, stopHeartbeat]);
+
+  useEffect(() => {
+    connect();
+    return () => {
+      stopHeartbeat();
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, [connect, stopHeartbeat]);
+
+  // SQL-like UPDATE
+  const updateUser = useCallback((set: Partial<DbUser>) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'SQL_UPDATE',
+        table: 'users',
+        id: currentUserRef.current.id,
+        set,
+      }));
+    }
+  }, []);
+
+  // SQL-like INSERT
+  const insertMessage = useCallback((content: string, channelId: string = 'text-general', attachment?: { url: string; type: 'image' | 'video' | 'audio' | 'file' | 'gif' | string; name?: string }) => {
+    if (!content.trim() && !attachment) return;
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       const u = currentUserRef.current;
-      socket.emit('REGISTER_USER', {
-        user: {
-          id: u.id,
-          username: u.username,
+      wsRef.current.send(JSON.stringify({
+        type: 'SQL_INSERT',
+        table: 'messages',
+        row: {
+          channel_id: channelId,
+          sender_id: u.id,
+          sender_name: u.username,
           avatar_color: u.avatar_color,
-          avatar_url: u.avatar_url || null,
+          content: content.trim(),
+          attachment_url: attachment?.url,
+          attachment_type: attachment?.type,
+          attachment_name: attachment?.name,
+          timestamp: 'Today at ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+      }));
+    }
+  }, []);
+
+  // SQL-like DELETE
+  const deleteMessage = useCallback((messageId: string) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'SQL_DELETE',
+        table: 'messages',
+        id: messageId,
+      }));
+    }
+  }, []);
+
+  const registerUser = useCallback((user: { id: string; username: string; avatar_color: string }) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'REGISTER_USER',
+        user: {
+          ...user,
           current_channel: 'text-general',
           is_speaking: false,
           is_muted: false,
@@ -66,132 +236,33 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
           has_video: false,
           is_screen_sharing: false,
         },
-      });
-    });
-
-    socket.on('disconnect', () => {
-      setIsConnected(false);
-    });
-
-    socket.on('DB_INIT', (data) => {
-      if (data?.users) setUsers(data.users);
-      if (data?.messages) setMessages(data.messages);
-    });
-
-    socket.on('DB_SYNC', (data) => {
-      if (data.table === 'users') setUsers(data.data);
-      else if (data.table === 'messages') setMessages(data.data);
-    });
-
-    socket.on('RTC_SIGNAL', (msg) => {
-      if (onRtcSignalRef.current) onRtcSignalRef.current(msg.fromUserId, msg.signal);
-    });
-
-    socket.on('USER_CALL', (msg) => {
-      if (onUserCallRef.current) onUserCallRef.current(msg.fromUserId, msg.fromUserName, msg.callType);
-    });
-
-    socket.on('USER_JOINED_MEDIA', (msg) => {
-      if (onUserJoinedMediaRef.current) onUserJoinedMediaRef.current(msg.userId, msg.channel);
-    });
-
-    socket.on('USER_LEFT_MEDIA', (msg) => {
-      if (onUserLeftMediaRef.current) onUserLeftMediaRef.current(msg.userId, msg.channel);
-    });
-
-    // Server-Sent Events (SSE) fallback / redundancy event stream as requested
-    let eventSource: EventSource | null = null;
-    try {
-      eventSource = new EventSource('/api/events');
-      eventSource.addEventListener('DB_SYNC', (event: any) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.table === 'users') setUsers(data.data);
-          else if (data.table === 'messages') setMessages(data.data);
-        } catch {}
-      });
-      eventSource.addEventListener('USER_JOINED_MEDIA', (event: any) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (onUserJoinedMediaRef.current && data.userId && data.channel) {
-            onUserJoinedMediaRef.current(data.userId, data.channel);
-          }
-        } catch {}
-      });
-      eventSource.addEventListener('USER_LEFT_MEDIA', (event: any) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (onUserLeftMediaRef.current && data.userId && data.channel) {
-            onUserLeftMediaRef.current(data.userId, data.channel);
-          }
-        } catch {}
-      });
-    } catch (e) {}
-
-    return () => {
-      socket.disconnect();
-      if (eventSource) eventSource.close();
-    };
+      }));
+    }
   }, []);
 
-  const updateUser = useCallback((set: Partial<DbUser>) => {
-    socketRef.current?.emit('SQL_UPDATE', { table: 'users', id: currentUserRef.current.id, set });
-  }, []);
-
-  const insertMessage = useCallback((content: string, channelId: string = 'text-general', attachment?: { url: string; type: string; name?: string }) => {
-    if (!content.trim() && !attachment) return;
-    const u = currentUserRef.current;
-    socketRef.current?.emit('SQL_INSERT', {
-      table: 'messages',
-      row: {
-        channel_id: channelId,
-        sender_id: u.id,
-        sender_name: u.username,
-        avatar_color: u.avatar_color,
-        sender_avatar_url: u.avatar_url || null,
-        content: content.trim(),
-        attachment_url: attachment?.url,
-        attachment_type: attachment?.type,
-        attachment_name: attachment?.name,
-        timestamp: 'Today at ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      },
-    });
-  }, []);
-
-  const deleteMessage = useCallback((messageId: string) => {
-    socketRef.current?.emit('SQL_DELETE', { table: 'messages', id: messageId });
-  }, []);
-
-  const registerUser = useCallback((user: { id: string; username: string; avatar_color: string; avatar_url?: string }) => {
-    socketRef.current?.emit('REGISTER_USER', {
-      user: {
-        ...user,
-        avatar_url: user.avatar_url || null,
-        current_channel: 'text-general',
-        is_speaking: false,
-        is_muted: false,
-        is_deafened: false,
-        has_video: false,
-        is_screen_sharing: false,
-      },
-    });
-  }, []);
-
+  // Send WebRTC Signal
   const sendRtcSignal = useCallback((targetUserId: string, signal: any) => {
-    socketRef.current?.emit('RTC_SIGNAL', {
-      fromUserId: currentUserRef.current.id,
-      targetUserId,
-      signal,
-    });
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'RTC_SIGNAL',
+        fromUserId: currentUserRef.current.id,
+        targetUserId,
+        signal,
+      }));
+    }
   }, []);
 
   const callUser = useCallback((targetUserId: string, callType: 'audio' | 'video') => {
-    socketRef.current?.emit('USER_CALL', {
-      fromUserId: currentUserRef.current.id,
-      fromUserName: currentUserRef.current.username,
-      targetUserId,
-      callType,
-    });
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      const u = currentUserRef.current;
+      wsRef.current.send(JSON.stringify({
+        type: 'USER_CALL',
+        fromUserId: u.id,
+        fromUserName: u.username,
+        targetUserId,
+        callType,
+      }));
+    }
   }, []);
 
   return {
@@ -207,6 +278,6 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     setRtcSignalHandler,
     setUserCallHandler,
     setMediaHandlers,
-    ws: socketRef.current,
+    ws: wsRef.current,
   };
 }

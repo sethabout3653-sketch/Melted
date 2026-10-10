@@ -14,7 +14,6 @@ export function useGlobalChat() {
     const savedId = localStorage.getItem('frosted_chat_user_id') || ('u_' + Math.random().toString(36).substr(2, 6));
     const savedName = localStorage.getItem('frosted_chat_username') || ('Player_' + Math.floor(100 + Math.random() * 900));
     const savedColor = localStorage.getItem('frosted_chat_usercolor') || '#0066ff';
-    const savedAvatar = localStorage.getItem('frosted_chat_useravatar') || '';
     localStorage.setItem('frosted_chat_user_id', savedId);
     localStorage.setItem('frosted_chat_username', savedName);
     localStorage.setItem('frosted_chat_usercolor', savedColor);
@@ -22,7 +21,6 @@ export function useGlobalChat() {
       id: savedId,
       username: savedName,
       avatar_color: savedColor,
-      avatar_url: savedAvatar || undefined,
     };
   });
 
@@ -38,12 +36,12 @@ export function useGlobalChat() {
 
   // Sync user profile with server when user connects or profile attributes change (prevents infinite loop!)
   useEffect(() => {
-    const userKey = `${currentUser.id}:${currentUser.username}:${currentUser.avatar_color}:${currentUser.avatar_url || ''}`;
+    const userKey = `${currentUser.id}:${currentUser.username}:${currentUser.avatar_color}`;
     if (isConnected && registeredKeyRef.current !== userKey) {
       registeredKeyRef.current = userKey;
       registerUser(currentUser);
     }
-  }, [isConnected, currentUser.id, currentUser.username, currentUser.avatar_color, currentUser.avatar_url, registerUser]);
+  }, [isConnected, currentUser.id, currentUser.username, currentUser.avatar_color, registerUser]);
 
   // Handle incoming call events from relay server
   useEffect(() => {
