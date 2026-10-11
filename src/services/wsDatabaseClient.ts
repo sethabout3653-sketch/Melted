@@ -148,7 +148,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectTimeoutRef.current = null;
             connect();
-          }, 2000);
+          }, 1000);
         }
       };
 
@@ -162,7 +162,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
         reconnectTimeoutRef.current = setTimeout(() => {
           reconnectTimeoutRef.current = null;
           connect();
-        }, 3000);
+        }, 1000);
       }
     }
   }, [startHeartbeat, stopHeartbeat]);
