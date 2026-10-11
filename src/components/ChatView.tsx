@@ -2281,8 +2281,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     {voiceUsers.map((u: any) => {
                       const stream = remoteStreams[u.id];
                       const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
-                      // Only show video if we actually have a live video track AND user enabled it
-                      const shouldShowVideo = u.has_video && stream && stream.getVideoTracks().some((t) => t.enabled && t.readyState === 'live');
+                      // Get all video tracks
+                      const videoTracks = stream?.getVideoTracks().filter((t) => t.enabled && t.readyState === 'live') || [];
+                      const shouldShowVideo = u.has_video && videoTracks.length > 0;
                       const isPeerTileVertical = (peerOrientations[u.id] || false);
 
                       return (
@@ -2295,7 +2296,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         }`}>
                           {shouldShowVideo ? (
                             <RemoteVideoPlayer 
-                              stream={stream} 
+                              stream={new MediaStream([stream.getVideoTracks()[0]])} 
                               username={u.username}
                               avatarColor={u.avatar_color}
                               onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [u.id]: vert }))}
