@@ -269,7 +269,7 @@ export function initWebSocketDatabase(server: Server) {
     });
   }
 
-  function broadcastMediaPresence(type: 'USER_JOINED_MEDIA' | 'USER_LEFT_MEDIA', userId: string, channel: string) {
+  function broadcastMediaPresence(type: 'USER_JOINED_MEDIA' | 'USER_LEFT_MEDIA' | 'USER_MEDIA_UPDATE', userId: string, channel: string) {
     const payload = JSON.stringify({
       type,
       userId,
@@ -354,7 +354,7 @@ export function initWebSocketDatabase(server: Server) {
                 db.upsertUser(updated);
                 broadcastTable('users', db.selectUsers());
 
-                // Detect presence changes (channel, mute, camera, etc)
+                // Detect channel media transitions
                 if (msg.set.current_channel !== undefined && msg.set.current_channel !== oldChannel) {
                   if (msg.set.current_channel === 'voice-general' || msg.set.current_channel === 'video-general') {
                     broadcastMediaPresence('USER_JOINED_MEDIA', msg.id, msg.set.current_channel);
@@ -362,6 +362,15 @@ export function initWebSocketDatabase(server: Server) {
                   if (oldChannel === 'voice-general' || oldChannel === 'video-general') {
                     broadcastMediaPresence('USER_LEFT_MEDIA', msg.id, oldChannel);
                   }
+                }
+
+                // Explicitly broadcast media status changes (video/mute/screen-share)
+                if (
+                  msg.set.has_video !== undefined ||
+                  msg.set.is_muted !== undefined ||
+                  msg.set.is_screen_sharing !== undefined
+                ) {
+                  broadcastMediaPresence('USER_MEDIA_UPDATE', msg.id, user.current_channel);
                 }
               }
             }

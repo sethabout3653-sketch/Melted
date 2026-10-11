@@ -962,7 +962,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   };
 
   const toggleDeafen = () => {
-    setIsDeafened(!isDeafened);
+    const nextDeafened = !isDeafened;
+    setIsDeafened(nextDeafened);
+    updateUser({ is_deafened: nextDeafened });
   };
 
   const handleChannelSelect = (channel: 'text-general' | 'video-general') => {
@@ -2228,8 +2230,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     {voiceUsers.map((u: any) => {
                       const stream = remoteStreams[u.id];
                       const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
-                      // Only show video if we actually have a live video track
-                      const shouldShowVideo = stream && stream.getVideoTracks().some((t) => t.enabled && t.readyState === 'live');
+                      // Only show video if we actually have a live video track AND user enabled it
+                      const shouldShowVideo = u.has_video && stream && stream.getVideoTracks().some((t) => t.enabled && t.readyState === 'live');
                       const isPeerTileVertical = (peerOrientations[u.id] || false);
 
                       return (
