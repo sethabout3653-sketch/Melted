@@ -273,23 +273,6 @@ const RemoteVideoPlayer: React.FC<{
 
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-black">
-      {/* Loading Screen UI before video media arrives and renders */}
-      {!isLoaded && (
-        <div className="absolute inset-0 bg-[#0e0e14] flex flex-col items-center justify-center p-4 z-10 animate-in fade-in duration-200">
-          <div className="relative flex items-center justify-center mb-3">
-            <div className="absolute w-16 h-16 rounded-full bg-blue-500/20 animate-ping" />
-            <div 
-              className="w-14 h-14 rounded-2xl flex items-center justify-center text-white text-base font-black shadow-lg shadow-blue-500/10"
-              style={{ backgroundColor: avatarColor || '#0066ff' }}
-            >
-              <Video className="w-7 h-7 text-white animate-pulse" />
-            </div>
-          </div>
-          <p className="text-xs font-bold text-white tracking-wide">Connecting Camera</p>
-          <p className="text-[11px] text-zinc-400 mt-0.5">{username}&apos;s stream initializing...</p>
-        </div>
-      )}
-
       {/* Video element */}
       <video
         ref={videoRef}
@@ -302,34 +285,28 @@ const RemoteVideoPlayer: React.FC<{
         onPlaying={checkOrientation}
         onTimeUpdate={checkOrientation}
         onResize={checkOrientation}
-        className={`w-full h-full object-cover rounded-3xl transition-opacity duration-300 ${
-          isLoaded ? 'opacity-100' : 'opacity-0'
-        }`}
+        className="w-full h-full object-cover rounded-3xl transition-opacity duration-300 opacity-100"
       />
     </div>
   );
 };
 
-// Local Video Player with loading screen & orientation detection
+// Local Video Player
 const LocalVideoPlayer: React.FC<{ 
   stream: MediaStream | null;
-  isLoading?: boolean;
   onOrientationChange?: (isVertical: boolean) => void;
-}> = ({ stream, isLoading, onOrientationChange }) => {
+}> = ({ stream, onOrientationChange }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
 
   const checkOrientation = useCallback(() => {
     const video = videoRef.current;
     if (video && video.videoWidth > 0 && video.videoHeight > 0) {
       const vertical = video.videoHeight > video.videoWidth;
       onOrientationChange?.(vertical);
-      setIsLoaded(true);
     }
   }, [onOrientationChange]);
 
   useEffect(() => {
-    setIsLoaded(false);
     const video = videoRef.current;
     if (video) {
       if (stream && video.srcObject !== stream) {
@@ -339,35 +316,10 @@ const LocalVideoPlayer: React.FC<{
         video.play().catch(() => {});
       }
     }
-
-    const interval = setInterval(() => {
-      const vid = videoRef.current;
-      if (vid && vid.videoWidth > 0 && vid.videoHeight > 0) {
-        checkOrientation();
-      }
-    }, 150);
-
-    return () => clearInterval(interval);
-  }, [stream, checkOrientation]);
-
-  const showLoading = isLoading || !isLoaded;
+  }, [stream]);
 
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-black">
-      {/* Loading Screen UI before local camera shows media */}
-      {showLoading && (
-        <div className="absolute inset-0 bg-[#0e0e14] flex flex-col items-center justify-center p-4 z-10 animate-in fade-in duration-200">
-          <div className="relative flex items-center justify-center mb-3">
-            <div className="absolute w-16 h-16 rounded-full bg-blue-500/20 animate-ping" />
-            <div className="w-14 h-14 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shadow-lg shadow-blue-600/20">
-              <Video className="w-7 h-7 text-blue-400 animate-pulse" />
-            </div>
-          </div>
-          <p className="text-xs font-bold text-white tracking-wide">Starting Camera</p>
-          <p className="text-[11px] text-zinc-400 mt-0.5">Initializing video stream...</p>
-        </div>
-      )}
-
       {/* Local Video Stream with mirror preview */}
       <video
         ref={videoRef}
@@ -375,14 +327,8 @@ const LocalVideoPlayer: React.FC<{
         muted
         playsInline
         onLoadedMetadata={checkOrientation}
-        onLoadedData={checkOrientation}
-        onCanPlay={checkOrientation}
-        onPlaying={checkOrientation}
-        onTimeUpdate={checkOrientation}
         onResize={checkOrientation}
-        className={`w-full h-full object-cover rounded-3xl transform scale-x-[-1] transition-opacity duration-300 ${
-          isLoaded && !isLoading ? 'opacity-100' : 'opacity-0'
-        }`}
+        className="w-full h-full object-cover rounded-3xl transform scale-x-[-1] opacity-100"
       />
     </div>
   );
@@ -825,7 +771,42 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     }
   }, [localAudioStream, isMuted, isMicTesting]);
 
-  // Join Voice Channel
+  // Robust media acquisition that handles device switching
+  const acquireAudioStream = async (): Promise<MediaStream> => {
+    try {
+      // Use standard audio constraints, allowing the browser to pick the active device
+      return await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false,
+      });
+    } catch (err) {
+      console.error('[WebRTC] Audio acquisition failed:', err);
+      throw err;
+    }
+  };
+
+  // Re-acquire stream if device change occurs
+  useEffect(() => {
+    const handleDeviceChange = async () => {
+      if (isInVideo) {
+        console.log('[WebRTC] Audio device change detected, re-initializing...');
+        try {
+          const newStream = await acquireAudioStream();
+          micStreamRef.current = newStream;
+          setLocalAudioStream(newStream);
+        } catch (e) {
+          console.error('[WebRTC] Failed to re-acquire audio after device change:', e);
+        }
+      }
+    };
+
+    navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    return () => {
+      navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+    };
+  }, [isInVideo]);
+
+  // Updated joinVoiceChannel using robust acquisition
   const joinVoiceChannel = async (withVideo: boolean = false) => {
     setMicError(null);
     setCameraError(null);
@@ -834,18 +815,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     let videoStream: MediaStream | null = null;
 
     try {
-      audioStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: false,
-      });
-
+      audioStream = await acquireAudioStream();
       setMicPermissionStatus('granted');
       micStreamRef.current = audioStream;
       setLocalAudioStream(audioStream);
       setIsMuted(false);
     } catch (err: any) {
       setMicPermissionStatus('denied');
-      setMicError('Could not access microphone. Please allow microphone permission.');
+      setMicError('Could not access microphone. Please check your connection and allow microphone permission.');
     }
 
     if (withVideo) {
@@ -1704,11 +1681,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 {/* Messages List */}
                 {messages.map((msg: any) => (
                   <div key={msg.id} className="flex items-start gap-3.5 group hover:bg-white/[0.02] -mx-4 px-4 py-1.5 rounded-xl transition-colors">
-                    <div 
-                      className="w-10 h-10 rounded-full text-black font-extrabold flex items-center justify-center shrink-0 text-xs shadow-sm"
-                      style={{ backgroundColor: msg.avatar_color || '#0066ff' }}
-                    >
-                      {msg.sender_name.slice(0, 2).toUpperCase()}
+                    <div className="shrink-0">
+                      {renderAvatar({ username: msg.sender_name, avatar_color: msg.avatar_color, avatar_url: msg.sender_avatar_url }, 'w-10 h-10 text-xs')}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-2">
@@ -2080,12 +2054,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 {users.map((u: any) => (
                   <div key={u.id} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] transition-colors">
                     <div className="relative shrink-0">
-                      <div 
-                        className="w-9 h-9 rounded-full text-black font-extrabold flex items-center justify-center text-xs shadow-sm"
-                        style={{ backgroundColor: u.avatar_color || '#0066ff' }}
-                      >
-                        {u.username.slice(0, 2).toUpperCase()}
-                      </div>
+                      {renderAvatar(u, 'w-9 h-9 text-xs')}
                       <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                     </div>
 
@@ -2240,7 +2209,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       {isVideoEnabled ? (
                         <LocalVideoPlayer 
                           stream={activeVideoStream} 
-                          isLoading={isCameraStarting} 
                           onOrientationChange={setLocalIsVertical} 
                         />
                       ) : (

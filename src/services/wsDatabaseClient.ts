@@ -7,7 +7,7 @@ export interface RtcSignalPayload {
   signal: any;
 }
 
-export function useWebSocketDatabase(currentUser: { id: string; username: string; avatar_color: string; activity?: string }) {
+export function useWebSocketDatabase(currentUser: { id: string; username: string; avatar_color: string; avatar_url?: string; activity?: string }) {
   const [users, setUsers] = useState<DbUser[]>([]);
   const [messages, setMessages] = useState<DbMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
@@ -203,6 +203,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
           sender_id: u.id,
           sender_name: u.username,
           avatar_color: u.avatar_color,
+          sender_avatar_url: u.avatar_url || '',
           content: content.trim(),
           attachment_url: attachment?.url,
           attachment_type: attachment?.type,

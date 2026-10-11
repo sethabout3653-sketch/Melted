@@ -24,6 +24,7 @@ export interface DbMessage {
   sender_id: string;
   sender_name: string;
   avatar_color: string;
+  sender_avatar_url?: string;
   content: string;
   attachment_url?: string;
   attachment_type?: 'image' | 'video' | 'audio' | 'gif' | 'file' | string;
@@ -70,6 +71,7 @@ class WebSocketDatabase {
         sender_id TEXT NOT NULL,
         sender_name TEXT NOT NULL,
         avatar_color TEXT NOT NULL,
+        sender_avatar_url TEXT DEFAULT '',
         content TEXT NOT NULL,
         attachment_url TEXT,
         attachment_type TEXT,
@@ -184,9 +186,9 @@ class WebSocketDatabase {
   public insertMessage(msg: DbMessage) {
     const stmt = this.db.prepare(`
       INSERT OR REPLACE INTO messages (
-        id, channel_id, sender_id, sender_name, avatar_color,
+        id, channel_id, sender_id, sender_name, avatar_color, sender_avatar_url,
         content, attachment_url, attachment_type, attachment_name, timestamp, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     stmt.run(
       msg.id,
@@ -194,6 +196,7 @@ class WebSocketDatabase {
       msg.sender_id,
       msg.sender_name,
       msg.avatar_color,
+      msg.sender_avatar_url ?? '',
       msg.content,
       msg.attachment_url ?? null,
       msg.attachment_type ?? null,
@@ -211,6 +214,7 @@ class WebSocketDatabase {
       sender_id: String(r.sender_id),
       sender_name: String(r.sender_name),
       avatar_color: String(r.avatar_color),
+      sender_avatar_url: r.sender_avatar_url ?? undefined,
       content: String(r.content),
       attachment_url: r.attachment_url ?? undefined,
       attachment_type: r.attachment_type ?? undefined,
@@ -228,6 +232,7 @@ class WebSocketDatabase {
       sender_id: String(r.sender_id),
       sender_name: String(r.sender_name),
       avatar_color: String(r.avatar_color),
+      sender_avatar_url: r.sender_avatar_url ?? undefined,
       content: String(r.content),
       attachment_url: r.attachment_url ?? undefined,
       attachment_type: r.attachment_type ?? undefined,
@@ -322,6 +327,7 @@ export function initWebSocketDatabase(server: Server) {
                 sender_id: msg.row.sender_id,
                 sender_name: msg.row.sender_name,
                 avatar_color: msg.row.avatar_color || '#0066ff',
+                sender_avatar_url: msg.row.sender_avatar_url || '',
                 content: msg.row.content || '',
                 attachment_url: msg.row.attachment_url,
                 attachment_type: msg.row.attachment_type,
@@ -348,8 +354,8 @@ export function initWebSocketDatabase(server: Server) {
                 db.upsertUser(updated);
                 broadcastTable('users', db.selectUsers());
 
-                // Detect channel media transitions
-                if (msg.set.current_channel && msg.set.current_channel !== oldChannel) {
+                // Detect presence changes (channel, mute, camera, etc)
+                if (msg.set.current_channel !== undefined && msg.set.current_channel !== oldChannel) {
                   if (msg.set.current_channel === 'voice-general' || msg.set.current_channel === 'video-general') {
                     broadcastMediaPresence('USER_JOINED_MEDIA', msg.id, msg.set.current_channel);
                   }

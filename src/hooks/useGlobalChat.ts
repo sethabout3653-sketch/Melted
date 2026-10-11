@@ -13,6 +13,7 @@ export interface InAppNotification {
   id: string;
   sender_name: string;
   avatar_color: string;
+  avatar_url?: string;
   content: string;
   timestamp: string;
   attachment_type?: string;
@@ -54,7 +55,7 @@ export function playNotificationSound() {
   } catch {}
 }
 
-export function useGlobalChat() {
+export function useGlobalChat({ isChatTabActive }: { isChatTabActive: boolean }) {
   const [currentUser, setCurrentUser] = useState(() => {
     const savedId = localStorage.getItem('frosted_chat_user_id') || ('u_' + Math.random().toString(36).substr(2, 6));
     const savedName = localStorage.getItem('frosted_chat_username') || ('Player_' + Math.floor(100 + Math.random() * 900));
