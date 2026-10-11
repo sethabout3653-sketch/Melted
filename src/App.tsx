@@ -24,7 +24,9 @@ import {
   ArrowRight,
   Gamepad2,
   MessageSquare,
-  Zap
+  Zap,
+  Video,
+  PhoneOff
 } from 'lucide-react';
 
 const PAGE_SIZE = 36;
@@ -343,12 +345,17 @@ export default function App() {
         isConnected={globalChat.isConnected}
       />
 
-      {/* Main View: Either Discord Chat OR Games Catalog */}
-      {currentTab === 'chat' ? (
-        <div className={`flex-1 min-h-0 w-full overflow-hidden flex flex-col ${deviceInfo.isMobile ? 'pb-16' : ''}`}>
-          <ChatView globalChat={globalChat} />
-        </div>
-      ) : (
+      {/* Persistent Global Chat & WebRTC Voice/Video View (Kept mounted globally so calls and screen shares never drop!) */}
+      <div 
+        className={`flex-1 min-h-0 w-full overflow-hidden flex flex-col ${deviceInfo.isMobile ? 'pb-16' : ''} ${
+          currentTab === 'chat' ? 'flex' : 'hidden'
+        }`}
+      >
+        <ChatView globalChat={globalChat} />
+      </div>
+
+      {/* Main View: Games Catalog */}
+      {currentTab === 'games' && (
         <main className={`flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 ${deviceInfo.isMobile ? 'pb-24' : ''}`}>
           
           {/* Hero Spotlight: Shown on default landing */}
@@ -592,6 +599,40 @@ export default function App() {
           setCurrentTab('chat');
         }}
       />
+
+      {/* Persistent Global Voice HUD when browsing games while connected to Voice */}
+      {currentTab === 'games' && (() => {
+        const currentDbUser = globalChat.users.find((u: any) => u.id === globalChat.currentUser?.id);
+        const isConnectedToVoice = currentDbUser?.current_channel === 'video-general' || currentDbUser?.current_channel === 'voice-general';
+        if (!isConnectedToVoice) return null;
+        return (
+          <aside aria-label="Active voice call" className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-40 bg-[#0d0d12]/95 backdrop-blur-xl border border-blue-500/50 rounded-2xl p-3 shadow-2xl flex items-center gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+              </span>
+              <div className="flex flex-col">
+                <span className="text-xs font-black text-white">General Voice</span>
+                <span className="text-[10px] text-zinc-400 font-medium">
+                  {globalChat.users.filter((u: any) => u.current_channel === 'video-general' || u.current_channel === 'voice-general').length} connected
+                </span>
+              </div>
+            </div>
+
+            <div className="h-6 w-px bg-white/10" />
+
+            <button
+              onClick={() => setCurrentTab('chat')}
+              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold rounded-xl transition-all shadow-md cursor-pointer flex items-center gap-1.5"
+              title="Return to Video & Screen Share"
+            >
+              <Video className="w-3.5 h-3.5" />
+              <span>Open Call</span>
+            </button>
+          </aside>
+        );
+      })()}
 
     </div>
   );

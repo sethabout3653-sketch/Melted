@@ -193,14 +193,15 @@ const AudioAttachmentPlayer: React.FC<{
   );
 };
 
-// Dedicated audio player for WebRTC voice peers
-const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened: boolean; volume?: number }> = ({ stream, isDeafened, volume = 1 }) => {
+// Single Audio Track Player - plays a specific track with full volume and autoplay resilience
+const SingleAudioTrackPlayer: React.FC<{ track: MediaStreamTrack; isDeafened: boolean; volume: number }> = ({ track, isDeafened, volume }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
     const el = audioRef.current;
-    if (!el || !stream) return;
+    if (!el || !track) return;
 
+    const stream = new MediaStream([track]);
     if (el.srcObject !== stream) {
       el.srcObject = stream;
     }
@@ -210,7 +211,6 @@ const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened:
     const tryPlay = () => {
       el.play().catch(() => {});
     };
-
     tryPlay();
 
     const onUserGesture = () => {
@@ -224,9 +224,50 @@ const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened:
       window.removeEventListener('click', onUserGesture);
       window.removeEventListener('keydown', onUserGesture);
     };
-  }, [stream, isDeafened, volume]);
+  }, [track, isDeafened, volume]);
 
   return <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />;
+};
+
+// Dedicated audio player for WebRTC voice peers (plays both microphone and screen share audio tracks!)
+const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened: boolean; volume?: number }> = ({ stream, isDeafened, volume = 1 }) => {
+  const [tracks, setTracks] = useState<MediaStreamTrack[]>([]);
+
+  useEffect(() => {
+    if (!stream) {
+      setTracks([]);
+      return;
+    }
+
+    const updateTracks = () => {
+      const live = stream.getAudioTracks().filter((t) => t.readyState === 'live');
+      setTracks(live);
+    };
+
+    updateTracks();
+    stream.onaddtrack = updateTracks;
+    stream.onremovetrack = updateTracks;
+
+    return () => {
+      stream.onaddtrack = null;
+      stream.onremovetrack = null;
+    };
+  }, [stream]);
+
+  if (!stream || tracks.length === 0) return null;
+
+  return (
+    <>
+      {tracks.map((track) => (
+        <SingleAudioTrackPlayer
+          key={track.id}
+          track={track}
+          isDeafened={isDeafened}
+          volume={volume}
+        />
+      ))}
+    </>
+  );
 };
 
 // Remote Video Player with loading screen & orientation detection
@@ -235,7 +276,8 @@ const RemoteVideoPlayer: React.FC<{
   username: string;
   avatarColor?: string;
   onOrientationChange?: (isVertical: boolean) => void;
-}> = ({ stream, username, avatarColor, onOrientationChange }) => {
+  isScreen?: boolean;
+}> = ({ stream, username, avatarColor, onOrientationChange, isScreen = false }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -259,16 +301,6 @@ const RemoteVideoPlayer: React.FC<{
         video.play().catch(() => {});
       }
     }
-
-    // Interval to detect when mobile camera video frames/dimensions are ready
-    const interval = setInterval(() => {
-      const vid = videoRef.current;
-      if (vid && vid.videoWidth > 0 && vid.videoHeight > 0) {
-        checkOrientation();
-      }
-    }, 150);
-
-    return () => clearInterval(interval);
   }, [stream, checkOrientation]);
 
   return (
@@ -285,7 +317,7 @@ const RemoteVideoPlayer: React.FC<{
         onPlaying={checkOrientation}
         onTimeUpdate={checkOrientation}
         onResize={checkOrientation}
-        className="w-full h-full object-cover rounded-3xl transition-opacity duration-300 opacity-100"
+        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl transition-opacity duration-300 opacity-100`}
       />
     </div>
   );
@@ -298,7 +330,8 @@ const LocalVideoPlayer: React.FC<{
   renderAvatar: (u: any, sizeClass: string) => React.ReactNode;
   onOrientationChange?: (isVertical: boolean) => void;
   isMirrored?: boolean;
-}> = ({ stream, user, renderAvatar, onOrientationChange, isMirrored = true }) => {
+  isScreen?: boolean;
+}> = ({ stream, user, renderAvatar, onOrientationChange, isMirrored = true, isScreen = false }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const checkOrientation = useCallback(() => {
@@ -339,7 +372,7 @@ const LocalVideoPlayer: React.FC<{
         playsInline
         onLoadedMetadata={checkOrientation}
         onResize={checkOrientation}
-        className={`w-full h-full object-cover rounded-3xl ${isMirrored ? 'transform scale-x-[-1]' : ''} opacity-100`}
+        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl ${isMirrored ? 'transform scale-x-[-1]' : ''} opacity-100`}
       />
     </div>
   );
@@ -530,6 +563,24 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         return;
       }
 
+      // If only screen audio is live, or microphone is muted:
+      if (micTracks.length === 0 || isMuted) {
+        if (screenAudioTracks.length > 0) {
+          setLocalAudioStream(new MediaStream([screenAudioTracks[0]]));
+          return;
+        } else {
+          setLocalAudioStream(null);
+          return;
+        }
+      }
+
+      // If only microphone audio is live (no screen share audio):
+      if (screenAudioTracks.length === 0) {
+        setLocalAudioStream(micStreamRef.current);
+        return;
+      }
+
+      // If both microphone and screen share audio are live and unmuted:
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
       if (AudioCtx) {
         if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
@@ -542,37 +593,25 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
         const dest = ctx.createMediaStreamDestination();
 
-        if (micTracks.length > 0) {
-          const micOnlyStream = new MediaStream([micTracks[0]]);
-          const micSource = ctx.createMediaStreamSource(micOnlyStream);
-          const micGain = ctx.createGain();
-          micGain.gain.value = isMuted ? 0 : 1;
-          micSource.connect(micGain);
-          micGain.connect(dest);
-        }
+        const micOnlyStream = new MediaStream([micTracks[0]]);
+        const micSource = ctx.createMediaStreamSource(micOnlyStream);
+        const micGain = ctx.createGain();
+        micGain.gain.value = 1.0;
+        micSource.connect(micGain);
+        micGain.connect(dest);
 
-        if (screenAudioTracks.length > 0) {
-          const screenOnlyStream = new MediaStream([screenAudioTracks[0]]);
-          const screenSource = ctx.createMediaStreamSource(screenOnlyStream);
-          const screenGain = ctx.createGain();
-          screenGain.gain.value = 1.0;
-          screenSource.connect(screenGain);
-          screenGain.connect(dest);
-        }
+        const screenOnlyStream = new MediaStream([screenAudioTracks[0]]);
+        const screenSource = ctx.createMediaStreamSource(screenOnlyStream);
+        const screenGain = ctx.createGain();
+        screenGain.gain.value = 1.0;
+        screenSource.connect(screenGain);
+        screenGain.connect(dest);
 
-        const mixedStream = new MediaStream(dest.stream.getAudioTracks());
-        screenAudioTracks.forEach((t) => {
-          try { mixedStream.addTrack(t); } catch {}
-        });
-
-        setLocalAudioStream(mixedStream);
+        setLocalAudioStream(dest.stream);
         return;
       }
 
-      const combinedTracks: MediaStreamTrack[] = [];
-      if (micTracks.length > 0) combinedTracks.push(micTracks[0]);
-      if (screenAudioTracks.length > 0) combinedTracks.push(screenAudioTracks[0]);
-      setLocalAudioStream(new MediaStream(combinedTracks));
+      setLocalAudioStream(new MediaStream([micTracks[0], screenAudioTracks[0]]));
     } catch (err) {
       console.warn('[Audio Mixer] error mixing audio:', err);
       if (micStreamRef.current) {
@@ -605,6 +644,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
   // Explicit microphone permission requester with instant browser prompt
   const requestMicrophonePermission = async (withVideo: boolean = false) => {
+    // Unlock AudioContext inside user gesture
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioCtx) {
+      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+        audioContextRef.current = new AudioCtx();
+      }
+      if (audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume().catch(() => {});
+      }
+    }
+
     setMicError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -627,6 +677,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         is_speaking: false,
         is_muted: false,
         is_deafened: false,
+        is_screen_sharing: false,
       });
 
       if (withVideo) {
@@ -893,6 +944,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
   // Updated joinVoiceChannel using robust acquisition
   const joinVoiceChannel = async (withVideo: boolean = false) => {
+    // Unlock AudioContext inside user gesture
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioCtx) {
+      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+        audioContextRef.current = new AudioCtx();
+      }
+      if (audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume().catch(() => {});
+      }
+    }
+
     setMicError(null);
     setCameraError(null);
 
@@ -936,6 +998,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       is_speaking: false,
       is_muted: false,
       is_deafened: false,
+      is_screen_sharing: false,
     });
   };
 
@@ -970,6 +1033,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
   // Toggle Screen Sharing
   const toggleScreenShare = async () => {
+    // Synchronously resume/create audio context inside user interaction click
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (AudioCtx) {
+      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+        audioContextRef.current = new AudioCtx();
+      }
+      if (audioContextRef.current.state === 'suspended') {
+        audioContextRef.current.resume().catch(() => {});
+      }
+    }
+
     if (isScreenSharing) {
       if (screenStreamRef.current) {
         screenStreamRef.current.getTracks().forEach((t) => t.stop());
@@ -988,13 +1062,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         screenStreamRef.current = stream;
         setIsScreenSharing(true);
         setScreenStream(stream);
-        updateUser({ is_screen_sharing: true, has_video: true });
+        updateUser({ is_screen_sharing: true, has_video: isVideoEnabled });
 
-        stream.getVideoTracks()[0].onended = () => {
-          setIsScreenSharing(false);
-          setScreenStream(null);
-          updateUser({ is_screen_sharing: false, has_video: isVideoEnabled });
-        };
+        stream.getTracks().forEach((track) => {
+          track.onended = () => {
+            if (screenStreamRef.current) {
+              screenStreamRef.current.getTracks().forEach((t) => t.stop());
+              screenStreamRef.current = null;
+            }
+            setIsScreenSharing(false);
+            setScreenStream(null);
+            updateUser({ is_screen_sharing: false, has_video: isVideoEnabled });
+          };
+        });
       } catch {
         // Screen share dismissed
       }
@@ -2305,24 +2385,26 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                     {/* Screen Share Tile */}
                     {isScreenSharing && screenStream && (
-                      <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px] border-white/10`}>
+                      <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]`}>
                         <LocalVideoPlayer 
                           stream={screenStream} 
                           user={currentUser}
                           renderAvatar={renderAvatar}
                           isMirrored={false}
+                          isScreen={true}
                         />
                         {/* Bottom-Left Overlay */}
                         <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
-                          <div className="text-sm font-extrabold text-white">
-                            {currentUser.username} (You - Screen)
+                          <div className="text-sm font-extrabold text-white flex items-center gap-2">
+                            <Monitor className="w-4 h-4 text-blue-400" />
+                            <span>{currentUser.username} (You - Screen)</span>
                           </div>
                         </div>
                       </div>
                     )}
 
-                    {/* Avatar Tile (if camera and screen share are both off) */}
-                    {(!isVideoEnabled || !cameraStream) && (!isScreenSharing || !screenStream) && (
+                    {/* Avatar Tile (ALWAYS shown when camera is off, even if screen sharing!) */}
+                    {(!isVideoEnabled || !cameraStream) && (
                       <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px] ${
                         isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
                       }`}>
@@ -2344,46 +2426,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     {/* Remote Peers Tiles */}
                     {voiceUsers.map((u: any) => {
                       const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
-                      const rawStream = remoteStreams[u.id];
-                      const allVideoTracks = rawStream?.getVideoTracks().filter((t) => t.readyState === 'live') || [];
+                      const camStream = remoteCameraStreams[u.id];
+                      const scrStream = remoteScreenStreams[u.id];
 
-                      // 1. Resolve Camera Stream
-                      let camStream = remoteCameraStreams[u.id];
-                      if (!camStream && allVideoTracks.length > 0) {
-                        const nonScreenTrack = allVideoTracks.find(
-                          (t) =>
-                            !t.label.toLowerCase().includes('screen') &&
-                            !t.label.toLowerCase().includes('display') &&
-                            !t.label.toLowerCase().includes('window')
-                        );
-                        if (nonScreenTrack && !u.is_screen_sharing) {
-                          camStream = new MediaStream([nonScreenTrack]);
-                        } else if (allVideoTracks.length === 1 && !u.is_screen_sharing) {
-                          camStream = new MediaStream([allVideoTracks[0]]);
-                        }
-                      }
-
-                      // 2. Resolve Screen Share Stream
-                      let scrStream = remoteScreenStreams[u.id];
-                      if (!scrStream && allVideoTracks.length > 0) {
-                        const screenTrack = allVideoTracks.find(
-                          (t) =>
-                            t.label.toLowerCase().includes('screen') ||
-                            t.label.toLowerCase().includes('display') ||
-                            t.label.toLowerCase().includes('window')
-                        );
-                        if (screenTrack) {
-                          scrStream = new MediaStream([screenTrack]);
-                        } else if (u.is_screen_sharing && allVideoTracks.length === 1) {
-                          scrStream = new MediaStream([allVideoTracks[0]]);
-                        } else if (allVideoTracks.length >= 2) {
-                          scrStream = new MediaStream([allVideoTracks[1]]);
-                        }
-                      }
-
-                      const hasCamera = Boolean(camStream && camStream.getVideoTracks().some((t) => t.readyState === 'live'));
-                      const hasScreen = Boolean(scrStream && scrStream.getVideoTracks().some((t) => t.readyState === 'live'));
-
+                      const hasCamera = Boolean(u.has_video);
+                      const hasScreen = Boolean(u.is_screen_sharing);
                       const isPeerCameraVertical = Boolean(peerOrientations[`${u.id}-camera`]);
 
                       return (
@@ -2402,6 +2449,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                                 username={u.username}
                                 avatarColor={u.avatar_color}
                                 onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [`${u.id}-camera`]: vert }))}
+                                isScreen={false}
                               />
                               <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
                                 <div className="text-sm font-extrabold text-white">
@@ -2420,17 +2468,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                                 username={`${u.username}'s Screen`}
                                 avatarColor={u.avatar_color}
                                 onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [`${u.id}-screen`]: vert }))}
+                                isScreen={true}
                               />
                               <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
                                 <div className="text-sm font-extrabold text-white flex items-center gap-2">
                                   <Monitor className="w-4 h-4 text-blue-400" />
-                                  <span>{u.username}'s Screen</span>
+                                  <span>{u.username}&apos;s Screen</span>
                                 </div>
                               </div>
                             </div>
                           )}
 
-                          {/* Dedicated Remote Avatar Tile (shown when camera is off so peer is always present and visible!) */}
+                          {/* Dedicated Remote Avatar Tile (shown when camera is off so peer is ALWAYS visible, even during screen share) */}
                           {!hasCamera && (
                             <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px] ${
                               isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
