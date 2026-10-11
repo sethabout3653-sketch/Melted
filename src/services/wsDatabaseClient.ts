@@ -25,9 +25,14 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
   const onUserCallRef = useRef<((fromUserId: string, fromUserName: string, callType: 'audio' | 'video') => void) | null>(null);
   const onUserJoinedMediaRef = useRef<((userId: string, channel: string) => void) | null>(null);
   const onUserLeftMediaRef = useRef<((userId: string, channel: string) => void) | null>(null);
+  const onScreenShareOverrideRef = useRef<((sharerId: string, sharerName: string) => void) | null>(null);
 
   const setRtcSignalHandler = useCallback((fn: (fromUserId: string, signal: any) => void) => {
     onRtcSignalRef.current = fn;
+  }, []);
+
+  const setScreenShareOverrideHandler = useCallback((fn: (sharerId: string, sharerName: string) => void) => {
+    onScreenShareOverrideRef.current = fn;
   }, []);
 
   const setUserCallHandler = useCallback((fn: (fromUserId: string, fromUserName: string, callType: 'audio' | 'video') => void) => {
@@ -133,6 +138,10 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
           } else if (msg.type === 'USER_LEFT_MEDIA') {
             if (onUserLeftMediaRef.current) {
               onUserLeftMediaRef.current(msg.userId, msg.channel);
+            }
+          } else if (msg.type === 'SCREEN_SHARE_OVERRIDE') {
+            if (onScreenShareOverrideRef.current) {
+              onScreenShareOverrideRef.current(msg.sharerId, msg.sharerName);
             }
           }
         } catch (err) {
@@ -280,6 +289,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     setRtcSignalHandler,
     setUserCallHandler,
     setMediaHandlers,
+    setScreenShareOverrideHandler,
     ws: wsRef.current,
   };
 }

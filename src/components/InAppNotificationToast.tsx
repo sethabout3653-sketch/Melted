@@ -95,12 +95,18 @@ export const InAppNotificationToast: React.FC<InAppNotificationToastProps> = ({
       {/* Message Body */}
       <div className="p-3.5 flex items-start gap-3">
         {/* Avatar */}
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-black text-black shrink-0 shadow-md ring-2 ring-white/10"
-          style={{ backgroundColor: notification.avatar_color || '#0066ff' }}
-        >
-          {notification.sender_name.slice(0, 2).toUpperCase()}
-        </div>
+        {notification.avatar_url ? (
+          <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 shadow-md ring-2 ring-white/10 bg-zinc-800">
+            <img src={notification.avatar_url} alt={notification.sender_name} className="w-full h-full object-cover" />
+          </div>
+        ) : (
+          <div
+            className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-black text-black shrink-0 shadow-md ring-2 ring-white/10"
+            style={{ backgroundColor: notification.avatar_color || '#0066ff' }}
+          >
+            {notification.sender_name.slice(0, 2).toUpperCase()}
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 min-w-0">

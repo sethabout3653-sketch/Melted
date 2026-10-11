@@ -158,6 +158,10 @@ class WebSocketDatabase {
     );
   }
 
+  public enforceSingleScreenShare(activeUserId: string) {
+    this.db.prepare('UPDATE users SET is_screen_sharing = 0 WHERE id != ?').run(activeUserId);
+  }
+
   public deleteUser(userId: string) {
     this.db.prepare('DELETE FROM users WHERE id = ?').run(userId);
   }
@@ -321,6 +325,24 @@ export function initWebSocketDatabase(server: Server) {
               const user = db.getUser(msg.id);
               if (user) {
                 const oldChannel = user.current_channel;
+
+                // Enforce strictly ONLY ONE screen share at any time:
+                // If any user starts screen sharing, instantly turn off screen sharing for all other users!
+                if (msg.set.is_screen_sharing === true) {
+                  db.enforceSingleScreenShare(msg.id);
+                  const overridePayload = JSON.stringify({
+                    type: 'SCREEN_SHARE_OVERRIDE',
+                    sharerId: msg.id,
+                    sharerName: user.username,
+                    timestamp: Date.now(),
+                  });
+                  wss.clients.forEach((client) => {
+                    if (client.readyState === WebSocket.OPEN) {
+                      client.send(overridePayload);
+                    }
+                  });
+                }
+
                 const updated: DbUser = {
                   ...user,
                   ...msg.set,

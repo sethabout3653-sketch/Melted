@@ -89,11 +89,12 @@ export function useGlobalChat() {
   // Sync user profile with server when user connects or profile attributes change (prevents infinite loop!)
   useEffect(() => {
     const userKey = `${currentUser.id}:${currentUser.username}:${currentUser.avatar_color}`;
-    if (isConnected && registeredKeyRef.current !== userKey) {
+    if (isConnected) {
       registeredKeyRef.current = userKey;
       registerUser(currentUser);
+      chat.updateUser({ username: currentUser.username, avatar_color: currentUser.avatar_color });
     }
-  }, [isConnected, currentUser.id, currentUser.username, currentUser.avatar_color, registerUser]);
+  }, [isConnected, currentUser.id, currentUser.username, currentUser.avatar_color, registerUser, chat]);
 
   // Handle incoming call events from relay server
   useEffect(() => {

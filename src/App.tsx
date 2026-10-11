@@ -64,7 +64,13 @@ export default function App() {
   const { isGameCached, cacheProgress, cachedIds } = useGameCache(allGames);
 
   // Global Chat and Notifications
-  const globalChat = useGlobalChat();
+  const globalChat = useGlobalChat({ isChatTabActive: currentTab === 'chat' });
+
+  useEffect(() => {
+    if (currentTab === 'chat' && globalChat.activeNotification) {
+      globalChat.dismissNotification();
+    }
+  }, [currentTab, globalChat.activeNotification, globalChat.dismissNotification]);
 
   // Multi-Device Adaptation System (Mobile, Tablet, Desktop)
   const deviceInfo = useDeviceAdaptation();
