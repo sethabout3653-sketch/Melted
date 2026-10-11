@@ -517,6 +517,46 @@ const ScreenSharePlayer: React.FC<{
   );
 };
 
+// Compresses and downscales user avatar images to a high-quality, lightweight format (256x256 max)
+const compressAvatarFile = (file: File, callback: (dataUrl: string) => void) => {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const rawData = e.target?.result as string;
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const maxDim = 256;
+      let width = img.width;
+      let height = img.height;
+      if (width > height) {
+        if (width > maxDim) {
+          height = Math.round((height * maxDim) / width);
+          width = maxDim;
+        }
+      } else {
+        if (height > maxDim) {
+          width = Math.round((width * maxDim) / height);
+          height = maxDim;
+        }
+      }
+      canvas.width = Math.max(1, width);
+      canvas.height = Math.max(1, height);
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        callback(canvas.toDataURL('image/jpeg', 0.88));
+      } else {
+        callback(rawData);
+      }
+    };
+    img.onerror = () => {
+      callback(rawData);
+    };
+    img.src = rawData;
+  };
+  reader.readAsDataURL(file);
+};
+
 // Reusable Avatar component supporting custom image PFP and fallback color/initials
 const UserAvatar: React.FC<{
   username: string;
@@ -524,10 +564,21 @@ const UserAvatar: React.FC<{
   avatarUrl?: string;
   className?: string;
 }> = ({ username, avatarColor, avatarUrl, className = 'w-10 h-10 text-xs' }) => {
-  if (avatarUrl && avatarUrl.trim()) {
+  const [imageError, setImageError] = useState(false);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [avatarUrl]);
+
+  if (avatarUrl && avatarUrl.trim() && !imageError) {
     return (
       <div className={`rounded-full overflow-hidden shrink-0 flex items-center justify-center bg-zinc-800 ${className}`}>
-        <img src={avatarUrl} alt={username} className="w-full h-full object-cover" />
+        <img
+          src={avatarUrl}
+          alt={username}
+          className="w-full h-full object-cover"
+          onError={() => setImageError(true)}
+        />
       </div>
     );
   }
@@ -595,15 +646,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   // Call & Audio Level States
   const [audioLevel, setAudioLevel] = useState<number>(0);
   const [isMicTesting, setIsMicTesting] = useState(false);
-
-  // Auto-stop local screen share if another user starts sharing to prevent lag
-  useEffect(() => {
-    const isSomeoneElseSharing = voiceUsers.some(u => u.id !== currentUser.id && u.is_screen_sharing);
-    if (isSomeoneElseSharing && isScreenSharing) {
-      console.log('[ScreenShare] Another user started sharing, stopping local screen share');
-      toggleScreenShare();
-    }
-  }, [voiceUsers, isScreenSharing, currentUser.id]);
 
   useEffect(() => {
     setEditName(currentUser.username);
@@ -1096,6 +1138,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     }
   };
 
+  // Auto-stop local screen share if another user starts sharing to prevent lag
+  useEffect(() => {
+    const isSomeoneElseSharing = voiceUsers.some((u: any) => u.id !== currentUser.id && u.is_screen_sharing);
+    if (isSomeoneElseSharing && isScreenSharing) {
+      console.log('[ScreenShare] Another user started sharing, stopping local screen share');
+      toggleScreenShare();
+    }
+  }, [voiceUsers, isScreenSharing, currentUser.id]);
+
   // Stop / Disconnect Voice Channel
   const stopVoiceChannel = () => {
     if (micStreamRef.current) {
@@ -1464,12 +1515,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             className="flex items-center gap-2.5 min-w-0 cursor-pointer p-1.5 rounded-xl hover:bg-white/5 transition-colors flex-1"
           >
             <div className="relative shrink-0">
-              <div 
-                className="w-9 h-9 rounded-full text-black font-extrabold flex items-center justify-center text-xs shadow-md"
-                style={{ backgroundColor: currentUser.avatar_color || '#0066ff' }}
-              >
-                {currentUser.username.slice(0, 2).toUpperCase()}
-              </div>
+              <UserAvatar
+                username={currentUser.username}
+                avatarColor={currentUser.avatar_color}
+                avatarUrl={currentUser.avatar_url}
+                className="w-9 h-9 text-xs shadow-md"
+              />
               <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#0a0a0d]" />
             </div>
 
@@ -1609,12 +1660,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 className="flex items-center gap-2.5 min-w-0 cursor-pointer p-1.5 rounded-xl hover:bg-white/5 transition-colors flex-1"
               >
                 <div className="relative shrink-0">
-                  <div 
-                    className="w-9 h-9 rounded-full text-black font-extrabold flex items-center justify-center text-xs shadow-md"
-                    style={{ backgroundColor: currentUser.avatar_color || '#0066ff' }}
-                  >
-                    {currentUser.username.slice(0, 2).toUpperCase()}
-                  </div>
+                  <UserAvatar
+                    username={currentUser.username}
+                    avatarColor={currentUser.avatar_color}
+                    avatarUrl={currentUser.avatar_url}
+                    className="w-9 h-9 text-xs shadow-md"
+                  />
                   <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#0a0a0d]" />
                 </div>
 
@@ -1691,9 +1742,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (e) => setEditAvatarUrl(e.target?.result as string);
-                        reader.readAsDataURL(file);
+                        compressAvatarFile(file, (dataUrl) => {
+                          setEditAvatarUrl(dataUrl);
+                        });
                       }
                     }}
                     className="hidden"
@@ -1705,6 +1756,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   >
                     Upload
                   </label>
+                  {editAvatarUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setEditAvatarUrl('')}
+                      className="px-3 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                    >
+                      Remove
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -2231,12 +2291,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 {users.map((u: any) => (
                   <div key={u.id} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] transition-colors">
                     <div className="relative shrink-0">
-                      <div 
-                        className="w-9 h-9 rounded-full text-black font-extrabold flex items-center justify-center text-xs shadow-sm"
-                        style={{ backgroundColor: u.avatar_color || '#0066ff' }}
-                      >
-                        {u.username.slice(0, 2).toUpperCase()}
-                      </div>
+                      <UserAvatar
+                        username={u.username}
+                        avatarColor={u.avatar_color}
+                        avatarUrl={u.avatar_url}
+                        className="w-9 h-9 text-xs shadow-sm"
+                      />
                       <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                     </div>
 
@@ -2285,12 +2345,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     {users.map((u: any) => (
                       <div key={u.id} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] transition-colors">
                         <div className="relative shrink-0">
-                          <div 
-                            className="w-9 h-9 rounded-full text-black font-extrabold flex items-center justify-center text-xs shadow-sm"
-                            style={{ backgroundColor: u.avatar_color || '#0066ff' }}
-                          >
-                            {u.username.slice(0, 2).toUpperCase()}
-                          </div>
+                          <UserAvatar
+                            username={u.username}
+                            avatarColor={u.avatar_color}
+                            avatarUrl={u.avatar_url}
+                            className="w-9 h-9 text-xs shadow-sm"
+                          />
                           <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                         </div>
 
@@ -2479,14 +2539,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                             />
                           ) : (
                             <div className="relative flex items-center justify-center">
-                              <div 
-                                className={`w-28 h-28 rounded-full flex items-center justify-center text-3xl font-black text-black shadow-2xl transition-all ${
+                              <UserAvatar
+                                username={u.username}
+                                avatarColor={u.avatar_color}
+                                avatarUrl={u.avatar_url}
+                                className={`w-28 h-28 text-3xl shadow-2xl transition-all ${
                                   isPeerSpeaking ? 'ring-4 ring-amber-500 shadow-[0_0_30px_#f59e0b]' : 'ring-2 ring-white/10'
                                 }`}
-                                style={{ backgroundColor: u.avatar_color || '#0066ff' }}
-                              >
-                                {u.username.slice(0, 2).toUpperCase()}
-                              </div>
+                              />
                             </div>
                           )}
 
@@ -2628,12 +2688,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     <div className="p-2.5 rounded-2xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-between">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="relative shrink-0">
-                          <div 
-                            className="w-8 h-8 rounded-full text-black font-extrabold flex items-center justify-center text-xs"
-                            style={{ backgroundColor: currentUser.avatar_color || '#0066ff' }}
-                          >
-                            {currentUser.username.slice(0, 2).toUpperCase()}
-                          </div>
+                          <UserAvatar
+                            username={currentUser.username}
+                            avatarColor={currentUser.avatar_color}
+                            avatarUrl={currentUser.avatar_url}
+                            className="w-8 h-8 text-xs"
+                          />
                           <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                         </div>
                         <div className="min-w-0 leading-tight">
@@ -2652,12 +2712,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     <div key={u.id} className="p-2.5 rounded-2xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-between">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="relative shrink-0">
-                          <div 
-                            className="w-8 h-8 rounded-full text-black font-extrabold flex items-center justify-center text-xs"
-                            style={{ backgroundColor: u.avatar_color || '#0066ff' }}
-                          >
-                            {u.username.slice(0, 2).toUpperCase()}
-                          </div>
+                          <UserAvatar
+                            username={u.username}
+                            avatarColor={u.avatar_color}
+                            avatarUrl={u.avatar_url}
+                            className="w-8 h-8 text-xs"
+                          />
                           <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                         </div>
                         <div className="min-w-0 leading-tight">
@@ -2678,12 +2738,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   {users.filter((u: any) => u.id !== currentUser.id && !voiceUsers.some((vu: any) => vu.id === u.id)).map((u: any) => (
                     <div key={u.id} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-white/[0.03] transition-colors">
                       <div className="relative shrink-0">
-                        <div 
-                          className="w-7 h-7 rounded-full text-black font-extrabold flex items-center justify-center text-[10px]"
-                          style={{ backgroundColor: u.avatar_color || '#0066ff' }}
-                        >
-                          {u.username.slice(0, 2).toUpperCase()}
-                        </div>
+                        <UserAvatar
+                          username={u.username}
+                          avatarColor={u.avatar_color}
+                          avatarUrl={u.avatar_url}
+                          className="w-7 h-7 text-[10px]"
+                        />
                         <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                       </div>
                       <div className="min-w-0 flex-1 leading-tight">
@@ -2725,12 +2785,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         <div className="p-2.5 rounded-2xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-between">
                           <div className="flex items-center gap-2.5 min-w-0">
                             <div className="relative shrink-0">
-                              <div 
-                                className="w-8 h-8 rounded-full text-black font-extrabold flex items-center justify-center text-xs"
-                                style={{ backgroundColor: currentUser.avatar_color || '#0066ff' }}
-                              >
-                                {currentUser.username.slice(0, 2).toUpperCase()}
-                              </div>
+                              <UserAvatar
+                                username={currentUser.username}
+                                avatarColor={currentUser.avatar_color}
+                                avatarUrl={currentUser.avatar_url}
+                                className="w-8 h-8 text-xs"
+                              />
                               <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                             </div>
                             <div className="min-w-0 leading-tight">
@@ -2749,12 +2809,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         <div key={u.id} className="p-2.5 rounded-2xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-between">
                           <div className="flex items-center gap-2.5 min-w-0">
                             <div className="relative shrink-0">
-                              <div 
-                                className="w-8 h-8 rounded-full text-black font-extrabold flex items-center justify-center text-xs"
-                                style={{ backgroundColor: u.avatar_color || '#0066ff' }}
-                              >
-                                {u.username.slice(0, 2).toUpperCase()}
-                              </div>
+                              <UserAvatar
+                                username={u.username}
+                                avatarColor={u.avatar_color}
+                                avatarUrl={u.avatar_url}
+                                className="w-8 h-8 text-xs"
+                              />
                               <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                             </div>
                             <div className="min-w-0 leading-tight">
@@ -2774,12 +2834,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       {users.filter((u: any) => u.id !== currentUser.id && !voiceUsers.some((vu: any) => vu.id === u.id)).map((u: any) => (
                         <div key={u.id} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-white/[0.03] transition-colors">
                           <div className="relative shrink-0">
-                            <div 
-                              className="w-7 h-7 rounded-full text-black font-extrabold flex items-center justify-center text-[10px]"
-                              style={{ backgroundColor: u.avatar_color || '#0066ff' }}
-                            >
-                              {u.username.slice(0, 2).toUpperCase()}
-                            </div>
+                            <UserAvatar
+                              username={u.username}
+                              avatarColor={u.avatar_color}
+                              avatarUrl={u.avatar_url}
+                              className="w-7 h-7 text-[10px]"
+                            />
                             <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                           </div>
                           <div className="min-w-0 flex-1 leading-tight">
@@ -2804,9 +2864,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
           <div className="bg-[#0e0e13] p-7 rounded-3xl border border-[#262630] w-full max-w-sm flex flex-col items-center text-center space-y-5 shadow-2xl">
             <div className="relative">
-              <div className="w-20 h-20 rounded-full bg-blue-600 text-black font-black text-2xl flex items-center justify-center ring-4 ring-blue-500/40 animate-pulse shadow-lg shadow-blue-600/30">
-                {(incomingCall.fromUserName || 'P').slice(0, 2).toUpperCase()}
-              </div>
+              <UserAvatar
+                username={incomingCall.fromUserName || 'Friend'}
+                avatarUrl={users.find((u: any) => u.id === incomingCall.fromUserId)?.avatar_url}
+                avatarColor={users.find((u: any) => u.id === incomingCall.fromUserId)?.avatar_color || '#0066ff'}
+                className="w-20 h-20 text-2xl ring-4 ring-blue-500/40 animate-pulse shadow-lg shadow-blue-600/30"
+              />
               <div className="absolute -bottom-1 -right-1 p-2 rounded-full bg-blue-500 text-white shadow-md">
                 <Mic className="w-3.5 h-3.5" />
               </div>
@@ -2844,9 +2907,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
           <div className="bg-[#0e0e13] p-7 rounded-3xl border border-[#262630] w-full max-w-sm flex flex-col items-center text-center space-y-5 shadow-2xl">
             <div className="relative">
-              <div className="w-20 h-20 rounded-full bg-blue-600 text-black font-black text-2xl flex items-center justify-center ring-4 ring-blue-500/40 animate-pulse shadow-lg shadow-blue-600/30">
-                {(outgoingCall.targetUserName || 'P').slice(0, 2).toUpperCase()}
-              </div>
+              <UserAvatar
+                username={outgoingCall.targetUserName || 'Friend'}
+                avatarUrl={users.find((u: any) => u.id === outgoingCall.targetUserId)?.avatar_url}
+                avatarColor={users.find((u: any) => u.id === outgoingCall.targetUserId)?.avatar_color || '#0066ff'}
+                className="w-20 h-20 text-2xl ring-4 ring-blue-500/40 animate-pulse shadow-lg shadow-blue-600/30"
+              />
             </div>
 
             <div className="space-y-1">

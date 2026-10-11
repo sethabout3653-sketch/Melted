@@ -222,12 +222,18 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
   }, [connect, stopHeartbeat]);
 
   const updateUser = useCallback((set: Partial<DbUser>) => {
+    // Optimistically update local users state immediately
+    const currentId = currentUserRef.current.id;
+    setUsers((prev) =>
+      prev.map((u) => (u.id === currentId ? { ...u, ...set } : u))
+    );
+
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       try {
         wsRef.current.send(JSON.stringify({
           type: 'SQL_UPDATE',
           table: 'users',
-          id: currentUserRef.current.id,
+          id: currentId,
           set,
         }));
       } catch (e) {
@@ -278,6 +284,32 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
   }, []);
 
   const registerUser = useCallback((user: { id: string; username: string; avatar_color: string; avatar_url?: string; activity?: string }) => {
+    setUsers((prev) => {
+      const idx = prev.findIndex((u) => u.id === user.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], ...user };
+        return next;
+      }
+      return [
+        ...prev,
+        {
+          id: user.id,
+          username: user.username,
+          avatar_color: user.avatar_color,
+          avatar_url: user.avatar_url || '',
+          activity: user.activity || '',
+          current_channel: 'text-general',
+          is_speaking: false,
+          is_muted: false,
+          is_deafened: false,
+          has_video: false,
+          is_screen_sharing: false,
+          updated_at: Date.now(),
+        },
+      ];
+    });
+
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       try {
         const existingUser = users.find(u => u.id === user.id);

@@ -122,7 +122,7 @@ export class AdvancedEchoProcessor {
 
   private startEchoDetection() {
     const detectEcho = () => {
-      this.analyser.getByteFrequencyData(this.frequencyData);
+      this.analyser.getByteFrequencyData(this.frequencyData as any);
 
       // Calculate echo power (sum of frequency bins)
       let echoPower = 0;

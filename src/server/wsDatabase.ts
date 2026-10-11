@@ -41,30 +41,17 @@ class PresenceCache {
   private lastSyncTime: number = 0;
   private syncInterval: NodeJS.Timeout | null = null;
 
-  constructor(private db: DatabaseSync, private broadcastFn: (tableName: string, data: any) => void) {
+  constructor(private db: WebSocketDatabase, private broadcastFn: (tableName: string, data: any) => void) {
     this.loadFromDb();
     this.startPeriodicSync();
   }
 
   private loadFromDb() {
     try {
-      const rows = this.db.prepare('SELECT * FROM users ORDER BY updated_at DESC').all() as any[];
+      const rows = this.db.selectUsers();
       this.users.clear();
       for (const r of rows) {
-        this.users.set(r.id, {
-          id: String(r.id),
-          username: String(r.username),
-          avatar_color: String(r.avatar_color),
-          avatar_url: r.avatar_url ? String(r.avatar_url) : '',
-          current_channel: r.current_channel,
-          is_speaking: Boolean(r.is_speaking),
-          is_muted: Boolean(r.is_muted),
-          is_deafened: Boolean(r.is_deafened),
-          has_video: Boolean(r.has_video),
-          is_screen_sharing: Boolean(r.is_screen_sharing),
-          activity: r.activity ? String(r.activity) : '',
-          updated_at: Number(r.updated_at),
-        });
+        this.users.set(r.id, r);
       }
     } catch (e) {
       console.error('[Cache] Load users error:', e);
