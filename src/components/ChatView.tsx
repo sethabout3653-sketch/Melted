@@ -388,106 +388,6 @@ const LocalVideoPlayer: React.FC<{
   );
 };
 
-// Dedicated Screen Share Player with Full HD 1080p, aspect ratio preservation, and fullscreen toggle
-const ScreenSharePlayer: React.FC<{
-  stream: MediaStream | null;
-  username: string;
-  isLocal: boolean;
-  onStopShare?: () => void;
-}> = ({ stream, username, isLocal, onStopShare }) => {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (video) {
-      if (stream && video.srcObject !== stream) {
-        video.srcObject = stream;
-      }
-      if (stream) {
-        video.play().catch(() => {});
-      }
-    }
-  }, [stream]);
-
-  const toggleFullscreen = () => {
-    if (!containerRef.current) return;
-    if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen?.().then(() => setIsFullscreen(true)).catch(() => {});
-    } else {
-      document.exitFullscreen?.().then(() => setIsFullscreen(false)).catch(() => {});
-    }
-  };
-
-  const hasAudio = stream && stream.getAudioTracks().length > 0;
-
-  return (
-    <div 
-      ref={containerRef}
-      className="relative w-full max-w-5xl rounded-3xl overflow-hidden bg-black border border-blue-500/30 shadow-[0_0_35px_rgba(0,102,255,0.2)] flex flex-col group transition-all"
-    >
-      {/* Top Header Bar */}
-      <div className="absolute top-0 inset-x-0 p-3.5 bg-gradient-to-b from-black/90 via-black/50 to-transparent z-20 flex items-center justify-between pointer-events-auto">
-        <div className="flex items-center gap-2.5">
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600/90 text-white text-[11px] font-black uppercase tracking-wider shadow-md">
-            <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-            <span>LIVE SCREEN</span>
-          </div>
-
-          <span className="text-sm font-extrabold text-white truncate drop-shadow-md">
-            {isLocal ? 'You are sharing your screen' : `${username}'s Screen`}
-          </span>
-
-          <span className="hidden sm:inline-flex items-center px-2 py-0.5 rounded-md bg-blue-600/30 text-blue-300 border border-blue-500/40 text-[10px] font-bold">
-            1080P Full HD
-          </span>
-
-          {hasAudio && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
-              <Volume2 className="w-3 h-3" />
-              <span>Audio Active</span>
-            </span>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {isLocal && onStopShare && (
-            <button
-              type="button"
-              onClick={onStopShare}
-              className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-lg transition-colors cursor-pointer"
-            >
-              <Monitor className="w-3.5 h-3.5" />
-              <span>Stop Sharing</span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={toggleFullscreen}
-            className="p-2 rounded-xl bg-black/60 hover:bg-white/20 text-white backdrop-blur-sm transition-colors cursor-pointer"
-            title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-          >
-            <RotateCw className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-
-      {/* Screen Video element - ALWAYS muted locally to prevent echo */}
-      <div className="w-full flex items-center justify-center bg-black min-h-[300px] sm:min-h-[440px] max-h-[62vh]">
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className="w-full h-full max-h-[62vh] object-contain rounded-2xl"
-        />
-      </div>
-    </div>
-  );
-};
-
 export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const {
     currentUser,
@@ -513,6 +413,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
+  const [editAvatarUrl, setEditAvatarUrl] = useState('');
+
+  const profileAvatarInputRef = useRef<HTMLInputElement | null>(null);
 
   // Attachment Uploading States with Real Progress
   const [pendingFile, setPendingFile] = useState<{
@@ -544,18 +447,65 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   useEffect(() => {
     setEditName(currentUser.username);
     setEditColor(currentUser.avatar_color || '#0066ff');
-  }, [currentUser.username, currentUser.avatar_color]);
+    setEditAvatarUrl(currentUser.avatar_url || '');
+  }, [currentUser.username, currentUser.avatar_color, currentUser.avatar_url]);
+
+  const handleProfileAvatarFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64Data = reader.result as string;
+      try {
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename: file.name, base64Data, mimeType: file.type }),
+        });
+        const data = await res.json();
+        if (data.success && data.url) {
+          setEditAvatarUrl(data.url);
+        } else {
+          setEditAvatarUrl(base64Data);
+        }
+      } catch {
+        setEditAvatarUrl(base64Data);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   const saveProfile = () => {
-    const updatedUser = { ...currentUser, username: editName, avatar_color: editColor };
+    const updatedUser = { ...currentUser, username: editName, avatar_color: editColor, avatar_url: editAvatarUrl };
     setCurrentUser(updatedUser);
     localStorage.setItem('frosted_chat_username', editName);
     localStorage.setItem('frosted_chat_usercolor', editColor);
+    localStorage.setItem('frosted_chat_avatar_url', editAvatarUrl);
     
-    updateUser({ username: editName, avatar_color: editColor });
+    updateUser({ username: editName, avatar_color: editColor, avatar_url: editAvatarUrl });
     registerUser(updatedUser);
     
     setIsProfileModalOpen(false);
+  };
+
+  // Helper to render user avatar (supports custom image upload / URL or colored initials fallback)
+  const renderAvatar = (u: { username: string; avatar_color?: string; avatar_url?: string }, sizeClass: string = 'w-9 h-9 text-xs') => {
+    if (u.avatar_url && u.avatar_url.trim()) {
+      return (
+        <div className={`${sizeClass} rounded-full overflow-hidden shrink-0 border border-white/10 bg-black`}>
+          <img src={u.avatar_url} alt={u.username} className="w-full h-full object-cover" />
+        </div>
+      );
+    }
+    return (
+      <div 
+        className={`${sizeClass} rounded-full text-black font-extrabold flex items-center justify-center shrink-0 shadow-sm`}
+        style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+      >
+        {(u.username || 'P').slice(0, 2).toUpperCase()}
+      </div>
+    );
   };
 
   // Voice & Video Call States
@@ -565,9 +515,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const [localIsVertical, setLocalIsVertical] = useState(false);
   const [peerOrientations, setPeerOrientations] = useState<Record<string, boolean>>({});
 
-  // 1080P Full HD Camera Streamer
+  // 1080P Camera Streamer with high resolution and 30-60fps constraints
   const acquireCameraStream = async (): Promise<MediaStream> => {
-    // 1. Studio 1080P Full HD (1920x1080, 30-60 FPS)
     try {
       return await navigator.mediaDevices.getUserMedia({
         video: {
@@ -579,46 +528,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         audio: false,
       });
     } catch {
-      // 2. High-res fallback with ideal 1080p
       try {
         return await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: 'user',
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            frameRate: { ideal: 30 },
-          },
+          video: { facingMode: 'user' },
           audio: false,
         });
       } catch {
-        // 3. Fallback for mobile / webviews
-        try {
-          return await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'user' },
-            audio: false,
-          });
-        } catch {
-          return await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: false,
-          });
-        }
+        return await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
       }
     }
-  };
-
-  // Studio-grade 48kHz Microphone Streamer with echo cancellation
-  const acquireMicrophoneStream = async (): Promise<MediaStream> => {
-    return await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        sampleRate: { ideal: 48000 },
-        channelCount: { ideal: 2 },
-      },
-      video: false,
-    });
   };
 
   const [isMuted, setIsMuted] = useState(false);
@@ -626,7 +547,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const [isVideoEnabled, setIsVideoEnabled] = useState(false);
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isUserSpeaking, setIsUserSpeaking] = useState(false);
-  const [screenShareNotice, setScreenShareNotice] = useState<string | null>(null);
 
   // Mobile Drawer toggles for adapting to mobile devices
   const [isMobileChannelsOpen, setIsMobileChannelsOpen] = useState(false);
@@ -634,26 +554,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
   // Local Reactive Media Streams
   const [localAudioStream, setLocalAudioStream] = useState<MediaStream | null>(null);
-  const [localCameraStream, setLocalCameraStream] = useState<MediaStream | null>(null);
-  const [localScreenStream, setLocalScreenStream] = useState<MediaStream | null>(null);
   const [activeVideoStream, setActiveVideoStream] = useState<MediaStream | null>(null);
-
-  // Audio Mixer for Echo-Free Screen Audio Sharing
-  const audioMixerRef = useRef<{
-    ctx: AudioContext | null;
-    dest: MediaStreamAudioDestinationNode | null;
-    micSource: MediaStreamAudioSourceNode | null;
-    screenSource: MediaStreamAudioSourceNode | null;
-    micGain: GainNode | null;
-    screenGain: GainNode | null;
-  }>({
-    ctx: null,
-    dest: null,
-    micSource: null,
-    screenSource: null,
-    micGain: null,
-    screenGain: null,
-  });
 
   // Media Stream refs
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -685,91 +586,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     }
   }, []);
 
-  // Update Web Audio mix cleanly for WebRTC transceiver:
-  // Combines mic + screen audio without routing to local speakers (0% local echo)
-  const updateAudioMixer = useCallback((micStream: MediaStream | null, screenAudioTrack: MediaStreamTrack | null) => {
-    const mixer = audioMixerRef.current;
-    try {
-      mixer.micSource?.disconnect();
-      mixer.screenSource?.disconnect();
-      mixer.micGain?.disconnect();
-      mixer.screenGain?.disconnect();
-    } catch {}
-
-    if (!screenAudioTrack) {
-      // Pure mic stream directly
-      setLocalAudioStream(micStream);
-      return;
-    }
-
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!mixer.ctx || mixer.ctx.state === 'closed') {
-        mixer.ctx = new AudioCtx({ sampleRate: 48000 });
-      }
-      if (mixer.ctx.state === 'suspended') {
-        mixer.ctx.resume().catch(() => {});
-      }
-
-      mixer.dest = mixer.ctx.createMediaStreamDestination();
-
-      if (micStream && micStream.getAudioTracks().length > 0) {
-        mixer.micSource = mixer.ctx.createMediaStreamSource(micStream);
-        mixer.micGain = mixer.ctx.createGain();
-        mixer.micGain.gain.value = 1.0;
-        mixer.micSource.connect(mixer.micGain);
-        mixer.micGain.connect(mixer.dest);
-      }
-
-      const screenStreamWithAudio = new MediaStream([screenAudioTrack]);
-      mixer.screenSource = mixer.ctx.createMediaStreamSource(screenStreamWithAudio);
-      mixer.screenGain = mixer.ctx.createGain();
-      mixer.screenGain.gain.value = 0.95;
-      mixer.screenSource.connect(mixer.screenGain);
-      mixer.screenGain.connect(mixer.dest);
-
-      // NOTICE: mixer.dest is NEVER connected to mixer.ctx.destination (speakers)!
-      // The sharer never hears an echo of their screen audio or microphone!
-      setLocalAudioStream(mixer.dest.stream);
-    } catch (err) {
-      console.warn('[AudioMixer] mixer error:', err);
-      setLocalAudioStream(micStream);
-    }
-  }, []);
-
-  // Stop Screen Share with optional notification if overridden by another user
-  const stopScreenShare = useCallback((wasOverridden: boolean = false, overrideUserName?: string) => {
-    if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach((t) => t.stop());
-      screenStreamRef.current = null;
-    }
-    setIsScreenSharing(false);
-    setLocalScreenStream(null);
-    updateAudioMixer(micStreamRef.current, null);
-    updateUser({ is_screen_sharing: false });
-
-    if (wasOverridden) {
-      setScreenShareNotice(`${overrideUserName || 'Another user'} started sharing their screen. Your screen share was stopped to prevent lag.`);
-      setTimeout(() => setScreenShareNotice(null), 5000);
-    }
-  }, [updateAudioMixer, updateUser]);
-
-  // 1. Direct WebSocket override broadcast listener (Single screen share rule)
-  useEffect(() => {
-    if (globalChat.setScreenShareOverrideHandler) {
-      globalChat.setScreenShareOverrideHandler((sharerId: string, sharerName: string) => {
-        if (sharerId !== currentUser.id && isScreenSharing) {
-          stopScreenShare(true, sharerName);
-        }
-      });
-    }
-  }, [globalChat.setScreenShareOverrideHandler, currentUser.id, isScreenSharing, stopScreenShare]);
-
   // Explicit microphone permission requester with instant browser prompt
   const requestMicrophonePermission = async (withVideo: boolean = false) => {
     setMicError(null);
     try {
-      const stream = await acquireMicrophoneStream();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
 
       setMicPermissionStatus('granted');
       setShowMicPermissionModal(false);
@@ -865,33 +693,32 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     return voiceUsers;
   }, [voiceUsers, isMediaActive]);
 
-  const { 
-    remoteCameraStreams, 
-    remoteScreenStreams, 
-    remoteAudioStreams, 
-    remoteStreams, 
-    remoteSpeaking 
-  } = useWebRTC({
+  const { remoteStreams, remoteSpeaking } = useWebRTC({
     currentUserId: currentUser.id,
     activeChannel: isMediaActive ? 'video-general' : 'text-general',
     localAudioStream,
-    localCameraStream,
-    localScreenStream,
-    localVideoStream: localCameraStream || activeVideoStream,
+    localVideoStream: activeVideoStream,
     peers: activePeers,
     sendRtcSignal,
     setRtcSignalHandler,
     setMediaHandlers,
   });
 
-  // Watch for any peer starting screen share while we are sharing (Strictly only ONE screen share)
+  // Enforce single screen share: if another user starts screen sharing, instantly stop our screen share
   useEffect(() => {
-    if (!isScreenSharing) return;
-    const anotherSharer = voiceUsers.find((u: any) => u.is_screen_sharing && u.id !== currentUser.id);
-    if (anotherSharer) {
-      stopScreenShare(true, anotherSharer.username);
+    if (isScreenSharing) {
+      const activeOtherSharer = users.find((u: any) => u.is_screen_sharing && u.id !== currentUser.id);
+      if (activeOtherSharer) {
+        if (screenStreamRef.current) {
+          screenStreamRef.current.getTracks().forEach((t) => t.stop());
+          screenStreamRef.current = null;
+        }
+        setIsScreenSharing(false);
+        setActiveVideoStream(cameraStreamRef.current || null);
+        updateUser({ is_screen_sharing: false, has_video: isVideoEnabled });
+      }
     }
-  }, [voiceUsers, isScreenSharing, currentUser.id, stopScreenShare]);
+  }, [users, isScreenSharing, currentUser.id, isVideoEnabled, updateUser]);
 
   // Sync scroll to bottom on new messages
   useEffect(() => {
@@ -1023,7 +850,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     let videoStream: MediaStream | null = null;
 
     try {
-      audioStream = await acquireMicrophoneStream();
+      audioStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
 
       setMicPermissionStatus('granted');
       micStreamRef.current = audioStream;
@@ -1040,7 +874,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         videoStream = await acquireCameraStream();
 
         cameraStreamRef.current = videoStream;
-        setLocalCameraStream(videoStream);
         setActiveVideoStream(videoStream);
         setIsVideoEnabled(true);
       } catch (err: any) {
@@ -1072,8 +905,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         cameraStreamRef.current = null;
       }
       setIsVideoEnabled(false);
-      setLocalCameraStream(null);
-      setActiveVideoStream(null);
+      if (!isScreenSharing) {
+        setActiveVideoStream(null);
+      }
       updateUser({ has_video: false });
     } else {
       setIsCameraStarting(true);
@@ -1083,8 +917,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
         cameraStreamRef.current = stream;
         setIsVideoEnabled(true);
-        setLocalCameraStream(stream);
-        setActiveVideoStream(stream);
+        if (!isScreenSharing) {
+          setActiveVideoStream(stream);
+        }
         updateUser({ has_video: true });
       } catch (err: any) {
         setCameraError('Camera access denied or unavailable.');
@@ -1095,40 +930,35 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     }
   };
 
-  // Toggle Screen Sharing with 1080p, crystal clear audio, and single screen share enforcement
+  // Toggle Screen Sharing
   const toggleScreenShare = async () => {
     if (isScreenSharing) {
-      stopScreenShare(false);
+      if (screenStreamRef.current) {
+        screenStreamRef.current.getTracks().forEach((t) => t.stop());
+        screenStreamRef.current = null;
+      }
+      setIsScreenSharing(false);
+      setActiveVideoStream(cameraStreamRef.current || null);
+      updateUser({ is_screen_sharing: false, has_video: isVideoEnabled });
     } else {
       try {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            width: { ideal: 1920 },
-            height: { ideal: 1080 },
-            frameRate: { ideal: 60, max: 60 },
-          },
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-            channelCount: { ideal: 2 },
-          },
+          video: true,
+          audio: true,
         });
 
         screenStreamRef.current = screenStream;
-        setLocalScreenStream(screenStream);
         setIsScreenSharing(true);
-
-        const screenAudioTrack = screenStream.getAudioTracks()[0] || null;
-        updateAudioMixer(micStreamRef.current, screenAudioTrack);
-
-        updateUser({ is_screen_sharing: true });
+        setActiveVideoStream(screenStream);
+        updateUser({ is_screen_sharing: true, has_video: true });
 
         screenStream.getVideoTracks()[0].onended = () => {
-          stopScreenShare(false);
+          setIsScreenSharing(false);
+          setActiveVideoStream(cameraStreamRef.current || null);
+          updateUser({ is_screen_sharing: false, has_video: isVideoEnabled });
         };
       } catch {
-        // Screen share dismissed by user
+        // Screen share dismissed
       }
     }
   };
@@ -1148,16 +978,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       screenStreamRef.current = null;
     }
 
-    try {
-      audioMixerRef.current.micSource?.disconnect();
-      audioMixerRef.current.screenSource?.disconnect();
-      audioMixerRef.current.micGain?.disconnect();
-      audioMixerRef.current.screenGain?.disconnect();
-    } catch {}
-
     setLocalAudioStream(null);
-    setLocalCameraStream(null);
-    setLocalScreenStream(null);
     setActiveVideoStream(null);
     setIsInVideo(false);
     setIsVideoEnabled(false);
@@ -1694,6 +1515,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       {/* Profile Edit Modal */}
       {isProfileModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
+          <input 
+            type="file" 
+            ref={profileAvatarInputRef} 
+            onChange={handleProfileAvatarFileSelect} 
+            accept="image/*" 
+            style={{ display: 'none' }} 
+          />
           <div className="bg-[#0b0b0e] p-6 rounded-2xl border border-[#1f1f1f] w-full max-w-sm space-y-4 shadow-2xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">Edit Profile</h2>
@@ -1715,20 +1543,49 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Avatar Color</label>
+                <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Profile Picture / Avatar</label>
+                <div className="flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-full overflow-hidden shrink-0 border border-white/10 bg-black flex items-center justify-center">
+                    {editAvatarUrl ? (
+                      <img src={editAvatarUrl} alt="Avatar Preview" className="w-full h-full object-cover" />
+                    ) : (
+                      <div 
+                        className="w-full h-full flex items-center justify-center text-sm font-black text-black"
+                        style={{ backgroundColor: editColor }}
+                      >
+                        {editName.slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <button
+                      type="button"
+                      onClick={() => profileAvatarInputRef.current?.click()}
+                      className="w-full py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-colors cursor-pointer text-center"
+                    >
+                      Upload Image File
+                    </button>
+                    <input
+                      type="text"
+                      value={editAvatarUrl}
+                      onChange={(e) => setEditAvatarUrl(e.target.value)}
+                      placeholder="Or enter Image URL..."
+                      className="w-full bg-[#121215] border border-[#222226] rounded-xl px-3 py-1.5 text-white text-xs focus:outline-none focus:border-blue-500 transition-colors"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Fallback Avatar Color</label>
                 <div className="flex items-center gap-3">
                   <input
                     type="color"
                     value={editColor}
                     onChange={(e) => setEditColor(e.target.value)}
-                    className="w-12 h-12 bg-transparent border-none p-0 cursor-pointer"
+                    className="w-10 h-10 bg-transparent border-none p-0 cursor-pointer"
                   />
-                  <div 
-                    className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-black text-black"
-                    style={{ backgroundColor: editColor }}
-                  >
-                    {editName.slice(0, 2).toUpperCase()}
-                  </div>
+                  <span className="text-xs text-zinc-400">Used if no profile picture is set</span>
                 </div>
               </div>
             </div>
@@ -2390,160 +2247,91 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               <div className="flex-1 min-h-0 p-6 pb-28 flex items-center justify-center overflow-hidden">
                 
                 {isInVideo ? (
-                  <div className="flex flex-col items-center justify-start gap-6 w-full max-w-6xl max-h-full overflow-y-auto p-2">
+                  <div className="flex flex-wrap items-center justify-center gap-6 w-full max-w-6xl max-h-full overflow-y-auto p-2">
                     
-                    {/* In-app Toast Banner if another user started screen sharing and stopped yours */}
-                    {screenShareNotice && (
-                      <div className="w-full max-w-2xl bg-blue-600/95 border border-blue-400 text-white px-4 py-2.5 rounded-2xl shadow-2xl flex items-center justify-between gap-3 text-xs font-bold animate-in fade-in slide-in-from-top-2">
-                        <div className="flex items-center gap-2">
-                          <AlertCircle className="w-4 h-4 text-amber-300 shrink-0" />
-                          <span>{screenShareNotice}</span>
+                    {/* Local User Tile */}
+                    <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                      (isVideoEnabled || isCameraStarting) && localIsVertical 
+                        ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
+                        : 'aspect-video w-full max-w-[500px]'
+                    } ${
+                      isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
+                    }`}>
+                      {isVideoEnabled || isCameraStarting ? (
+                        <LocalVideoPlayer 
+                          stream={activeVideoStream} 
+                          isLoading={isCameraStarting} 
+                          onOrientationChange={setLocalIsVertical} 
+                        />
+                      ) : (
+                        <div className="relative flex items-center justify-center">
+                          <div 
+                            className={`w-28 h-28 rounded-full flex items-center justify-center text-3xl font-black text-black shadow-2xl transition-all ${
+                              isUserSpeaking ? 'ring-4 ring-amber-500 shadow-[0_0_30px_#f59e0b]' : 'ring-2 ring-white/10'
+                            }`}
+                            style={{ backgroundColor: currentUser.avatar_color || '#0066ff' }}
+                          >
+                            {currentUser.username.slice(0, 2).toUpperCase()}
+                          </div>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setScreenShareNotice(null)}
-                          className="p-1 rounded-lg hover:bg-white/10 transition-colors cursor-pointer"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
+                      )}
+
+                      {/* Bottom-Left Overlay */}
+                      <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                        <div className="text-sm font-extrabold text-white">
+                          {currentUser.username} (You)
+                        </div>
+
+                        {isMuted && <MicOff className="w-4 h-4 text-red-400" />}
                       </div>
-                    )}
-
-                    {/* Dedicated Separate Screen Share Stage for EVERYONE */}
-                    {(() => {
-                      const activeScreenSharer = isScreenSharing
-                        ? currentUser
-                        : voiceUsers.find((u: any) => u.is_screen_sharing);
-
-                      const activeScreenStream = isScreenSharing
-                        ? localScreenStream
-                        : (activeScreenSharer ? (remoteScreenStreams[activeScreenSharer.id] || null) : null);
-
-                      if (!activeScreenSharer) return null;
-
-                      return (
-                        <div className="w-full flex justify-center animate-in fade-in zoom-in-95 duration-200 mb-2">
-                          <ScreenSharePlayer
-                            stream={activeScreenStream}
-                            username={activeScreenSharer.username}
-                            isLocal={activeScreenSharer.id === currentUser.id}
-                            onStopShare={() => stopScreenShare(false)}
-                          />
-                        </div>
-                      );
-                    })()}
-
-                    {/* Participant Camera & Voice Grid (Separate from Screen Share!) */}
-                    <div className="flex flex-wrap items-center justify-center gap-4 sm:gap-6 w-full">
-                      
-                      {/* Local User Tile */}
-                      <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
-                        (isVideoEnabled || isCameraStarting) && localIsVertical 
-                          ? 'aspect-[9/16] w-full max-w-[240px] sm:max-w-[280px] max-h-[460px]' 
-                          : 'aspect-video w-full max-w-[380px] sm:max-w-[440px]'
-                      } ${
-                        isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
-                      }`}>
-                        {isVideoEnabled || isCameraStarting ? (
-                          <LocalVideoPlayer 
-                            stream={localCameraStream || cameraStreamRef.current} 
-                            isLoading={isCameraStarting} 
-                            onOrientationChange={setLocalIsVertical} 
-                          />
-                        ) : (
-                          <div className="relative flex items-center justify-center">
-                            <div 
-                              className={`w-24 h-24 rounded-full flex items-center justify-center text-3xl font-black text-black shadow-2xl transition-all ${
-                                isUserSpeaking ? 'ring-4 ring-amber-500 shadow-[0_0_30px_#f59e0b]' : 'ring-2 ring-white/10'
-                              }`}
-                              style={{ backgroundColor: currentUser.avatar_color || '#0066ff' }}
-                            >
-                              {currentUser.username.slice(0, 2).toUpperCase()}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Bottom-Left Overlay */}
-                        <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs sm:text-sm font-extrabold text-white">
-                              {currentUser.username} (You)
-                            </span>
-                            {isVideoEnabled && (
-                              <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 border border-blue-400/30 font-bold">
-                                1080P
-                              </span>
-                            )}
-                          </div>
-
-                          {isMuted && <MicOff className="w-4 h-4 text-red-400" />}
-                        </div>
-                      </div>
-
-                      {/* Remote Peers Tiles */}
-                      {voiceUsers.map((u: any) => {
-                        const cameraStream = remoteCameraStreams[u.id] || remoteStreams[u.id];
-                        const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
-                        const hasPeerCamera = cameraStream && cameraStream.getVideoTracks().some((t) => t.enabled && t.readyState === 'live');
-                        const shouldShowCamera = hasPeerCamera || u.has_video;
-                        const isPeerTileVertical = (peerOrientations[u.id] || false);
-
-                        return (
-                          <div key={u.id} className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
-                            shouldShowCamera && isPeerTileVertical 
-                              ? 'aspect-[9/16] w-full max-w-[240px] sm:max-w-[280px] max-h-[460px]' 
-                              : 'aspect-video w-full max-w-[380px] sm:max-w-[440px]'
-                          } ${
-                            isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
-                          }`}>
-                            {shouldShowCamera ? (
-                              <RemoteVideoPlayer 
-                                stream={cameraStream} 
-                                username={u.username}
-                                avatarColor={u.avatar_color}
-                                onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [u.id]: vert }))}
-                              />
-                            ) : (
-                              <div className="relative flex items-center justify-center">
-                                <div 
-                                  className={`w-24 h-24 rounded-full flex items-center justify-center text-3xl font-black text-black shadow-2xl transition-all ${
-                                    isPeerSpeaking ? 'ring-4 ring-amber-500 shadow-[0_0_30px_#f59e0b]' : 'ring-2 ring-white/10'
-                                  }`}
-                                  style={{ backgroundColor: u.avatar_color || '#0066ff' }}
-                                >
-                                  {u.username.slice(0, 2).toUpperCase()}
-                                </div>
-                              </div>
-                            )}
-
-                            <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
-                              <div className="flex items-center gap-2">
-                                <span className="text-xs sm:text-sm font-extrabold text-white">
-                                  {u.username}
-                                </span>
-                                {shouldShowCamera && (
-                                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-500/20 text-blue-300 border border-blue-400/30 font-bold">
-                                    1080P
-                                  </span>
-                                )}
-                              </div>
-
-                              {u.is_muted && <MicOff className="w-4 h-4 text-zinc-400" />}
-                            </div>
-                          </div>
-                        );
-                      })}
-
                     </div>
 
-                    {/* Background Audio Players for Voice & Screen Audio (Plays clearly without echo) */}
-                    {voiceUsers.map((u: any) => (
-                      <RemoteAudioPlayer
-                        key={`voice-audio-${u.id}`}
-                        stream={remoteAudioStreams[u.id] || remoteStreams[u.id]}
-                        isDeafened={isDeafened}
-                      />
-                    ))}
+                    {/* Remote Peers Tiles */}
+                    {voiceUsers.map((u: any) => {
+                      const stream = remoteStreams[u.id];
+                      const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
+                      const hasPeerVideo = stream && stream.getVideoTracks().some((t) => t.enabled && t.readyState === 'live');
+                      const shouldShowVideo = hasPeerVideo || u.has_video;
+                      const isPeerTileVertical = (peerOrientations[u.id] || false);
+
+                      return (
+                        <div key={u.id} className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                          shouldShowVideo && isPeerTileVertical 
+                            ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
+                            : 'aspect-video w-full max-w-[500px]'
+                        } ${
+                          isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
+                        }`}>
+                          {shouldShowVideo ? (
+                            <RemoteVideoPlayer 
+                              stream={stream} 
+                              username={u.username}
+                              avatarColor={u.avatar_color}
+                              onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [u.id]: vert }))}
+                            />
+                          ) : (
+                            <div className="relative flex items-center justify-center">
+                              <div 
+                                className={`w-28 h-28 rounded-full flex items-center justify-center text-3xl font-black text-black shadow-2xl transition-all ${
+                                  isPeerSpeaking ? 'ring-4 ring-amber-500 shadow-[0_0_30px_#f59e0b]' : 'ring-2 ring-white/10'
+                                }`}
+                                style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+                              >
+                                {u.username.slice(0, 2).toUpperCase()}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                            <div className="text-sm font-extrabold text-white">
+                              {u.username}
+                            </div>
+
+                            {u.is_muted && <MicOff className="w-4 h-4 text-zinc-400" />}
+                          </div>
+                        </div>
+                      );
+                    })}
 
                   </div>
                 ) : (
