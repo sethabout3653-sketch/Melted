@@ -295,7 +295,7 @@ const RemoteVideoPlayer: React.FC<{
 const LocalVideoPlayer: React.FC<{ 
   stream: MediaStream | null;
   user: any;
-  renderAvatar: (u: any, sizeClass: string) => JSX.Element;
+  renderAvatar: (u: any, sizeClass: string) => React.ReactNode;
   onOrientationChange?: (isVertical: boolean) => void;
   isMirrored?: boolean;
 }> = ({ stream, user, renderAvatar, onOrientationChange, isMirrored = true }) => {
@@ -514,10 +514,72 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   // Combine streams for WebRTC
   useEffect(() => {
     const combined = new MediaStream();
-    if (cameraStream) cameraStream.getTracks().forEach(t => combined.addTrack(t));
-    if (screenStream) screenStream.getTracks().forEach(t => combined.addTrack(t));
+    if (cameraStream) cameraStream.getVideoTracks().forEach(t => combined.addTrack(t));
+    if (screenStream) screenStream.getVideoTracks().forEach(t => combined.addTrack(t));
     setActiveVideoStream(combined);
   }, [cameraStream, screenStream]);
+
+  // Mix Microphone + Screen Share audio into localAudioStream for WebRTC so remote users hear screen audio!
+  useEffect(() => {
+    try {
+      const micTracks = micStreamRef.current?.getAudioTracks().filter((t) => t.readyState === 'live') || [];
+      const screenAudioTracks = screenStream?.getAudioTracks().filter((t) => t.readyState === 'live') || [];
+
+      if (micTracks.length === 0 && screenAudioTracks.length === 0) {
+        setLocalAudioStream(null);
+        return;
+      }
+
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+          audioContextRef.current = new AudioCtx();
+        }
+        const ctx = audioContextRef.current;
+        if (ctx.state === 'suspended') {
+          ctx.resume().catch(() => {});
+        }
+
+        const dest = ctx.createMediaStreamDestination();
+
+        if (micTracks.length > 0) {
+          const micOnlyStream = new MediaStream([micTracks[0]]);
+          const micSource = ctx.createMediaStreamSource(micOnlyStream);
+          const micGain = ctx.createGain();
+          micGain.gain.value = isMuted ? 0 : 1;
+          micSource.connect(micGain);
+          micGain.connect(dest);
+        }
+
+        if (screenAudioTracks.length > 0) {
+          const screenOnlyStream = new MediaStream([screenAudioTracks[0]]);
+          const screenSource = ctx.createMediaStreamSource(screenOnlyStream);
+          const screenGain = ctx.createGain();
+          screenGain.gain.value = 1.0;
+          screenSource.connect(screenGain);
+          screenGain.connect(dest);
+        }
+
+        const mixedStream = new MediaStream(dest.stream.getAudioTracks());
+        screenAudioTracks.forEach((t) => {
+          try { mixedStream.addTrack(t); } catch {}
+        });
+
+        setLocalAudioStream(mixedStream);
+        return;
+      }
+
+      const combinedTracks: MediaStreamTrack[] = [];
+      if (micTracks.length > 0) combinedTracks.push(micTracks[0]);
+      if (screenAudioTracks.length > 0) combinedTracks.push(screenAudioTracks[0]);
+      setLocalAudioStream(new MediaStream(combinedTracks));
+    } catch (err) {
+      console.warn('[Audio Mixer] error mixing audio:', err);
+      if (micStreamRef.current) {
+        setLocalAudioStream(micStreamRef.current);
+      }
+    }
+  }, [screenStream, isMuted]);
 
   const [micError, setMicError] = useState<string | null>(null);
   const [micPermissionStatus, setMicPermissionStatus] = useState<'prompt' | 'granted' | 'denied' | 'unknown'>('unknown');
@@ -644,11 +706,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     return voiceUsers;
   }, [voiceUsers, isMediaActive]);
 
-  const { remoteStreams, remoteSpeaking } = useWebRTC({
+  const { remoteStreams, remoteCameraStreams, remoteScreenStreams, remoteSpeaking } = useWebRTC({
     currentUserId: currentUser.id,
     activeChannel: isMediaActive ? 'video-general' : 'text-general',
     localAudioStream,
     localVideoStream: activeVideoStream,
+    cameraStream,
+    screenStream,
     peers: activePeers,
     sendRtcSignal,
     setRtcSignalHandler,
@@ -2279,44 +2343,112 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                     {/* Remote Peers Tiles */}
                     {voiceUsers.map((u: any) => {
-                      const stream = remoteStreams[u.id];
                       const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
-                      // Get all video tracks
-                      const videoTracks = stream?.getVideoTracks().filter((t) => t.enabled && t.readyState === 'live') || [];
-                      const shouldShowVideo = u.has_video && videoTracks.length > 0;
-                      const isPeerTileVertical = (peerOrientations[u.id] || false);
+                      const rawStream = remoteStreams[u.id];
+                      const allVideoTracks = rawStream?.getVideoTracks().filter((t) => t.readyState === 'live') || [];
+
+                      // 1. Resolve Camera Stream
+                      let camStream = remoteCameraStreams[u.id];
+                      if (!camStream && allVideoTracks.length > 0) {
+                        const nonScreenTrack = allVideoTracks.find(
+                          (t) =>
+                            !t.label.toLowerCase().includes('screen') &&
+                            !t.label.toLowerCase().includes('display') &&
+                            !t.label.toLowerCase().includes('window')
+                        );
+                        if (nonScreenTrack && !u.is_screen_sharing) {
+                          camStream = new MediaStream([nonScreenTrack]);
+                        } else if (allVideoTracks.length === 1 && !u.is_screen_sharing) {
+                          camStream = new MediaStream([allVideoTracks[0]]);
+                        }
+                      }
+
+                      // 2. Resolve Screen Share Stream
+                      let scrStream = remoteScreenStreams[u.id];
+                      if (!scrStream && allVideoTracks.length > 0) {
+                        const screenTrack = allVideoTracks.find(
+                          (t) =>
+                            t.label.toLowerCase().includes('screen') ||
+                            t.label.toLowerCase().includes('display') ||
+                            t.label.toLowerCase().includes('window')
+                        );
+                        if (screenTrack) {
+                          scrStream = new MediaStream([screenTrack]);
+                        } else if (u.is_screen_sharing && allVideoTracks.length === 1) {
+                          scrStream = new MediaStream([allVideoTracks[0]]);
+                        } else if (allVideoTracks.length >= 2) {
+                          scrStream = new MediaStream([allVideoTracks[1]]);
+                        }
+                      }
+
+                      const hasCamera = Boolean(camStream && camStream.getVideoTracks().some((t) => t.readyState === 'live'));
+                      const hasScreen = Boolean(scrStream && scrStream.getVideoTracks().some((t) => t.readyState === 'live'));
+
+                      const isPeerCameraVertical = Boolean(peerOrientations[`${u.id}-camera`]);
 
                       return (
-                        <div key={u.id} className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
-                          shouldShowVideo && isPeerTileVertical 
-                            ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
-                            : 'aspect-video w-full max-w-[500px]'
-                        } ${
-                          isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
-                        }`}>
-                          {shouldShowVideo ? (
-                            <RemoteVideoPlayer 
-                              stream={new MediaStream([stream.getVideoTracks()[0]])} 
-                              username={u.username}
-                              avatarColor={u.avatar_color}
-                              onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [u.id]: vert }))}
-                            />
-                          ) : (
-                            <div className="relative flex items-center justify-center">
-                              <div className={`transition-all ${isPeerSpeaking ? 'ring-4 ring-amber-500 rounded-full shadow-[0_0_30px_#f59e0b]' : ''}`}>
-                                {renderAvatar(u, 'w-28 h-28 text-3xl')}
+                        <React.Fragment key={u.id}>
+                          {/* Dedicated Remote Camera Tile (when camera is on) */}
+                          {hasCamera && (
+                            <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                              isPeerCameraVertical 
+                                ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
+                                : 'aspect-video w-full max-w-[500px]'
+                            } ${
+                              isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
+                            }`}>
+                              <RemoteVideoPlayer 
+                                stream={camStream} 
+                                username={u.username}
+                                avatarColor={u.avatar_color}
+                                onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [`${u.id}-camera`]: vert }))}
+                              />
+                              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                                <div className="text-sm font-extrabold text-white">
+                                  {u.username} (Camera)
+                                </div>
+                                {u.is_muted && <MicOff className="w-4 h-4 text-zinc-400" />}
                               </div>
                             </div>
                           )}
 
-                          <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
-                            <div className="text-sm font-extrabold text-white">
-                              {u.username}
+                          {/* Dedicated Remote Screen Share Tile (when screen share is on) */}
+                          {hasScreen && (
+                            <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
+                              <RemoteVideoPlayer 
+                                stream={scrStream} 
+                                username={`${u.username}'s Screen`}
+                                avatarColor={u.avatar_color}
+                                onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [`${u.id}-screen`]: vert }))}
+                              />
+                              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                                <div className="text-sm font-extrabold text-white flex items-center gap-2">
+                                  <Monitor className="w-4 h-4 text-blue-400" />
+                                  <span>{u.username}'s Screen</span>
+                                </div>
+                              </div>
                             </div>
+                          )}
 
-                            {u.is_muted && <MicOff className="w-4 h-4 text-zinc-400" />}
-                          </div>
-                        </div>
+                          {/* Dedicated Remote Avatar Tile (shown when camera is off so peer is always present and visible!) */}
+                          {!hasCamera && (
+                            <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px] ${
+                              isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
+                            }`}>
+                              <div className="relative flex items-center justify-center">
+                                <div className={`transition-all ${isPeerSpeaking ? 'ring-4 ring-amber-500 rounded-full shadow-[0_0_30px_#f59e0b]' : ''}`}>
+                                  {renderAvatar(u, 'w-28 h-28 text-3xl')}
+                                </div>
+                              </div>
+                              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                                <div className="text-sm font-extrabold text-white">
+                                  {u.username}
+                                </div>
+                                {u.is_muted && <MicOff className="w-4 h-4 text-zinc-400" />}
+                              </div>
+                            </div>
+                          )}
+                        </React.Fragment>
                       );
                     })}
 
