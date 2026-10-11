@@ -290,18 +290,42 @@ const RemoteVideoPlayer: React.FC<{
     }
   }, [onOrientationChange]);
 
+  const checkOrientationRef = useRef(checkOrientation);
+  useEffect(() => {
+    checkOrientationRef.current = checkOrientation;
+  }, [checkOrientation]);
+
   useEffect(() => {
     setIsLoaded(false);
     const video = videoRef.current;
-    if (video) {
-      if (stream && video.srcObject !== stream) {
-        video.srcObject = stream;
-      }
+    if (!video) return;
+
+    // Explicitly update srcObject whenever stream changes
+    if (video.srcObject !== stream) {
+      video.srcObject = stream || null;
       if (stream) {
         video.play().catch(() => {});
       }
     }
-  }, [stream, checkOrientation]);
+
+    const tryPlay = () => {
+      if (stream) video.play().catch(() => {});
+    };
+
+    tryPlay();
+
+    const onUserGesture = () => {
+      tryPlay();
+    };
+
+    window.addEventListener('click', onUserGesture, { once: true });
+    window.addEventListener('keydown', onUserGesture, { once: true });
+
+    return () => {
+      window.removeEventListener('click', onUserGesture);
+      window.removeEventListener('keydown', onUserGesture);
+    };
+  }, [stream]);
 
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-black">
@@ -311,8 +335,14 @@ const RemoteVideoPlayer: React.FC<{
         autoPlay
         playsInline
         muted
-        onLoadedMetadata={checkOrientation}
-        onLoadedData={checkOrientation}
+        onLoadedMetadata={(e) => {
+          checkOrientation();
+          (e.target as HTMLVideoElement).play().catch(() => {});
+        }}
+        onLoadedData={(e) => {
+          checkOrientation();
+          (e.target as HTMLVideoElement).play().catch(() => {});
+        }}
         onCanPlay={checkOrientation}
         onPlaying={checkOrientation}
         onTimeUpdate={checkOrientation}
@@ -344,14 +374,29 @@ const LocalVideoPlayer: React.FC<{
 
   useEffect(() => {
     const video = videoRef.current;
-    if (video) {
-      if (stream && video.srcObject !== stream) {
-        video.srcObject = stream;
-      }
-      if (stream) {
-        video.play().catch(() => {});
-      }
+    if (!video) return;
+
+    if (stream && video.srcObject !== stream) {
+      video.srcObject = stream;
     }
+
+    const tryPlay = () => {
+      if (stream) video.play().catch(() => {});
+    };
+
+    tryPlay();
+
+    const onUserGesture = () => {
+      tryPlay();
+    };
+
+    window.addEventListener('click', onUserGesture, { once: true });
+    window.addEventListener('keydown', onUserGesture, { once: true });
+
+    return () => {
+      window.removeEventListener('click', onUserGesture);
+      window.removeEventListener('keydown', onUserGesture);
+    };
   }, [stream]);
 
   if (!stream) {
@@ -370,7 +415,10 @@ const LocalVideoPlayer: React.FC<{
         autoPlay
         muted
         playsInline
-        onLoadedMetadata={checkOrientation}
+        onLoadedMetadata={(e) => {
+          checkOrientation();
+          (e.target as HTMLVideoElement).play().catch(() => {});
+        }}
         onResize={checkOrientation}
         className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl ${isMirrored ? 'transform scale-x-[-1]' : ''} opacity-100`}
       />
