@@ -6,11 +6,7 @@ const RTC_CONFIG: RTCConfiguration = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: 'stun:global.stun.twilio.com:3478' },
-    { urls: 'stun:stun.services.mozilla.com' },
     { urls: 'stun:stun.relay.metered.ca:80' },
     {
       urls: 'turn:standard.relay.metered.ca:80',
@@ -177,30 +173,8 @@ export function useWebRTC({
           console.warn('[WebRTC] replaceTrack video warning:', err);
         });
       }
-      if (videoTrack) {
-        try {
-          videoTrack.contentHint = 'motion';
-          const params = videoTransceiver.sender.getParameters();
-          if (params.encodings && params.encodings.length > 0) {
-            params.encodings[0].maxBitrate = 6000000; // 6 Mbps for zero-lag 60fps screen sharing
-            params.encodings[0].maxFramerate = 60;
-            videoTransceiver.sender.setParameters(params).catch(() => {});
-          }
-        } catch {}
-      }
     } else if (videoTrack) {
-      try {
-        videoTrack.contentHint = 'motion';
-      } catch {}
-      const sender = pc.addTrack(videoTrack);
-      try {
-        const params = sender.getParameters();
-        if (params.encodings && params.encodings.length > 0) {
-          params.encodings[0].maxBitrate = 6000000;
-          params.encodings[0].maxFramerate = 60;
-          sender.setParameters(params).catch(() => {});
-        }
-      } catch {}
+      pc.addTrack(videoTrack);
     }
   }, []);
 
@@ -255,9 +229,6 @@ export function useWebRTC({
       
       const updateStreamTracks = () => {
         setRemoteStreams((prev) => {
-          if (event.streams && event.streams[0]) {
-            return { ...prev, [peerId]: event.streams[0] };
-          }
           const existing = prev[peerId];
           let tracks: MediaStreamTrack[] = [];
           if (existing) {
@@ -284,19 +255,11 @@ export function useWebRTC({
       console.log(`[WebRTC] Peer ${peerId} connectionState:`, pc.connectionState);
       if (pc.connectionState === 'failed') {
         closePeer(peerId);
-        setTimeout(() => {
-          if (isMediaChannel) {
+        if (currentUserId > peerId) {
+          setTimeout(() => {
             initiateOfferRef.current(peerId);
-          }
-        }, 1200);
-      } else if (pc.connectionState === 'disconnected') {
-        setTimeout(() => {
-          if (pc.connectionState === 'disconnected') {
-            try {
-              pc.restartIce?.();
-            } catch {}
-          }
-        }, 2000);
+          }, 1500);
+        }
       }
     };
 
@@ -428,8 +391,10 @@ export function useWebRTC({
     setMediaHandlers(
       (userId, channel) => {
         if (isMediaChannel && userId !== currentUserId) {
-          console.log(`[WebRTC] Peer ${userId} joined ${channel}. Initiating offer.`);
-          initiateOfferRef.current(userId);
+          console.log(`[WebRTC] Peer ${userId} joined ${channel}. Checking offer initiation.`);
+          if (currentUserId > userId) {
+            initiateOfferRef.current(userId);
+          }
         }
       },
       (userId) => {
@@ -459,7 +424,7 @@ export function useWebRTC({
       }
     });
 
-    // Initiate offer with any new peer that is not connected
+    // Initiate offer with any new peer that is not connected (deterministic caller)
     peers.forEach((peer) => {
       const existing = peerConnections.current.get(peer.id);
       const isConnected = existing && (existing.connectionState === 'connected' || existing.connectionState === 'connecting');
@@ -467,63 +432,10 @@ export function useWebRTC({
         if (currentUserId > peer.id) {
           console.log(`[WebRTC] Sync effect initiating offer to peer: ${peer.id}`);
           initiateOffer(peer.id);
-        } else {
-          // Polite peer fallback: if impolite peer hasn't initiated connection within 1.2s, initiate offer
-          setTimeout(() => {
-            const curPc = peerConnections.current.get(peer.id);
-            const isNowConnected = curPc && (curPc.connectionState === 'connected' || curPc.connectionState === 'connecting');
-            if (!isNowConnected && isMediaChannel) {
-              console.log(`[WebRTC] Polite peer fallback initiating offer to peer: ${peer.id}`);
-              initiateOfferRef.current(peer.id);
-            }
-          }, 1200);
         }
       }
     });
   }, [peerIdsStr, isMediaChannel, currentUserId, initiateOffer, closePeer, closeAllPeers, peers]);
-
-  // Periodic connection watchdog & auto-reconnect (crucial for mobile networks & PC-to-Mobile sync)
-  useEffect(() => {
-    if (!isMediaChannel) return;
-
-    const watchdogInterval = setInterval(() => {
-      peers.forEach((peer) => {
-        const pc = peerConnections.current.get(peer.id);
-        if (!pc || pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-          console.log(`[WebRTC Watchdog] Reconnecting failed peer: ${peer.id}`);
-          closePeerRef.current(peer.id);
-          initiateOfferRef.current(peer.id);
-        } else if (pc.connectionState === 'disconnected' || pc.iceConnectionState === 'disconnected') {
-          console.log(`[WebRTC Watchdog] Restarting ICE for disconnected peer: ${peer.id}`);
-          try {
-            pc.restartIce?.();
-          } catch {}
-        }
-      });
-    }, 3000);
-
-    const handleAppResume = () => {
-      if (document.visibilityState === 'visible' && isMediaChannel) {
-        console.log('[WebRTC] App resumed, verifying peer connections...');
-        peers.forEach((peer) => {
-          const pc = peerConnections.current.get(peer.id);
-          if (!pc || pc.connectionState !== 'connected') {
-            console.log(`[WebRTC] Reconnecting peer ${peer.id} on resume`);
-            initiateOfferRef.current(peer.id);
-          }
-        });
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleAppResume);
-    window.addEventListener('online', handleAppResume);
-
-    return () => {
-      clearInterval(watchdogInterval);
-      document.removeEventListener('visibilitychange', handleAppResume);
-      window.removeEventListener('online', handleAppResume);
-    };
-  }, [isMediaChannel, peers]);
 
   // Update tracks across all active peer connections when local streams change
   useEffect(() => {

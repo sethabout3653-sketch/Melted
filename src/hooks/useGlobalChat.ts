@@ -13,7 +13,6 @@ export interface InAppNotification {
   id: string;
   sender_name: string;
   avatar_color: string;
-  avatar_url?: string;
   content: string;
   timestamp: string;
   attachment_type?: string;
@@ -55,27 +54,23 @@ export function playNotificationSound() {
   } catch {}
 }
 
-export function useGlobalChat(options?: { isChatTabActive?: boolean }) {
-  const { isChatTabActive = false } = options || {};
+export function useGlobalChat() {
   const [currentUser, setCurrentUser] = useState(() => {
     const savedId = localStorage.getItem('frosted_chat_user_id') || ('u_' + Math.random().toString(36).substr(2, 6));
     const savedName = localStorage.getItem('frosted_chat_username') || ('Player_' + Math.floor(100 + Math.random() * 900));
     const savedColor = localStorage.getItem('frosted_chat_usercolor') || '#0066ff';
-    const savedAvatarUrl = localStorage.getItem('frosted_chat_user_avatar') || '';
     localStorage.setItem('frosted_chat_user_id', savedId);
     localStorage.setItem('frosted_chat_username', savedName);
     localStorage.setItem('frosted_chat_usercolor', savedColor);
-    localStorage.setItem('frosted_chat_user_avatar', savedAvatarUrl);
     return {
       id: savedId,
       username: savedName,
       avatar_color: savedColor,
-      avatar_url: savedAvatarUrl,
     };
   });
 
   const chat = useWebSocketDatabase(currentUser);
-  const { messages, setUserCallHandler, isConnected, registerUser, callUser: rawCallUser, updateUser } = chat;
+  const { messages, setUserCallHandler, isConnected, registerUser, callUser: rawCallUser } = chat;
 
   const lastMessageId = useRef<string | null>(null);
   const registeredKeyRef = useRef<string>('');
@@ -93,18 +88,12 @@ export function useGlobalChat(options?: { isChatTabActive?: boolean }) {
 
   // Sync user profile with server when user connects or profile attributes change (prevents infinite loop!)
   useEffect(() => {
-    const userKey = `${currentUser.id}:${currentUser.username}:${currentUser.avatar_color}:${currentUser.avatar_url || ''}`;
+    const userKey = `${currentUser.id}:${currentUser.username}:${currentUser.avatar_color}`;
     if (isConnected && registeredKeyRef.current !== userKey) {
       registeredKeyRef.current = userKey;
       registerUser(currentUser);
-      // Also update the database immediately so all peers see the new profile picture
-      updateUser({
-        username: currentUser.username,
-        avatar_color: currentUser.avatar_color,
-        avatar_url: currentUser.avatar_url || '',
-      });
     }
-  }, [isConnected, currentUser.id, currentUser.username, currentUser.avatar_color, currentUser.avatar_url, registerUser, updateUser]);
+  }, [isConnected, currentUser.id, currentUser.username, currentUser.avatar_color, registerUser]);
 
   // Handle incoming call events from relay server
   useEffect(() => {
@@ -156,7 +145,7 @@ export function useGlobalChat(options?: { isChatTabActive?: boolean }) {
     if (lastMessage.id !== lastMessageId.current) {
       lastMessageId.current = lastMessage.id;
       
-      if (lastMessage.sender_id !== currentUser.id && !isChatTabActive) {
+      if (lastMessage.sender_id !== currentUser.id) {
         // Play instant Web Audio API chime
         playNotificationSound();
 
@@ -165,7 +154,6 @@ export function useGlobalChat(options?: { isChatTabActive?: boolean }) {
           id: lastMessage.id,
           sender_name: lastMessage.sender_name,
           avatar_color: lastMessage.avatar_color,
-          avatar_url: lastMessage.avatar_url,
           content: lastMessage.content,
           timestamp: lastMessage.timestamp,
           attachment_type: lastMessage.attachment_type,
@@ -181,28 +169,11 @@ export function useGlobalChat(options?: { isChatTabActive?: boolean }) {
         }
       }
     }
-  }, [messages, currentUser.id, isChatTabActive]);
-
-  const setCurrentUserPersisted = useCallback((user: typeof currentUser) => {
-    localStorage.setItem('frosted_chat_user_id', user.id);
-    localStorage.setItem('frosted_chat_username', user.username);
-    localStorage.setItem('frosted_chat_usercolor', user.avatar_color);
-    localStorage.setItem('frosted_chat_user_avatar', user.avatar_url || '');
-    
-    // Update server immediately when profile changes
-    updateUser({
-      username: user.username,
-      avatar_color: user.avatar_color,
-      avatar_url: user.avatar_url || '',
-    });
-    registerUser(user);
-    
-    setCurrentUser(user);
-  }, [updateUser, registerUser]);
+  }, [messages, currentUser.id]);
 
   return {
     currentUser,
-    setCurrentUser: setCurrentUserPersisted,
+    setCurrentUser,
     incomingCall,
     outgoingCall,
     activeNotification,

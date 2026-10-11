@@ -193,7 +193,7 @@ const AudioAttachmentPlayer: React.FC<{
   );
 };
 
-// Dedicated audio player for WebRTC voice peers with instant mobile unlock
+// Dedicated audio player for WebRTC voice peers
 const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened: boolean; volume?: number }> = ({ stream, isDeafened, volume = 1 }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -208,11 +208,7 @@ const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened:
     el.volume = Math.max(0, Math.min(1, volume));
 
     const tryPlay = () => {
-      if (el && !el.muted) {
-        el.play().catch((err) => {
-          console.warn('[RemoteAudio] play error:', err);
-        });
-      }
+      el.play().catch(() => {});
     };
 
     tryPlay();
@@ -222,12 +218,10 @@ const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened:
     };
 
     window.addEventListener('click', onUserGesture, { once: true });
-    window.addEventListener('touchstart', onUserGesture, { once: true });
     window.addEventListener('keydown', onUserGesture, { once: true });
 
     return () => {
       window.removeEventListener('click', onUserGesture);
-      window.removeEventListener('touchstart', onUserGesture);
       window.removeEventListener('keydown', onUserGesture);
     };
   }, [stream, isDeafened, volume]);
@@ -247,7 +241,7 @@ const RemoteVideoPlayer: React.FC<{
 
   const checkOrientation = useCallback(() => {
     const video = videoRef.current;
-    if (video && (video.videoWidth > 0 || video.readyState >= 2)) {
+    if (video && video.videoWidth > 0 && video.videoHeight > 0) {
       const vertical = video.videoHeight > video.videoWidth;
       onOrientationChange?.(vertical);
       setIsLoaded(true);
@@ -258,37 +252,23 @@ const RemoteVideoPlayer: React.FC<{
     setIsLoaded(false);
     const video = videoRef.current;
     if (video) {
+      if (stream && video.srcObject !== stream) {
+        video.srcObject = stream;
+      }
       if (stream) {
-        if (video.srcObject !== stream) {
-          video.srcObject = stream;
-        }
-        video.play().catch((err) => {
-          console.warn('[RemoteVideo] play error:', err);
-        });
-      } else {
-        video.srcObject = null;
+        video.play().catch(() => {});
       }
     }
 
-    const check = () => {
+    // Interval to detect when mobile camera video frames/dimensions are ready
+    const interval = setInterval(() => {
       const vid = videoRef.current;
-      if (vid && (vid.videoWidth > 0 || vid.readyState >= 2)) {
+      if (vid && vid.videoWidth > 0 && vid.videoHeight > 0) {
         checkOrientation();
       }
-    };
+    }, 150);
 
-    check();
-    const interval = setInterval(check, 100);
-    const fallbackTimer = setTimeout(() => {
-      if (stream) {
-        setIsLoaded(true);
-      }
-    }, 600);
-
-    return () => {
-      clearInterval(interval);
-      clearTimeout(fallbackTimer);
-    };
+    return () => clearInterval(interval);
   }, [stream, checkOrientation]);
 
   return (
@@ -341,7 +321,7 @@ const LocalVideoPlayer: React.FC<{
 
   const checkOrientation = useCallback(() => {
     const video = videoRef.current;
-    if (video && (video.videoWidth > 0 || video.readyState >= 2)) {
+    if (video && video.videoWidth > 0 && video.videoHeight > 0) {
       const vertical = video.videoHeight > video.videoWidth;
       onOrientationChange?.(vertical);
       setIsLoaded(true);
@@ -352,37 +332,22 @@ const LocalVideoPlayer: React.FC<{
     setIsLoaded(false);
     const video = videoRef.current;
     if (video) {
+      if (stream && video.srcObject !== stream) {
+        video.srcObject = stream;
+      }
       if (stream) {
-        if (video.srcObject !== stream) {
-          video.srcObject = stream;
-        }
-        video.play().catch((err) => {
-          console.warn('[LocalVideo] play error:', err);
-        });
-      } else {
-        video.srcObject = null;
+        video.play().catch(() => {});
       }
     }
 
-    const check = () => {
+    const interval = setInterval(() => {
       const vid = videoRef.current;
-      if (vid && (vid.videoWidth > 0 || vid.readyState >= 2)) {
+      if (vid && vid.videoWidth > 0 && vid.videoHeight > 0) {
         checkOrientation();
       }
-    };
+    }, 150);
 
-    check();
-    const interval = setInterval(check, 100);
-    const fallbackTimer = setTimeout(() => {
-      if (stream) {
-        setIsLoaded(true);
-      }
-    }, 600);
-
-    return () => {
-      clearInterval(interval);
-      clearTimeout(fallbackTimer);
-    };
+    return () => clearInterval(interval);
   }, [stream, checkOrientation]);
 
   const showLoading = isLoading || !isLoaded;
@@ -423,152 +388,6 @@ const LocalVideoPlayer: React.FC<{
   );
 };
 
-// Dedicated Screen Share Player (unmirrored, contain fit for crisp screen sharing)
-const ScreenSharePlayer: React.FC<{ 
-  stream: MediaStream | null;
-}> = ({ stream }) => {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
-
-  useEffect(() => {
-    setIsLoaded(false);
-    const video = videoRef.current;
-    if (video) {
-      if (stream) {
-        if (video.srcObject !== stream) {
-          video.srcObject = stream;
-        }
-        video.play().catch((err) => {
-          console.warn('[ScreenSharePlayer] play error:', err);
-        });
-      } else {
-        video.srcObject = null;
-      }
-    }
-
-    const check = () => {
-      const vid = videoRef.current;
-      if (vid && (vid.videoWidth > 0 || vid.readyState >= 2)) {
-        setIsLoaded(true);
-      }
-    };
-
-    check();
-    const interval = setInterval(check, 100);
-    const fallbackTimer = setTimeout(() => {
-      if (stream) {
-        setIsLoaded(true);
-      }
-    }, 600);
-
-    return () => {
-      clearInterval(interval);
-      clearTimeout(fallbackTimer);
-    };
-  }, [stream]);
-
-  return (
-    <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-black">
-      {!isLoaded && (
-        <div className="absolute inset-0 bg-[#0e0e14] flex flex-col items-center justify-center p-4 z-10 animate-in fade-in duration-200">
-          <div className="relative flex items-center justify-center mb-3">
-            <div className="absolute w-16 h-16 rounded-full bg-blue-500/20 animate-ping" />
-            <div className="w-14 h-14 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shadow-lg shadow-blue-600/20">
-              <Monitor className="w-7 h-7 text-blue-400 animate-pulse" />
-            </div>
-          </div>
-          <p className="text-xs font-bold text-white tracking-wide">Starting Screen Share</p>
-          <p className="text-[11px] text-zinc-400 mt-0.5">Broadcasting screen stream...</p>
-        </div>
-      )}
-      <video
-        ref={videoRef}
-        autoPlay
-        playsInline
-        muted
-        className={`w-full h-full object-contain rounded-3xl transition-opacity duration-300 ${
-          isLoaded ? 'opacity-100' : 'opacity-0'
-        }`}
-      />
-    </div>
-  );
-};
-
-// Compresses and downscales user avatar images to a high-quality, lightweight format (256x256 max)
-const compressAvatarFile = (file: File, callback: (dataUrl: string) => void) => {
-  const reader = new FileReader();
-  reader.onload = (e) => {
-    const rawData = e.target?.result as string;
-    const img = new Image();
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      const maxDim = 256;
-      let width = img.width;
-      let height = img.height;
-      if (width > height) {
-        if (width > maxDim) {
-          height = Math.round((height * maxDim) / width);
-          width = maxDim;
-        }
-      } else {
-        if (height > maxDim) {
-          width = Math.round((width * maxDim) / height);
-          height = maxDim;
-        }
-      }
-      canvas.width = Math.max(1, width);
-      canvas.height = Math.max(1, height);
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        callback(canvas.toDataURL('image/jpeg', 0.88));
-      } else {
-        callback(rawData);
-      }
-    };
-    img.onerror = () => {
-      callback(rawData);
-    };
-    img.src = rawData;
-  };
-  reader.readAsDataURL(file);
-};
-
-// Reusable Avatar component supporting custom image PFP and fallback color/initials
-const UserAvatar: React.FC<{
-  username: string;
-  avatarColor?: string;
-  avatarUrl?: string;
-  className?: string;
-}> = ({ username, avatarColor, avatarUrl, className = 'w-10 h-10 text-xs' }) => {
-  const [imageError, setImageError] = useState(false);
-
-  useEffect(() => {
-    setImageError(false);
-  }, [avatarUrl]);
-
-  if (avatarUrl && avatarUrl.trim() && !imageError) {
-    return (
-      <div className={`rounded-full overflow-hidden shrink-0 flex items-center justify-center bg-zinc-800 ${className}`}>
-        <img
-          src={avatarUrl}
-          alt={username}
-          className="w-full h-full object-cover"
-          onError={() => setImageError(true)}
-        />
-      </div>
-    );
-  }
-  return (
-    <div 
-      className={`rounded-full flex items-center justify-center font-black text-black shrink-0 ${className}`}
-      style={{ backgroundColor: avatarColor || '#0066ff' }}
-    >
-      {(username || 'User').slice(0, 2).toUpperCase()}
-    </div>
-  );
-};
-
 export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const {
     currentUser,
@@ -582,7 +401,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     sendRtcSignal,
     setRtcSignalHandler,
     setMediaHandlers,
-    sendMediaStateSignal,
     incomingCall,
     outgoingCall,
     dismissIncomingCall,
@@ -595,7 +413,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
-  const [editAvatarUrl, setEditAvatarUrl] = useState('');
 
   // Attachment Uploading States with Real Progress
   const [pendingFile, setPendingFile] = useState<{
@@ -627,17 +444,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   useEffect(() => {
     setEditName(currentUser.username);
     setEditColor(currentUser.avatar_color || '#0066ff');
-    setEditAvatarUrl(currentUser.avatar_url || '');
-  }, [currentUser.username, currentUser.avatar_color, currentUser.avatar_url]);
+  }, [currentUser.username, currentUser.avatar_color]);
 
   const saveProfile = () => {
-    const updatedUser = { ...currentUser, username: editName, avatar_color: editColor, avatar_url: editAvatarUrl };
+    const updatedUser = { ...currentUser, username: editName, avatar_color: editColor };
     setCurrentUser(updatedUser);
     localStorage.setItem('frosted_chat_username', editName);
     localStorage.setItem('frosted_chat_usercolor', editColor);
-    localStorage.setItem('frosted_chat_user_avatar', editAvatarUrl);
     
-    updateUser({ username: editName, avatar_color: editColor, avatar_url: editAvatarUrl });
+    updateUser({ username: editName, avatar_color: editColor });
     registerUser(updatedUser);
     
     setIsProfileModalOpen(false);
@@ -657,8 +472,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       return await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: 'user',
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
         },
         audio: false,
       });
@@ -691,14 +506,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
   // Local Reactive Media Streams
   const [localAudioStream, setLocalAudioStream] = useState<MediaStream | null>(null);
-  const [activeCameraStream, setActiveCameraStream] = useState<MediaStream | null>(null);
-  const [activeScreenStream, setActiveScreenStream] = useState<MediaStream | null>(null);
-
-  const localVideoStream = useMemo(() => {
-    if (isScreenSharing && activeScreenStream) return activeScreenStream;
-    if (isVideoEnabled && activeCameraStream) return activeCameraStream;
-    return null;
-  }, [isScreenSharing, activeScreenStream, isVideoEnabled, activeCameraStream]);
+  const [activeVideoStream, setActiveVideoStream] = useState<MediaStream | null>(null);
 
   // Media Stream refs
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -730,10 +538,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     }
   }, []);
 
-  // Safe audio streamer with fallback for mobile webviews & strict permissions
-  const acquireAudioStream = async (): Promise<MediaStream> => {
+  // Explicit microphone permission requester with instant browser prompt
+  const requestMicrophonePermission = async (withVideo: boolean = false) => {
+    setMicError(null);
     try {
-      return await navigator.mediaDevices.getUserMedia({
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
@@ -741,19 +550,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         },
         video: false,
       });
-    } catch {
-      return await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: false,
-      });
-    }
-  };
-
-  // Explicit microphone permission requester with instant browser prompt
-  const requestMicrophonePermission = async (withVideo: boolean = false) => {
-    setMicError(null);
-    try {
-      const stream = await acquireAudioStream();
 
       setMicPermissionStatus('granted');
       setShowMicPermissionModal(false);
@@ -778,19 +574,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     } catch (err: any) {
       console.warn('Microphone permission request result:', err);
       setMicPermissionStatus('denied');
-      setMicError('Microphone permission was not allowed. Joining in listen-only mode.');
-      setShowMicPermissionModal(false);
-      setIsMuted(true);
-      setIsInVideo(true);
-      setActiveChannel('video-general');
-      updateUser({
-        current_channel: 'video-general',
-        activity: 'In General Voice',
-        has_video: false,
-        is_speaking: false,
-        is_muted: true,
-        is_deafened: false,
-      });
+      setMicError('Microphone permission was not allowed. Please click the site settings/lock icon in your browser URL bar to allow microphone access.');
     }
   };
 
@@ -865,7 +649,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     currentUserId: currentUser.id,
     activeChannel: isMediaActive ? 'video-general' : 'text-general',
     localAudioStream,
-    localVideoStream,
+    localVideoStream: activeVideoStream,
     peers: activePeers,
     sendRtcSignal,
     setRtcSignalHandler,
@@ -1002,30 +786,33 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     let videoStream: MediaStream | null = null;
 
     try {
-      audioStream = await acquireAudioStream();
+      audioStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
 
       setMicPermissionStatus('granted');
       micStreamRef.current = audioStream;
       setLocalAudioStream(audioStream);
       setIsMuted(false);
     } catch (err: any) {
-      console.warn('[Voice] Microphone acquisition warning, joining listen-only:', err);
       setMicPermissionStatus('denied');
-      setIsMuted(true);
+      setMicError('Could not access microphone. Please allow microphone permission.');
     }
 
     if (withVideo) {
-      console.log('[Camera] Joining channel with video');
       setIsCameraStarting(true);
       try {
         videoStream = await acquireCameraStream();
-        console.log('[Camera] Camera stream acquired in joinVoiceChannel');
 
         cameraStreamRef.current = videoStream;
-        setActiveCameraStream(videoStream);
+        setActiveVideoStream(videoStream);
         setIsVideoEnabled(true);
       } catch (err: any) {
-        console.error('[Camera] Camera access error in joinVoiceChannel:', err);
         setCameraError('Could not access camera.');
         setIsVideoEnabled(false);
       } finally {
@@ -1049,33 +836,30 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   // Toggle Camera
   const toggleCamera = async () => {
     if (isVideoEnabled) {
-      console.log('[Camera] Disabling camera');
-      sendMediaStateSignal('camera', 'off');
       if (cameraStreamRef.current) {
         cameraStreamRef.current.getTracks().forEach((track) => track.stop());
         cameraStreamRef.current = null;
       }
       setIsVideoEnabled(false);
-      setActiveCameraStream(null);
+      if (!isScreenSharing) {
+        setActiveVideoStream(null);
+      }
       updateUser({ has_video: false });
     } else {
-      console.log('[Camera] Enabling camera');
-      sendMediaStateSignal('camera', 'on');
       setIsCameraStarting(true);
       setCameraError(null);
       try {
         const stream = await acquireCameraStream();
-        console.log('[Camera] Camera stream acquired');
 
         cameraStreamRef.current = stream;
-        setActiveCameraStream(stream);
         setIsVideoEnabled(true);
+        if (!isScreenSharing) {
+          setActiveVideoStream(stream);
+        }
         updateUser({ has_video: true });
       } catch (err: any) {
-        console.error('[Camera] Camera access error:', err);
         setCameraError('Camera access denied or unavailable.');
         setIsVideoEnabled(false);
-        sendMediaStateSignal('camera', 'off');
       } finally {
         setIsCameraStarting(false);
       }
@@ -1090,47 +874,30 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         screenStreamRef.current = null;
       }
       setIsScreenSharing(false);
-      setActiveScreenStream(null);
-      updateUser({ is_screen_sharing: false });
-      sendMediaStateSignal('screen', 'off');
+      setActiveVideoStream(cameraStreamRef.current || null);
+      updateUser({ is_screen_sharing: false, has_video: isVideoEnabled });
     } else {
       try {
         const screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            frameRate: { ideal: 60, max: 60 },
-            width: { max: 1920, ideal: 1920 },
-            height: { max: 1080, ideal: 1080 },
-          },
+          video: true,
           audio: true,
         });
 
         screenStreamRef.current = screenStream;
-        setActiveScreenStream(screenStream);
         setIsScreenSharing(true);
-        updateUser({ is_screen_sharing: true });
-        sendMediaStateSignal('screen', 'on');
+        setActiveVideoStream(screenStream);
+        updateUser({ is_screen_sharing: true, has_video: true });
 
         screenStream.getVideoTracks()[0].onended = () => {
           setIsScreenSharing(false);
-          setActiveScreenStream(null);
-          updateUser({ is_screen_sharing: false });
-          sendMediaStateSignal('screen', 'off');
+          setActiveVideoStream(cameraStreamRef.current || null);
+          updateUser({ is_screen_sharing: false, has_video: isVideoEnabled });
         };
       } catch {
         // Screen share dismissed
-        sendMediaStateSignal('screen', 'off');
       }
     }
   };
-
-  // Auto-stop local screen share if another user starts sharing to prevent lag
-  useEffect(() => {
-    const isSomeoneElseSharing = voiceUsers.some((u: any) => u.id !== currentUser.id && u.is_screen_sharing);
-    if (isSomeoneElseSharing && isScreenSharing) {
-      console.log('[ScreenShare] Another user started sharing, stopping local screen share');
-      toggleScreenShare();
-    }
-  }, [voiceUsers, isScreenSharing, currentUser.id]);
 
   // Stop / Disconnect Voice Channel
   const stopVoiceChannel = () => {
@@ -1148,8 +915,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     }
 
     setLocalAudioStream(null);
-    setActiveCameraStream(null);
-    setActiveScreenStream(null);
+    setActiveVideoStream(null);
     setIsInVideo(false);
     setIsVideoEnabled(false);
     setIsScreenSharing(false);
@@ -1183,7 +949,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     const newActivity = channel === 'video-general' ? 'In General Voice' : 'In #general';
     updateUser({ current_channel: channel, activity: newActivity });
     if (channel === 'video-general' && !isInVideo) {
-      joinVoiceChannel(false);
+      if (micPermissionStatus === 'prompt') {
+        setShowMicPermissionModal(true);
+      } else {
+        joinVoiceChannel(false);
+      }
     }
   };
 
@@ -1369,16 +1139,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     const gifUrl = gif.images?.original?.url || gif.images?.downsized_medium?.url || gif.images?.fixed_height?.url;
     if (!gifUrl) return;
     
-    let gifName = gif.title ? gif.title.trim().replace(/[^a-zA-Z0-9 _-]/g, '') : 'giphy';
-    if (!gifName) gifName = 'giphy';
-    if (!gifName.toLowerCase().endsWith('.gif')) {
-      gifName += '.gif';
-    }
-
     insertMessage('', activeChannel, {
       url: gifUrl,
       type: 'image',
-      name: gifName,
+      name: 'gif.gif',
     });
     setIsGiphyOpen(false);
   };
@@ -1496,12 +1260,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             className="flex items-center gap-2.5 min-w-0 cursor-pointer p-1.5 rounded-xl hover:bg-white/5 transition-colors flex-1"
           >
             <div className="relative shrink-0">
-              <UserAvatar
-                username={currentUser.username}
-                avatarColor={currentUser.avatar_color}
-                avatarUrl={currentUser.avatar_url}
-                className="w-9 h-9 text-xs shadow-md"
-              />
+              <div 
+                className="w-9 h-9 rounded-full text-black font-extrabold flex items-center justify-center text-xs shadow-md"
+                style={{ backgroundColor: currentUser.avatar_color || '#0066ff' }}
+              >
+                {currentUser.username.slice(0, 2).toUpperCase()}
+              </div>
               <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#0a0a0d]" />
             </div>
 
@@ -1641,12 +1405,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 className="flex items-center gap-2.5 min-w-0 cursor-pointer p-1.5 rounded-xl hover:bg-white/5 transition-colors flex-1"
               >
                 <div className="relative shrink-0">
-                  <UserAvatar
-                    username={currentUser.username}
-                    avatarColor={currentUser.avatar_color}
-                    avatarUrl={currentUser.avatar_url}
-                    className="w-9 h-9 text-xs shadow-md"
-                  />
+                  <div 
+                    className="w-9 h-9 rounded-full text-black font-extrabold flex items-center justify-center text-xs shadow-md"
+                    style={{ backgroundColor: currentUser.avatar_color || '#0066ff' }}
+                  >
+                    {currentUser.username.slice(0, 2).toUpperCase()}
+                  </div>
                   <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#0a0a0d]" />
                 </div>
 
@@ -1708,56 +1472,20 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Avatar URL or Upload</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={editAvatarUrl}
-                    onChange={(e) => setEditAvatarUrl(e.target.value)}
-                    className="flex-1 bg-[#121215] border border-[#222226] rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
-                    placeholder="https://example.com/avatar.png"
-                  />
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        compressAvatarFile(file, (dataUrl) => {
-                          setEditAvatarUrl(dataUrl);
-                        });
-                      }
-                    }}
-                    className="hidden"
-                    id="avatar-upload"
-                  />
-                  <label
-                    htmlFor="avatar-upload"
-                    className="px-4 py-2.5 bg-[#1c1c1f] hover:bg-[#25252a] text-zinc-300 hover:text-white font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center justify-center"
-                  >
-                    Upload
-                  </label>
-                  {editAvatarUrl && (
-                    <button
-                      type="button"
-                      onClick={() => setEditAvatarUrl('')}
-                      className="px-3 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-bold text-xs rounded-xl transition-colors cursor-pointer"
-                    >
-                      Remove
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Avatar Preview</label>
+                <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Avatar Color</label>
                 <div className="flex items-center gap-3">
-                  <UserAvatar 
-                    username={editName} 
-                    avatarColor={editColor} 
-                    avatarUrl={editAvatarUrl} 
-                    className="w-12 h-12 text-sm"
+                  <input
+                    type="color"
+                    value={editColor}
+                    onChange={(e) => setEditColor(e.target.value)}
+                    className="w-12 h-12 bg-transparent border-none p-0 cursor-pointer"
                   />
+                  <div 
+                    className="w-12 h-12 rounded-full flex items-center justify-center text-sm font-black text-black"
+                    style={{ backgroundColor: editColor }}
+                  >
+                    {editName.slice(0, 2).toUpperCase()}
+                  </div>
                 </div>
               </div>
             </div>
@@ -1896,12 +1624,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 {/* Messages List */}
                 {messages.map((msg: any) => (
                   <div key={msg.id} className="flex items-start gap-3.5 group hover:bg-white/[0.02] -mx-4 px-4 py-1.5 rounded-xl transition-colors">
-                    <UserAvatar 
-                      username={msg.sender_name}
-                      avatarColor={msg.avatar_color}
-                      avatarUrl={msg.avatar_url}
-                      className="w-10 h-10 text-xs"
-                    />
+                    <div 
+                      className="w-10 h-10 rounded-full text-black font-extrabold flex items-center justify-center shrink-0 text-xs shadow-sm"
+                      style={{ backgroundColor: msg.avatar_color || '#0066ff' }}
+                    >
+                      {msg.sender_name.slice(0, 2).toUpperCase()}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-2">
                         <span className="font-extrabold text-white text-sm hover:underline cursor-pointer">
@@ -2272,12 +2000,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 {users.map((u: any) => (
                   <div key={u.id} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] transition-colors">
                     <div className="relative shrink-0">
-                      <UserAvatar
-                        username={u.username}
-                        avatarColor={u.avatar_color}
-                        avatarUrl={u.avatar_url}
-                        className="w-9 h-9 text-xs shadow-sm"
-                      />
+                      <div 
+                        className="w-9 h-9 rounded-full text-black font-extrabold flex items-center justify-center text-xs shadow-sm"
+                        style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+                      >
+                        {u.username.slice(0, 2).toUpperCase()}
+                      </div>
                       <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                     </div>
 
@@ -2326,12 +2054,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     {users.map((u: any) => (
                       <div key={u.id} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] transition-colors">
                         <div className="relative shrink-0">
-                          <UserAvatar
-                            username={u.username}
-                            avatarColor={u.avatar_color}
-                            avatarUrl={u.avatar_url}
-                            className="w-9 h-9 text-xs shadow-sm"
-                          />
+                          <div 
+                            className="w-9 h-9 rounded-full text-black font-extrabold flex items-center justify-center text-xs shadow-sm"
+                            style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+                          >
+                            {u.username.slice(0, 2).toUpperCase()}
+                          </div>
                           <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                         </div>
 
@@ -2421,78 +2149,42 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 {isInVideo ? (
                   <div className="flex flex-wrap items-center justify-center gap-6 w-full max-w-6xl max-h-full overflow-y-auto p-2">
                     
-                    {/* Local User Camera Tile */}
-                    {(isVideoEnabled || (isCameraStarting && !cameraError)) && (
-                      <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
-                        localIsVertical ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' : 'aspect-video w-full max-w-[500px]'
-                      } ${
-                        isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
-                      }`}>
+                    {/* Local User Tile */}
+                    <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                      (isVideoEnabled || isCameraStarting) && localIsVertical 
+                        ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
+                        : 'aspect-video w-full max-w-[500px]'
+                    } ${
+                      isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
+                    }`}>
+                      {isVideoEnabled || isCameraStarting ? (
                         <LocalVideoPlayer 
-                          stream={activeCameraStream} 
+                          stream={activeVideoStream} 
                           isLoading={isCameraStarting} 
                           onOrientationChange={setLocalIsVertical} 
                         />
-                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
-                          <div className="text-sm font-extrabold text-white">
-                            {currentUser.username} (Camera)
-                          </div>
-                          {isMuted && <MicOff className="w-4 h-4 text-red-400" />}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Local User Screen Share Tile (Separate Screen) */}
-                    {isScreenSharing && (
-                      <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/40 shadow-[0_0_30px_rgba(0,102,255,0.2)] transition-all duration-300 flex flex-col items-center justify-center aspect-video w-full max-w-[500px]">
-                        <div className="flex flex-col items-center justify-center p-6 text-center space-y-3 z-10">
-                          <div className="relative flex items-center justify-center">
-                            <div className="absolute w-20 h-20 rounded-full bg-blue-500/20 animate-ping" />
-                            <div className="w-16 h-16 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shadow-xl shadow-blue-600/20">
-                              <Monitor className="w-8 h-8 text-blue-400 animate-pulse" />
-                            </div>
-                          </div>
-                          <div>
-                            <p className="text-sm font-extrabold text-white tracking-wide">You are sharing your screen</p>
-                            <p className="text-[11px] text-zinc-400 mt-0.5">Broadcasting live with zero local lag</p>
-                          </div>
-                          <button
-                            onClick={toggleScreenShare}
-                            className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer font-heading pointer-events-auto"
-                          >
-                            Stop Sharing
-                          </button>
-                        </div>
-                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
-                          <div className="text-sm font-extrabold text-white flex items-center gap-2">
-                            <Monitor className="w-4 h-4 text-blue-400" />
-                            <span>{currentUser.username}&apos;s Screen (You)</span>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Default Avatar Tile if neither camera nor screen share is active */}
-                    {!isVideoEnabled && !isCameraStarting && !isScreenSharing && (
-                      <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px] ${
-                        isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
-                      }`}>
+                      ) : (
                         <div className="relative flex items-center justify-center">
-                          <UserAvatar 
-                            username={currentUser.username}
-                            avatarColor={currentUser.avatar_color}
-                            avatarUrl={currentUser.avatar_url}
-                            className="w-28 h-28 text-3xl"
-                          />
-                        </div>
-                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
-                          <div className="text-sm font-extrabold text-white">
-                            {currentUser.username} (You)
+                          <div 
+                            className={`w-28 h-28 rounded-full flex items-center justify-center text-3xl font-black text-black shadow-2xl transition-all ${
+                              isUserSpeaking ? 'ring-4 ring-amber-500 shadow-[0_0_30px_#f59e0b]' : 'ring-2 ring-white/10'
+                            }`}
+                            style={{ backgroundColor: currentUser.avatar_color || '#0066ff' }}
+                          >
+                            {currentUser.username.slice(0, 2).toUpperCase()}
                           </div>
-                          {isMuted && <MicOff className="w-4 h-4 text-red-400" />}
                         </div>
+                      )}
+
+                      {/* Bottom-Left Overlay */}
+                      <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                        <div className="text-sm font-extrabold text-white">
+                          {currentUser.username} (You)
+                        </div>
+
+                        {isMuted && <MicOff className="w-4 h-4 text-red-400" />}
                       </div>
-                    )}
+                    </div>
 
                     {/* Remote Peers Tiles */}
                     {voiceUsers.map((u: any) => {
@@ -2503,14 +2195,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       const isPeerTileVertical = (peerOrientations[u.id] || false);
 
                       return (
-                        <React.Fragment key={u.id}>
-                          <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
-                            shouldShowVideo && isPeerTileVertical 
-                              ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
-                              : 'aspect-video w-full max-w-[500px]'
-                          } ${
-                            isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
-                          }`}>
+                        <div key={u.id} className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                          shouldShowVideo && isPeerTileVertical 
+                            ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
+                            : 'aspect-video w-full max-w-[500px]'
+                        } ${
+                          isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
+                        }`}>
                           {shouldShowVideo ? (
                             <RemoteVideoPlayer 
                               stream={stream} 
@@ -2520,14 +2211,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                             />
                           ) : (
                             <div className="relative flex items-center justify-center">
-                              <UserAvatar
-                                username={u.username}
-                                avatarColor={u.avatar_color}
-                                avatarUrl={u.avatar_url}
-                                className={`w-28 h-28 text-3xl shadow-2xl transition-all ${
+                              <div 
+                                className={`w-28 h-28 rounded-full flex items-center justify-center text-3xl font-black text-black shadow-2xl transition-all ${
                                   isPeerSpeaking ? 'ring-4 ring-amber-500 shadow-[0_0_30px_#f59e0b]' : 'ring-2 ring-white/10'
                                 }`}
-                              />
+                                style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+                              >
+                                {u.username.slice(0, 2).toUpperCase()}
+                              </div>
                             </div>
                           )}
 
@@ -2539,19 +2230,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                             {u.is_muted && <MicOff className="w-4 h-4 text-zinc-400" />}
                           </div>
                         </div>
-                        
-                        {u.is_screen_sharing && (
-                            <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/40 shadow-[0_0_30px_rgba(0,102,255,0.2)] transition-all duration-300 flex flex-col items-center justify-center aspect-video w-full max-w-[500px]">
-                                <ScreenSharePlayer stream={stream} />
-                                <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
-                                    <div className="text-sm font-extrabold text-white flex items-center gap-2">
-                                        <Monitor className="w-4 h-4 text-blue-400" />
-                                        <span>{u.username}&apos;s Screen</span>
-                                    </div>
-                                </div>
-                            </div>
-                          )}
-                        </React.Fragment>
                       );
                     })}
 
@@ -2618,11 +2296,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     {/* Camera Toggle Button */}
                     <button 
                       onClick={() => toggleCamera()}
-                      className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
-                        isVideoEnabled 
-                          ? 'bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500' 
-                          : 'bg-white/10 text-zinc-300 border border-white/10 hover:bg-white/20 hover:text-white'
-                      }`}
+                      className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500"
                       title={isVideoEnabled ? 'Turn Off Camera' : 'Turn On Camera'}
                     >
                       {isVideoEnabled ? <Video className="w-5 h-5 sm:w-6 sm:h-6" /> : <VideoOff className="w-5 h-5 sm:w-6 sm:h-6" />}
@@ -2669,12 +2343,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     <div className="p-2.5 rounded-2xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-between">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="relative shrink-0">
-                          <UserAvatar
-                            username={currentUser.username}
-                            avatarColor={currentUser.avatar_color}
-                            avatarUrl={currentUser.avatar_url}
-                            className="w-8 h-8 text-xs"
-                          />
+                          <div 
+                            className="w-8 h-8 rounded-full text-black font-extrabold flex items-center justify-center text-xs"
+                            style={{ backgroundColor: currentUser.avatar_color || '#0066ff' }}
+                          >
+                            {currentUser.username.slice(0, 2).toUpperCase()}
+                          </div>
                           <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                         </div>
                         <div className="min-w-0 leading-tight">
@@ -2693,12 +2367,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     <div key={u.id} className="p-2.5 rounded-2xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-between">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="relative shrink-0">
-                          <UserAvatar
-                            username={u.username}
-                            avatarColor={u.avatar_color}
-                            avatarUrl={u.avatar_url}
-                            className="w-8 h-8 text-xs"
-                          />
+                          <div 
+                            className="w-8 h-8 rounded-full text-black font-extrabold flex items-center justify-center text-xs"
+                            style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+                          >
+                            {u.username.slice(0, 2).toUpperCase()}
+                          </div>
                           <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                         </div>
                         <div className="min-w-0 leading-tight">
@@ -2719,12 +2393,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   {users.filter((u: any) => u.id !== currentUser.id && !voiceUsers.some((vu: any) => vu.id === u.id)).map((u: any) => (
                     <div key={u.id} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-white/[0.03] transition-colors">
                       <div className="relative shrink-0">
-                        <UserAvatar
-                          username={u.username}
-                          avatarColor={u.avatar_color}
-                          avatarUrl={u.avatar_url}
-                          className="w-7 h-7 text-[10px]"
-                        />
+                        <div 
+                          className="w-7 h-7 rounded-full text-black font-extrabold flex items-center justify-center text-[10px]"
+                          style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+                        >
+                          {u.username.slice(0, 2).toUpperCase()}
+                        </div>
                         <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                       </div>
                       <div className="min-w-0 flex-1 leading-tight">
@@ -2766,12 +2440,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         <div className="p-2.5 rounded-2xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-between">
                           <div className="flex items-center gap-2.5 min-w-0">
                             <div className="relative shrink-0">
-                              <UserAvatar
-                                username={currentUser.username}
-                                avatarColor={currentUser.avatar_color}
-                                avatarUrl={currentUser.avatar_url}
-                                className="w-8 h-8 text-xs"
-                              />
+                              <div 
+                                className="w-8 h-8 rounded-full text-black font-extrabold flex items-center justify-center text-xs"
+                                style={{ backgroundColor: currentUser.avatar_color || '#0066ff' }}
+                              >
+                                {currentUser.username.slice(0, 2).toUpperCase()}
+                              </div>
                               <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                             </div>
                             <div className="min-w-0 leading-tight">
@@ -2790,12 +2464,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         <div key={u.id} className="p-2.5 rounded-2xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-between">
                           <div className="flex items-center gap-2.5 min-w-0">
                             <div className="relative shrink-0">
-                              <UserAvatar
-                                username={u.username}
-                                avatarColor={u.avatar_color}
-                                avatarUrl={u.avatar_url}
-                                className="w-8 h-8 text-xs"
-                              />
+                              <div 
+                                className="w-8 h-8 rounded-full text-black font-extrabold flex items-center justify-center text-xs"
+                                style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+                              >
+                                {u.username.slice(0, 2).toUpperCase()}
+                              </div>
                               <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                             </div>
                             <div className="min-w-0 leading-tight">
@@ -2815,12 +2489,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       {users.filter((u: any) => u.id !== currentUser.id && !voiceUsers.some((vu: any) => vu.id === u.id)).map((u: any) => (
                         <div key={u.id} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-white/[0.03] transition-colors">
                           <div className="relative shrink-0">
-                            <UserAvatar
-                              username={u.username}
-                              avatarColor={u.avatar_color}
-                              avatarUrl={u.avatar_url}
-                              className="w-7 h-7 text-[10px]"
-                            />
+                            <div 
+                              className="w-7 h-7 rounded-full text-black font-extrabold flex items-center justify-center text-[10px]"
+                              style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+                            >
+                              {u.username.slice(0, 2).toUpperCase()}
+                            </div>
                             <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                           </div>
                           <div className="min-w-0 flex-1 leading-tight">
@@ -2845,12 +2519,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
           <div className="bg-[#0e0e13] p-7 rounded-3xl border border-[#262630] w-full max-w-sm flex flex-col items-center text-center space-y-5 shadow-2xl">
             <div className="relative">
-              <UserAvatar
-                username={incomingCall.fromUserName || 'Friend'}
-                avatarUrl={users.find((u: any) => u.id === incomingCall.fromUserId)?.avatar_url}
-                avatarColor={users.find((u: any) => u.id === incomingCall.fromUserId)?.avatar_color || '#0066ff'}
-                className="w-20 h-20 text-2xl ring-4 ring-blue-500/40 animate-pulse shadow-lg shadow-blue-600/30"
-              />
+              <div className="w-20 h-20 rounded-full bg-blue-600 text-black font-black text-2xl flex items-center justify-center ring-4 ring-blue-500/40 animate-pulse shadow-lg shadow-blue-600/30">
+                {(incomingCall.fromUserName || 'P').slice(0, 2).toUpperCase()}
+              </div>
               <div className="absolute -bottom-1 -right-1 p-2 rounded-full bg-blue-500 text-white shadow-md">
                 <Mic className="w-3.5 h-3.5" />
               </div>
@@ -2888,12 +2559,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
           <div className="bg-[#0e0e13] p-7 rounded-3xl border border-[#262630] w-full max-w-sm flex flex-col items-center text-center space-y-5 shadow-2xl">
             <div className="relative">
-              <UserAvatar
-                username={outgoingCall.targetUserName || 'Friend'}
-                avatarUrl={users.find((u: any) => u.id === outgoingCall.targetUserId)?.avatar_url}
-                avatarColor={users.find((u: any) => u.id === outgoingCall.targetUserId)?.avatar_color || '#0066ff'}
-                className="w-20 h-20 text-2xl ring-4 ring-blue-500/40 animate-pulse shadow-lg shadow-blue-600/30"
-              />
+              <div className="w-20 h-20 rounded-full bg-blue-600 text-black font-black text-2xl flex items-center justify-center ring-4 ring-blue-500/40 animate-pulse shadow-lg shadow-blue-600/30">
+                {(outgoingCall.targetUserName || 'P').slice(0, 2).toUpperCase()}
+              </div>
             </div>
 
             <div className="space-y-1">

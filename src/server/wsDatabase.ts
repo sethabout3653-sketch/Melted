@@ -7,7 +7,6 @@ export interface DbUser {
   id: string;
   username: string;
   avatar_color: string;
-  avatar_url?: string;
   current_channel: 'text-general' | 'voice-general' | 'video-general' | 'offline';
   is_speaking: boolean;
   is_muted: boolean;
@@ -24,76 +23,12 @@ export interface DbMessage {
   sender_id: string;
   sender_name: string;
   avatar_color: string;
-  avatar_url?: string;
   content: string;
   attachment_url?: string;
   attachment_type?: 'image' | 'video' | 'audio' | 'gif' | 'file' | string;
   attachment_name?: string;
   timestamp: string;
   created_at: number;
-}
-
-// Ultra-fast in-memory cache for presence
-class PresenceCache {
-  private users: Map<string, DbUser> = new Map();
-  private messages: DbMessage[] = [];
-  private dirtyUsers: Set<string> = new Set();
-  private lastSyncTime: number = 0;
-  private syncInterval: NodeJS.Timeout | null = null;
-
-  constructor(private db: WebSocketDatabase, private broadcastFn: (tableName: string, data: any) => void) {
-    this.loadFromDb();
-    this.startPeriodicSync();
-  }
-
-  private loadFromDb() {
-    try {
-      const rows = this.db.selectUsers();
-      this.users.clear();
-      for (const r of rows) {
-        this.users.set(r.id, r);
-      }
-    } catch (e) {
-      console.error('[Cache] Load users error:', e);
-    }
-  }
-
-  private startPeriodicSync() {
-    this.syncInterval = setInterval(() => {
-      if (this.dirtyUsers.size > 0) {
-        const usersArray = Array.from(this.users.values());
-        this.broadcastFn('users', usersArray);
-        this.dirtyUsers.clear();
-      }
-      this.lastSyncTime = Date.now();
-    }, 50); // Ultra-fast 50ms batch sync
-  }
-
-  getUser(userId: string): DbUser | null {
-    return this.users.get(userId) || null;
-  }
-
-  getAllUsers(): DbUser[] {
-    return Array.from(this.users.values());
-  }
-
-  upsertUser(user: DbUser) {
-    this.users.set(user.id, user);
-    this.dirtyUsers.add(user.id);
-  }
-
-  deleteUser(userId: string) {
-    this.users.delete(userId);
-    this.dirtyUsers.delete(userId);
-  }
-
-  markDirty(userId: string) {
-    this.dirtyUsers.add(userId);
-  }
-
-  destroy() {
-    if (this.syncInterval) clearInterval(this.syncInterval);
-  }
 }
 
 // Persistent Relational Tables backed by SQLite (WAL mode)
@@ -109,15 +44,12 @@ class WebSocketDatabase {
     this.db = new DatabaseSync(dbPath);
     this.db.exec('PRAGMA journal_mode = WAL;');
     this.db.exec('PRAGMA synchronous = NORMAL;');
-    this.db.exec('PRAGMA cache_size = 10000;');
-    this.db.exec('PRAGMA temp_store = MEMORY;');
 
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         username TEXT NOT NULL,
         avatar_color TEXT NOT NULL,
-        avatar_url TEXT DEFAULT '',
         current_channel TEXT NOT NULL,
         is_speaking INTEGER NOT NULL DEFAULT 0,
         is_muted INTEGER NOT NULL DEFAULT 0,
@@ -134,7 +66,6 @@ class WebSocketDatabase {
         sender_id TEXT NOT NULL,
         sender_name TEXT NOT NULL,
         avatar_color TEXT NOT NULL,
-        avatar_url TEXT DEFAULT '',
         content TEXT NOT NULL,
         attachment_url TEXT,
         attachment_type TEXT,
@@ -150,206 +81,154 @@ class WebSocketDatabase {
     try {
       this.db.exec("ALTER TABLE users ADD COLUMN activity TEXT DEFAULT '';");
     } catch {}
-    try {
-      this.db.exec("ALTER TABLE users ADD COLUMN avatar_url TEXT DEFAULT '';");
-    } catch {}
-    try {
-      this.db.exec("ALTER TABLE messages ADD COLUMN avatar_url TEXT DEFAULT '';");
-    } catch {}
 
-    // Reset transient users on server restart so no ghost users remain
-    this.db.exec("DELETE FROM users;");
+    // Reset transient users on server restart to keep presence accurate
+    this.db.exec("DELETE FROM users WHERE current_channel = 'offline' OR updated_at < " + (Date.now() - 3600000));
   }
 
   public selectUsers(where?: Partial<DbUser>): DbUser[] {
-    try {
-      const rows = this.db.prepare('SELECT * FROM users ORDER BY updated_at DESC').all() as any[];
-      const list: DbUser[] = rows.map((r) => ({
-        id: String(r.id),
-        username: String(r.username),
-        avatar_color: String(r.avatar_color),
-        avatar_url: r.avatar_url ? String(r.avatar_url) : '',
-        current_channel: r.current_channel as any,
-        is_speaking: Boolean(r.is_speaking),
-        is_muted: Boolean(r.is_muted),
-        is_deafened: Boolean(r.is_deafened),
-        has_video: Boolean(r.has_video),
-        is_screen_sharing: Boolean(r.is_screen_sharing),
-        activity: r.activity ? String(r.activity) : '',
-        updated_at: Number(r.updated_at),
-      }));
-      if (!where) return list;
-      return list.filter((user) => {
-        return Object.entries(where).every(([key, val]) => (user as any)[key] === val);
-      });
-    } catch (e) {
-      console.error('[DB] selectUsers error:', e);
-      return [];
-    }
+    const rows = this.db.prepare('SELECT * FROM users ORDER BY updated_at DESC').all() as any[];
+    const list: DbUser[] = rows.map((r) => ({
+      id: String(r.id),
+      username: String(r.username),
+      avatar_color: String(r.avatar_color),
+      current_channel: r.current_channel as any,
+      is_speaking: Boolean(r.is_speaking),
+      is_muted: Boolean(r.is_muted),
+      is_deafened: Boolean(r.is_deafened),
+      has_video: Boolean(r.has_video),
+      is_screen_sharing: Boolean(r.is_screen_sharing),
+      activity: r.activity ? String(r.activity) : '',
+      updated_at: Number(r.updated_at),
+    }));
+    if (!where) return list;
+    return list.filter((user) => {
+      return Object.entries(where).every(([key, val]) => (user as any)[key] === val);
+    });
   }
 
   public getUser(userId: string): DbUser | null {
-    try {
-      const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
-      if (!row) return null;
-      return {
-        id: String(row.id),
-        username: String(row.username),
-        avatar_color: String(row.avatar_color),
-        avatar_url: row.avatar_url ? String(row.avatar_url) : '',
-        current_channel: row.current_channel as any,
-        is_speaking: Boolean(row.is_speaking),
-        is_muted: Boolean(row.is_muted),
-        is_deafened: Boolean(row.is_deafened),
-        has_video: Boolean(row.has_video),
-        is_screen_sharing: Boolean(row.is_screen_sharing),
-        activity: row.activity ? String(row.activity) : '',
-        updated_at: Number(row.updated_at),
-      };
-    } catch (e) {
-      console.error('[DB] getUser error:', e);
-      return null;
-    }
+    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
+    if (!row) return null;
+    return {
+      id: String(row.id),
+      username: String(row.username),
+      avatar_color: String(row.avatar_color),
+      current_channel: row.current_channel as any,
+      is_speaking: Boolean(row.is_speaking),
+      is_muted: Boolean(row.is_muted),
+      is_deafened: Boolean(row.is_deafened),
+      has_video: Boolean(row.has_video),
+      is_screen_sharing: Boolean(row.is_screen_sharing),
+      activity: row.activity ? String(row.activity) : '',
+      updated_at: Number(row.updated_at),
+    };
   }
 
   public upsertUser(user: DbUser) {
-    try {
-      const stmt = this.db.prepare(`
-        INSERT INTO users (
-          id, username, avatar_color, avatar_url, current_channel,
-          is_speaking, is_muted, is_deafened, has_video, is_screen_sharing, activity, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET
-          username = excluded.username,
-          avatar_color = excluded.avatar_color,
-          avatar_url = excluded.avatar_url,
-          current_channel = excluded.current_channel,
-          is_speaking = excluded.is_speaking,
-          is_muted = excluded.is_muted,
-          is_deafened = excluded.is_deafened,
-          has_video = excluded.has_video,
-          is_screen_sharing = excluded.is_screen_sharing,
-          activity = excluded.activity,
-          updated_at = excluded.updated_at
-      `);
-      stmt.run(
-        user.id,
-        user.username,
-        user.avatar_color,
-        user.avatar_url || '',
-        user.current_channel,
-        user.is_speaking ? 1 : 0,
-        user.is_muted ? 1 : 0,
-        user.is_deafened ? 1 : 0,
-        user.has_video ? 1 : 0,
-        user.is_screen_sharing ? 1 : 0,
-        user.activity || '',
-        Date.now()
-      );
-    } catch (e) {
-      console.error('[DB] upsertUser error:', e);
-    }
+    const stmt = this.db.prepare(`
+      INSERT INTO users (
+        id, username, avatar_color, current_channel,
+        is_speaking, is_muted, is_deafened, has_video, is_screen_sharing, activity, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        username = excluded.username,
+        avatar_color = excluded.avatar_color,
+        current_channel = excluded.current_channel,
+        is_speaking = excluded.is_speaking,
+        is_muted = excluded.is_muted,
+        is_deafened = excluded.is_deafened,
+        has_video = excluded.has_video,
+        is_screen_sharing = excluded.is_screen_sharing,
+        activity = excluded.activity,
+        updated_at = excluded.updated_at
+    `);
+    stmt.run(
+      user.id,
+      user.username,
+      user.avatar_color,
+      user.current_channel,
+      user.is_speaking ? 1 : 0,
+      user.is_muted ? 1 : 0,
+      user.is_deafened ? 1 : 0,
+      user.has_video ? 1 : 0,
+      user.is_screen_sharing ? 1 : 0,
+      user.activity || '',
+      Date.now()
+    );
   }
 
   public deleteUser(userId: string) {
-    try {
-      this.db.prepare('DELETE FROM users WHERE id = ?').run(userId);
-    } catch (e) {
-      console.error('[DB] deleteUser error:', e);
-    }
+    this.db.prepare('DELETE FROM users WHERE id = ?').run(userId);
   }
 
   public insertMessage(msg: DbMessage) {
-    try {
-      const stmt = this.db.prepare(`
-        INSERT OR REPLACE INTO messages (
-          id, channel_id, sender_id, sender_name, avatar_color, avatar_url,
-          content, attachment_url, attachment_type, attachment_name, timestamp, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      stmt.run(
-        msg.id,
-        msg.channel_id,
-        msg.sender_id,
-        msg.sender_name,
-        msg.avatar_color,
-        msg.avatar_url || '',
-        msg.content,
-        msg.attachment_url ?? null,
-        msg.attachment_type ?? null,
-        msg.attachment_name ?? null,
-        msg.timestamp,
-        msg.created_at
-      );
-    } catch (e) {
-      console.error('[DB] insertMessage error:', e);
-    }
+    const stmt = this.db.prepare(`
+      INSERT OR REPLACE INTO messages (
+        id, channel_id, sender_id, sender_name, avatar_color,
+        content, attachment_url, attachment_type, attachment_name, timestamp, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(
+      msg.id,
+      msg.channel_id,
+      msg.sender_id,
+      msg.sender_name,
+      msg.avatar_color,
+      msg.content,
+      msg.attachment_url ?? null,
+      msg.attachment_type ?? null,
+      msg.attachment_name ?? null,
+      msg.timestamp,
+      msg.created_at
+    );
   }
 
   public selectAllMessages(): DbMessage[] {
-    try {
-      const rows = this.db.prepare('SELECT * FROM messages ORDER BY created_at ASC LIMIT 500').all() as any[];
-      return rows.map((r) => ({
-        id: String(r.id),
-        channel_id: String(r.channel_id),
-        sender_id: String(r.sender_id),
-        sender_name: String(r.sender_name),
-        avatar_color: String(r.avatar_color),
-        avatar_url: r.avatar_url ? String(r.avatar_url) : '',
-        content: String(r.content),
-        attachment_url: r.attachment_url ?? undefined,
-        attachment_type: r.attachment_type ?? undefined,
-        attachment_name: r.attachment_name ?? undefined,
-        timestamp: String(r.timestamp),
-        created_at: Number(r.created_at),
-      }));
-    } catch (e) {
-      console.error('[DB] selectAllMessages error:', e);
-      return [];
-    }
+    const rows = this.db.prepare('SELECT * FROM messages ORDER BY created_at ASC LIMIT 500').all() as any[];
+    return rows.map((r) => ({
+      id: String(r.id),
+      channel_id: String(r.channel_id),
+      sender_id: String(r.sender_id),
+      sender_name: String(r.sender_name),
+      avatar_color: String(r.avatar_color),
+      content: String(r.content),
+      attachment_url: r.attachment_url ?? undefined,
+      attachment_type: r.attachment_type ?? undefined,
+      attachment_name: r.attachment_name ?? undefined,
+      timestamp: String(r.timestamp),
+      created_at: Number(r.created_at),
+    }));
   }
 
   public selectMessages(channelId: string): DbMessage[] {
-    try {
-      const rows = this.db.prepare('SELECT * FROM messages WHERE channel_id = ? ORDER BY created_at ASC LIMIT 500').all(channelId) as any[];
-      return rows.map((r) => ({
-        id: String(r.id),
-        channel_id: String(r.channel_id),
-        sender_id: String(r.sender_id),
-        sender_name: String(r.sender_name),
-        avatar_color: String(r.avatar_color),
-        avatar_url: r.avatar_url ? String(r.avatar_url) : '',
-        content: String(r.content),
-        attachment_url: r.attachment_url ?? undefined,
-        attachment_type: r.attachment_type ?? undefined,
-        attachment_name: r.attachment_name ?? undefined,
-        timestamp: String(r.timestamp),
-        created_at: Number(r.created_at),
-      }));
-    } catch (e) {
-      console.error('[DB] selectMessages error:', e);
-      return [];
-    }
+    const rows = this.db.prepare('SELECT * FROM messages WHERE channel_id = ? ORDER BY created_at ASC LIMIT 500').all(channelId) as any[];
+    return rows.map((r) => ({
+      id: String(r.id),
+      channel_id: String(r.channel_id),
+      sender_id: String(r.sender_id),
+      sender_name: String(r.sender_name),
+      avatar_color: String(r.avatar_color),
+      content: String(r.content),
+      attachment_url: r.attachment_url ?? undefined,
+      attachment_type: r.attachment_type ?? undefined,
+      attachment_name: r.attachment_name ?? undefined,
+      timestamp: String(r.timestamp),
+      created_at: Number(r.created_at),
+    }));
   }
 
   public deleteMessage(id: string) {
-    try {
-      this.db.prepare('DELETE FROM messages WHERE id = ?').run(id);
-    } catch (e) {
-      console.error('[DB] deleteMessage error:', e);
-    }
+    this.db.prepare('DELETE FROM messages WHERE id = ?').run(id);
   }
 }
 
 export function initWebSocketDatabase(server: Server) {
-  const wss = new WebSocketServer({ server, path: '/ws-db', perMessageDeflate: false });
+  const wss = new WebSocketServer({ server, path: '/ws-db' });
   const db = new WebSocketDatabase();
-
-  // Ultra-fast presence cache with batched sync
-  let presenceCache: PresenceCache | null = null;
+  
+  // Track multiple sockets per user ID (for multi-tab support)
   const userIdToSockets = new Map<string, Set<WebSocket>>();
-  const messageBroadcastQueue: DbMessage[] = [];
-  let messageBroadcastTimer: NodeJS.Timeout | null = null;
 
   function broadcastTable(tableName: string, data: any) {
     const payload = JSON.stringify({
@@ -359,17 +238,9 @@ export function initWebSocketDatabase(server: Server) {
       timestamp: Date.now(),
     });
 
-    const buffer = Buffer.from(payload);
-    let sentCount = 0;
-
     wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
-        try {
-          client.send(buffer);
-          sentCount++;
-        } catch (e) {
-          console.warn('[WS] Broadcast error:', e);
-        }
+        client.send(payload);
       }
     });
   }
@@ -382,36 +253,26 @@ export function initWebSocketDatabase(server: Server) {
       timestamp: Date.now(),
     });
 
-    const buffer = Buffer.from(payload);
     wss.clients.forEach((client) => {
       if (client.readyState === WebSocket.OPEN) {
-        try {
-          client.send(buffer);
-        } catch (e) {
-          console.warn('[WS] Media presence error:', e);
-        }
+        client.send(payload);
       }
     });
   }
 
   wss.on('connection', (ws) => {
     let boundUserId: string | null = null;
-    let lastPingTime = Date.now();
 
-    try {
-      ws.send(JSON.stringify({
-        type: 'DB_INIT',
-        tables: {
-          users: presenceCache?.getAllUsers() || db.selectUsers(),
-          messages: db.selectAllMessages(),
-          channels: db.channels,
-        },
-      }));
-    } catch (e) {
-      console.error('[WS] Failed to send DB_INIT:', e);
-    }
+    // Send initial snapshot
+    ws.send(JSON.stringify({
+      type: 'DB_INIT',
+      tables: {
+        users: db.selectUsers(),
+        messages: db.selectAllMessages(),
+        channels: db.channels,
+      },
+    }));
 
-    // Ultra-fast message handler
     ws.on('message', (raw) => {
       try {
         const msg = JSON.parse(raw.toString());
@@ -422,7 +283,7 @@ export function initWebSocketDatabase(server: Server) {
               ws.send(JSON.stringify({
                 type: 'SQL_RESULT',
                 requestId: msg.requestId,
-                rows: presenceCache?.getAllUsers() || db.selectUsers(msg.where),
+                rows: db.selectUsers(msg.where),
               }));
             } else if (msg.table === 'messages') {
               ws.send(JSON.stringify({
@@ -456,44 +317,26 @@ export function initWebSocketDatabase(server: Server) {
           }
 
           case 'SQL_UPDATE': {
-            if (msg.table === 'users' && msg.id) {
-              if (!boundUserId) {
-                boundUserId = msg.id;
-                if (!userIdToSockets.has(msg.id)) {
-                  userIdToSockets.set(msg.id, new Set());
-                }
-                userIdToSockets.get(msg.id)?.add(ws);
-              }
+            if (msg.table === 'users') {
+              const user = db.getUser(msg.id);
+              if (user) {
+                const oldChannel = user.current_channel;
+                const updated: DbUser = {
+                  ...user,
+                  ...msg.set,
+                  updated_at: Date.now(),
+                };
+                db.upsertUser(updated);
+                broadcastTable('users', db.selectUsers());
 
-              const existingUser = presenceCache?.getUser(msg.id) || db.getUser(msg.id);
-              const oldChannel = existingUser?.current_channel;
-              const updated: DbUser = {
-                id: msg.id,
-                username: existingUser?.username || 'User',
-                avatar_color: existingUser?.avatar_color || '#0066ff',
-                avatar_url: existingUser?.avatar_url || '',
-                current_channel: existingUser?.current_channel || 'text-general',
-                is_speaking: Boolean(existingUser?.is_speaking),
-                is_muted: Boolean(existingUser?.is_muted),
-                is_deafened: Boolean(existingUser?.is_deafened),
-                has_video: Boolean(existingUser?.has_video),
-                is_screen_sharing: Boolean(existingUser?.is_screen_sharing),
-                activity: existingUser?.activity || '',
-                ...existingUser,
-                ...msg.set,
-                updated_at: Date.now(),
-              };
-
-              db.upsertUser(updated);
-              presenceCache?.upsertUser(updated);
-              broadcastTable('users', presenceCache?.getAllUsers() || db.selectUsers());
-
-              if (msg.set.current_channel && msg.set.current_channel !== oldChannel) {
-                if (msg.set.current_channel === 'voice-general' || msg.set.current_channel === 'video-general') {
-                  broadcastMediaPresence('USER_JOINED_MEDIA', msg.id, msg.set.current_channel);
-                }
-                if (oldChannel === 'voice-general' || oldChannel === 'video-general') {
-                  broadcastMediaPresence('USER_LEFT_MEDIA', msg.id, oldChannel);
+                // Detect channel media transitions
+                if (msg.set.current_channel && msg.set.current_channel !== oldChannel) {
+                  if (msg.set.current_channel === 'voice-general' || msg.set.current_channel === 'video-general') {
+                    broadcastMediaPresence('USER_JOINED_MEDIA', msg.id, msg.set.current_channel);
+                  }
+                  if (oldChannel === 'voice-general' || oldChannel === 'video-general') {
+                    broadcastMediaPresence('USER_LEFT_MEDIA', msg.id, oldChannel);
+                  }
                 }
               }
             }
@@ -512,17 +355,16 @@ export function initWebSocketDatabase(server: Server) {
             if (msg.user && typeof msg.user.id === 'string') {
               const uId: string = msg.user.id;
               boundUserId = uId;
-
+              
               if (!userIdToSockets.has(uId)) {
                 userIdToSockets.set(uId, new Set());
               }
               userIdToSockets.get(uId)?.add(ws);
 
-              const newUser: DbUser = {
+              db.upsertUser({
                 id: uId,
                 username: msg.user.username,
                 avatar_color: msg.user.avatar_color || '#0066ff',
-                avatar_url: msg.user.avatar_url || '',
                 current_channel: msg.user.current_channel || 'text-general',
                 is_speaking: Boolean(msg.user.is_speaking),
                 is_muted: Boolean(msg.user.is_muted),
@@ -531,11 +373,8 @@ export function initWebSocketDatabase(server: Server) {
                 is_screen_sharing: Boolean(msg.user.is_screen_sharing),
                 activity: msg.user.activity ? String(msg.user.activity) : '',
                 updated_at: Date.now(),
-              };
-
-              db.upsertUser(newUser);
-              presenceCache?.upsertUser(newUser);
-              broadcastTable('users', presenceCache?.getAllUsers() || db.selectUsers());
+              });
+              broadcastTable('users', db.selectUsers());
 
               if (msg.user.current_channel === 'voice-general' || msg.user.current_channel === 'video-general') {
                 broadcastMediaPresence('USER_JOINED_MEDIA', uId, msg.user.current_channel);
@@ -544,41 +383,18 @@ export function initWebSocketDatabase(server: Server) {
             break;
           }
 
-          case 'MEDIA_STATE_SIGNAL': {
-            if (!msg.fromUserId || !msg.mediaType || !msg.state) break;
-            const user = presenceCache?.getUser(msg.fromUserId) || db.getUser(msg.fromUserId);
-            if (!user) break;
-
-            const nextUser: DbUser = {
-              ...user,
-              has_video: msg.mediaType === 'camera' ? msg.state === 'on' : user.has_video,
-              is_screen_sharing: msg.mediaType === 'screen' ? msg.state === 'on' : user.is_screen_sharing,
-              updated_at: Date.now(),
-            };
-
-            db.upsertUser(nextUser);
-            presenceCache?.upsertUser(nextUser);
-            broadcastTable('users', presenceCache?.getAllUsers() || db.selectUsers());
-            break;
-          }
-
+          // Direct WebRTC Signaling Relay
           case 'RTC_SIGNAL': {
             if (msg.targetUserId) {
               const targetSockets = userIdToSockets.get(msg.targetUserId);
-              const payload = JSON.stringify({
-                type: 'RTC_SIGNAL',
-                fromUserId: msg.fromUserId,
-                targetUserId: msg.targetUserId,
-                signal: msg.signal,
-              });
-              const buffer = Buffer.from(payload);
               targetSockets?.forEach(targetWs => {
                 if (targetWs.readyState === WebSocket.OPEN) {
-                  try {
-                    targetWs.send(buffer);
-                  } catch (e) {
-                    console.warn('[WS] RTC relay error:', e);
-                  }
+                  targetWs.send(JSON.stringify({
+                    type: 'RTC_SIGNAL',
+                    fromUserId: msg.fromUserId,
+                    targetUserId: msg.targetUserId,
+                    signal: msg.signal,
+                  }));
                 }
               });
             }
@@ -588,20 +404,14 @@ export function initWebSocketDatabase(server: Server) {
           case 'USER_CALL': {
             if (msg.targetUserId) {
               const targetSockets = userIdToSockets.get(msg.targetUserId);
-              const payload = JSON.stringify({
-                type: 'USER_CALL',
-                fromUserId: msg.fromUserId,
-                fromUserName: msg.fromUserName,
-                callType: msg.callType,
-              });
-              const buffer = Buffer.from(payload);
               targetSockets?.forEach(targetWs => {
                 if (targetWs.readyState === WebSocket.OPEN) {
-                  try {
-                    targetWs.send(buffer);
-                  } catch (e) {
-                    console.warn('[WS] Call relay error:', e);
-                  }
+                  targetWs.send(JSON.stringify({
+                    type: 'USER_CALL',
+                    fromUserId: msg.fromUserId,
+                    fromUserName: msg.fromUserName,
+                    callType: msg.callType,
+                  }));
                 }
               });
             }
@@ -609,17 +419,17 @@ export function initWebSocketDatabase(server: Server) {
           }
 
           case 'PING': {
-            lastPingTime = Date.now();
             if (ws.readyState === WebSocket.OPEN) {
-              try {
-                ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
-              } catch {}
+              ws.send(JSON.stringify({
+                type: 'PONG',
+                timestamp: Date.now(),
+              }));
             }
             break;
           }
 
           case 'PONG': {
-            lastPingTime = Date.now();
+            // Heartbeat response from client
             break;
           }
 
@@ -627,65 +437,38 @@ export function initWebSocketDatabase(server: Server) {
             break;
         }
       } catch (err) {
-        console.error('[WS] Parse error:', err);
+        console.error('[WebSocket DB] Parse error:', err);
       }
     });
 
-    // Ultra-aggressive 10s ping for instant disconnect detection with 30s dead socket termination
-    const pingInterval = setInterval(() => {
+    // Cloudflare 100s timeout prevention: Server-side periodic ping every 30 seconds
+    const serverHeartbeatInterval = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
-        if (Date.now() - lastPingTime > 30000) {
-          console.log('[WS] Connection timed out (no ping/pong response in 30s), terminating');
-          ws.terminate();
-          return;
-        }
         try {
           ws.send(JSON.stringify({ type: 'PING', timestamp: Date.now() }));
         } catch {}
       }
-    }, 10000);
+    }, 30000);
 
     ws.on('close', () => {
-      clearInterval(pingInterval);
+      clearInterval(serverHeartbeatInterval);
       if (boundUserId) {
         const sockets = userIdToSockets.get(boundUserId);
         if (sockets) {
           sockets.delete(ws);
           if (sockets.size === 0) {
-            const user = presenceCache?.getUser(boundUserId) || db.getUser(boundUserId);
+            const user = db.getUser(boundUserId);
             if (user && (user.current_channel === 'voice-general' || user.current_channel === 'video-general')) {
               broadcastMediaPresence('USER_LEFT_MEDIA', boundUserId, user.current_channel);
             }
             userIdToSockets.delete(boundUserId);
             db.deleteUser(boundUserId);
-            presenceCache?.deleteUser(boundUserId);
-            broadcastTable('users', presenceCache?.getAllUsers() || db.selectUsers());
+            broadcastTable('users', db.selectUsers());
           }
         }
       }
     });
-
-    ws.on('error', (err) => {
-      console.error('[WS] Socket error:', err);
-    });
   });
 
-  presenceCache = new PresenceCache(db, (tableName, data) => {
-    const payload = JSON.stringify({
-      type: 'DB_SYNC',
-      table: tableName,
-      data,
-      timestamp: Date.now(),
-    });
-    const buffer = Buffer.from(payload);
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        try {
-          client.send(buffer);
-        } catch {}
-      }
-    });
-  });
-
-  console.log(`🔌 WebSocket Database ULTRA-FAST mounted at /ws-db`);
+  console.log(`🔌 WebSocket Database mounted at /ws-db with WebRTC Signaling & SQLite storage`);
 }
