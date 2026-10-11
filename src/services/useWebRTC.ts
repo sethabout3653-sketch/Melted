@@ -424,6 +424,11 @@ export function useWebRTC({
       }
     });
 
+    // Update tracks for existing connections (to handle stream updates)
+    peerConnections.current.forEach((pc) => {
+      updateTracksForPeer(pc);
+    });
+
     // Initiate offer with any new peer that is not connected
     peers.forEach((peer) => {
       const existing = peerConnections.current.get(peer.id);
@@ -449,7 +454,7 @@ export function useWebRTC({
     }, 2500);
 
     return () => clearTimeout(fallbackTimer);
-  }, [peerIdsStr, isMediaChannel, currentUserId, initiateOffer, closePeer, closeAllPeers, peers]);
+  }, [peerIdsStr, isMediaChannel, currentUserId, initiateOffer, closePeer, closeAllPeers, peers, updateTracksForPeer]);
 
   // Update tracks across all active peer connections when local streams change
   useEffect(() => {

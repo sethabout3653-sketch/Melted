@@ -1426,12 +1426,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 className="flex items-center gap-2.5 min-w-0 cursor-pointer p-1.5 rounded-xl hover:bg-white/5 transition-colors flex-1"
               >
                 <div className="relative shrink-0">
-                  <div 
-                    className="w-9 h-9 rounded-full text-black font-extrabold flex items-center justify-center text-xs shadow-md"
-                    style={{ backgroundColor: currentUser.avatar_color || '#0066ff' }}
-                  >
-                    {currentUser.username.slice(0, 2).toUpperCase()}
-                  </div>
+                  {renderAvatar(currentUser, 'w-9 h-9 text-xs')}
                   <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#0a0a0d]" />
                 </div>
 
@@ -2233,8 +2228,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     {voiceUsers.map((u: any) => {
                       const stream = remoteStreams[u.id];
                       const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
-                      const hasPeerVideo = stream && stream.getVideoTracks().some((t) => t.enabled && t.readyState === 'live');
-                      const shouldShowVideo = hasPeerVideo || u.has_video;
+                      // Only show video if we actually have a live video track
+                      const shouldShowVideo = stream && stream.getVideoTracks().some((t) => t.enabled && t.readyState === 'live');
                       const isPeerTileVertical = (peerOrientations[u.id] || false);
 
                       return (
