@@ -193,10 +193,9 @@ const AudioAttachmentPlayer: React.FC<{
   );
 };
 
-// Dedicated audio player for WebRTC voice peers with Web Audio Ear-Protection Limiter
+// Dedicated audio player for WebRTC voice peers with instant mobile unlock
 const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened: boolean; volume?: number }> = ({ stream, isDeafened, volume = 1 }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioCtxRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
     const el = audioRef.current;
@@ -208,36 +207,12 @@ const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened:
     el.muted = isDeafened;
     el.volume = Math.max(0, Math.min(1, volume));
 
-    // Web Audio Peak Limiter & Compressor to prevent ear-breaking loud spikes
-    try {
-      if (!audioCtxRef.current || audioCtxRef.current.state === 'closed') {
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-        audioCtxRef.current = new AudioCtx();
-      }
-      const ctx = audioCtxRef.current;
-      if (ctx.state === 'suspended') {
-        ctx.resume().catch(() => {});
-      }
-
-      if (!(el as any).__sourceNode && ctx) {
-        const source = ctx.createMediaStreamSource(stream);
-        const compressor = ctx.createDynamicsCompressor();
-        compressor.threshold.setValueAtTime(-18, ctx.currentTime);
-        compressor.knee.setValueAtTime(3, ctx.currentTime);
-        compressor.ratio.setValueAtTime(12, ctx.currentTime);
-        compressor.attack.setValueAtTime(0.003, ctx.currentTime);
-        compressor.release.setValueAtTime(0.25, ctx.currentTime);
-
-        source.connect(compressor);
-        compressor.connect(ctx.destination);
-        (el as any).__sourceNode = source;
-      }
-    } catch (e) {
-      console.warn('[RemoteAudio] compressor warning:', e);
-    }
-
     const tryPlay = () => {
-      el.play().catch(() => {});
+      if (el && !el.muted) {
+        el.play().catch((err) => {
+          console.warn('[RemoteAudio] play error:', err);
+        });
+      }
     };
 
     tryPlay();
@@ -247,10 +222,12 @@ const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened:
     };
 
     window.addEventListener('click', onUserGesture, { once: true });
+    window.addEventListener('touchstart', onUserGesture, { once: true });
     window.addEventListener('keydown', onUserGesture, { once: true });
 
     return () => {
       window.removeEventListener('click', onUserGesture);
+      window.removeEventListener('touchstart', onUserGesture);
       window.removeEventListener('keydown', onUserGesture);
     };
   }, [stream, isDeafened, volume]);
@@ -753,23 +730,30 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     }
   }, []);
 
-  // Explicit microphone permission requester with instant browser prompt
-  const requestMicrophonePermission = async (withVideo: boolean = false) => {
-    setMicError(null);
+  // Safe audio streamer with fallback for mobile webviews & strict permissions
+  const acquireAudioStream = async (): Promise<MediaStream> => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
+      return await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          googEchoCancellation: true,
-          googNoiseSuppression: true,
-          googAutoGainControl: true,
-          googHighpassFilter: true,
-          latencyHint: 'interactive',
-        } as MediaTrackConstraints,
+        },
         video: false,
       });
+    } catch {
+      return await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: false,
+      });
+    }
+  };
+
+  // Explicit microphone permission requester with instant browser prompt
+  const requestMicrophonePermission = async (withVideo: boolean = false) => {
+    setMicError(null);
+    try {
+      const stream = await acquireAudioStream();
 
       setMicPermissionStatus('granted');
       setShowMicPermissionModal(false);
@@ -794,7 +778,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     } catch (err: any) {
       console.warn('Microphone permission request result:', err);
       setMicPermissionStatus('denied');
-      setMicError('Microphone permission was not allowed. Please click the site settings/lock icon in your browser URL bar to allow microphone access.');
+      setMicError('Microphone permission was not allowed. Joining in listen-only mode.');
+      setShowMicPermissionModal(false);
+      setIsMuted(true);
+      setIsInVideo(true);
+      setActiveChannel('video-general');
+      updateUser({
+        current_channel: 'video-general',
+        activity: 'In General Voice',
+        has_video: false,
+        is_speaking: false,
+        is_muted: true,
+        is_deafened: false,
+      });
     }
   };
 
@@ -1006,27 +1002,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     let videoStream: MediaStream | null = null;
 
     try {
-      audioStream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          googEchoCancellation: true,
-          googNoiseSuppression: true,
-          googAutoGainControl: true,
-          googHighpassFilter: true,
-          latencyHint: 'interactive',
-        } as MediaTrackConstraints,
-        video: false,
-      });
+      audioStream = await acquireAudioStream();
 
       setMicPermissionStatus('granted');
       micStreamRef.current = audioStream;
       setLocalAudioStream(audioStream);
       setIsMuted(false);
     } catch (err: any) {
+      console.warn('[Voice] Microphone acquisition warning, joining listen-only:', err);
       setMicPermissionStatus('denied');
-      setMicError('Could not access microphone. Please allow microphone permission.');
+      setIsMuted(true);
     }
 
     if (withVideo) {
@@ -1198,11 +1183,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     const newActivity = channel === 'video-general' ? 'In General Voice' : 'In #general';
     updateUser({ current_channel: channel, activity: newActivity });
     if (channel === 'video-general' && !isInVideo) {
-      if (micPermissionStatus === 'prompt') {
-        setShowMicPermissionModal(true);
-      } else {
-        joinVoiceChannel(false);
-      }
+      joinVoiceChannel(false);
     }
   };
 

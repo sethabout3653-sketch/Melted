@@ -113,12 +113,12 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
               avatar_color: u.avatar_color,
               avatar_url: u.avatar_url || '',
               activity: u.activity || '',
-              current_channel: 'text-general',
-              is_speaking: false,
-              is_muted: false,
-              is_deafened: false,
-              has_video: false,
-              is_screen_sharing: false,
+              current_channel: (u as any).current_channel || 'text-general',
+              is_speaking: Boolean((u as any).is_speaking),
+              is_muted: Boolean((u as any).is_muted),
+              is_deafened: Boolean((u as any).is_deafened),
+              has_video: Boolean((u as any).has_video),
+              is_screen_sharing: Boolean((u as any).is_screen_sharing),
             },
           }));
           console.log('[WS] User registered:', u.id);
@@ -212,8 +212,24 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
 
   useEffect(() => {
     connect();
+    const handleAppResume = () => {
+      if (document.visibilityState === 'visible' || navigator.onLine) {
+        if (!wsRef.current || wsRef.current.readyState === WebSocket.CLOSED || wsRef.current.readyState === WebSocket.CLOSING) {
+          console.log('[WS] App resumed/reconnected, triggering immediate connect');
+          connect();
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleAppResume);
+    window.addEventListener('online', handleAppResume);
+    window.addEventListener('focus', handleAppResume);
+
     return () => {
       stopHeartbeat();
+      document.removeEventListener('visibilitychange', handleAppResume);
+      window.removeEventListener('online', handleAppResume);
+      window.removeEventListener('focus', handleAppResume);
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         wsRef.current.close();
@@ -222,6 +238,9 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
   }, [connect, stopHeartbeat]);
 
   const updateUser = useCallback((set: Partial<DbUser>) => {
+    // Keep local ref up to date so reconnections retain current channel and states
+    Object.assign(currentUserRef.current, set);
+
     // Optimistically update local users state immediately
     const currentId = currentUserRef.current.id;
     setUsers((prev) =>

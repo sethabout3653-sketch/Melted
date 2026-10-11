@@ -157,8 +157,8 @@ class WebSocketDatabase {
       this.db.exec("ALTER TABLE messages ADD COLUMN avatar_url TEXT DEFAULT '';");
     } catch {}
 
-    // Reset transient users on server restart
-    this.db.exec("DELETE FROM users WHERE current_channel = 'offline' OR updated_at < " + (Date.now() - 3600000));
+    // Reset transient users on server restart so no ghost users remain
+    this.db.exec("DELETE FROM users;");
   }
 
   public selectUsers(where?: Partial<DbUser>): DbUser[] {
@@ -456,26 +456,44 @@ export function initWebSocketDatabase(server: Server) {
           }
 
           case 'SQL_UPDATE': {
-            if (msg.table === 'users') {
-              const user = presenceCache?.getUser(msg.id) || db.getUser(msg.id);
-              if (user) {
-                const oldChannel = user.current_channel;
-                const updated: DbUser = {
-                  ...user,
-                  ...msg.set,
-                  updated_at: Date.now(),
-                };
-                db.upsertUser(updated);
-                presenceCache?.upsertUser(updated);
-                broadcastTable('users', presenceCache?.getAllUsers() || db.selectUsers());
+            if (msg.table === 'users' && msg.id) {
+              if (!boundUserId) {
+                boundUserId = msg.id;
+                if (!userIdToSockets.has(msg.id)) {
+                  userIdToSockets.set(msg.id, new Set());
+                }
+                userIdToSockets.get(msg.id)?.add(ws);
+              }
 
-                if (msg.set.current_channel && msg.set.current_channel !== oldChannel) {
-                  if (msg.set.current_channel === 'voice-general' || msg.set.current_channel === 'video-general') {
-                    broadcastMediaPresence('USER_JOINED_MEDIA', msg.id, msg.set.current_channel);
-                  }
-                  if (oldChannel === 'voice-general' || oldChannel === 'video-general') {
-                    broadcastMediaPresence('USER_LEFT_MEDIA', msg.id, oldChannel);
-                  }
+              const existingUser = presenceCache?.getUser(msg.id) || db.getUser(msg.id);
+              const oldChannel = existingUser?.current_channel;
+              const updated: DbUser = {
+                id: msg.id,
+                username: existingUser?.username || 'User',
+                avatar_color: existingUser?.avatar_color || '#0066ff',
+                avatar_url: existingUser?.avatar_url || '',
+                current_channel: existingUser?.current_channel || 'text-general',
+                is_speaking: Boolean(existingUser?.is_speaking),
+                is_muted: Boolean(existingUser?.is_muted),
+                is_deafened: Boolean(existingUser?.is_deafened),
+                has_video: Boolean(existingUser?.has_video),
+                is_screen_sharing: Boolean(existingUser?.is_screen_sharing),
+                activity: existingUser?.activity || '',
+                ...existingUser,
+                ...msg.set,
+                updated_at: Date.now(),
+              };
+
+              db.upsertUser(updated);
+              presenceCache?.upsertUser(updated);
+              broadcastTable('users', presenceCache?.getAllUsers() || db.selectUsers());
+
+              if (msg.set.current_channel && msg.set.current_channel !== oldChannel) {
+                if (msg.set.current_channel === 'voice-general' || msg.set.current_channel === 'video-general') {
+                  broadcastMediaPresence('USER_JOINED_MEDIA', msg.id, msg.set.current_channel);
+                }
+                if (oldChannel === 'voice-general' || oldChannel === 'video-general') {
+                  broadcastMediaPresence('USER_LEFT_MEDIA', msg.id, oldChannel);
                 }
               }
             }
@@ -613,9 +631,14 @@ export function initWebSocketDatabase(server: Server) {
       }
     });
 
-    // Ultra-aggressive 10s ping for instant disconnect detection
+    // Ultra-aggressive 10s ping for instant disconnect detection with 30s dead socket termination
     const pingInterval = setInterval(() => {
       if (ws.readyState === WebSocket.OPEN) {
+        if (Date.now() - lastPingTime > 30000) {
+          console.log('[WS] Connection timed out (no ping/pong response in 30s), terminating');
+          ws.terminate();
+          return;
+        }
         try {
           ws.send(JSON.stringify({ type: 'PING', timestamp: Date.now() }));
         } catch {}
