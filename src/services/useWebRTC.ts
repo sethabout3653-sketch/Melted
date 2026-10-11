@@ -207,12 +207,10 @@ export function useWebRTC({
     pc = new RTCPeerConnection(RTC_CONFIG);
     peerConnections.current.set(peerId, pc);
 
-    // Always initialize audio transceivers with sendrecv so voice connects immediately
-    pc.addTransceiver('audio', { direction: 'sendrecv' });
+    // Always initialize audio transceiver with sendrecv so voice connects immediately
     pc.addTransceiver('audio', { direction: 'sendrecv' });
 
-    // Always initialize video transceivers with sendrecv so camera/screen connects immediately on mobile & desktop
-    pc.addTransceiver('video', { direction: 'sendrecv' });
+    // Always initialize video transceiver with sendrecv so camera connects immediately on mobile & desktop
     pc.addTransceiver('video', { direction: 'sendrecv' });
 
     // Initial track assignment
