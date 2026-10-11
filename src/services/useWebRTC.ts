@@ -147,35 +147,50 @@ export function useWebRTC({
 
   // Sync track attachments to a peer connection safely via transceivers
   const updateTracksForPeer = useCallback((pc: RTCPeerConnection) => {
-    const audioTrack = localAudioRef.current?.getAudioTracks().find((t) => t.readyState === 'live') || null;
-    const videoTrack = localVideoRef.current?.getVideoTracks().find((t) => t.readyState === 'live') || null;
+    const audioTracks = localAudioRef.current?.getAudioTracks().filter((t) => t.readyState === 'live') || [];
+    const videoTracks = localVideoRef.current?.getVideoTracks().filter((t) => t.readyState === 'live') || [];
 
-    const transceivers = pc.getTransceivers();
-    const audioTransceiver = transceivers.find((t) => t.receiver.track.kind === 'audio');
-    const videoTransceiver = transceivers.find((t) => t.receiver.track.kind === 'video');
+    // Handle Audio (multiple tracks)
+    const audioTransceivers = pc.getTransceivers().filter((t) => t.receiver.track.kind === 'audio');
 
-    if (audioTransceiver) {
-      if (audioTransceiver.sender.track !== audioTrack) {
-        audioTransceiver.sender.replaceTrack(audioTrack).catch((err) => {
-          console.warn('[WebRTC] replaceTrack audio warning:', err);
-        });
+    audioTracks.forEach((track, index) => {
+      const transceiver = audioTransceivers[index];
+      if (transceiver) {
+        if (transceiver.sender.track !== track) {
+          transceiver.sender.replaceTrack(track).catch((err) => {
+            console.warn('[WebRTC] replaceTrack audio warning:', err);
+          });
+        }
+      } else {
+        pc.addTrack(track);
       }
-    } else if (audioTrack) {
-      pc.addTrack(audioTrack);
-    }
+    });
 
-    if (videoTransceiver) {
-      if (videoTrack && videoTransceiver.direction !== 'sendrecv') {
-        videoTransceiver.direction = 'sendrecv';
+    audioTransceivers.slice(audioTracks.length).forEach((t) => {
+      t.sender.replaceTrack(null).catch(() => {});
+    });
+
+    // Handle Video (multiple tracks)
+    const videoTransceivers = pc.getTransceivers().filter((t) => t.receiver.track.kind === 'video');
+
+    // Add new tracks if missing
+    videoTracks.forEach((track, index) => {
+      const transceiver = videoTransceivers[index];
+      if (transceiver) {
+        if (transceiver.sender.track !== track) {
+          transceiver.sender.replaceTrack(track).catch((err) => {
+            console.warn('[WebRTC] replaceTrack video warning:', err);
+          });
+        }
+      } else {
+        pc.addTrack(track);
       }
-      if (videoTransceiver.sender.track !== videoTrack) {
-        videoTransceiver.sender.replaceTrack(videoTrack).catch((err) => {
-          console.warn('[WebRTC] replaceTrack video warning:', err);
-        });
-      }
-    } else if (videoTrack) {
-      pc.addTrack(videoTrack);
-    }
+    });
+
+    // Remove extra transceivers if tracks were removed
+    videoTransceivers.slice(videoTracks.length).forEach((t) => {
+      t.sender.replaceTrack(null).catch(() => {});
+    });
   }, []);
 
   // Create or get RTCPeerConnection
@@ -192,10 +207,12 @@ export function useWebRTC({
     pc = new RTCPeerConnection(RTC_CONFIG);
     peerConnections.current.set(peerId, pc);
 
-    // Always initialize audio transceiver with sendrecv so voice connects immediately
+    // Always initialize audio transceivers with sendrecv so voice connects immediately
+    pc.addTransceiver('audio', { direction: 'sendrecv' });
     pc.addTransceiver('audio', { direction: 'sendrecv' });
 
-    // Always initialize video transceiver with sendrecv so camera connects immediately on mobile & desktop
+    // Always initialize video transceivers with sendrecv so camera/screen connects immediately on mobile & desktop
+    pc.addTransceiver('video', { direction: 'sendrecv' });
     pc.addTransceiver('video', { direction: 'sendrecv' });
 
     // Initial track assignment
