@@ -294,8 +294,11 @@ const RemoteVideoPlayer: React.FC<{
 // Local Video Player
 const LocalVideoPlayer: React.FC<{ 
   stream: MediaStream | null;
+  user: any;
+  renderAvatar: (u: any, sizeClass: string) => JSX.Element;
   onOrientationChange?: (isVertical: boolean) => void;
-}> = ({ stream, onOrientationChange }) => {
+  isMirrored?: boolean;
+}> = ({ stream, user, renderAvatar, onOrientationChange, isMirrored = true }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const checkOrientation = useCallback(() => {
@@ -318,9 +321,17 @@ const LocalVideoPlayer: React.FC<{
     }
   }, [stream]);
 
+  if (!stream) {
+    return (
+      <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-[#1c1c22]">
+        {renderAvatar(user, 'w-24 h-24 text-3xl')}
+      </div>
+    );
+  }
+
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-black">
-      {/* Local Video Stream with mirror preview */}
+      {/* Local Video Stream with optional mirror preview */}
       <video
         ref={videoRef}
         autoPlay
@@ -328,7 +339,7 @@ const LocalVideoPlayer: React.FC<{
         playsInline
         onLoadedMetadata={checkOrientation}
         onResize={checkOrientation}
-        className="w-full h-full object-cover rounded-3xl transform scale-x-[-1] opacity-100"
+        className={`w-full h-full object-cover rounded-3xl ${isMirrored ? 'transform scale-x-[-1]' : ''} opacity-100`}
       />
     </div>
   );
@@ -2206,7 +2217,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       {isVideoEnabled ? (
                         <LocalVideoPlayer 
                           stream={activeVideoStream} 
-                          onOrientationChange={setLocalIsVertical} 
+                          user={currentUser}
+                          renderAvatar={renderAvatar}
+                          onOrientationChange={setLocalIsVertical}
+                          isMirrored={!isScreenSharing}
                         />
                       ) : (
                         <div className="relative flex items-center justify-center">
