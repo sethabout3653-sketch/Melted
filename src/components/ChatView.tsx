@@ -2231,13 +2231,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     
                     {/* Local User Tile */}
                     <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
-                      (isVideoEnabled || isCameraStarting) && localIsVertical 
+                      isVideoEnabled && localIsVertical 
                         ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
                         : 'aspect-video w-full max-w-[500px]'
                     } ${
                       isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
                     }`}>
-                      {isVideoEnabled || isCameraStarting ? (
+                      {isVideoEnabled ? (
                         <LocalVideoPlayer 
                           stream={activeVideoStream} 
                           isLoading={isCameraStarting} 
@@ -2245,13 +2245,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         />
                       ) : (
                         <div className="relative flex items-center justify-center">
-                          <div 
-                            className={`w-28 h-28 rounded-full flex items-center justify-center text-3xl font-black text-black shadow-2xl transition-all ${
-                              isUserSpeaking ? 'ring-4 ring-amber-500 shadow-[0_0_30px_#f59e0b]' : 'ring-2 ring-white/10'
-                            }`}
-                            style={{ backgroundColor: currentUser.avatar_color || '#0066ff' }}
-                          >
-                            {currentUser.username.slice(0, 2).toUpperCase()}
+                          <div className={`transition-all ${isUserSpeaking ? 'ring-4 ring-amber-500 rounded-full shadow-[0_0_30px_#f59e0b]' : ''}`}>
+                            {renderAvatar(currentUser, 'w-28 h-28 text-3xl')}
                           </div>
                         </div>
                       )}
@@ -2291,13 +2286,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                             />
                           ) : (
                             <div className="relative flex items-center justify-center">
-                              <div 
-                                className={`w-28 h-28 rounded-full flex items-center justify-center text-3xl font-black text-black shadow-2xl transition-all ${
-                                  isPeerSpeaking ? 'ring-4 ring-amber-500 shadow-[0_0_30px_#f59e0b]' : 'ring-2 ring-white/10'
-                                }`}
-                                style={{ backgroundColor: u.avatar_color || '#0066ff' }}
-                              >
-                                {u.username.slice(0, 2).toUpperCase()}
+                              <div className={`transition-all ${isPeerSpeaking ? 'ring-4 ring-amber-500 rounded-full shadow-[0_0_30px_#f59e0b]' : ''}`}>
+                                {renderAvatar(u, 'w-28 h-28 text-3xl')}
                               </div>
                             </div>
                           )}
