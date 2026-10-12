@@ -303,6 +303,7 @@ const RemoteVideoPlayer: React.FC<{
     // Explicitly update srcObject whenever stream changes
     if (video.srcObject !== stream) {
       video.srcObject = stream || null;
+      video.load(); // Force re-initialization
       if (stream) {
         video.play().catch(() => {});
       }
@@ -378,6 +379,8 @@ const LocalVideoPlayer: React.FC<{
 
     if (stream && video.srcObject !== stream) {
       video.srcObject = stream;
+      video.load(); // Force re-initialization
+      video.play().catch(() => {});
     }
 
     const tryPlay = () => {
