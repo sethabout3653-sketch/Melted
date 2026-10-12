@@ -306,6 +306,12 @@ export function useWebRTC({
     }
 
     pc = new RTCPeerConnection(RTC_CONFIG);
+    
+    // Handle renegotiation needed (e.g., when adding/replacing tracks)
+    pc.onnegotiationneeded = async () => {
+      await initiateOfferRef.current(peerId);
+    };
+
     peerConnections.current.set(peerId, pc);
 
     // Deterministic transceivers order:
