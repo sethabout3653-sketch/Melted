@@ -337,17 +337,20 @@ const RemoteVideoPlayer: React.FC<{
         playsInline
         muted
         onLoadedMetadata={(e) => {
+          console.log('[RemoteVideoPlayer] Loaded Metadata');
           checkOrientation();
-          (e.target as HTMLVideoElement).play().catch(() => {});
+          (e.target as HTMLVideoElement).play().catch((err) => console.error('[RemoteVideoPlayer] Play error:', err));
         }}
         onLoadedData={(e) => {
+          console.log('[RemoteVideoPlayer] Loaded Data');
           checkOrientation();
-          (e.target as HTMLVideoElement).play().catch(() => {});
+          (e.target as HTMLVideoElement).play().catch((err) => console.error('[RemoteVideoPlayer] Play error:', err));
         }}
         onCanPlay={checkOrientation}
         onPlaying={checkOrientation}
         onTimeUpdate={checkOrientation}
         onResize={checkOrientation}
+        onError={(e) => console.error('[RemoteVideoPlayer] Video error:', e)}
         className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl transition-opacity duration-300 opacity-100`}
       />
     </div>
