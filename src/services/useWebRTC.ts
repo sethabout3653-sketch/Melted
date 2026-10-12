@@ -193,56 +193,62 @@ export function useWebRTC({
     });
 
     if (audioTracks.length > 0) {
-      setRemoteStreams((prev) => ({
-        ...prev,
-        [peerId]: new MediaStream(audioTracks),
-      }));
+      setRemoteStreams((prev) => {
+        const existing = prev[peerId];
+        const existingIds = existing?.getAudioTracks().map((t) => t.id).join(',');
+        const newIds = audioTracks.map((t) => t.id).join(',');
+        if (existingIds === newIds) return prev;
+        return {
+          ...prev,
+          [peerId]: new MediaStream(audioTracks),
+        };
+      });
       // Set up voice analysis on the primary mic track
       setupRemoteAudioAnalysis(peerId, audioTracks[0]);
     }
 
     // 2. Camera Video: Slot 0
-    const camTrack = vTrans[0]?.receiver.track;
+    const camTransceiver = vTrans[0];
+    const camTrack = camTransceiver?.receiver.track;
     if (camTrack && camTrack.readyState !== 'ended') {
-      setRemoteCameraStreams((prev) => ({
-        ...prev,
-        [peerId]: new MediaStream([camTrack]),
-      }));
+      const updateCam = () => {
+        setRemoteCameraStreams((prev) => {
+          const existing = prev[peerId];
+          const existingTrack = existing?.getVideoTracks()[0];
+          if (existingTrack && existingTrack.id === camTrack.id && existingTrack.readyState === 'live') {
+            return prev;
+          }
+          return {
+            ...prev,
+            [peerId]: new MediaStream([camTrack]),
+          };
+        });
+      };
 
-      camTrack.onunmute = () => {
-        setRemoteCameraStreams((prev) => ({
-          ...prev,
-          [peerId]: new MediaStream([camTrack]),
-        }));
-      };
-      camTrack.onmute = () => {
-        setRemoteCameraStreams((prev) => ({
-          ...prev,
-          [peerId]: new MediaStream([camTrack]),
-        }));
-      };
+      updateCam();
+      camTrack.onunmute = updateCam;
     }
 
     // 3. Screen Share Video: Slot 1
-    const scrTrack = vTrans[1]?.receiver.track;
+    const scrTransceiver = vTrans[1];
+    const scrTrack = scrTransceiver?.receiver.track;
     if (scrTrack && scrTrack.readyState !== 'ended') {
-      setRemoteScreenStreams((prev) => ({
-        ...prev,
-        [peerId]: new MediaStream([scrTrack]),
-      }));
+      const updateScr = () => {
+        setRemoteScreenStreams((prev) => {
+          const existing = prev[peerId];
+          const existingTrack = existing?.getVideoTracks()[0];
+          if (existingTrack && existingTrack.id === scrTrack.id && existingTrack.readyState === 'live') {
+            return prev;
+          }
+          return {
+            ...prev,
+            [peerId]: new MediaStream([scrTrack]),
+          };
+        });
+      };
 
-      scrTrack.onunmute = () => {
-        setRemoteScreenStreams((prev) => ({
-          ...prev,
-          [peerId]: new MediaStream([scrTrack]),
-        }));
-      };
-      scrTrack.onmute = () => {
-        setRemoteScreenStreams((prev) => ({
-          ...prev,
-          [peerId]: new MediaStream([scrTrack]),
-        }));
-      };
+      updateScr();
+      scrTrack.onunmute = updateScr;
     }
   }, [setupRemoteAudioAnalysis]);
 
@@ -259,6 +265,10 @@ export function useWebRTC({
 
     // Slot 0 (Audio): Local Mic / Mixed Audio
     if (audioTransceivers[0]) {
+      const desiredDir = localAudioTrack ? 'sendrecv' : 'recvonly';
+      if (audioTransceivers[0].direction !== desiredDir) {
+        audioTransceivers[0].direction = desiredDir;
+      }
       if (audioTransceivers[0].sender.track !== localAudioTrack) {
         audioTransceivers[0].sender.replaceTrack(localAudioTrack).catch(() => {});
       }
@@ -268,6 +278,10 @@ export function useWebRTC({
 
     // Slot 1 (Audio): Screen Share Audio (dedicated high-fidelity track)
     if (audioTransceivers[1]) {
+      const desiredDir = screenAudioTrack ? 'sendrecv' : 'recvonly';
+      if (audioTransceivers[1].direction !== desiredDir) {
+        audioTransceivers[1].direction = desiredDir;
+      }
       if (audioTransceivers[1].sender.track !== screenAudioTrack) {
         audioTransceivers[1].sender.replaceTrack(screenAudioTrack).catch(() => {});
       }
@@ -277,6 +291,10 @@ export function useWebRTC({
 
     // Slot 0 (Video): Camera
     if (videoTransceivers[0]) {
+      const desiredDir = cameraTrack ? 'sendrecv' : 'recvonly';
+      if (videoTransceivers[0].direction !== desiredDir) {
+        videoTransceivers[0].direction = desiredDir;
+      }
       if (videoTransceivers[0].sender.track !== cameraTrack) {
         videoTransceivers[0].sender.replaceTrack(cameraTrack).catch(() => {});
       }
@@ -286,6 +304,10 @@ export function useWebRTC({
 
     // Slot 1 (Video): Screen Share
     if (videoTransceivers[1]) {
+      const desiredDir = screenTrack ? 'sendrecv' : 'recvonly';
+      if (videoTransceivers[1].direction !== desiredDir) {
+        videoTransceivers[1].direction = desiredDir;
+      }
       if (videoTransceivers[1].sender.track !== screenTrack) {
         videoTransceivers[1].sender.replaceTrack(screenTrack).catch(() => {});
       }
@@ -346,8 +368,11 @@ export function useWebRTC({
     };
 
     // Track arrival handler
-    pc.ontrack = () => {
+    pc.ontrack = (event) => {
       syncRemoteTracksForPeer(peerId, pc);
+      event.track.onunmute = () => {
+        syncRemoteTracksForPeer(peerId, pc);
+      };
     };
 
     pc.onconnectionstatechange = () => {
@@ -372,6 +397,10 @@ export function useWebRTC({
     try {
       isMakingOffer.current.set(peerId, true);
       const pc = getOrCreatePeerConnection(peerId);
+
+      if (pc.signalingState !== 'stable') {
+        return;
+      }
 
       updateTracksForPeer(pc);
 

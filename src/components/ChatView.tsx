@@ -271,6 +271,7 @@ const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened:
 };
 
 // Remote Video Player with loading screen & orientation detection
+// Remote Video Player with loading screen, orientation detection, and frame readiness
 const RemoteVideoPlayer: React.FC<{ 
   stream: MediaStream | undefined;
   username: string;
@@ -279,14 +280,14 @@ const RemoteVideoPlayer: React.FC<{
   isScreen?: boolean;
 }> = ({ stream, username, avatarColor, onOrientationChange, isScreen = false }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [isLoaded, setIsLoaded] = useState(false);
+  const [hasFrames, setHasFrames] = useState(false);
 
   const checkOrientation = useCallback(() => {
     const video = videoRef.current;
     if (video && video.videoWidth > 0 && video.videoHeight > 0) {
       const vertical = video.videoHeight > video.videoWidth;
       onOrientationChange?.(vertical);
-      setIsLoaded(true);
+      setHasFrames(true);
     }
   }, [onOrientationChange]);
 
@@ -296,63 +297,105 @@ const RemoteVideoPlayer: React.FC<{
   }, [checkOrientation]);
 
   useEffect(() => {
-    setIsLoaded(false);
     const video = videoRef.current;
     if (!video) return;
 
-    // Explicitly update srcObject whenever stream changes
-    if (video.srcObject !== stream) {
+    if (video.srcObject !== (stream || null)) {
       video.srcObject = stream || null;
-      video.load(); // Force re-initialization
-      if (stream) {
-        video.play().catch(() => {});
-      }
+      setHasFrames(false);
+    }
+
+    if (!stream) {
+      setHasFrames(false);
+      return;
     }
 
     const tryPlay = () => {
-      if (stream) video.play().catch(() => {});
+      if (video) {
+        video.play().then(() => {
+          checkOrientationRef.current();
+        }).catch((err) => {
+          console.warn('[RemoteVideoPlayer] Play waiting for user interaction:', err);
+        });
+      }
     };
+
+    // Attach unmute listener to all video tracks on the incoming stream
+    const tracks = stream.getVideoTracks();
+    const handleUnmute = () => {
+      tryPlay();
+    };
+
+    tracks.forEach((t) => {
+      t.addEventListener('unmute', handleUnmute);
+    });
 
     tryPlay();
 
+    // Fallback on global user interaction in case autoplay policy blocked initial play
     const onUserGesture = () => {
       tryPlay();
     };
 
     window.addEventListener('click', onUserGesture, { once: true });
+    window.addEventListener('touchstart', onUserGesture, { once: true });
     window.addEventListener('keydown', onUserGesture, { once: true });
 
     return () => {
+      tracks.forEach((t) => {
+        t.removeEventListener('unmute', handleUnmute);
+      });
       window.removeEventListener('click', onUserGesture);
+      window.removeEventListener('touchstart', onUserGesture);
       window.removeEventListener('keydown', onUserGesture);
     };
   }, [stream]);
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-black">
-      {/* Video element */}
+    <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-[#0f0f12]">
+      {/* Video element - always rendered so decoder can run and fire events */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted
         onLoadedMetadata={(e) => {
-          console.log('[RemoteVideoPlayer] Loaded Metadata');
           checkOrientation();
-          (e.target as HTMLVideoElement).play().catch((err) => console.error('[RemoteVideoPlayer] Play error:', err));
+          (e.target as HTMLVideoElement).play().catch(() => {});
         }}
         onLoadedData={(e) => {
-          console.log('[RemoteVideoPlayer] Loaded Data');
           checkOrientation();
-          (e.target as HTMLVideoElement).play().catch((err) => console.error('[RemoteVideoPlayer] Play error:', err));
+          (e.target as HTMLVideoElement).play().catch(() => {});
         }}
         onCanPlay={checkOrientation}
-        onPlaying={checkOrientation}
-        onTimeUpdate={checkOrientation}
+        onPlaying={() => {
+          setHasFrames(true);
+          checkOrientation();
+        }}
+        onTimeUpdate={() => {
+          if (!hasFrames) checkOrientation();
+        }}
         onResize={checkOrientation}
-        onError={(e) => console.error('[RemoteVideoPlayer] Video error:', e)}
-        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl transition-opacity duration-300 opacity-100`}
+        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl transition-opacity duration-300 ${
+          hasFrames ? 'opacity-100' : 'opacity-0'
+        }`}
       />
+
+      {/* Connecting & placeholder state while first frames decode */}
+      {!hasFrames && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#121217] text-zinc-400 gap-3 z-10 pointer-events-none p-4">
+          <div
+            className="w-16 h-16 rounded-full flex items-center justify-center font-bold text-xl text-white shadow-xl animate-pulse ring-4 ring-white/5"
+            style={{ backgroundColor: avatarColor || '#6366f1' }}
+          >
+            {(username || 'U').slice(0, 2).toUpperCase()}
+          </div>
+          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-400 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+            <span>Connecting video...</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -382,7 +425,6 @@ const LocalVideoPlayer: React.FC<{
 
     if (stream && video.srcObject !== stream) {
       video.srcObject = stream;
-      video.load(); // Force re-initialization
       video.play().catch(() => {});
     }
 
@@ -397,10 +439,12 @@ const LocalVideoPlayer: React.FC<{
     };
 
     window.addEventListener('click', onUserGesture, { once: true });
+    window.addEventListener('touchstart', onUserGesture, { once: true });
     window.addEventListener('keydown', onUserGesture, { once: true });
 
     return () => {
       window.removeEventListener('click', onUserGesture);
+      window.removeEventListener('touchstart', onUserGesture);
       window.removeEventListener('keydown', onUserGesture);
     };
   }, [stream]);
@@ -563,14 +607,25 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const acquireCameraStream = async (): Promise<MediaStream> => {
     try {
       return await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'user' },
+        video: {
+          facingMode: 'user',
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+        },
         audio: false,
       });
     } catch {
-      return await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: false,
-      });
+      try {
+        return await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' },
+          audio: false,
+        });
+      } catch {
+        return await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
     }
   };
 
