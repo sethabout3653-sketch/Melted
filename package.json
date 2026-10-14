@@ -16,6 +16,7 @@
     "deploy": "wrangler pages deploy dist"
   },
   "dependencies": {
+    "@blinkdotnew/sdk": "^2.11.0",
     "@giphy/js-fetch-api": "^5.8.0",
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.3.3",
