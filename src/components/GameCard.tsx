@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Heart, ExternalLink, Flame, Gamepad2 } from 'lucide-react';
+import { Play, Heart, ExternalLink, Gamepad2, Zap } from 'lucide-react';
 import { GameItem } from '../types/game';
 
 interface GameCardProps {
@@ -21,8 +21,25 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
 }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [triedFallback, setTriedFallback] = useState(false);
 
+  const initialCover = game.localCover || game.resolvedCover || game.cover || '';
+  const [currentCover, setCurrentCover] = useState<string>(initialCover);
+
+  const isLumin = game.source === 'lumin' || game.special?.includes('Lumin');
   const ratingNumber = (4.7 + ((game.id * 13) % 30) / 100).toFixed(1);
+
+  const handleImageError = () => {
+    if (!triedFallback && game.fallbackCover && game.fallbackCover !== currentCover) {
+      setTriedFallback(true);
+      setCurrentCover(game.fallbackCover);
+    } else if (!triedFallback && game.localCover && game.localCover !== currentCover) {
+      setTriedFallback(true);
+      setCurrentCover(game.localCover);
+    } else {
+      setImageError(true);
+    }
+  };
 
   return (
     <div className="group relative bg-[#0e0e10] hover:bg-[#131316] border border-[#202024] hover:border-[#0066ff]/40 rounded-2xl p-4 transition-all duration-200 hover:shadow-xl hover:shadow-[#0066ff]/5 flex flex-col justify-between transform-gpu">
@@ -39,28 +56,36 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
             <div className="absolute inset-0 bg-[#161619] animate-pulse" />
           )}
 
+          {/* Lumin Installed Badge */}
+          {isLumin && (
+            <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-amber-400 text-black font-extrabold text-[10px] tracking-wider uppercase flex items-center gap-1 shadow-md z-10 select-none">
+              <Zap className="w-2.5 h-2.5 fill-black text-black" />
+              <span>Lumin</span>
+            </div>
+          )}
+
           {/* Fallback styling container if image fails to load */}
-          {imageError || !game.resolvedCover ? (
-            <div className="absolute inset-0 bg-[#121214] flex flex-col items-center justify-center p-4 text-center">
-              <div className="w-10 h-10 rounded-xl bg-[#0066ff]/15 border border-[#0066ff]/30 flex items-center justify-center text-[#0066ff] mb-2">
-                <Gamepad2 className="w-5 h-5" />
+          {imageError || !currentCover ? (
+            <div className="absolute inset-0 bg-gradient-to-br from-[#121216] to-[#1c1c24] flex flex-col items-center justify-center p-4 text-center select-none">
+              <div className="w-10 h-10 rounded-xl bg-[#0066ff]/15 border border-[#0066ff]/30 flex items-center justify-center text-[#0066ff] mb-2 shadow-inner">
+                {isLumin ? <Zap className="w-5 h-5 fill-amber-400 text-amber-400" /> : <Gamepad2 className="w-5 h-5" />}
               </div>
-              <span className="text-xs font-bold text-zinc-300 font-heading line-clamp-1">
+              <span className="text-xs font-bold text-zinc-200 font-heading line-clamp-1">
                 {game.name}
               </span>
               <span className="text-[10px] text-zinc-400 mt-0.5">
-                Arcade
+                {isLumin ? 'Lumin Installed' : (game.category || 'Arcade')}
               </span>
             </div>
           ) : (
             <img
-              src={game.resolvedCover || undefined}
+              src={currentCover}
               alt={game.name}
               referrerPolicy="no-referrer"
               loading="lazy"
               decoding="async"
               onLoad={() => setImageLoaded(true)}
-              onError={() => setImageError(true)}
+              onError={handleImageError}
               className={`w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105 will-change-transform ${
                 imageLoaded ? 'opacity-100' : 'opacity-0'
               }`}

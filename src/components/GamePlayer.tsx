@@ -388,7 +388,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               tabIndex={0}
               loading="eager"
               className="w-full h-full border-none outline-none"
-              allow="fullscreen; autoplay; gamepad; focus-without-user-activation; clipboard-read; clipboard-write; microphone; camera; pointer-lock; xr-spatial-tracking; screen-wake-lock"
+              allow="fullscreen; autoplay; gamepad; focus-without-user-activation; clipboard-read; clipboard-write; microphone; camera; pointer-lock; xr-spatial-tracking; screen-wake-lock; display-capture; encrypted-media; picture-in-picture; midi; accelerometer; gyroscope; speaker-selection"
               allowFullScreen
               onLoad={() => {
                 setIsLoading(false);

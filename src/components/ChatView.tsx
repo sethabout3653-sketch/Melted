@@ -767,7 +767,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     setMicError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
         video: false,
       });
 
@@ -1019,9 +1023,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   // Robust media acquisition that handles device switching
   const acquireAudioStream = async (): Promise<MediaStream> => {
     try {
-      // Use standard audio constraints, allowing the browser to pick the active device
       return await navigator.mediaDevices.getUserMedia({
-        audio: true,
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
         video: false,
       });
     } catch (err) {

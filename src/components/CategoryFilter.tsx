@@ -1,4 +1,3 @@
-import React from 'react';
 import { 
   Sparkles, 
   Gamepad2, 
@@ -10,7 +9,8 @@ import {
   Puzzle, 
   Cpu, 
   Heart,
-  ArrowUpDown
+  ArrowUpDown,
+  Zap
 } from 'lucide-react';
 import { GameCategory } from '../types/game';
 
@@ -25,6 +25,7 @@ interface CategoryFilterProps {
 const CATEGORIES: { id: GameCategory; label: string; icon: React.ReactNode }[] = [
   { id: 'All', label: 'All Games', icon: <Gamepad2 className="w-3.5 h-3.5" /> },
   { id: 'Featured', label: 'Featured', icon: <Sparkles className="w-3.5 h-3.5" /> },
+  { id: 'Lumin Games', label: 'Lumin Games', icon: <Zap className="w-3.5 h-3.5 text-amber-400" /> },
   { id: 'Action & Shooters', label: 'Action', icon: <Flame className="w-3.5 h-3.5" /> },
   { id: 'Driving & Racing', label: 'Driving', icon: <Car className="w-3.5 h-3.5" /> },
   { id: 'Skill & Platformer', label: 'Skill', icon: <Sparkles className="w-3.5 h-3.5" /> },

@@ -5,6 +5,8 @@ export interface RawGame {
   url: string;
   author?: string;
   authorLink?: string;
+  fallbackCover?: string;
+  localCover?: string;
   special?: string[];
   featured?: boolean;
   source?: 'native' | 'lumin';
@@ -14,6 +16,7 @@ export interface RawGame {
 export type GameCategory = 
   | 'All'
   | 'Featured'
+  | 'Lumin Games'
   | 'Action & Shooters'
   | 'Driving & Racing'
   | 'Skill & Platformer'

@@ -76,15 +76,20 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
             className="group relative w-full aspect-[16/10] rounded-xl overflow-hidden bg-[#161619] border border-[#26262a] shadow-2xl cursor-pointer"
           >
             <img
-              src={activeGame.resolvedCover || undefined}
+              src={activeGame.localCover || activeGame.resolvedCover || activeGame.cover || undefined}
               alt={activeGame.name}
               referrerPolicy="no-referrer"
+              onError={(e) => {
+                if (activeGame.fallbackCover && e.currentTarget.src !== activeGame.fallbackCover) {
+                  e.currentTarget.src = activeGame.fallbackCover;
+                }
+              }}
               className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-4">
               <div>
                 <span className="text-[10px] uppercase font-black tracking-wider text-white bg-[#0066ff] px-2 py-0.5 rounded-full">
-                  Trending
+                  {activeGame.source === 'lumin' ? '⚡ Lumin Installed' : 'Trending'}
                 </span>
                 <div className="text-base font-bold text-white mt-1">
                   {activeGame.name}
@@ -109,9 +114,14 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
                   title={game.name}
                 >
                   <img
-                    src={game.resolvedCover || undefined}
+                    src={game.localCover || game.resolvedCover || game.cover || undefined}
                     alt={game.name}
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      if (game.fallbackCover && e.currentTarget.src !== game.fallbackCover) {
+                        e.currentTarget.src = game.fallbackCover;
+                      }
+                    }}
                     className="w-full h-full object-cover"
                   />
                 </button>

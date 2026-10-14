@@ -207,48 +207,95 @@ export function useWebRTC({
       setupRemoteAudioAnalysis(peerId, audioTracks[0]);
     }
 
-    // 2. Camera Video: Slot 0
-    const camTransceiver = vTrans[0];
-    const camTrack = camTransceiver?.receiver.track;
+    // 2 & 3. Video Tracks: Classify into camera and screen share robustly
+    const videoTracks: MediaStreamTrack[] = [];
+    vTrans.forEach((t) => {
+      const track = t.receiver.track;
+      if (track && track.readyState !== 'ended') {
+        videoTracks.push(track);
+      }
+    });
+
+    let camTrack: MediaStreamTrack | null = null;
+    let scrTrack: MediaStreamTrack | null = null;
+
+    videoTracks.forEach((track) => {
+      const label = (track.label || '').toLowerCase();
+      if (
+        label.includes('screen') || 
+        label.includes('display') || 
+        label.includes('window') || 
+        label.includes('monitor') || 
+        label.includes('capture')
+      ) {
+        scrTrack = track;
+      } else {
+        if (!camTrack) {
+          camTrack = track;
+        } else {
+          scrTrack = track;
+        }
+      }
+    });
+
+    // Fallback if 1 video track is present and no screen label detected
+    if (!camTrack && !scrTrack && videoTracks.length > 0) {
+      camTrack = videoTracks[0];
+      if (videoTracks.length > 1) {
+        scrTrack = videoTracks[1];
+      }
+    }
+
     if (camTrack && camTrack.readyState !== 'ended') {
       const updateCam = () => {
         setRemoteCameraStreams((prev) => {
           const existing = prev[peerId];
           const existingTrack = existing?.getVideoTracks()[0];
-          if (existingTrack && existingTrack.id === camTrack.id && existingTrack.readyState === 'live') {
+          if (existingTrack && existingTrack.id === camTrack!.id && existingTrack.readyState === 'live') {
             return prev;
           }
           return {
             ...prev,
-            [peerId]: new MediaStream([camTrack]),
+            [peerId]: new MediaStream([camTrack!]),
           };
         });
       };
 
       updateCam();
       camTrack.onunmute = updateCam;
+    } else {
+      setRemoteCameraStreams((prev) => {
+        if (!prev[peerId]) return prev;
+        const copy = { ...prev };
+        delete copy[peerId];
+        return copy;
+      });
     }
 
-    // 3. Screen Share Video: Slot 1
-    const scrTransceiver = vTrans[1];
-    const scrTrack = scrTransceiver?.receiver.track;
     if (scrTrack && scrTrack.readyState !== 'ended') {
       const updateScr = () => {
         setRemoteScreenStreams((prev) => {
           const existing = prev[peerId];
           const existingTrack = existing?.getVideoTracks()[0];
-          if (existingTrack && existingTrack.id === scrTrack.id && existingTrack.readyState === 'live') {
+          if (existingTrack && existingTrack.id === scrTrack!.id && existingTrack.readyState === 'live') {
             return prev;
           }
           return {
             ...prev,
-            [peerId]: new MediaStream([scrTrack]),
+            [peerId]: new MediaStream([scrTrack!]),
           };
         });
       };
 
       updateScr();
       scrTrack.onunmute = updateScr;
+    } else {
+      setRemoteScreenStreams((prev) => {
+        if (!prev[peerId]) return prev;
+        const copy = { ...prev };
+        delete copy[peerId];
+        return copy;
+      });
     }
   }, [setupRemoteAudioAnalysis]);
 

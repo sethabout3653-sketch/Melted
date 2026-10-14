@@ -175,6 +175,7 @@ export default function App() {
     const counts: Record<string, number> = {
       All: allGames.length,
       Featured: allGames.filter((g) => g.featured).length,
+      'Lumin Games': allGames.filter((g) => g.source === 'lumin' || g.special?.includes('Lumin')).length,
       'Action & Shooters': allGames.filter((g) => g.category === 'Action & Shooters').length,
       'Driving & Racing': allGames.filter((g) => g.category === 'Driving & Racing').length,
       'Skill & Platformer': allGames.filter((g) => g.category === 'Skill & Platformer').length,
@@ -202,6 +203,8 @@ export default function App() {
       list = list.filter((g) => favorites.includes(g.id));
     } else if (selectedCategory === 'Featured') {
       list = list.filter((g) => g.featured);
+    } else if (selectedCategory === 'Lumin Games') {
+      list = list.filter((g) => g.source === 'lumin' || g.special?.includes('Lumin'));
     } else if (selectedCategory !== 'All') {
       list = list.filter((g) => g.category === selectedCategory);
     }
@@ -212,7 +215,8 @@ export default function App() {
       list = list.filter((g) => 
         g.name.toLowerCase().includes(q) || 
         g.category.toLowerCase().includes(q) ||
-        (g.author && g.author.toLowerCase().includes(q))
+        (g.author && g.author.toLowerCase().includes(q)) ||
+        (g.special && g.special.some((s) => s.toLowerCase().includes(q)))
       );
     }
 

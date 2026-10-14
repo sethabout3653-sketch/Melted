@@ -6,10 +6,16 @@ export const COVER_BASE = 'https://cdn.jsdelivr.net/gh/freebuisness/covers@main'
 
 export function resolveCoverUrl(rawCover?: string): string {
   if (!rawCover) return '';
+  const clean = rawCover.replace('{COVER_URL}/', '').replace('{COVER_URL}', '');
+  return `/api/cover/${clean}`;
+}
+
+export function getDirectCoverUrl(rawCover?: string): string {
+  if (!rawCover) return '';
   return rawCover.replace('{COVER_URL}', COVER_BASE);
 }
 
-// Seamless streaming endpoint via backend proxy with RawGitHack engine
+// Seamless streaming endpoint via backend proxy with auto-resolution
 export function resolveGameUrl(rawUrl: string): string {
   if (!rawUrl) return '';
   if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
@@ -196,6 +202,7 @@ export function getAllGames(): GameItem[] {
     const isFeatured = FEATURED_NAMES.has(game.name) || Boolean(game.featured);
     const category = detectCategory(game);
     const resolvedCover = resolveCoverUrl(game.cover);
+    const fallbackCover = getDirectCoverUrl(game.cover);
     const resolvedUrl = resolveGameUrl(game.url);
 
     return {
@@ -203,6 +210,8 @@ export function getAllGames(): GameItem[] {
       featured: isFeatured,
       category,
       resolvedCover,
+      fallbackCover,
+      localCover: resolvedCover,
       resolvedUrl,
     };
   });
