@@ -141,15 +141,23 @@ export function useGlobalChat({ isChatTabActive }: { isChatTabActive: boolean })
     setOutgoingCall(null);
   }, []);
 
+  const isInitialMount = useRef(true);
+
   // Message notifications: Play chime, trigger in-app notification UI on any page, and browser notification
   useEffect(() => {
     if (messages.length === 0) return;
     const lastMessage = messages[messages.length - 1];
     
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      lastMessageId.current = lastMessage.id;
+      return;
+    }
+
     if (lastMessage.id !== lastMessageId.current) {
       lastMessageId.current = lastMessage.id;
       
-      if (lastMessage.sender_id !== currentUser.id) {
+      if (lastMessage.sender_id !== currentUser.id && lastMessage.sender_id !== 'system') {
         // Play instant Web Audio API chime
         playNotificationSound();
 

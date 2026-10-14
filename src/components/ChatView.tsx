@@ -376,26 +376,8 @@ const RemoteVideoPlayer: React.FC<{
           if (!hasFrames) checkOrientation();
         }}
         onResize={checkOrientation}
-        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl transition-opacity duration-300 ${
-          hasFrames ? 'opacity-100' : 'opacity-0'
-        }`}
+        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl opacity-100`}
       />
-
-      {/* Connecting & placeholder state while first frames decode */}
-      {!hasFrames && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#121217] text-zinc-400 gap-3 z-10 pointer-events-none p-4">
-          <div
-            className="w-16 h-16 rounded-full flex items-center justify-center font-bold text-xl text-white shadow-xl animate-pulse ring-4 ring-white/5"
-            style={{ backgroundColor: avatarColor || '#6366f1' }}
-          >
-            {(username || 'U').slice(0, 2).toUpperCase()}
-          </div>
-          <div className="flex items-center gap-2 text-xs font-semibold text-zinc-400 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-            <span>Connecting video...</span>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

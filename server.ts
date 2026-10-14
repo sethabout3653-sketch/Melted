@@ -134,6 +134,84 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// Cross-Link Global State Sync Store (bridges users across different URLs/links)
+let globalSyncUsers: Record<string, any> = {};
+let globalSyncMessages: any[] = [];
+
+app.get('/api/sync/state', (req, res) => {
+  const now = Date.now();
+  Object.keys(globalSyncUsers).forEach((id) => {
+    if (now - globalSyncUsers[id].updated_at > 45000) {
+      delete globalSyncUsers[id];
+    }
+  });
+
+  res.json({
+    success: true,
+    users: Object.values(globalSyncUsers),
+    messages: globalSyncMessages.slice(-150),
+  });
+});
+
+app.post('/api/sync/user', (req, res) => {
+  const user = req.body;
+  if (user && user.id) {
+    globalSyncUsers[user.id] = { ...user, updated_at: Date.now() };
+  }
+  res.json({ success: true, users: Object.values(globalSyncUsers) });
+});
+
+app.post('/api/sync/message', (req, res) => {
+  const msg = req.body;
+  if (msg && (msg.content || msg.attachment_url)) {
+    const newMsg = {
+      id: 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      channel_id: msg.channel_id || 'text-general',
+      sender_id: msg.sender_id,
+      sender_name: msg.sender_name,
+      avatar_color: msg.avatar_color || '#0066ff',
+      sender_avatar_url: msg.sender_avatar_url || '',
+      content: msg.content || '',
+      attachment_url: msg.attachment_url,
+      attachment_type: msg.attachment_type,
+      attachment_name: msg.attachment_name,
+      timestamp: msg.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      created_at: Date.now(),
+    };
+    globalSyncMessages.push(newMsg);
+    if (globalSyncMessages.length > 300) globalSyncMessages.shift();
+  }
+  res.json({ success: true, messages: globalSyncMessages.slice(-150) });
+});
+
+// Cross-Link WebRTC Signaling Relay Store (bridges peer connections across different URLs/links)
+let globalRtcSignals: Array<{ targetUserId: string; fromUserId: string; signal: any; timestamp: number }> = [];
+
+app.post('/api/sync/signal', (req, res) => {
+  const { fromUserId, targetUserId, signal } = req.body;
+  if (fromUserId && targetUserId && signal) {
+    globalRtcSignals.push({
+      fromUserId,
+      targetUserId,
+      signal,
+      timestamp: Date.now(),
+    });
+    if (globalRtcSignals.length > 500) globalRtcSignals.shift();
+  }
+  res.json({ success: true });
+});
+
+app.get('/api/sync/signals/:userId', (req, res) => {
+  const userId = req.params.userId;
+  const now = Date.now();
+  globalRtcSignals = globalRtcSignals.filter(s => now - s.timestamp < 15000);
+
+  const pending = globalRtcSignals.filter(s => s.targetUserId === userId);
+  globalRtcSignals = globalRtcSignals.filter(s => s.targetUserId !== userId);
+
+  res.json({ success: true, signals: pending });
+});
+
 // Giphy Search & Trending API Proxy (Supports full Giphy library, limit=50, pagination)
 app.get('/api/giphy/search', async (req, res) => {
   const query = (req.query.q as string) || '';
@@ -154,181 +232,41 @@ app.get('/api/giphy/search', async (req, res) => {
   }
 });
 
-// Load pre-compiled HTML package tree for instant filename resolution
-const htmlTreePath = path.resolve(__dirname, 'src/data/htmlTree.json');
-let htmlTree: string[] = [];
-let htmlTreeSet = new Set<string>();
-if (fs.existsSync(htmlTreePath)) {
-  try {
-    htmlTree = JSON.parse(fs.readFileSync(htmlTreePath, 'utf-8'));
-    htmlTreeSet = new Set(htmlTree);
-    console.log(`🎮 [Game Index] Loaded ${htmlTree.length} verified game packages into memory.`);
-  } catch (e) {
-    console.warn('[Game Index] Failed to parse htmlTree.json:', e);
-  }
-}
-
-// Memory caches for sub-millisecond local serving
-const rawGameMemoryCache = new Map<string, string>();
-const coverMemoryCache = new Map<string, { buffer: Buffer; contentType: string }>();
-
-function resolveGameFilename(requested: string): string {
-  let fname = requested.replace(/\.html$/, '').trim();
-  if (htmlTreeSet.has(fname + '.html')) return fname + '.html';
-  if (htmlTreeSet.has(requested)) return requested;
-
-  const baseNum = fname.split('-')[0];
-  const candidates = [
-    fname + '-fix2.html',
-    fname + '-fix.html',
-    fname + '-fix3.html',
-    fname + '-f2.html',
-    fname + '-fde.html',
-    fname + '-f.html',
-    fname + '-fixed.html',
-    fname + '-ff.html',
-    fname + '-F2.html',
-    fname + '-wow2.html',
-    fname + '-a.html',
-    baseNum + '-fix2.html',
-    baseNum + '-fix.html',
-    baseNum + '-fix3.html',
-    baseNum + '-fixed.html',
-    baseNum + '-f2.html',
-    baseNum + '-f.html',
-    baseNum + '-ff.html',
-    baseNum + '-fde.html',
-    baseNum + '-F2.html',
-    baseNum + '.html'
-  ];
-  for (const c of candidates) {
-    if (htmlTreeSet.has(c)) return c;
-  }
-  const startsWith = htmlTree.find(f => f.toLowerCase().startsWith(baseNum.toLowerCase() + '-'));
-  if (startsWith) return startsWith;
-  return requested.endsWith('.html') ? requested : requested + '.html';
-}
-
-// Cover image proxy: guarantees 100% cover display on school/restricted networks
-app.get('/api/cover/:filename', async (req, res) => {
-  let filename = req.params.filename;
-  if (!filename) return res.status(400).send('Invalid cover filename');
-  const cleanFilename = filename.endsWith('.png') ? filename : `${filename}.png`;
-
-  if (coverMemoryCache.has(cleanFilename)) {
-    const cached = coverMemoryCache.get(cleanFilename)!;
-    res.setHeader('Content-Type', cached.contentType);
-    res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    return res.send(cached.buffer);
-  }
-
-  const sources = [
-    `https://cdn.jsdelivr.net/gh/freebuisness/covers@main/${cleanFilename}`,
-    `https://raw.githubusercontent.com/freebuisness/covers/main/${cleanFilename}`,
-  ];
-
-  for (const src of sources) {
-    try {
-      const response = await fetch(src, { 
-        headers: { 'User-Agent': 'Mozilla/5.0' },
-        signal: AbortSignal.timeout(5000) 
-      });
-      if (response.ok) {
-        const arrayBuf = await response.arrayBuffer();
-        const buffer = Buffer.from(arrayBuf);
-        const contentType = response.headers.get('content-type') || 'image/png';
-        coverMemoryCache.set(cleanFilename, { buffer, contentType });
-        res.setHeader('Content-Type', contentType);
-        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        return res.send(buffer);
-      }
-    } catch {}
-  }
-
-  // Graceful dynamic SVG fallback so no card ever breaks
-  const rawTitle = cleanFilename.replace('.png', '').replace(/[-_]/g, ' ');
-  const titleDisplay = rawTitle.length > 20 ? rawTitle.substring(0, 18) + '...' : rawTitle;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="400" height="250" viewBox="0 0 400 250">
-    <defs>
-      <linearGradient id="g" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" style="stop-color:#0d0d11;stop-opacity:1" />
-        <stop offset="100%" style="stop-color:#1c1c24;stop-opacity:1" />
-      </linearGradient>
-    </defs>
-    <rect width="400" height="250" fill="url(#g)" rx="16"/>
-    <circle cx="200" cy="95" r="38" fill="#0066ff" fill-opacity="0.15" stroke="#0066ff" stroke-width="2"/>
-    <polygon points="195,82 215,95 195,108" fill="#0066ff" />
-    <text x="200" y="165" fill="#f4f4f5" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="16" font-weight="800" text-anchor="middle">${titleDisplay.toUpperCase()}</text>
-    <text x="200" y="190" fill="#0066ff" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif" font-size="11" font-weight="700" letter-spacing="1.5" text-anchor="middle">⚡ INSTALLED LUMIN</text>
-  </svg>`;
-
-  res.setHeader('Content-Type', 'image/svg+xml');
-  res.setHeader('Cache-Control', 'public, max-age=86400');
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.send(svg);
-});
-
-// Proxy game files to guarantee 100% reliable iframe loading across ANY device and network
+// Proxy game files to guarantee 100% reliable iframe loading
+// Fetches from RawGitHack first, with resilient fallback to GitHub Raw if Cloudflare restricts it
 app.get('/api/raw/:filename', async (req, res) => {
   let filename = req.params.filename;
   if (!filename) {
     return res.status(400).send('Invalid game filename');
   }
-
-  // Resolve target to exact existing package in tree
-  const targetFilename = resolveGameFilename(filename);
-
-  // Return instantly from in-memory cache if available
-  if (rawGameMemoryCache.has(targetFilename)) {
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('X-Frame-Options', 'ALLOWALL');
-    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
-    return res.send(rawGameMemoryCache.get(targetFilename)!);
+  if (!filename.endsWith('.html')) {
+    filename = `${filename}.html`;
   }
 
-  const jsdelivrUrl = `https://cdn.jsdelivr.net/gh/freebuisness/html@main/${targetFilename}`;
-  const githubRawUrl = `https://raw.githubusercontent.com/freebuisness/html/main/${targetFilename}`;
+  const rawgithackUrl = `https://raw.githack.com/freebuisness/html/main/${filename}`;
+  const githubRawUrl = `https://raw.githubusercontent.com/freebuisness/html/main/${filename}`;
 
   try {
-    let response: Response | null = null;
-    let html = '';
+    let response = await fetch(rawgithackUrl, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+      },
+      signal: AbortSignal.timeout(8000),
+    });
 
-    // Step 1: Try ultra-fast jsdelivr CDN
-    try {
-      const res1 = await fetch(jsdelivrUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0.0.0 Safari/537.36',
-        },
-        signal: AbortSignal.timeout(6000),
+    // If raw.githack returns 403 or error, fallback to upstream GitHub Raw
+    if (!response.ok) {
+      response = await fetch(githubRawUrl, {
+        signal: AbortSignal.timeout(8000),
       });
-      if (res1.ok) {
-        response = res1;
-        html = await res1.text();
-      }
-    } catch {}
-
-    // Step 2: Fallback to GitHub Raw if jsdelivr is blocked on restricted Wi-Fi
-    if (!response || !response.ok || !html) {
-      try {
-        const res2 = await fetch(githubRawUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124.0.0.0 Safari/537.36',
-          },
-          signal: AbortSignal.timeout(8000),
-        });
-        if (res2.ok) {
-          response = res2;
-          html = await res2.text();
-        }
-      } catch {}
     }
 
-    if (!html) {
-      return res.status(404).send(`Failed to fetch game package for ${filename} (resolved: ${targetFilename})`);
+    if (!response.ok) {
+      return res.status(response.status).send(`Failed to fetch game package: ${response.statusText}`);
     }
+
+    let html = await response.text();
 
     // Desktop Spoofing, GPU Acceleration, Inactivity Wake-Up, & Batch Save Sync for School Chromebooks
     const desktopSpoof = `<script>(function(){try{
@@ -461,9 +399,6 @@ window.addEventListener('message',function(e){
     } else {
       html = `${desktopSpoof}${html}`;
     }
-
-    // Cache in memory for instant subsequent loads
-    rawGameMemoryCache.set(targetFilename, html);
 
     // Serve with permissive headers and long-term caching for offline speed
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
