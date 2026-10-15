@@ -11,7 +11,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
   const [users, setUsers] = useState<DbUser[]>([]);
   const [messages, setMessages] = useState<DbMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
-  const [isFallback, setIsFallback] = useState(false);
+  const [isFallback, setIsFallback] = useState(true);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<any>(null);
@@ -274,13 +274,13 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
   }, [startHeartbeat, stopHeartbeat, enableFallbackMode]);
 
   useEffect(() => {
-    connect();
+    // connect(); // WebSocket disabled
     return () => {
       stopHeartbeat();
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (wsRef.current) wsRef.current.close();
     };
-  }, [connect, stopHeartbeat]);
+  }, [stopHeartbeat]); // connect removed from dependencies
 
   const updateUser = useCallback((set: Partial<DbUser>) => {
     const u = currentUserRef.current;
@@ -448,12 +448,12 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
       });
     }
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'RTC_SIGNAL',
-        fromUserId: currentUserRef.current.id,
-        targetUserId,
-        signal,
-      }));
+      // wsRef.current.send(JSON.stringify({
+      //   type: 'RTC_SIGNAL',
+      //   fromUserId: currentUserRef.current.id,
+      //   targetUserId,
+      //   signal,
+      // }));
     }
   }, []);
 
