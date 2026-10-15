@@ -512,13 +512,8 @@ export function initWebSocketDatabase(server: Server) {
         if (sockets) {
           sockets.delete(ws);
           if (sockets.size === 0) {
-            const user = db.getUser(boundUserId);
-            if (user && (user.current_channel === 'voice-general' || user.current_channel === 'video-general')) {
-              broadcastMediaPresence('USER_LEFT_MEDIA', boundUserId, user.current_channel);
-            }
             userIdToSockets.delete(boundUserId);
-            db.deleteUser(boundUserId);
-            broadcastTable('users', db.selectUsers());
+            // Do not delete user from database on temporary socket disconnects so they stay connected and stable
           }
         }
       }
