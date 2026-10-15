@@ -103,6 +103,24 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
       }
     } catch {}
 
+    // EventSource (SSE) connection for unbreakable real-time keep-connectivity
+    let eventSource: EventSource | null = null;
+    try {
+      eventSource = new EventSource('/api/events');
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'USERS_UPDATE' && Array.isArray(data.users)) {
+            setUsers(data.users);
+            setIsConnected(true);
+          }
+        } catch {}
+      };
+      eventSource.onerror = () => {
+        try { eventSource?.close(); } catch {}
+      };
+    } catch {}
+
     // Cross-Link HTTP Polling Sync & RTC Signal Relay
     const pollSyncState = async () => {
       try {
@@ -145,11 +163,14 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     };
 
     pollSyncState();
-    syncPollIntervalRef.current = setInterval(pollSyncState, 1000);
+    syncPollIntervalRef.current = setInterval(pollSyncState, 2000);
 
     return () => {
       if (broadcastChannelRef.current) broadcastChannelRef.current.close();
       if (syncPollIntervalRef.current) clearInterval(syncPollIntervalRef.current);
+      if (eventSource) {
+        try { eventSource.close(); } catch {}
+      }
     };
   }, []);
 

@@ -137,11 +137,42 @@ app.get('/api/health', (req, res) => {
 // Cross-Link Global State Sync Store (bridges users across different URLs/links)
 let globalSyncUsers: Record<string, any> = {};
 let globalSyncMessages: any[] = [];
+let sseClients: Array<any> = [];
+
+app.get('/api/events', (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  sseClients.push(res);
+
+  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', timestamp: Date.now() })}\n\n`);
+
+  req.on('close', () => {
+    sseClients = sseClients.filter(c => c !== res);
+  });
+});
+
+function broadcastSSE(data: any) {
+  const payload = `data: ${JSON.stringify(data)}\n\n`;
+  sseClients.forEach(client => {
+    try {
+      client.write(payload);
+    } catch {}
+  });
+}
+
+// Keep-alive heartbeat every 15 seconds for SSE
+setInterval(() => {
+  broadcastSSE({ type: 'PING', timestamp: Date.now() });
+}, 15000);
 
 app.get('/api/sync/state', (req, res) => {
   const now = Date.now();
   Object.keys(globalSyncUsers).forEach((id) => {
-    if (now - globalSyncUsers[id].updated_at > 45000) {
+    // Extended to 15 minutes (900,000ms) so users never leave unexpectedly
+    if (now - globalSyncUsers[id].updated_at > 900000) {
       delete globalSyncUsers[id];
     }
   });
@@ -157,6 +188,7 @@ app.post('/api/sync/user', (req, res) => {
   const user = req.body;
   if (user && user.id) {
     globalSyncUsers[user.id] = { ...user, updated_at: Date.now() };
+    broadcastSSE({ type: 'USERS_UPDATE', users: Object.values(globalSyncUsers) });
   }
   res.json({ success: true, users: Object.values(globalSyncUsers) });
 });
