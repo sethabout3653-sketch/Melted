@@ -219,16 +219,14 @@ const SingleAudioTrackPlayer: React.FC<{ track: MediaStreamTrack; isDeafened: bo
 
     window.addEventListener('click', onUserGesture, { once: true });
     window.addEventListener('keydown', onUserGesture, { once: true });
-    window.addEventListener('touchstart', onUserGesture, { once: true });
 
     return () => {
       window.removeEventListener('click', onUserGesture);
       window.removeEventListener('keydown', onUserGesture);
-      window.removeEventListener('touchstart', onUserGesture);
     };
   }, [track, isDeafened, volume]);
 
-  return <audio ref={audioRef} autoPlay playsInline controls={false} style={{ width: '1px', height: '1px', opacity: 0.01, position: 'absolute', pointerEvents: 'none' }} />;
+  return <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />;
 };
 
 // Dedicated audio player for WebRTC voice peers (plays both microphone and screen share audio tracks!)
@@ -272,146 +270,103 @@ const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened:
   );
 };
 
-// Remote Video Player with instant display and zero loading screen text
+// Remote Video Player with orientation detection
 const RemoteVideoPlayer: React.FC<{ 
   stream: MediaStream | undefined;
-  fallbackFrame?: string;
   username: string;
   avatarColor?: string;
-  avatarUrl?: string;
   onOrientationChange?: (isVertical: boolean) => void;
   isScreen?: boolean;
-}> = ({ stream, fallbackFrame, username, avatarColor, avatarUrl, onOrientationChange, isScreen = false }) => {
+}> = ({ stream, username, avatarColor, onOrientationChange, isScreen = false }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [hasFrames, setHasFrames] = useState(false);
 
-  const checkFramesAndOrientation = useCallback(() => {
+  const checkOrientation = useCallback(() => {
     const video = videoRef.current;
     if (video && video.videoWidth > 0 && video.videoHeight > 0) {
       const vertical = video.videoHeight > video.videoWidth;
       onOrientationChange?.(vertical);
-      setHasFrames(true);
     }
   }, [onOrientationChange]);
+
+  const checkOrientationRef = useRef(checkOrientation);
+  useEffect(() => {
+    checkOrientationRef.current = checkOrientation;
+  }, [checkOrientation]);
 
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    video.muted = true;
-    video.defaultMuted = true;
-
-    if (stream) {
-      if (video.srcObject !== stream) {
-        video.srcObject = stream;
-      }
-
-      const tryPlay = () => {
-        if (video) {
-          video.muted = true;
-          video.play().then(() => {
-            checkFramesAndOrientation();
-          }).catch(() => {});
-        }
-      };
-
-      tryPlay();
-
-      const tracks = stream.getVideoTracks();
-      const onUnmute = () => {
-        tryPlay();
-      };
-
-      tracks.forEach((t) => {
-        t.addEventListener('unmute', onUnmute);
-      });
-
-      const frameCheckInterval = setInterval(() => {
-        if (video.videoWidth > 0 && video.videoHeight > 0) {
-          checkFramesAndOrientation();
-        }
-      }, 200);
-
-      const onUserGesture = () => {
-        tryPlay();
-      };
-      window.addEventListener('click', onUserGesture, { once: true });
-      window.addEventListener('touchstart', onUserGesture, { once: true });
-      window.addEventListener('keydown', onUserGesture, { once: true });
-
-      return () => {
-        clearInterval(frameCheckInterval);
-        tracks.forEach((t) => {
-          t.removeEventListener('unmute', onUnmute);
-        });
-        window.removeEventListener('click', onUserGesture);
-        window.removeEventListener('touchstart', onUserGesture);
-        window.removeEventListener('keydown', onUserGesture);
-      };
-    } else {
-      video.srcObject = null;
-      setHasFrames(false);
+    if (video.srcObject !== (stream || null)) {
+      video.srcObject = stream || null;
     }
-  }, [stream, checkFramesAndOrientation]);
 
-  const showFallback = !hasFrames && Boolean(fallbackFrame);
+    if (!stream) {
+      return;
+    }
+
+    const tryPlay = () => {
+      if (video) {
+        video.play().then(() => {
+          checkOrientationRef.current();
+        }).catch((err) => {
+          console.warn('[RemoteVideoPlayer] Play waiting for user interaction:', err);
+        });
+      }
+    };
+
+    // Attach unmute listener to all video tracks on the incoming stream
+    const tracks = stream.getVideoTracks();
+    const handleUnmute = () => {
+      tryPlay();
+    };
+
+    tracks.forEach((t) => {
+      t.addEventListener('unmute', handleUnmute);
+    });
+
+    tryPlay();
+
+    // Fallback on global user interaction in case autoplay policy blocked initial play
+    const onUserGesture = () => {
+      tryPlay();
+    };
+
+    window.addEventListener('click', onUserGesture, { once: true });
+    window.addEventListener('touchstart', onUserGesture, { once: true });
+    window.addEventListener('keydown', onUserGesture, { once: true });
+
+    return () => {
+      tracks.forEach((t) => {
+        t.removeEventListener('unmute', handleUnmute);
+      });
+      window.removeEventListener('click', onUserGesture);
+      window.removeEventListener('touchstart', onUserGesture);
+      window.removeEventListener('keydown', onUserGesture);
+    };
+  }, [stream]);
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-[#0a0a0d]">
-      {/* Live Relay Fallback Frame */}
-      {showFallback && (
-        <img
-          src={fallbackFrame}
-          alt={username}
-          className={`absolute inset-0 w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl z-0`}
-        />
-      )}
-
-      {/* Video element */}
+    <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-[#0f0f12]">
+      {/* Video element - always rendered so decoder can run and fire events */}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted
         onLoadedMetadata={(e) => {
-          const v = e.target as HTMLVideoElement;
-          v.play().catch(() => {});
-          checkFramesAndOrientation();
+          checkOrientation();
+          (e.target as HTMLVideoElement).play().catch(() => {});
         }}
         onLoadedData={(e) => {
-          const v = e.target as HTMLVideoElement;
-          v.play().catch(() => {});
-          checkFramesAndOrientation();
+          checkOrientation();
+          (e.target as HTMLVideoElement).play().catch(() => {});
         }}
-        onCanPlay={checkFramesAndOrientation}
-        onPlaying={() => {
-          setHasFrames(true);
-          checkFramesAndOrientation();
-        }}
-        onTimeUpdate={() => {
-          if (!hasFrames) checkFramesAndOrientation();
-        }}
-        onResize={checkFramesAndOrientation}
-        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl z-10 transition-opacity duration-200 ${
-          hasFrames ? 'opacity-100' : (showFallback ? 'opacity-0' : 'opacity-100')
-        }`}
+        onCanPlay={checkOrientation}
+        onPlaying={checkOrientation}
+        onResize={checkOrientation}
+        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl opacity-100`}
       />
-
-      {/* Clean Avatar fallback if no frames or fallback frame exist yet (Zero loading text) */}
-      {!hasFrames && !fallbackFrame && (
-        <div className="absolute inset-0 flex items-center justify-center bg-[#101015] select-none z-0">
-          <div 
-            className="w-20 h-20 rounded-full flex items-center justify-center text-black font-extrabold text-2xl shadow-lg shrink-0 overflow-hidden"
-            style={{ backgroundColor: avatarColor || '#0066ff' }}
-          >
-            {avatarUrl ? (
-              <img src={avatarUrl} alt="" className="w-full h-full object-cover rounded-full" />
-            ) : (
-              (username || 'U').slice(0, 2).toUpperCase()
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 };
@@ -438,9 +393,6 @@ const LocalVideoPlayer: React.FC<{
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
-
-    video.muted = true;
-    video.defaultMuted = true;
 
     if (stream && video.srcObject !== stream) {
       video.srcObject = stream;
@@ -506,9 +458,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     deleteMessage,
     registerUser,
     sendRtcSignal,
-    sendMediaFrame,
     setRtcSignalHandler,
-    setMediaFrameHandler,
     setMediaHandlers,
     incomingCall,
     outgoingCall,
@@ -523,9 +473,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
   const [editAvatarUrl, setEditAvatarUrl] = useState('');
-
-  // Fallback Media Frames per peer: `${peerId}-${kind}` -> dataUrl
-  const [peerMediaFrames, setPeerMediaFrames] = useState<Record<string, string>>({});
 
   const profileAvatarInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -923,86 +870,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     }
   }, [users, isScreenSharing, currentUser.id, isVideoEnabled, updateUser]);
 
-  // Listen for real-time fallback media frames from peers
-  useEffect(() => {
-    if (setMediaFrameHandler) {
-      setMediaFrameHandler((fromUserId: string, kind: 'camera' | 'screen', frame: string) => {
-        setPeerMediaFrames((prev) => ({
-          ...prev,
-          [`${fromUserId}-${kind}`]: frame,
-        }));
-      });
-    }
-  }, [setMediaFrameHandler]);
-
-  // Real-time camera frame stream fallback (guarantees camera is visible even behind strict firewalls)
-  useEffect(() => {
-    if (!cameraStream || !isVideoEnabled) return;
-    const track = cameraStream.getVideoTracks().find((t) => t.readyState === 'live');
-    if (!track) return;
-
-    const v = document.createElement('video');
-    v.muted = true;
-    v.playsInline = true;
-    v.srcObject = new MediaStream([track]);
-    v.play().catch(() => {});
-
-    const canvas = document.createElement('canvas');
-    canvas.width = 480;
-    canvas.height = 360;
-    const ctx = canvas.getContext('2d');
-
-    const interval = setInterval(() => {
-      if (v.videoWidth > 0 && ctx && sendMediaFrame) {
-        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
-        try {
-          const frame = canvas.toDataURL('image/jpeg', 0.5);
-          sendMediaFrame('camera', frame);
-        } catch {}
-      }
-    }, 250);
-
-    return () => {
-      clearInterval(interval);
-      v.pause();
-      v.srcObject = null;
-    };
-  }, [cameraStream, isVideoEnabled, sendMediaFrame]);
-
-  // Real-time screen share frame stream fallback (guarantees screen share is visible even behind strict firewalls)
-  useEffect(() => {
-    if (!screenStream || !isScreenSharing) return;
-    const track = screenStream.getVideoTracks().find((t) => t.readyState === 'live');
-    if (!track) return;
-
-    const v = document.createElement('video');
-    v.muted = true;
-    v.playsInline = true;
-    v.srcObject = new MediaStream([track]);
-    v.play().catch(() => {});
-
-    const canvas = document.createElement('canvas');
-    canvas.width = 640;
-    canvas.height = 360;
-    const ctx = canvas.getContext('2d');
-
-    const interval = setInterval(() => {
-      if (v.videoWidth > 0 && ctx && sendMediaFrame) {
-        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
-        try {
-          const frame = canvas.toDataURL('image/jpeg', 0.55);
-          sendMediaFrame('screen', frame);
-        } catch {}
-      }
-    }, 300);
-
-    return () => {
-      clearInterval(interval);
-      v.pause();
-      v.srcObject = null;
-    };
-  }, [screenStream, isScreenSharing, sendMediaFrame]);
-
   // Sync scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1274,17 +1141,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       updateUser({ is_screen_sharing: false, has_video: isVideoEnabled });
     } else {
       try {
-        let stream: MediaStream;
-        try {
-          stream = await navigator.mediaDevices.getDisplayMedia({
-            video: true,
-            audio: true,
-          });
-        } catch {
-          stream = await navigator.mediaDevices.getDisplayMedia({
-            video: true,
-          });
-        }
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+          video: true,
+          audio: true,
+        });
 
         screenStreamRef.current = stream;
         setIsScreenSharing(true);
@@ -2673,10 +2533,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                             }`}>
                               <RemoteVideoPlayer 
                                 stream={camStream} 
-                                fallbackFrame={peerMediaFrames[`${u.id}-camera`]}
                                 username={u.username}
                                 avatarColor={u.avatar_color}
-                                avatarUrl={u.avatar_url}
                                 onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [`${u.id}-camera`]: vert }))}
                                 isScreen={false}
                               />
@@ -2694,10 +2552,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                             <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
                               <RemoteVideoPlayer 
                                 stream={scrStream} 
-                                fallbackFrame={peerMediaFrames[`${u.id}-screen`]}
                                 username={`${u.username}'s Screen`}
                                 avatarColor={u.avatar_color}
-                                avatarUrl={u.avatar_url}
                                 onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [`${u.id}-screen`]: vert }))}
                                 isScreen={true}
                               />
