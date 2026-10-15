@@ -219,14 +219,16 @@ const SingleAudioTrackPlayer: React.FC<{ track: MediaStreamTrack; isDeafened: bo
 
     window.addEventListener('click', onUserGesture, { once: true });
     window.addEventListener('keydown', onUserGesture, { once: true });
+    window.addEventListener('touchstart', onUserGesture, { once: true });
 
     return () => {
       window.removeEventListener('click', onUserGesture);
       window.removeEventListener('keydown', onUserGesture);
+      window.removeEventListener('touchstart', onUserGesture);
     };
   }, [track, isDeafened, volume]);
 
-  return <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />;
+  return <audio ref={audioRef} autoPlay playsInline controls={false} style={{ width: '1px', height: '1px', opacity: 0.01, position: 'absolute', pointerEvents: 'none' }} />;
 };
 
 // Dedicated audio player for WebRTC voice peers (plays both microphone and screen share audio tracks!)

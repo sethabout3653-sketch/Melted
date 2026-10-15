@@ -297,7 +297,6 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
 
       ws.onclose = () => {
         clearTimeout(connectionTimeout);
-        setIsConnected(false);
         stopHeartbeat();
         wsRef.current = null;
         fallbackFailCountRef.current++;
