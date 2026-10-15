@@ -270,7 +270,7 @@ const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened:
   );
 };
 
-// Remote Video Player with fallback frame support, instant display, and autoPlay resilience
+// Remote Video Player with instant display and zero loading screen text
 const RemoteVideoPlayer: React.FC<{ 
   stream: MediaStream | undefined;
   fallbackFrame?: string;
@@ -282,7 +282,6 @@ const RemoteVideoPlayer: React.FC<{
 }> = ({ stream, fallbackFrame, username, avatarColor, avatarUrl, onOrientationChange, isScreen = false }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [hasFrames, setHasFrames] = useState(false);
-  const [connectingTimeoutPassed, setConnectingTimeoutPassed] = useState(false);
 
   const checkFramesAndOrientation = useCallback(() => {
     const video = videoRef.current;
@@ -292,13 +291,6 @@ const RemoteVideoPlayer: React.FC<{
       setHasFrames(true);
     }
   }, [onOrientationChange]);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setConnectingTimeoutPassed(true);
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [stream]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -361,11 +353,10 @@ const RemoteVideoPlayer: React.FC<{
   }, [stream, checkFramesAndOrientation]);
 
   const showFallback = !hasFrames && Boolean(fallbackFrame);
-  const showConnecting = !hasFrames && !fallbackFrame && !connectingTimeoutPassed;
 
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-[#0a0a0d]">
-      {/* Live Relay Fallback Frame (instant visual display even before WebRTC decodes or on firewalled connections) */}
+      {/* Live Relay Fallback Frame */}
       {showFallback && (
         <img
           src={fallbackFrame}
@@ -374,7 +365,7 @@ const RemoteVideoPlayer: React.FC<{
         />
       )}
 
-      {/* Video element - ALWAYS rendered so decoder can run and frames display directly */}
+      {/* Video element */}
       <video
         ref={videoRef}
         autoPlay
@@ -404,31 +395,19 @@ const RemoteVideoPlayer: React.FC<{
         }`}
       />
 
-      {/* Avatar placeholder ONLY when neither WebRTC nor fallback frame has arrived yet */}
+      {/* Clean Avatar fallback if no frames or fallback frame exist yet (Zero loading text) */}
       {!hasFrames && !fallbackFrame && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#101015] gap-3 p-4 select-none z-0">
-          <div className="relative flex items-center justify-center">
-            <div 
-              className="w-20 h-20 rounded-full flex items-center justify-center text-black font-extrabold text-2xl shadow-lg shrink-0 overflow-hidden"
-              style={{ backgroundColor: avatarColor || '#0066ff' }}
-            >
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="" className="w-full h-full object-cover rounded-full" />
-              ) : (
-                (username || 'U').slice(0, 2).toUpperCase()
-              )}
-            </div>
-            {showConnecting && (
-              <div className="absolute -inset-2 rounded-full border-2 border-blue-500/40 animate-ping pointer-events-none" />
+        <div className="absolute inset-0 flex items-center justify-center bg-[#101015] select-none z-0">
+          <div 
+            className="w-20 h-20 rounded-full flex items-center justify-center text-black font-extrabold text-2xl shadow-lg shrink-0 overflow-hidden"
+            style={{ backgroundColor: avatarColor || '#0066ff' }}
+          >
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="" className="w-full h-full object-cover rounded-full" />
+            ) : (
+              (username || 'U').slice(0, 2).toUpperCase()
             )}
           </div>
-          {showConnecting && (
-            <div className="text-center space-y-1">
-              <span className="text-xs font-bold text-zinc-200 block">
-                {isScreen ? `Receiving ${username}...` : `Connecting ${username}'s video...`}
-              </span>
-            </div>
-          )}
         </div>
       )}
     </div>
