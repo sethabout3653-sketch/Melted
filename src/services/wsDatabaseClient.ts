@@ -44,6 +44,28 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     onUserLeftMediaRef.current = onLeft;
   }, []);
 
+  const seenSignalsRef = useRef<Set<string>>(new Set());
+
+  const handleIncomingRtcSignal = useCallback((fromUserId: string, signal: any) => {
+    if (!signal) return;
+    const candStr = signal.candidate ? (signal.candidate.candidate || signal.candidate.sdpMid || '') : '';
+    const sdpStr = signal.sdp ? signal.sdp.slice(0, 50) : (signal.description?.sdp ? signal.description.sdp.slice(0, 50) : '');
+    const sigKey = `${fromUserId}_${signal.type}_${candStr || sdpStr}`;
+
+    if (seenSignalsRef.current.has(sigKey)) {
+      return;
+    }
+    seenSignalsRef.current.add(sigKey);
+    if (seenSignalsRef.current.size > 250) {
+      const first = seenSignalsRef.current.values().next().value;
+      if (first) seenSignalsRef.current.delete(first);
+    }
+
+    if (onRtcSignalRef.current) {
+      onRtcSignalRef.current(fromUserId, signal);
+    }
+  }, []);
+
   // Initialize BroadcastChannel Fallback & HTTP Cross-Link Polling Sync + WebRTC Signal Relay
   useEffect(() => {
     try {
@@ -58,9 +80,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
         } else if (data.type === 'SYNC_MESSAGES' && Array.isArray(data.messages)) {
           setMessages(data.messages);
         } else if (data.type === 'RTC_SIGNAL' && data.targetUserId === currentUserRef.current.id) {
-          if (onRtcSignalRef.current) {
-            onRtcSignalRef.current(data.fromUserId, data.signal);
-          }
+          handleIncomingRtcSignal(data.fromUserId, data.signal);
         }
       };
 
@@ -97,9 +117,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
           const sigData = await sigRes.json();
           if (sigData.success && Array.isArray(sigData.signals)) {
             sigData.signals.forEach((s: any) => {
-              if (onRtcSignalRef.current) {
-                onRtcSignalRef.current(s.fromUserId, s.signal);
-              }
+              handleIncomingRtcSignal(s.fromUserId, s.signal);
             });
           }
         }
@@ -221,7 +239,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
             if (msg.table === 'users') setUsers(msg.data);
             else if (msg.table === 'messages') setMessages(msg.data);
           } else if (msg.type === 'RTC_SIGNAL') {
-            if (onRtcSignalRef.current) onRtcSignalRef.current(msg.fromUserId, msg.signal);
+            handleIncomingRtcSignal(msg.fromUserId, msg.signal);
           } else if (msg.type === 'USER_CALL') {
             if (onUserCallRef.current) onUserCallRef.current(msg.fromUserId, msg.fromUserName, msg.callType);
           } else if (msg.type === 'USER_JOINED_MEDIA') {

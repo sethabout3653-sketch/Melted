@@ -10,7 +10,6 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { GameItem } from '../types/game';
-import { getLuminPlayableUrl } from '../services/luminService';
 import { resolveGameUrl } from '../services/gameService';
 import { launchAboutBlank } from '../hooks/useCloak';
 import { storeGameSave, restoreAutoSaveToIframe, flushPendingSaves } from '../services/saveService';
@@ -146,35 +145,12 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     setHasError(false);
 
     const directUrl = game.resolvedUrl || (game.url ? resolveGameUrl(game.url) : '');
-
-    if (game.source === 'lumin' && game.luminId) {
-      // If we already have a direct unblocked URL ready, activate it immediately and lock it
-      if (directUrl && directUrl.startsWith('/api/raw/')) {
-        setPlayableUrl((prev) => (prev === directUrl ? prev : directUrl));
-        setIsLoading(false);
-        return;
-      }
-
-      getLuminPlayableUrl(game.luminId, game.name, directUrl).then((url) => {
-        if (!active) return;
-        const targetUrl = url || directUrl;
-        if (targetUrl) {
-          setPlayableUrl((prev) => (prev === targetUrl ? prev : targetUrl));
-        } else {
-          setHasError(true);
-        }
-        setIsLoading(false);
-      }).catch(() => {
-        if (active) {
-          if (directUrl) setPlayableUrl((prev) => (prev === directUrl ? prev : directUrl));
-          else setHasError(true);
-          setIsLoading(false);
-        }
-      });
+    if (directUrl) {
+      setPlayableUrl(directUrl);
     } else {
-      setPlayableUrl((prev) => (prev === directUrl ? prev : directUrl));
-      setIsLoading(false);
+      setHasError(true);
     }
+    setIsLoading(false);
 
     // Safety timeout for school Chromebooks: never show loading screen for more than 2.0s
     const safetyTimer = setTimeout(() => {
@@ -185,7 +161,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       active = false;
       clearTimeout(safetyTimer);
     };
-  }, [game.id, game.luminId, game.resolvedUrl, game.url, game.name, game.source, playableUrl]);
+  }, [game.id, game.resolvedUrl, game.url, game.name, playableUrl]);
 
   if (!game) return null;
 
@@ -205,19 +181,14 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     setIsLoading(true);
     setHasError(false);
     const directUrl = game.resolvedUrl || (game.url ? resolveGameUrl(game.url) : '');
-    if (game.source === 'lumin' && game.luminId) {
-      getLuminPlayableUrl(game.luminId, game.name, directUrl).then((url) => {
-        const finalUrl = url || directUrl;
-        if (finalUrl) {
-          setPlayableUrl(finalUrl);
-          if (iframeRef.current) iframeRef.current.src = finalUrl + (finalUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
-        } else {
-          setHasError(true);
-        }
-        setIsLoading(false);
-      });
-    } else if (iframeRef.current && playableUrl) {
-      iframeRef.current.src = playableUrl + (playableUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
+    if (directUrl) {
+      setPlayableUrl(directUrl);
+      if (iframeRef.current) {
+        iframeRef.current.src = directUrl + (directUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
+      }
+      setIsLoading(false);
+    } else {
+      setHasError(true);
       setIsLoading(false);
     }
   };

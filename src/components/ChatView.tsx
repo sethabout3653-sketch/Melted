@@ -270,19 +270,19 @@ const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened:
   );
 };
 
-// Remote Video Player with loading screen & orientation detection
 // Remote Video Player with loading screen, orientation detection, and frame readiness
 const RemoteVideoPlayer: React.FC<{ 
   stream: MediaStream | undefined;
   username: string;
   avatarColor?: string;
+  avatarUrl?: string;
   onOrientationChange?: (isVertical: boolean) => void;
   isScreen?: boolean;
-}> = ({ stream, username, avatarColor, onOrientationChange, isScreen = false }) => {
+}> = ({ stream, username, avatarColor, avatarUrl, onOrientationChange, isScreen = false }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [hasFrames, setHasFrames] = useState(false);
 
-  const checkOrientation = useCallback(() => {
+  const checkFramesAndOrientation = useCallback(() => {
     const video = videoRef.current;
     if (video && video.videoWidth > 0 && video.videoHeight > 0) {
       const vertical = video.videoHeight > video.videoWidth;
@@ -291,68 +291,96 @@ const RemoteVideoPlayer: React.FC<{
     }
   }, [onOrientationChange]);
 
-  const checkOrientationRef = useRef(checkOrientation);
-  useEffect(() => {
-    checkOrientationRef.current = checkOrientation;
-  }, [checkOrientation]);
-
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    if (video.srcObject !== (stream || null)) {
-      video.srcObject = stream || null;
-      setHasFrames(false);
-    }
+    video.muted = true;
+    video.defaultMuted = true;
 
-    if (!stream) {
-      setHasFrames(false);
-      return;
-    }
-
-    const tryPlay = () => {
-      if (video) {
-        video.play().then(() => {
-          checkOrientationRef.current();
-        }).catch((err) => {
-          console.warn('[RemoteVideoPlayer] Play waiting for user interaction:', err);
-        });
+    if (stream) {
+      if (video.srcObject !== stream) {
+        video.srcObject = stream;
       }
-    };
 
-    // Attach unmute listener to all video tracks on the incoming stream
-    const tracks = stream.getVideoTracks();
-    const handleUnmute = () => {
+      const tryPlay = () => {
+        if (video) {
+          video.muted = true;
+          video.play().then(() => {
+            checkFramesAndOrientation();
+          }).catch(() => {});
+        }
+      };
+
       tryPlay();
-    };
 
-    tracks.forEach((t) => {
-      t.addEventListener('unmute', handleUnmute);
-    });
+      const tracks = stream.getVideoTracks();
+      const onUnmute = () => {
+        tryPlay();
+      };
 
-    tryPlay();
-
-    // Fallback on global user interaction in case autoplay policy blocked initial play
-    const onUserGesture = () => {
-      tryPlay();
-    };
-
-    window.addEventListener('click', onUserGesture, { once: true });
-    window.addEventListener('touchstart', onUserGesture, { once: true });
-    window.addEventListener('keydown', onUserGesture, { once: true });
-
-    return () => {
       tracks.forEach((t) => {
-        t.removeEventListener('unmute', handleUnmute);
+        t.addEventListener('unmute', onUnmute);
       });
-      window.removeEventListener('click', onUserGesture);
-      window.removeEventListener('touchstart', onUserGesture);
-      window.removeEventListener('keydown', onUserGesture);
-    };
-  }, [stream]);
+
+      // Polling check to detect when first frames decode
+      const frameCheckInterval = setInterval(() => {
+        if (video.videoWidth > 0 && video.videoHeight > 0) {
+          checkFramesAndOrientation();
+        }
+      }, 250);
+
+      const onUserGesture = () => {
+        tryPlay();
+      };
+      window.addEventListener('click', onUserGesture, { once: true });
+      window.addEventListener('touchstart', onUserGesture, { once: true });
+      window.addEventListener('keydown', onUserGesture, { once: true });
+
+      return () => {
+        clearInterval(frameCheckInterval);
+        tracks.forEach((t) => {
+          t.removeEventListener('unmute', onUnmute);
+        });
+        window.removeEventListener('click', onUserGesture);
+        window.removeEventListener('touchstart', onUserGesture);
+        window.removeEventListener('keydown', onUserGesture);
+      };
+    } else {
+      video.srcObject = null;
+      setHasFrames(false);
+    }
+  }, [stream, checkFramesAndOrientation]);
 
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-[#0f0f12]">
+      {/* Loading & Connecting Placeholder (Prevents black screen while stream connects or decodes) */}
+      {!hasFrames && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#101015] gap-3 p-4 select-none">
+          <div className="relative flex items-center justify-center">
+            <div 
+              className="w-20 h-20 rounded-full flex items-center justify-center text-black font-extrabold text-2xl shadow-lg shrink-0 overflow-hidden"
+              style={{ backgroundColor: avatarColor || '#0066ff' }}
+            >
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="w-full h-full object-cover rounded-full" />
+              ) : (
+                (username || 'U').slice(0, 2).toUpperCase()
+              )}
+            </div>
+            <div className="absolute -inset-2 rounded-full border-2 border-blue-500/40 animate-ping pointer-events-none" />
+          </div>
+          <div className="text-center space-y-1">
+            <span className="text-xs font-bold text-zinc-200 block">
+              {isScreen ? `Receiving ${username}...` : `Connecting ${username}'s video...`}
+            </span>
+            <span className="text-[10px] text-zinc-500 block font-mono">
+              Streaming live...
+            </span>
+          </div>
+        </div>
+      )}
+
       {/* Video element - always rendered so decoder can run and fire events */}
       <video
         ref={videoRef}
@@ -360,23 +388,27 @@ const RemoteVideoPlayer: React.FC<{
         playsInline
         muted
         onLoadedMetadata={(e) => {
-          checkOrientation();
-          (e.target as HTMLVideoElement).play().catch(() => {});
+          const v = e.target as HTMLVideoElement;
+          v.play().catch(() => {});
+          checkFramesAndOrientation();
         }}
         onLoadedData={(e) => {
-          checkOrientation();
-          (e.target as HTMLVideoElement).play().catch(() => {});
+          const v = e.target as HTMLVideoElement;
+          v.play().catch(() => {});
+          checkFramesAndOrientation();
         }}
-        onCanPlay={checkOrientation}
+        onCanPlay={checkFramesAndOrientation}
         onPlaying={() => {
           setHasFrames(true);
-          checkOrientation();
+          checkFramesAndOrientation();
         }}
         onTimeUpdate={() => {
-          if (!hasFrames) checkOrientation();
+          if (!hasFrames) checkFramesAndOrientation();
         }}
-        onResize={checkOrientation}
-        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl opacity-100`}
+        onResize={checkFramesAndOrientation}
+        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl transition-opacity duration-300 ${
+          hasFrames ? 'opacity-100' : 'opacity-0'
+        }`}
       />
     </div>
   );
@@ -404,6 +436,9 @@ const LocalVideoPlayer: React.FC<{
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
+
+    video.muted = true;
+    video.defaultMuted = true;
 
     if (stream && video.srcObject !== stream) {
       video.srcObject = stream;
@@ -1152,10 +1187,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       updateUser({ is_screen_sharing: false, has_video: isVideoEnabled });
     } else {
       try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: true,
-        });
+        let stream: MediaStream;
+        try {
+          stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: true,
+          });
+        } catch {
+          stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+          });
+        }
 
         screenStreamRef.current = stream;
         setIsScreenSharing(true);
@@ -2546,6 +2588,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                                 stream={camStream} 
                                 username={u.username}
                                 avatarColor={u.avatar_color}
+                                avatarUrl={u.avatar_url}
                                 onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [`${u.id}-camera`]: vert }))}
                                 isScreen={false}
                               />
@@ -2565,6 +2608,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                                 stream={scrStream} 
                                 username={`${u.username}'s Screen`}
                                 avatarColor={u.avatar_color}
+                                avatarUrl={u.avatar_url}
                                 onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [`${u.id}-screen`]: vert }))}
                                 isScreen={true}
                               />

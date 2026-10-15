@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Play, Heart, ExternalLink, Gamepad2, Zap } from 'lucide-react';
+import { Play, Heart, ExternalLink, Gamepad2 } from 'lucide-react';
 import { GameItem } from '../types/game';
 
 interface GameCardProps {
@@ -26,7 +26,6 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
   const initialCover = game.localCover || game.resolvedCover || game.cover || '';
   const [currentCover, setCurrentCover] = useState<string>(initialCover);
 
-  const isLumin = game.source === 'lumin' || game.special?.includes('Lumin');
   const ratingNumber = (4.7 + ((game.id * 13) % 30) / 100).toFixed(1);
 
   const handleImageError = () => {
@@ -56,25 +55,17 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
             <div className="absolute inset-0 bg-[#161619] animate-pulse" />
           )}
 
-          {/* Lumin Installed Badge */}
-          {isLumin && (
-            <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-amber-400 text-black font-extrabold text-[10px] tracking-wider uppercase flex items-center gap-1 shadow-md z-10 select-none">
-              <Zap className="w-2.5 h-2.5 fill-black text-black" />
-              <span>Lumin</span>
-            </div>
-          )}
-
           {/* Fallback styling container if image fails to load */}
           {imageError || !currentCover ? (
             <div className="absolute inset-0 bg-gradient-to-br from-[#121216] to-[#1c1c24] flex flex-col items-center justify-center p-4 text-center select-none">
               <div className="w-10 h-10 rounded-xl bg-[#0066ff]/15 border border-[#0066ff]/30 flex items-center justify-center text-[#0066ff] mb-2 shadow-inner">
-                {isLumin ? <Zap className="w-5 h-5 fill-amber-400 text-amber-400" /> : <Gamepad2 className="w-5 h-5" />}
+                <Gamepad2 className="w-5 h-5" />
               </div>
               <span className="text-xs font-bold text-zinc-200 font-heading line-clamp-1">
                 {game.name}
               </span>
               <span className="text-[10px] text-zinc-400 mt-0.5">
-                {isLumin ? 'Lumin Installed' : (game.category || 'Arcade')}
+                {game.category || 'Arcade'}
               </span>
             </div>
           ) : (

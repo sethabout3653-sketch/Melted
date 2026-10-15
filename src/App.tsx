@@ -9,7 +9,6 @@ import { OfflineIndicator } from './components/OfflineIndicator';
 import { FrostedLoadingScreen } from './components/FrostedLoadingScreen';
 import { InAppNotificationToast } from './components/InAppNotificationToast';
 import { fetchGames, getAllGames, resolveGameUrl } from './services/gameService';
-import { fetchLuminGames, getInitialLuminGames } from './services/luminService';
 import { useCloak, launchAboutBlank } from './hooks/useCloak';
 import { useGameCache } from './hooks/useGameCache';
 import { useGlobalChat } from './hooks/useGlobalChat';
@@ -52,9 +51,7 @@ export default function App() {
   // Master Games State - Pre-populated with initial catalogue so UI renders instantly
   const [allGames, setAllGames] = useState<GameItem[]>(() => {
     try {
-      const initial = getAllGames();
-      const seedLumin = getInitialLuminGames();
-      return [...initial, ...seedLumin];
+      return getAllGames();
     } catch {
       return [];
     }
@@ -77,55 +74,13 @@ export default function App() {
   // Multi-Device Adaptation System (Mobile, Tablet, Desktop)
   const deviceInfo = useDeviceAdaptation();
 
-  // Master Catalog Load: Instant local boot + background 1,169+ Lumin catalog sync
+  // Catalog Load dismissal
   useEffect(() => {
-    let active = true;
-
-    // Fast intro animation dismissal (600ms)
     const introTimer = setTimeout(() => {
-      if (active) setIsCatalogLoading(false);
-    }, 600);
-
-    async function syncCatalogs() {
-      try {
-        const meltedGames = getAllGames();
-        
-        // Fetch full Lumin SDK catalog (1,169+ games)
-        const luminGames = await fetchLuminGames();
-
-        if (!active || !luminGames || luminGames.length === 0) return;
-
-        // Combine master archives preserving 100% of all titles across both catalogs
-        const masterMap = new Map<string, GameItem>();
-        
-        // Add Melted games
-        meltedGames.forEach((g) => {
-          if (g && g.id !== undefined) {
-            masterMap.set(`melted-${g.id}`, g);
-          }
-        });
-
-        // Add full Lumin games
-        luminGames.forEach((g) => {
-          if (g && (g.luminId || g.id !== undefined)) {
-            masterMap.set(`lumin-${g.luminId || g.id}`, g);
-          }
-        });
-
-        const combined = Array.from(masterMap.values());
-        setAllGames(combined);
-        console.log(`⚡ [Master Catalog] ${combined.length} Total Games Loaded!`);
-      } catch (err) {
-        console.warn('Catalog sync notice:', err);
-      } finally {
-        if (active) setIsCatalogLoading(false);
-      }
-    }
-
-    syncCatalogs();
+      setIsCatalogLoading(false);
+    }, 400);
 
     return () => {
-      active = false;
       clearTimeout(introTimer);
     };
   }, []);
@@ -156,7 +111,7 @@ export default function App() {
   };
 
   const handleAboutBlank = (game: GameItem) => {
-    const url = game.source === 'lumin' ? game.url : resolveGameUrl(game.url);
+    const url = resolveGameUrl(game.url);
     if (url) {
       launchAboutBlank(url, game.name);
     }
@@ -175,7 +130,6 @@ export default function App() {
     const counts: Record<string, number> = {
       All: allGames.length,
       Featured: allGames.filter((g) => g.featured).length,
-      'Lumin Games': allGames.filter((g) => g.source === 'lumin' || g.special?.includes('Lumin')).length,
       'Action & Shooters': allGames.filter((g) => g.category === 'Action & Shooters').length,
       'Driving & Racing': allGames.filter((g) => g.category === 'Driving & Racing').length,
       'Skill & Platformer': allGames.filter((g) => g.category === 'Skill & Platformer').length,
@@ -203,8 +157,6 @@ export default function App() {
       list = list.filter((g) => favorites.includes(g.id));
     } else if (selectedCategory === 'Featured') {
       list = list.filter((g) => g.featured);
-    } else if (selectedCategory === 'Lumin Games') {
-      list = list.filter((g) => g.source === 'lumin' || g.special?.includes('Lumin'));
     } else if (selectedCategory !== 'All') {
       list = list.filter((g) => g.category === selectedCategory);
     }

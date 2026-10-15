@@ -89,7 +89,7 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-4">
               <div>
                 <span className="text-[10px] uppercase font-black tracking-wider text-white bg-[#0066ff] px-2 py-0.5 rounded-full">
-                  {activeGame.source === 'lumin' ? '⚡ Lumin Installed' : 'Trending'}
+                  Trending
                 </span>
                 <div className="text-base font-bold text-white mt-1">
                   {activeGame.name}

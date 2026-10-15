@@ -9,14 +9,12 @@ export interface RawGame {
   localCover?: string;
   special?: string[];
   featured?: boolean;
-  source?: 'native' | 'lumin';
-  luminId?: string;
+  source?: 'native';
 }
 
 export type GameCategory = 
   | 'All'
   | 'Featured'
-  | 'Lumin Games'
   | 'Action & Shooters'
   | 'Driving & Racing'
   | 'Skill & Platformer'
@@ -40,9 +38,3 @@ export interface TabCloakPreset {
   icon: string;
 }
 
-export interface LuminGameRaw {
-  id: string;
-  name: string;
-  image_token: string;
-  category?: string;
-}
