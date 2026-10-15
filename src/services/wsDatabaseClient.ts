@@ -24,17 +24,12 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
   currentUserRef.current = currentUser;
 
   const onRtcSignalRef = useRef<((fromUserId: string, signal: any) => void) | null>(null);
-  const onMediaFrameRef = useRef<((fromUserId: string, kind: 'camera' | 'screen', frame: string) => void) | null>(null);
   const onUserCallRef = useRef<((fromUserId: string, fromUserName: string, callType: 'audio' | 'video') => void) | null>(null);
   const onUserJoinedMediaRef = useRef<((userId: string, channel: string) => void) | null>(null);
   const onUserLeftMediaRef = useRef<((userId: string, channel: string) => void) | null>(null);
 
   const setRtcSignalHandler = useCallback((fn: (fromUserId: string, signal: any) => void) => {
     onRtcSignalRef.current = fn;
-  }, []);
-
-  const setMediaFrameHandler = useCallback((fn: (fromUserId: string, kind: 'camera' | 'screen', frame: string) => void) => {
-    onMediaFrameRef.current = fn;
   }, []);
 
   const setUserCallHandler = useCallback((fn: (fromUserId: string, fromUserName: string, callType: 'audio' | 'video') => void) => {
@@ -47,28 +42,6 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
   ) => {
     onUserJoinedMediaRef.current = onJoined;
     onUserLeftMediaRef.current = onLeft;
-  }, []);
-
-  const seenSignalsRef = useRef<Set<string>>(new Set());
-
-  const handleIncomingRtcSignal = useCallback((fromUserId: string, signal: any) => {
-    if (!signal) return;
-    const candStr = signal.candidate ? (signal.candidate.candidate || signal.candidate.sdpMid || '') : '';
-    const sdpStr = signal.sdp ? signal.sdp.slice(0, 50) : (signal.description?.sdp ? signal.description.sdp.slice(0, 50) : '');
-    const sigKey = `${fromUserId}_${signal.type}_${candStr || sdpStr}`;
-
-    if (seenSignalsRef.current.has(sigKey)) {
-      return;
-    }
-    seenSignalsRef.current.add(sigKey);
-    if (seenSignalsRef.current.size > 250) {
-      const first = seenSignalsRef.current.values().next().value;
-      if (first) seenSignalsRef.current.delete(first);
-    }
-
-    if (onRtcSignalRef.current) {
-      onRtcSignalRef.current(fromUserId, signal);
-    }
   }, []);
 
   // Initialize BroadcastChannel Fallback & HTTP Cross-Link Polling Sync + WebRTC Signal Relay
@@ -85,10 +58,8 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
         } else if (data.type === 'SYNC_MESSAGES' && Array.isArray(data.messages)) {
           setMessages(data.messages);
         } else if (data.type === 'RTC_SIGNAL' && data.targetUserId === currentUserRef.current.id) {
-          handleIncomingRtcSignal(data.fromUserId, data.signal);
-        } else if (data.type === 'MEDIA_FRAME' && data.fromUserId !== currentUserRef.current.id) {
-          if (onMediaFrameRef.current) {
-            onMediaFrameRef.current(data.fromUserId, data.kind, data.frame);
+          if (onRtcSignalRef.current) {
+            onRtcSignalRef.current(data.fromUserId, data.signal);
           }
         }
       };
@@ -101,24 +72,6 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
       } else {
         setMessages([]);
       }
-    } catch {}
-
-    // EventSource (SSE) connection for unbreakable real-time keep-connectivity
-    let eventSource: EventSource | null = null;
-    try {
-      eventSource = new EventSource('/api/events');
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          if (data.type === 'USERS_UPDATE' && Array.isArray(data.users)) {
-            setUsers(data.users);
-            setIsConnected(true);
-          }
-        } catch {}
-      };
-      eventSource.onerror = () => {
-        try { eventSource?.close(); } catch {}
-      };
     } catch {}
 
     // Cross-Link HTTP Polling Sync & RTC Signal Relay
@@ -144,17 +97,8 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
           const sigData = await sigRes.json();
           if (sigData.success && Array.isArray(sigData.signals)) {
             sigData.signals.forEach((s: any) => {
-              handleIncomingRtcSignal(s.fromUserId, s.signal);
-            });
-          }
-
-          // Also check for fallback media frames
-          const frameRes = await fetch('/api/sync/media-frames');
-          const frameData = await frameRes.json();
-          if (frameData.success && Array.isArray(frameData.frames)) {
-            frameData.frames.forEach((f: any) => {
-              if (f.fromUserId !== uId && onMediaFrameRef.current) {
-                onMediaFrameRef.current(f.fromUserId, f.kind, f.frame);
+              if (onRtcSignalRef.current) {
+                onRtcSignalRef.current(s.fromUserId, s.signal);
               }
             });
           }
@@ -163,14 +107,11 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     };
 
     pollSyncState();
-    syncPollIntervalRef.current = setInterval(pollSyncState, 2000);
+    syncPollIntervalRef.current = setInterval(pollSyncState, 1000);
 
     return () => {
       if (broadcastChannelRef.current) broadcastChannelRef.current.close();
       if (syncPollIntervalRef.current) clearInterval(syncPollIntervalRef.current);
-      if (eventSource) {
-        try { eventSource.close(); } catch {}
-      }
     };
   }, []);
 
@@ -280,11 +221,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
             if (msg.table === 'users') setUsers(msg.data);
             else if (msg.table === 'messages') setMessages(msg.data);
           } else if (msg.type === 'RTC_SIGNAL') {
-            handleIncomingRtcSignal(msg.fromUserId, msg.signal);
-          } else if (msg.type === 'MEDIA_FRAME') {
-            if (msg.fromUserId !== currentUserRef.current.id && onMediaFrameRef.current) {
-              onMediaFrameRef.current(msg.fromUserId, msg.kind, msg.frame);
-            }
+            if (onRtcSignalRef.current) onRtcSignalRef.current(msg.fromUserId, msg.signal);
           } else if (msg.type === 'USER_CALL') {
             if (onUserCallRef.current) onUserCallRef.current(msg.fromUserId, msg.fromUserName, msg.callType);
           } else if (msg.type === 'USER_JOINED_MEDIA') {
@@ -297,10 +234,11 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
 
       ws.onclose = () => {
         clearTimeout(connectionTimeout);
+        setIsConnected(false);
         stopHeartbeat();
         wsRef.current = null;
         fallbackFailCountRef.current++;
-        if (fallbackFailCountRef.current >= 2) {
+        if (fallbackFailCountRef.current >= 5) { // Limit retries to 5
           enableFallbackMode();
           return;
         }
@@ -308,7 +246,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectTimeoutRef.current = null;
             connect();
-          }, 1500);
+          }, 3000); // Increased interval to 3000ms
         }
       };
 
@@ -519,40 +457,6 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     }
   }, []);
 
-  const sendMediaFrame = useCallback((kind: 'camera' | 'screen', frame: string, targetUserId?: string) => {
-    const payload = {
-      type: 'MEDIA_FRAME',
-      fromUserId: currentUserRef.current.id,
-      targetUserId,
-      kind,
-      frame,
-      timestamp: Date.now(),
-    };
-
-    if (broadcastChannelRef.current) {
-      try {
-        broadcastChannelRef.current.postMessage(payload);
-      } catch {}
-    }
-
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      try {
-        wsRef.current.send(JSON.stringify(payload));
-      } catch {}
-    }
-
-    // Also send via HTTP fallback
-    fetch('/api/sync/media-frame', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fromUserId: currentUserRef.current.id,
-        kind,
-        frame,
-      }),
-    }).catch(() => {});
-  }, []);
-
   const callUser = useCallback((targetUserId: string, callType: 'audio' | 'video') => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       const u = currentUserRef.current;
@@ -576,9 +480,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     registerUser,
     callUser,
     sendRtcSignal,
-    sendMediaFrame,
     setRtcSignalHandler,
-    setMediaFrameHandler,
     setUserCallHandler,
     setMediaHandlers,
     ws: wsRef.current,

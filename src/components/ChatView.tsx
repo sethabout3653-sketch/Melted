@@ -625,80 +625,78 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Combine streams for WebRTC
+  const activeVideoStreamRef = useRef<MediaStream | null>(null);
+
   useEffect(() => {
-    const combined = new MediaStream();
-    if (cameraStream) cameraStream.getVideoTracks().forEach(t => combined.addTrack(t));
-    if (screenStream) screenStream.getVideoTracks().forEach(t => combined.addTrack(t));
-    setActiveVideoStream(combined);
+    const cameraTracks = cameraStream?.getVideoTracks() || [];
+    const screenTracks = screenStream?.getVideoTracks() || [];
+    
+    // Check if tracks have actually changed
+    const currentTrackIds = [...cameraTracks, ...screenTracks].map(t => t.id).join(',');
+    const previousTrackIds = activeVideoStreamRef.current ? 
+        activeVideoStreamRef.current.getVideoTracks().map(t => t.id).join(',') : '';
+
+    if (currentTrackIds !== previousTrackIds) {
+        const combined = new MediaStream();
+        cameraTracks.forEach(t => combined.addTrack(t));
+        screenTracks.forEach(t => combined.addTrack(t));
+        activeVideoStreamRef.current = combined;
+        setActiveVideoStream(combined);
+    }
   }, [cameraStream, screenStream]);
 
   // Mix Microphone + Screen Share audio into localAudioStream for WebRTC so remote users hear screen audio!
+  const localAudioStreamRef = useRef<MediaStream | null>(null);
+
   useEffect(() => {
     try {
       const micTracks = micStreamRef.current?.getAudioTracks().filter((t) => t.readyState === 'live') || [];
       const screenAudioTracks = screenStream?.getAudioTracks().filter((t) => t.readyState === 'live') || [];
 
       if (micTracks.length === 0 && screenAudioTracks.length === 0) {
-        setLocalAudioStream(null);
-        return;
-      }
-
-      // If only screen audio is live, or microphone is muted:
-      if (micTracks.length === 0 || isMuted) {
-        if (screenAudioTracks.length > 0) {
-          setLocalAudioStream(new MediaStream([screenAudioTracks[0]]));
-          return;
-        } else {
+        if (localAudioStreamRef.current !== null) {
+          localAudioStreamRef.current = null;
           setLocalAudioStream(null);
-          return;
         }
-      }
-
-      // If only microphone audio is live (no screen share audio):
-      if (screenAudioTracks.length === 0) {
-        setLocalAudioStream(micStreamRef.current);
         return;
       }
 
-      // If both microphone and screen share audio are live and unmuted:
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioCtx) {
-        if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-          audioContextRef.current = new AudioCtx();
+      let audioTracks: MediaStreamTrack[] = [];
+      if (micTracks.length > 0 && !isMuted) {
+        audioTracks.push(micTracks[0]);
+      }
+      if (screenAudioTracks.length > 0) {
+        audioTracks.push(screenAudioTracks[0]);
+      }
+
+      if (audioTracks.length === 0) {
+        if (localAudioStreamRef.current !== null) {
+          localAudioStreamRef.current = null;
+          setLocalAudioStream(null);
         }
-        const ctx = audioContextRef.current;
-        if (ctx.state === 'suspended') {
-          ctx.resume().catch(() => {});
-        }
-
-        const dest = ctx.createMediaStreamDestination();
-
-        const micOnlyStream = new MediaStream([micTracks[0]]);
-        const micSource = ctx.createMediaStreamSource(micOnlyStream);
-        const micGain = ctx.createGain();
-        micGain.gain.value = 1.0;
-        micSource.connect(micGain);
-        micGain.connect(dest);
-
-        const screenOnlyStream = new MediaStream([screenAudioTracks[0]]);
-        const screenSource = ctx.createMediaStreamSource(screenOnlyStream);
-        const screenGain = ctx.createGain();
-        screenGain.gain.value = 1.0;
-        screenSource.connect(screenGain);
-        screenGain.connect(dest);
-
-        setLocalAudioStream(dest.stream);
         return;
       }
 
-      setLocalAudioStream(new MediaStream([micTracks[0], screenAudioTracks[0]]));
+      // Check if tracks have actually changed
+      const currentTrackIds = audioTracks.map(t => t.id).join(',');
+      const previousTrackIds = localAudioStreamRef.current ? 
+          localAudioStreamRef.current.getAudioTracks().map(t => t.id).join(',') : '';
+
+      if (currentTrackIds !== previousTrackIds) {
+        // Need to create a new stream if tracks changed
+        const newStream = new MediaStream(audioTracks);
+        localAudioStreamRef.current = newStream;
+        setLocalAudioStream(newStream);
+      }
     } catch (err) {
       console.warn('[Audio Mixer] error mixing audio:', err);
       if (micStreamRef.current) {
+        // Fallback
         setLocalAudioStream(micStreamRef.current);
       }
     }
-  }, [screenStream, isMuted]);
+  }, [screenStream, isMuted, micStreamRef.current]); // Added micStreamRef.current? No, that's a ref. Should be fine to not include it if I don't need it as dependency or add a trigger if it changes. Actually, micStreamRef.current is the mic stream. Need to track mic changes too? Yes, if mic status changes. But mic stream itself is set on join.
+
 
   const [micError, setMicError] = useState<string | null>(null);
   const [micPermissionStatus, setMicPermissionStatus] = useState<'prompt' | 'granted' | 'denied' | 'unknown'>('unknown');

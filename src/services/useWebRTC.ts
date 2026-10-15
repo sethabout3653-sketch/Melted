@@ -423,9 +423,11 @@ export function useWebRTC({
     };
 
     pc.onconnectionstatechange = () => {
+      console.log(`[WebRTC] Peer ${peerId} connection state: ${pc.connectionState}`);
       if (pc.connectionState === 'connected') {
         syncRemoteTracksForPeer(peerId, pc);
       } else if (pc.connectionState === 'failed') {
+        console.log(`[WebRTC] Peer ${peerId} connection failed, closing...`);
         closePeer(peerId);
         setTimeout(() => {
           if (isMediaChannel) {
