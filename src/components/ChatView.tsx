@@ -270,17 +270,19 @@ const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened:
   );
 };
 
-// Remote Video Player with loading screen, orientation detection, and frame readiness
+// Remote Video Player with fallback frame support, instant display, and autoPlay resilience
 const RemoteVideoPlayer: React.FC<{ 
   stream: MediaStream | undefined;
+  fallbackFrame?: string;
   username: string;
   avatarColor?: string;
   avatarUrl?: string;
   onOrientationChange?: (isVertical: boolean) => void;
   isScreen?: boolean;
-}> = ({ stream, username, avatarColor, avatarUrl, onOrientationChange, isScreen = false }) => {
+}> = ({ stream, fallbackFrame, username, avatarColor, avatarUrl, onOrientationChange, isScreen = false }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [hasFrames, setHasFrames] = useState(false);
+  const [connectingTimeoutPassed, setConnectingTimeoutPassed] = useState(false);
 
   const checkFramesAndOrientation = useCallback(() => {
     const video = videoRef.current;
@@ -290,6 +292,13 @@ const RemoteVideoPlayer: React.FC<{
       setHasFrames(true);
     }
   }, [onOrientationChange]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setConnectingTimeoutPassed(true);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [stream]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -323,12 +332,11 @@ const RemoteVideoPlayer: React.FC<{
         t.addEventListener('unmute', onUnmute);
       });
 
-      // Polling check to detect when first frames decode
       const frameCheckInterval = setInterval(() => {
         if (video.videoWidth > 0 && video.videoHeight > 0) {
           checkFramesAndOrientation();
         }
-      }, 250);
+      }, 200);
 
       const onUserGesture = () => {
         tryPlay();
@@ -352,36 +360,21 @@ const RemoteVideoPlayer: React.FC<{
     }
   }, [stream, checkFramesAndOrientation]);
 
+  const showFallback = !hasFrames && Boolean(fallbackFrame);
+  const showConnecting = !hasFrames && !fallbackFrame && !connectingTimeoutPassed;
+
   return (
-    <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-[#0f0f12]">
-      {/* Loading & Connecting Placeholder (Prevents black screen while stream connects or decodes) */}
-      {!hasFrames && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-[#101015] gap-3 p-4 select-none">
-          <div className="relative flex items-center justify-center">
-            <div 
-              className="w-20 h-20 rounded-full flex items-center justify-center text-black font-extrabold text-2xl shadow-lg shrink-0 overflow-hidden"
-              style={{ backgroundColor: avatarColor || '#0066ff' }}
-            >
-              {avatarUrl ? (
-                <img src={avatarUrl} alt="" className="w-full h-full object-cover rounded-full" />
-              ) : (
-                (username || 'U').slice(0, 2).toUpperCase()
-              )}
-            </div>
-            <div className="absolute -inset-2 rounded-full border-2 border-blue-500/40 animate-ping pointer-events-none" />
-          </div>
-          <div className="text-center space-y-1">
-            <span className="text-xs font-bold text-zinc-200 block">
-              {isScreen ? `Receiving ${username}...` : `Connecting ${username}'s video...`}
-            </span>
-            <span className="text-[10px] text-zinc-500 block font-mono">
-              Streaming live...
-            </span>
-          </div>
-        </div>
+    <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-[#0a0a0d]">
+      {/* Live Relay Fallback Frame (instant visual display even before WebRTC decodes or on firewalled connections) */}
+      {showFallback && (
+        <img
+          src={fallbackFrame}
+          alt={username}
+          className={`absolute inset-0 w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl z-0`}
+        />
       )}
 
-      {/* Video element - always rendered so decoder can run and fire events */}
+      {/* Video element - ALWAYS rendered so decoder can run and frames display directly */}
       <video
         ref={videoRef}
         autoPlay
@@ -406,10 +399,38 @@ const RemoteVideoPlayer: React.FC<{
           if (!hasFrames) checkFramesAndOrientation();
         }}
         onResize={checkFramesAndOrientation}
-        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl transition-opacity duration-300 ${
-          hasFrames ? 'opacity-100' : 'opacity-0'
+        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl z-10 transition-opacity duration-200 ${
+          hasFrames ? 'opacity-100' : (showFallback ? 'opacity-0' : 'opacity-100')
         }`}
       />
+
+      {/* Avatar placeholder ONLY when neither WebRTC nor fallback frame has arrived yet */}
+      {!hasFrames && !fallbackFrame && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#101015] gap-3 p-4 select-none z-0">
+          <div className="relative flex items-center justify-center">
+            <div 
+              className="w-20 h-20 rounded-full flex items-center justify-center text-black font-extrabold text-2xl shadow-lg shrink-0 overflow-hidden"
+              style={{ backgroundColor: avatarColor || '#0066ff' }}
+            >
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="w-full h-full object-cover rounded-full" />
+              ) : (
+                (username || 'U').slice(0, 2).toUpperCase()
+              )}
+            </div>
+            {showConnecting && (
+              <div className="absolute -inset-2 rounded-full border-2 border-blue-500/40 animate-ping pointer-events-none" />
+            )}
+          </div>
+          {showConnecting && (
+            <div className="text-center space-y-1">
+              <span className="text-xs font-bold text-zinc-200 block">
+                {isScreen ? `Receiving ${username}...` : `Connecting ${username}'s video...`}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -504,7 +525,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     deleteMessage,
     registerUser,
     sendRtcSignal,
+    sendMediaFrame,
     setRtcSignalHandler,
+    setMediaFrameHandler,
     setMediaHandlers,
     incomingCall,
     outgoingCall,
@@ -519,6 +542,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
   const [editAvatarUrl, setEditAvatarUrl] = useState('');
+
+  // Fallback Media Frames per peer: `${peerId}-${kind}` -> dataUrl
+  const [peerMediaFrames, setPeerMediaFrames] = useState<Record<string, string>>({});
 
   const profileAvatarInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -915,6 +941,86 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       }
     }
   }, [users, isScreenSharing, currentUser.id, isVideoEnabled, updateUser]);
+
+  // Listen for real-time fallback media frames from peers
+  useEffect(() => {
+    if (setMediaFrameHandler) {
+      setMediaFrameHandler((fromUserId: string, kind: 'camera' | 'screen', frame: string) => {
+        setPeerMediaFrames((prev) => ({
+          ...prev,
+          [`${fromUserId}-${kind}`]: frame,
+        }));
+      });
+    }
+  }, [setMediaFrameHandler]);
+
+  // Real-time camera frame stream fallback (guarantees camera is visible even behind strict firewalls)
+  useEffect(() => {
+    if (!cameraStream || !isVideoEnabled) return;
+    const track = cameraStream.getVideoTracks().find((t) => t.readyState === 'live');
+    if (!track) return;
+
+    const v = document.createElement('video');
+    v.muted = true;
+    v.playsInline = true;
+    v.srcObject = new MediaStream([track]);
+    v.play().catch(() => {});
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 480;
+    canvas.height = 360;
+    const ctx = canvas.getContext('2d');
+
+    const interval = setInterval(() => {
+      if (v.videoWidth > 0 && ctx && sendMediaFrame) {
+        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+        try {
+          const frame = canvas.toDataURL('image/jpeg', 0.5);
+          sendMediaFrame('camera', frame);
+        } catch {}
+      }
+    }, 250);
+
+    return () => {
+      clearInterval(interval);
+      v.pause();
+      v.srcObject = null;
+    };
+  }, [cameraStream, isVideoEnabled, sendMediaFrame]);
+
+  // Real-time screen share frame stream fallback (guarantees screen share is visible even behind strict firewalls)
+  useEffect(() => {
+    if (!screenStream || !isScreenSharing) return;
+    const track = screenStream.getVideoTracks().find((t) => t.readyState === 'live');
+    if (!track) return;
+
+    const v = document.createElement('video');
+    v.muted = true;
+    v.playsInline = true;
+    v.srcObject = new MediaStream([track]);
+    v.play().catch(() => {});
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 360;
+    const ctx = canvas.getContext('2d');
+
+    const interval = setInterval(() => {
+      if (v.videoWidth > 0 && ctx && sendMediaFrame) {
+        ctx.drawImage(v, 0, 0, canvas.width, canvas.height);
+        try {
+          const frame = canvas.toDataURL('image/jpeg', 0.55);
+          sendMediaFrame('screen', frame);
+        } catch {}
+      }
+    }, 300);
+
+    return () => {
+      clearInterval(interval);
+      v.pause();
+      v.srcObject = null;
+    };
+  }, [screenStream, isScreenSharing, sendMediaFrame]);
 
   // Sync scroll to bottom on new messages
   useEffect(() => {
@@ -2586,6 +2692,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                             }`}>
                               <RemoteVideoPlayer 
                                 stream={camStream} 
+                                fallbackFrame={peerMediaFrames[`${u.id}-camera`]}
                                 username={u.username}
                                 avatarColor={u.avatar_color}
                                 avatarUrl={u.avatar_url}
@@ -2606,6 +2713,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                             <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
                               <RemoteVideoPlayer 
                                 stream={scrStream} 
+                                fallbackFrame={peerMediaFrames[`${u.id}-screen`]}
                                 username={`${u.username}'s Screen`}
                                 avatarColor={u.avatar_color}
                                 avatarUrl={u.avatar_url}

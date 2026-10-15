@@ -212,6 +212,32 @@ app.get('/api/sync/signals/:userId', (req, res) => {
   res.json({ success: true, signals: pending });
 });
 
+// Real-time Media Frame Relay Endpoints (HTTP fallback)
+let globalMediaFrames: Record<string, { fromUserId: string; kind: 'camera' | 'screen'; frame: string; timestamp: number }> = {};
+
+app.post('/api/sync/media-frame', (req, res) => {
+  const { fromUserId, kind, frame } = req.body;
+  if (fromUserId && kind && frame) {
+    globalMediaFrames[`${fromUserId}_${kind}`] = {
+      fromUserId,
+      kind,
+      frame,
+      timestamp: Date.now(),
+    };
+  }
+  res.json({ success: true });
+});
+
+app.get('/api/sync/media-frames', (req, res) => {
+  const now = Date.now();
+  Object.keys(globalMediaFrames).forEach((k) => {
+    if (now - globalMediaFrames[k].timestamp > 8000) {
+      delete globalMediaFrames[k];
+    }
+  });
+  res.json({ success: true, frames: Object.values(globalMediaFrames) });
+});
+
 // Giphy Search & Trending API Proxy (Supports full Giphy library, limit=50, pagination)
 app.get('/api/giphy/search', async (req, res) => {
   const query = (req.query.q as string) || '';

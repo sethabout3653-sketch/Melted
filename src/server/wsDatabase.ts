@@ -436,6 +436,26 @@ export function initWebSocketDatabase(server: Server) {
             break;
           }
 
+          // Real-time Media Frame Relay (fallback for strict firewalls & instant video display)
+          case 'MEDIA_FRAME': {
+            if (msg.targetUserId) {
+              const targetSockets = userIdToSockets.get(msg.targetUserId);
+              targetSockets?.forEach(targetWs => {
+                if (targetWs.readyState === WebSocket.OPEN) {
+                  targetWs.send(JSON.stringify(msg));
+                }
+              });
+            } else {
+              const payload = JSON.stringify(msg);
+              wss.clients.forEach((client) => {
+                if (client !== ws && client.readyState === WebSocket.OPEN) {
+                  client.send(payload);
+                }
+              });
+            }
+            break;
+          }
+
           case 'USER_CALL': {
             if (msg.targetUserId) {
               const targetSockets = userIdToSockets.get(msg.targetUserId);
