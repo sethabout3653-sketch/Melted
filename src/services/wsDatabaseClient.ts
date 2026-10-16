@@ -184,6 +184,11 @@ export function useWebSocketDatabase(currentUser: {
             if (onUserLeftMediaRef.current) {
               onUserLeftMediaRef.current(msg.userId, msg.channel);
             }
+          } else if (msg.type === 'USER_MEDIA_UPDATE') {
+            // Request a full user sync from server to ensure media flags are up-to-date
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ type: 'GET_USERS' }));
+            }
           }
         } catch {}
       };

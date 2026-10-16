@@ -304,6 +304,11 @@ export function initWebSocketDatabase(server: Server) {
             break;
           }
 
+          case 'GET_USERS': {
+            broadcastTable('users', db.getUsers(getActiveUserIds()));
+            break;
+          }
+
           case 'SQL_INSERT': {
             if (msg.table === 'messages' && msg.row) {
               const row = msg.row;
