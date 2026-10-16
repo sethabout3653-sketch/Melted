@@ -36,8 +36,8 @@ export interface DbMessage {
 class WebSocketDatabase {
   private client: Client | null = null;
   private initPromise: Promise<void> | null = null;
-  private memoryUsers: Map<string, DbUser> = new Map();
-  private memoryMessages: DbMessage[] = [];
+  public memoryUsers: Map<string, DbUser> = new Map();
+  public memoryMessages: DbMessage[] = [];
 
   public channels = [
     { id: 'text-general', name: 'general', type: 'text' },
@@ -491,36 +491,48 @@ export function initWebSocketDatabase(server: Server) {
 
           case 'SQL_UPDATE': {
             if (msg.table === 'users' && msg.id) {
-              const user = await db.getUser(msg.id);
-              if (user) {
-                const oldChannel = user.current_channel;
-                const updated: DbUser = {
-                  ...user,
-                  ...msg.set,
-                  updated_at: Date.now(),
-                };
-                await db.upsertUser(updated);
-                const allUsers = await db.selectUsers();
-                broadcastTable('users', allUsers);
+              let user = await db.getUser(msg.id);
+              if (!user) {
+                user = db.memoryUsers.get(msg.id) || null;
+              }
+              const oldChannel = user?.current_channel || 'text-general';
+              const updated: DbUser = {
+                id: msg.id,
+                username: user?.username || 'User',
+                avatar_color: user?.avatar_color || '#0066ff',
+                avatar_url: user?.avatar_url || '',
+                current_channel: (user?.current_channel || 'text-general') as any,
+                is_speaking: false,
+                is_muted: false,
+                is_deafened: false,
+                has_video: false,
+                is_screen_sharing: false,
+                activity: user?.activity || '',
+                ...user,
+                ...msg.set,
+                updated_at: Date.now(),
+              };
+              await db.upsertUser(updated);
+              const allUsers = await db.selectUsers();
+              broadcastTable('users', allUsers);
 
-                // Detect channel media transitions
-                if (msg.set.current_channel !== undefined && msg.set.current_channel !== oldChannel) {
-                  if (msg.set.current_channel === 'voice-general' || msg.set.current_channel === 'video-general') {
-                    broadcastMediaPresence('USER_JOINED_MEDIA', msg.id, msg.set.current_channel);
-                  }
-                  if (oldChannel === 'voice-general' || oldChannel === 'video-general') {
-                    broadcastMediaPresence('USER_LEFT_MEDIA', msg.id, oldChannel);
-                  }
+              // Detect channel media transitions
+              if (msg.set.current_channel !== undefined && msg.set.current_channel !== oldChannel) {
+                if (msg.set.current_channel === 'voice-general' || msg.set.current_channel === 'video-general') {
+                  broadcastMediaPresence('USER_JOINED_MEDIA', msg.id, msg.set.current_channel);
                 }
+                if (oldChannel === 'voice-general' || oldChannel === 'video-general') {
+                  broadcastMediaPresence('USER_LEFT_MEDIA', msg.id, oldChannel);
+                }
+              }
 
-                // Explicitly broadcast media status changes (video/mute/screen-share)
-                if (
-                  msg.set.has_video !== undefined ||
-                  msg.set.is_muted !== undefined ||
-                  msg.set.is_screen_sharing !== undefined
-                ) {
-                  broadcastMediaPresence('USER_MEDIA_UPDATE', msg.id, user.current_channel);
-                }
+              // Explicitly broadcast media status changes (video/mute/screen-share)
+              if (
+                msg.set.has_video !== undefined ||
+                msg.set.is_muted !== undefined ||
+                msg.set.is_screen_sharing !== undefined
+              ) {
+                broadcastMediaPresence('USER_MEDIA_UPDATE', msg.id, updated.current_channel);
               }
             }
             break;
@@ -663,6 +675,27 @@ export function initWebSocketDatabase(server: Server) {
           sockets.delete(ws);
           if (sockets.size === 0) {
             userIdToSockets.delete(boundUserId);
+            const uId = boundUserId;
+            // Delay cleanup by 5 seconds to allow brief network hiccups / tab reloads without dropping voice
+            setTimeout(async () => {
+              if (!userIdToSockets.has(uId)) {
+                const user = await db.getUser(uId);
+                if (user && (user.current_channel === 'video-general' || user.current_channel === 'voice-general')) {
+                  const updated: DbUser = {
+                    ...user,
+                    current_channel: 'text-general',
+                    has_video: false,
+                    is_screen_sharing: false,
+                    is_speaking: false,
+                    updated_at: Date.now(),
+                  };
+                  await db.upsertUser(updated);
+                  broadcastMediaPresence('USER_LEFT_MEDIA', uId, user.current_channel);
+                  const allUsers = await db.selectUsers();
+                  broadcastTable('users', allUsers);
+                }
+              }
+            }, 5000);
           }
         }
       }

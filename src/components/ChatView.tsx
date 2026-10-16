@@ -193,7 +193,7 @@ const AudioAttachmentPlayer: React.FC<{
   );
 };
 
-// Single Audio Track Player - plays a specific track with full volume and autoplay resilience
+// Single Audio Track Player - plays a specific track with full volume, unmute detection, and autoplay resilience
 const SingleAudioTrackPlayer: React.FC<{ track: MediaStreamTrack; isDeafened: boolean; volume: number }> = ({ track, isDeafened, volume }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -201,32 +201,43 @@ const SingleAudioTrackPlayer: React.FC<{ track: MediaStreamTrack; isDeafened: bo
     const el = audioRef.current;
     if (!el || !track) return;
 
-    const stream = new MediaStream([track]);
-    if (el.srcObject !== stream) {
-      el.srcObject = stream;
+    // Check if the element already has a stream with this track
+    const currentStream = el.srcObject as MediaStream | null;
+    const currentTrackId = currentStream?.getAudioTracks()[0]?.id;
+
+    if (currentTrackId !== track.id) {
+      el.srcObject = new MediaStream([track]);
     }
+
     el.muted = isDeafened;
     el.volume = Math.max(0, Math.min(1, volume));
 
     const tryPlay = () => {
-      el.play().catch(() => {});
+      if (el) {
+        el.play().catch(() => {});
+      }
     };
+
     tryPlay();
+    track.addEventListener('unmute', tryPlay);
 
     const onUserGesture = () => {
       tryPlay();
     };
 
     window.addEventListener('click', onUserGesture, { once: true });
+    window.addEventListener('touchstart', onUserGesture, { once: true });
     window.addEventListener('keydown', onUserGesture, { once: true });
 
     return () => {
+      track.removeEventListener('unmute', tryPlay);
       window.removeEventListener('click', onUserGesture);
+      window.removeEventListener('touchstart', onUserGesture);
       window.removeEventListener('keydown', onUserGesture);
     };
   }, [track, isDeafened, volume]);
 
-  return <audio ref={audioRef} autoPlay playsInline style={{ display: 'none' }} />;
+  return <audio ref={audioRef} autoPlay playsInline className="fixed -top-96 -left-96 w-1 h-1 opacity-0 pointer-events-none" />;
 };
 
 // Dedicated audio player for WebRTC voice peers (plays both microphone and screen share audio tracks!)
@@ -752,6 +763,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       setIsInVideo(true);
       setActiveChannel('video-general');
 
+      setCurrentUser((prev: any) => ({
+        ...prev,
+        current_channel: 'video-general',
+        activity: 'In General Voice',
+      }));
+
       updateUser({
         current_channel: 'video-general',
         activity: 'In General Voice',
@@ -1076,6 +1093,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     setIsInVideo(true);
     setActiveChannel('video-general');
 
+    setCurrentUser((prev: any) => ({
+      ...prev,
+      current_channel: 'video-general',
+      activity: 'In General Voice',
+    }));
+
     updateUser({
       current_channel: 'video-general',
       activity: 'In General Voice',
@@ -1189,6 +1212,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     setIsScreenSharing(false);
     setIsUserSpeaking(false);
 
+    setCurrentUser((prev: any) => ({
+      ...prev,
+      current_channel: 'text-general',
+      activity: 'In #general',
+    }));
+
     updateUser({
       current_channel: 'text-general',
       activity: 'In #general',
@@ -1216,8 +1245,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
   const handleChannelSelect = (channel: 'text-general' | 'video-general') => {
     setActiveChannel(channel);
-    const newActivity = channel === 'video-general' ? 'In General Voice' : 'In #general';
-    updateUser({ current_channel: channel, activity: newActivity });
+    // If user is currently active in voice, browsing to text chat shouldn't kick them out of voice!
+    if (!isInVideo) {
+      const newActivity = channel === 'video-general' ? 'In General Voice' : 'In #general';
+      setCurrentUser((prev: any) => ({ ...prev, current_channel: channel, activity: newActivity }));
+      updateUser({ current_channel: channel, activity: newActivity });
+    }
     if (channel === 'video-general' && !isInVideo) {
       if (micPermissionStatus === 'prompt') {
         setShowMicPermissionModal(true);

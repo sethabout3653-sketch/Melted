@@ -7,11 +7,18 @@ export interface RtcSignalPayload {
   signal: any;
 }
 
-export function useWebSocketDatabase(currentUser: { id: string; username: string; avatar_color: string; avatar_url?: string; activity?: string }) {
+export function useWebSocketDatabase(currentUser: { 
+  id: string; 
+  username: string; 
+  avatar_color: string; 
+  avatar_url?: string; 
+  current_channel?: string;
+  activity?: string;
+}) {
   const [users, setUsers] = useState<DbUser[]>([]);
   const [messages, setMessages] = useState<DbMessage[]>([]);
   const [isConnected, setIsConnected] = useState(false);
-  const [isFallback, setIsFallback] = useState(true);
+  const [isFallback, setIsFallback] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<any>(null);
@@ -44,7 +51,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     onUserLeftMediaRef.current = onLeft;
   }, []);
 
-  // Initialize BroadcastChannel Fallback & HTTP Cross-Link Polling Sync + WebRTC Signal Relay
+  // Multi-tab BroadcastChannel & backup HTTP poll
   useEffect(() => {
     try {
       const bc = new BroadcastChannel('frosted_db_sync_channel');
@@ -54,9 +61,14 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
         const data = event.data;
         if (!data) return;
         if (data.type === 'SYNC_USERS' && Array.isArray(data.users)) {
-          setUsers(data.users);
+          // Only accept broadcast users if websocket is not connected
+          if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+            setUsers(data.users);
+          }
         } else if (data.type === 'SYNC_MESSAGES' && Array.isArray(data.messages)) {
-          setMessages(data.messages);
+          if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+            setMessages(data.messages);
+          }
         } else if (data.type === 'RTC_SIGNAL' && data.targetUserId === currentUserRef.current.id) {
           if (onRtcSignalRef.current) {
             onRtcSignalRef.current(data.fromUserId, data.signal);
@@ -70,28 +82,29 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
           const parsed = JSON.parse(savedMessages);
           if (Array.isArray(parsed)) setMessages(parsed);
         } catch {}
-      } else {
-        setMessages([]);
       }
     } catch {}
 
-    // Cross-Link HTTP Polling Sync & RTC Signal Relay
+    // Backup HTTP poll: ONLY runs if WebSocket is NOT open!
+    // This prevents stale HTTP data from overwriting live WebSocket users in voice!
     const pollSyncState = async () => {
+      // If WebSocket is alive and functioning, do NOT overwrite users from HTTP poll!
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        return;
+      }
+
       try {
         const res = await fetch('/api/sync/state');
         const data = await res.json();
         if (data.success) {
-          if (Array.isArray(data.users)) setUsers(data.users);
+          if (Array.isArray(data.users)) {
+            setUsers(data.users);
+          }
           if (Array.isArray(data.messages) && data.messages.length > 0) {
             setMessages(data.messages);
-            try {
-              localStorage.setItem('frosted_db_messages', JSON.stringify(data.messages.slice(-100)));
-            } catch {}
           }
-          setIsConnected(true);
         }
 
-        // Poll pending WebRTC signals across links/URLs
         const uId = currentUserRef.current.id;
         if (uId) {
           const sigRes = await fetch(`/api/sync/signals/${uId}`);
@@ -108,7 +121,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
     };
 
     pollSyncState();
-    syncPollIntervalRef.current = setInterval(pollSyncState, 1500);
+    syncPollIntervalRef.current = setInterval(pollSyncState, 3000);
 
     return () => {
       if (broadcastChannelRef.current) broadcastChannelRef.current.close();
@@ -124,7 +137,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
           wsRef.current.send(JSON.stringify({ type: 'PING', timestamp: Date.now() }));
         } catch {}
       }
-    }, 25000);
+    }, 15000);
   }, []);
 
   const stopHeartbeat = useCallback(() => {
@@ -143,7 +156,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
       username: u.username,
       avatar_color: u.avatar_color,
       avatar_url: u.avatar_url || '',
-      current_channel: 'text-general',
+      current_channel: (u.current_channel || 'text-general') as any,
       is_speaking: false,
       is_muted: false,
       is_deafened: false,
@@ -176,11 +189,11 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
         if (ws.readyState !== WebSocket.OPEN) {
           try { ws.close(); } catch {}
           fallbackFailCountRef.current++;
-          if (fallbackFailCountRef.current >= 1) {
+          if (fallbackFailCountRef.current >= 2) {
             enableFallbackMode();
           }
         }
-      }, 2000);
+      }, 3500);
 
       ws.onopen = () => {
         clearTimeout(connectionTimeout);
@@ -196,8 +209,9 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
             id: u.id,
             username: u.username,
             avatar_color: u.avatar_color,
+            avatar_url: u.avatar_url || '',
             activity: u.activity || '',
-            current_channel: 'text-general',
+            current_channel: u.current_channel || 'text-general',
             is_speaking: false,
             is_muted: false,
             is_deafened: false,
@@ -217,20 +231,32 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
             return;
           }
           if (msg.type === 'PONG') return;
+
           if (msg.type === 'DB_INIT') {
             if (Array.isArray(msg.tables?.users)) setUsers(msg.tables.users);
             if (Array.isArray(msg.tables?.messages)) setMessages(msg.tables.messages);
           } else if (msg.type === 'DB_SYNC') {
-            if (msg.table === 'users' && Array.isArray(msg.data)) setUsers(msg.data);
-            else if (msg.table === 'messages' && Array.isArray(msg.data)) setMessages(msg.data);
+            if (msg.table === 'users' && Array.isArray(msg.data)) {
+              setUsers(msg.data);
+            } else if (msg.table === 'messages' && Array.isArray(msg.data)) {
+              setMessages(msg.data);
+            }
           } else if (msg.type === 'RTC_SIGNAL') {
-            if (onRtcSignalRef.current) onRtcSignalRef.current(msg.fromUserId, msg.signal);
+            if (onRtcSignalRef.current) {
+              onRtcSignalRef.current(msg.fromUserId, msg.signal);
+            }
           } else if (msg.type === 'USER_CALL') {
-            if (onUserCallRef.current) onUserCallRef.current(msg.fromUserId, msg.fromUserName, msg.callType);
+            if (onUserCallRef.current) {
+              onUserCallRef.current(msg.fromUserId, msg.fromUserName, msg.callType);
+            }
           } else if (msg.type === 'USER_JOINED_MEDIA') {
-            if (onUserJoinedMediaRef.current) onUserJoinedMediaRef.current(msg.userId, msg.channel);
+            if (onUserJoinedMediaRef.current) {
+              onUserJoinedMediaRef.current(msg.userId, msg.channel);
+            }
           } else if (msg.type === 'USER_LEFT_MEDIA') {
-            if (onUserLeftMediaRef.current) onUserLeftMediaRef.current(msg.userId, msg.channel);
+            if (onUserLeftMediaRef.current) {
+              onUserLeftMediaRef.current(msg.userId, msg.channel);
+            }
           }
         } catch {}
       };
@@ -243,35 +269,25 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
         fallbackFailCountRef.current++;
         if (fallbackFailCountRef.current >= 5) {
           enableFallbackMode();
-          return;
         }
         if (!reconnectTimeoutRef.current) {
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectTimeoutRef.current = null;
             connect();
-          }, 3000);
+          }, 2000);
         }
       };
 
       ws.onerror = () => {
         clearTimeout(connectionTimeout);
         try { ws.close(); } catch {}
-        fallbackFailCountRef.current++;
-        if (fallbackFailCountRef.current >= 1) {
-          enableFallbackMode();
-        }
       };
     } catch {
-      fallbackFailCountRef.current++;
-      if (fallbackFailCountRef.current >= 1) {
-        enableFallbackMode();
-      } else {
-        if (!reconnectTimeoutRef.current) {
-          reconnectTimeoutRef.current = setTimeout(() => {
-            reconnectTimeoutRef.current = null;
-            connect();
-          }, 1500);
-        }
+      if (!reconnectTimeoutRef.current) {
+        reconnectTimeoutRef.current = setTimeout(() => {
+          reconnectTimeoutRef.current = null;
+          connect();
+        }, 2000);
       }
     }
   }, [startHeartbeat, stopHeartbeat, enableFallbackMode]);
@@ -287,7 +303,15 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
 
   const updateUser = useCallback((set: Partial<DbUser>) => {
     const u = currentUserRef.current;
-    const updatedUser = { id: u.id, username: u.username, avatar_color: u.avatar_color, avatar_url: u.avatar_url || '', ...set };
+    Object.assign(currentUserRef.current, set);
+    const updatedUser = { 
+      id: u.id, 
+      username: u.username, 
+      avatar_color: u.avatar_color, 
+      avatar_url: u.avatar_url || '', 
+      current_channel: u.current_channel || 'text-general',
+      ...set 
+    };
 
     fetch('/api/sync/user', {
       method: 'POST',
@@ -295,15 +319,12 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
       body: JSON.stringify(updatedUser),
     }).catch(() => {});
 
-    if (isFallback) {
-      setUsers((prev) => {
-        const safePrev = Array.isArray(prev) ? prev : [];
-        const next = safePrev.map((user) => (user.id === u.id ? { ...user, ...set, updated_at: Date.now() } : user));
-        broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: next });
-        return next;
-      });
-      return;
-    }
+    setUsers((prev) => {
+      const safePrev = Array.isArray(prev) ? prev : [];
+      const next = safePrev.map((user) => (user.id === u.id ? { ...user, ...set, updated_at: Date.now() } : user));
+      broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: next });
+      return next;
+    });
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
@@ -313,7 +334,7 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
         set,
       }));
     }
-  }, [isFallback]);
+  }, []);
 
   const insertMessage = useCallback((content: string, channelId: string = 'text-general', attachment?: { url: string; type: string; name?: string }) => {
     if (!content.trim() && !attachment) return;
@@ -343,19 +364,6 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
       }
     }).catch(() => {});
 
-    if (isFallback) {
-      setMessages((prev) => {
-        const safePrev = Array.isArray(prev) ? prev : [];
-        const next = [...safePrev, newMsg];
-        try {
-          localStorage.setItem('frosted_db_messages', JSON.stringify(next.slice(-100)));
-        } catch {}
-        broadcastChannelRef.current?.postMessage({ type: 'SYNC_MESSAGES', messages: next });
-        return next;
-      });
-      return;
-    }
-
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: 'SQL_INSERT',
@@ -370,37 +378,40 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
         return next;
       });
     }
-  }, [isFallback]);
+  }, []);
 
   const deleteMessage = useCallback((messageId: string) => {
-    if (isFallback) {
-      setMessages((prev) => {
-        const safePrev = Array.isArray(prev) ? prev : [];
-        const next = safePrev.filter((m) => m && m.id !== messageId);
-        try {
-          localStorage.setItem('frosted_db_messages', JSON.stringify(next));
-        } catch {}
-        broadcastChannelRef.current?.postMessage({ type: 'SYNC_MESSAGES', messages: next });
-        return next;
-      });
-      return;
-    }
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify({
         type: 'SQL_DELETE',
         table: 'messages',
         id: messageId,
       }));
+    } else {
+      setMessages((prev) => {
+        const safePrev = Array.isArray(prev) ? prev : [];
+        const next = safePrev.filter((m) => m && m.id !== messageId);
+        broadcastChannelRef.current?.postMessage({ type: 'SYNC_MESSAGES', messages: next });
+        return next;
+      });
     }
-  }, [isFallback]);
+  }, []);
 
-  const registerUser = useCallback((user: { id: string; username: string; avatar_color: string; avatar_url?: string; activity?: string }) => {
+  const registerUser = useCallback((user: { 
+    id: string; 
+    username: string; 
+    avatar_color: string; 
+    avatar_url?: string; 
+    current_channel?: string;
+    activity?: string;
+  }) => {
+    const activeChannel = (user as any).current_channel || currentUserRef.current.current_channel || 'text-general';
     const dbUser: DbUser = {
       id: user.id,
       username: user.username,
       avatar_color: user.avatar_color || '#0066ff',
       avatar_url: user.avatar_url || '',
-      current_channel: 'text-general',
+      current_channel: activeChannel as any,
       is_speaking: false,
       is_muted: false,
       is_deafened: false,
@@ -416,7 +427,12 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
       body: JSON.stringify(dbUser),
     }).catch(() => {});
 
-    if (isFallback) {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'REGISTER_USER',
+        user: dbUser,
+      }));
+    } else {
       setUsers((prev) => {
         const safePrev = Array.isArray(prev) ? prev : [];
         const filtered = safePrev.filter((x) => x && x.id !== user.id);
@@ -424,35 +440,37 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
         broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: next });
         return next;
       });
-      return;
     }
+  }, []);
 
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'REGISTER_USER',
-        user: dbUser,
-      }));
-    }
-  }, [isFallback]);
-
+  // WebRTC Signal Relay: Zero-latency direct WebSocket transmission
   const sendRtcSignal = useCallback((targetUserId: string, signal: any) => {
+    const payload = {
+      type: 'RTC_SIGNAL',
+      fromUserId: currentUserRef.current.id,
+      targetUserId,
+      signal,
+    };
+
+    // 1. Primary zero-latency path: Send directly over WebSocket
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      try {
+        wsRef.current.send(JSON.stringify(payload));
+      } catch (err) {
+        console.warn('[wsDatabaseClient] sendRtcSignal ws send failed:', err);
+      }
+    }
+
+    // 2. Secondary backup path: HTTP sync relay
     fetch('/api/sync/signal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fromUserId: currentUserRef.current.id,
-        targetUserId,
-        signal,
-      }),
+      body: JSON.stringify(payload),
     }).catch(() => {});
 
+    // 3. Multi-tab backup
     if (broadcastChannelRef.current) {
-      broadcastChannelRef.current.postMessage({
-        type: 'RTC_SIGNAL',
-        fromUserId: currentUserRef.current.id,
-        targetUserId,
-        signal,
-      });
+      broadcastChannelRef.current.postMessage(payload);
     }
   }, []);
 
