@@ -1209,7 +1209,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
   // Toggle Camera
   const toggleCamera = async () => {
-    console.log('[ChatView] toggleCamera triggered, isVideoEnabled:', isVideoEnabled);
     if (isVideoEnabled) {
       if (cameraStreamRef.current) {
         cameraStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -1218,7 +1217,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       setIsVideoEnabled(false);
       setCameraStream(null);
       updateUser({ has_video: false });
-      console.log('[ChatView] Camera turned OFF');
     } else {
       setIsCameraStarting(true);
       setCameraError(null);
@@ -1229,11 +1227,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         setIsVideoEnabled(true);
         setCameraStream(stream);
         updateUser({ has_video: true });
-        console.log('[ChatView] Camera turned ON, stream ID:', stream.id);
       } catch (err: any) {
         setCameraError('Camera access denied or unavailable.');
         setIsVideoEnabled(false);
-        console.error('[ChatView] Camera acquisition failed:', err);
       } finally {
         setIsCameraStarting(false);
       }
@@ -2702,8 +2698,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       const camStream = remoteCameraStreams[u.id];
                       const scrStream = remoteScreenStreams[u.id];
 
-                      const hasCamera = Boolean(u.has_video && camStream && camStream.getVideoTracks().some(t => t.readyState === 'live'));
-                      const hasScreen = Boolean(u.is_screen_sharing && scrStream && scrStream.getVideoTracks().some(t => t.readyState === 'live'));
+                      const hasCamera = Boolean(camStream && camStream.getVideoTracks().length > 0);
+                      const hasScreen = Boolean(scrStream && scrStream.getVideoTracks().length > 0);
                       const isPeerCameraVertical = Boolean(peerOrientations[`${u.id}-camera`]);
 
                       return (
