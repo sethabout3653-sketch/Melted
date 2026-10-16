@@ -164,9 +164,11 @@ export function useGlobalChat({ isChatTabActive }: { isChatTabActive: boolean })
       const isFresh = (Date.now() - messageCreatedAt) < 15000;
 
       // Only notify if message was newly created in real-time, not sent an hour ago, and user isn't in chat
+      const isTooOld = (Date.now() - messageCreatedAt) > 30000; // 30 seconds
       if (
         isCreatedDuringSession &&
         isFresh &&
+        !isTooOld &&
         !isChatTabActive &&
         lastMessage.sender_id !== currentUser.id &&
         lastMessage.sender_name !== 'Frosted System'

@@ -410,19 +410,6 @@ const RemoteVideoPlayer: React.FC<{
 
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-[#0f0f12]">
-      {/* Loading indicator when waiting for initial video frames (prevents black screen) */}
-      {!hasVideoFrame && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#0c0c10] z-10 text-zinc-400 p-4 text-center">
-          <div className="w-10 h-10 rounded-2xl bg-blue-600/15 border border-blue-500/25 flex items-center justify-center text-blue-400 animate-pulse">
-            {isScreen ? <Monitor className="w-5 h-5" /> : <Video className="w-5 h-5" />}
-          </div>
-          <span className="text-xs font-semibold text-zinc-400">
-            {isScreen ? 'Connecting to screen stream...' : 'Connecting to camera stream...'}
-          </span>
-        </div>
-      )}
-
-      {/* Video element */}
       <video
         ref={videoRef}
         autoPlay
@@ -449,7 +436,7 @@ const RemoteVideoPlayer: React.FC<{
           checkOrientation();
         }}
         onResize={checkOrientation}
-        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl ${hasVideoFrame ? 'opacity-100' : 'opacity-0'} transition-opacity duration-200`}
+        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl opacity-100 transition-opacity duration-200`}
       />
     </div>
   );
@@ -549,16 +536,6 @@ const LocalVideoPlayer: React.FC<{
 
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-black">
-      {!hasFrame && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#0c0c10] z-10 text-zinc-400 p-4 text-center">
-          <div className="w-10 h-10 rounded-2xl bg-blue-600/15 border border-blue-500/25 flex items-center justify-center text-blue-400 animate-pulse">
-            {isScreen ? <Monitor className="w-5 h-5" /> : <Video className="w-5 h-5" />}
-          </div>
-          <span className="text-xs font-semibold text-zinc-400">
-            {isScreen ? 'Starting screen preview...' : 'Starting camera...'}
-          </span>
-        </div>
-      )}
       {/* Local Video Stream with optional mirror preview */}
       <video
         ref={videoRef}
@@ -570,7 +547,7 @@ const LocalVideoPlayer: React.FC<{
           (e.target as HTMLVideoElement).play().catch(() => {});
         }}
         onResize={checkOrientation}
-        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl ${isMirrored && !isScreen ? 'transform scale-x-[-1]' : ''} ${hasFrame ? 'opacity-100' : 'opacity-0'} transition-opacity duration-200`}
+        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl ${isMirrored && !isScreen ? 'transform scale-x-[-1]' : ''} opacity-100 transition-opacity duration-200`}
       />
     </div>
   );
@@ -797,7 +774,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       if (micTracks.length > 0 && !isMuted) {
         audioTracks.push(micTracks[0]);
       }
-      if (screenAudioTracks.length > 0) {
+      if (screenAudioTracks.length > 0 && isScreenSharing) {
         audioTracks.push(screenAudioTracks[0]);
       }
 
@@ -2671,16 +2648,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       </div>
                     )}
 
-                    {/* Local Screen Share Tile - Shows live screen preview with stop control when actively sharing */}
-                    {isScreenSharing && screenStream && (
+                    {/* Local Screen Share Tile - Shows static indicator when actively sharing */}
+                    {isScreenSharing && (
                       <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/40 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
-                        <LocalVideoPlayer 
-                          stream={screenStream} 
-                          user={currentUser}
-                          renderAvatar={renderAvatar}
-                          isMirrored={false}
-                          isScreen={true}
-                        />
+                        
+                        <div className="flex flex-col items-center justify-center gap-4 text-blue-400">
+                           <Monitor className="w-16 h-16" />
+                           <span className="text-lg font-bold text-white">Sharing your screen</span>
+                        </div>
 
                         {/* Bottom-Left Overlay */}
                         <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-auto">
