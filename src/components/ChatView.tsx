@@ -380,7 +380,6 @@ const RemoteVideoPlayer: React.FC<{
 
     video.addEventListener('loadeddata', checkFrame);
     video.addEventListener('loadedmetadata', checkFrame);
-    video.addEventListener('timeupdate', checkFrame);
     video.addEventListener('canplay', checkFrame);
     video.addEventListener('playing', checkFrame);
 
@@ -399,7 +398,6 @@ const RemoteVideoPlayer: React.FC<{
       stream.removeEventListener('addtrack', handleAddTrack);
       video.removeEventListener('loadeddata', checkFrame);
       video.removeEventListener('loadedmetadata', checkFrame);
-      video.removeEventListener('timeupdate', checkFrame);
       video.removeEventListener('canplay', checkFrame);
       video.removeEventListener('playing', checkFrame);
       window.removeEventListener('click', onUserGesture);
@@ -515,13 +513,11 @@ const LocalVideoPlayer: React.FC<{
 
     video.addEventListener('loadeddata', checkFrame);
     video.addEventListener('loadedmetadata', checkFrame);
-    video.addEventListener('timeupdate', checkFrame);
     video.addEventListener('playing', checkFrame);
 
     return () => {
       video.removeEventListener('loadeddata', checkFrame);
       video.removeEventListener('loadedmetadata', checkFrame);
-      video.removeEventListener('timeupdate', checkFrame);
       video.removeEventListener('playing', checkFrame);
     };
   }, [stream, checkOrientation]);

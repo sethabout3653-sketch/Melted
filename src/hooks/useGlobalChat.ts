@@ -57,6 +57,17 @@ export function playNotificationSound() {
 
 export function useGlobalChat({ isChatTabActive }: { isChatTabActive: boolean }) {
   const [currentUser, setCurrentUser] = useState(() => {
+    // Clean up old/stale/corrupted localStorage keys while keeping valid ones
+    try {
+      const validKeys = ['frosted_chat_user_id', 'frosted_chat_username', 'frosted_chat_usercolor', 'frosted_chat_avatar_url', 'frosted_db_messages'];
+      const allKeys = Object.keys(localStorage);
+      allKeys.forEach((key) => {
+        if (key.startsWith('frosted_') && !validKeys.includes(key)) {
+          localStorage.removeItem(key);
+        }
+      });
+    } catch {}
+
     const savedId = localStorage.getItem('frosted_chat_user_id') || ('u_' + Math.random().toString(36).substr(2, 6));
     const savedName = localStorage.getItem('frosted_chat_username') || ('Player_' + Math.floor(100 + Math.random() * 900));
     const savedColor = localStorage.getItem('frosted_chat_usercolor') || '#0066ff';
@@ -164,11 +175,9 @@ export function useGlobalChat({ isChatTabActive }: { isChatTabActive: boolean })
       const isFresh = (Date.now() - messageCreatedAt) < 15000;
 
       // Only notify if message was newly created in real-time, not sent an hour ago, and user isn't in chat
-      const isTooOld = (Date.now() - messageCreatedAt) > 30000; // 30 seconds
       if (
         isCreatedDuringSession &&
         isFresh &&
-        !isTooOld &&
         !isChatTabActive &&
         lastMessage.sender_id !== currentUser.id &&
         lastMessage.sender_name !== 'Frosted System'
