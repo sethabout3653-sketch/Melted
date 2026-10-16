@@ -526,16 +526,13 @@ const LocalVideoPlayer: React.FC<{
     };
   }, [stream, checkOrientation]);
 
-  if (!stream) {
-    return (
-      <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-[#1c1c22]">
-        {renderAvatar(user, 'w-24 h-24 text-3xl')}
-      </div>
-    );
-  }
-
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-black">
+      {!stream && (
+        <div className="absolute inset-0 flex items-center justify-center bg-[#1c1c22]">
+          {renderAvatar(user, 'w-24 h-24 text-3xl')}
+        </div>
+      )}
       {/* Local Video Stream with optional mirror preview */}
       <video
         ref={videoRef}
@@ -547,7 +544,7 @@ const LocalVideoPlayer: React.FC<{
           (e.target as HTMLVideoElement).play().catch(() => {});
         }}
         onResize={checkOrientation}
-        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl ${isMirrored && !isScreen ? 'transform scale-x-[-1]' : ''} opacity-100 transition-opacity duration-200`}
+        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl ${isMirrored && !isScreen ? 'transform scale-x-[-1]' : ''} ${stream ? 'opacity-100' : 'opacity-0'} transition-opacity duration-200`}
       />
     </div>
   );
@@ -1181,6 +1178,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         cameraStreamRef.current = videoStream;
         setIsVideoEnabled(true);
         setCameraStream(videoStream);
+        updateUser({ has_video: true });
       } catch (err: any) {
         setCameraError('Could not access camera.');
         setIsVideoEnabled(false);
