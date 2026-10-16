@@ -1909,18 +1909,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               {/* Chat Scroll Area (Messages) */}
               <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
                 
-                {/* Channel Welcome Banner */}
-                <div className="space-y-3 pb-6 border-b border-[#1a1a20]">
-                  <div className="w-16 h-16 rounded-2xl bg-blue-600 flex items-center justify-center text-white text-3xl font-black shadow-xl shadow-blue-600/30">
-                    #
-                  </div>
-                  <h1 className="text-3xl font-black text-white tracking-tight">
-                    Welcome to #general!
-                  </h1>
-                  <p className="text-sm text-zinc-400 font-medium">
-                    This is the start of the #general channel.
-                  </p>
-                </div>
+
 
                 {/* Messages List */}
                 {messages.map((msg: any) => (

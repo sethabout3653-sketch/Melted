@@ -134,6 +134,10 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+app.get('/ping', (req, res) => {
+  res.status(200).send('pong');
+});
+
 // Cross-Link Global State Sync Store (bridges users across different URLs/links)
 let globalSyncUsers: Record<string, any> = {};
 let globalSyncMessages: any[] = [];

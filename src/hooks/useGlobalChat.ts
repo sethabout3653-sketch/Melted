@@ -70,6 +70,7 @@ export function useGlobalChat({ isChatTabActive }: { isChatTabActive: boolean })
       username: savedName,
       avatar_color: savedColor,
       avatar_url: savedAvatarUrl,
+      current_channel: 'text-general',
     };
   });
 
@@ -92,12 +93,12 @@ export function useGlobalChat({ isChatTabActive }: { isChatTabActive: boolean })
 
   // Sync user profile with server when user connects or profile attributes change (prevents infinite loop!)
   useEffect(() => {
-    const userKey = `${currentUser.id}:${currentUser.username}:${currentUser.avatar_color}:${currentUser.avatar_url}`;
+    const userKey = `${currentUser.id}:${currentUser.username}:${currentUser.avatar_color}:${currentUser.avatar_url}:${(currentUser as any).current_channel}`;
     if (isConnected && registeredKeyRef.current !== userKey) {
       registeredKeyRef.current = userKey;
       registerUser(currentUser);
     }
-  }, [isConnected, currentUser.id, currentUser.username, currentUser.avatar_color, currentUser.avatar_url, registerUser]);
+  }, [isConnected, currentUser.id, currentUser.username, currentUser.avatar_color, currentUser.avatar_url, (currentUser as any).current_channel, registerUser]);
 
   // Handle incoming call events from relay server
   useEffect(() => {
@@ -141,23 +142,15 @@ export function useGlobalChat({ isChatTabActive }: { isChatTabActive: boolean })
     setOutgoingCall(null);
   }, []);
 
-  const isInitialMount = useRef(true);
-
   // Message notifications: Play chime, trigger in-app notification UI on any page, and browser notification
   useEffect(() => {
     if (messages.length === 0) return;
     const lastMessage = messages[messages.length - 1];
     
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      lastMessageId.current = lastMessage.id;
-      return;
-    }
-
     if (lastMessage.id !== lastMessageId.current) {
       lastMessageId.current = lastMessage.id;
       
-      if (lastMessage.sender_id !== currentUser.id && lastMessage.sender_id !== 'system') {
+      if (lastMessage.sender_id !== currentUser.id && lastMessage.sender_name !== 'Frosted System') {
         // Play instant Web Audio API chime
         playNotificationSound();
 
