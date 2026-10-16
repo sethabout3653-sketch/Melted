@@ -1209,6 +1209,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
   // Toggle Camera
   const toggleCamera = async () => {
+    console.log('[ChatView] toggleCamera triggered, isVideoEnabled:', isVideoEnabled);
     if (isVideoEnabled) {
       if (cameraStreamRef.current) {
         cameraStreamRef.current.getTracks().forEach((track) => track.stop());
@@ -1217,6 +1218,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       setIsVideoEnabled(false);
       setCameraStream(null);
       updateUser({ has_video: false });
+      console.log('[ChatView] Camera turned OFF');
     } else {
       setIsCameraStarting(true);
       setCameraError(null);
@@ -1227,9 +1229,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         setIsVideoEnabled(true);
         setCameraStream(stream);
         updateUser({ has_video: true });
+        console.log('[ChatView] Camera turned ON, stream ID:', stream.id);
       } catch (err: any) {
         setCameraError('Camera access denied or unavailable.');
         setIsVideoEnabled(false);
+        console.error('[ChatView] Camera acquisition failed:', err);
       } finally {
         setIsCameraStarting(false);
       }

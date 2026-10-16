@@ -220,7 +220,7 @@ export function useWebRTC({
   }, []);
 
   // Synchronize tracks into peer connection ONLY when tracks genuinely exist!
-  const updateTracksForPeer = useCallback((pc: RTCPeerConnection, peerId: string) => {
+  const updateTracksForPeer = useCallback(async (pc: RTCPeerConnection, peerId: string) => {
     let senders = peerSenders.current.get(peerId);
     if (!senders) {
       senders = {};
@@ -235,7 +235,7 @@ export function useWebRTC({
       audioTrack.enabled = true;
       if (senders.audio && pcSenders.includes(senders.audio)) {
         if (senders.audio.track !== audioTrack) {
-          senders.audio.replaceTrack(audioTrack).catch(() => {});
+          await senders.audio.replaceTrack(audioTrack).catch(() => {});
         }
       } else if (localAudioRef.current) {
         try {
@@ -244,7 +244,7 @@ export function useWebRTC({
       }
     } else if (senders.audio && pcSenders.includes(senders.audio)) {
       try {
-        senders.audio.replaceTrack(null).catch(() => {});
+        await senders.audio.replaceTrack(null).catch(() => {});
       } catch {}
     }
 
@@ -256,7 +256,7 @@ export function useWebRTC({
       if (senders.camera && pcSenders.includes(senders.camera)) {
         if (senders.camera.track !== cameraTrack) {
           console.log(`[WebRTC] Replacing camera track for peer ${peerId}:`, cameraTrack.id);
-          senders.camera.replaceTrack(cameraTrack).catch(() => {});
+          await senders.camera.replaceTrack(cameraTrack).catch(() => {});
         }
       } else {
         try {
@@ -280,7 +280,7 @@ export function useWebRTC({
       screenTrack.enabled = true;
       if (senders.screen && pcSenders.includes(senders.screen)) {
         if (senders.screen.track !== screenTrack) {
-          senders.screen.replaceTrack(screenTrack).catch(() => {});
+          await senders.screen.replaceTrack(screenTrack).catch(() => {});
         }
       } else {
         try {
@@ -530,7 +530,7 @@ export function useWebRTC({
       }
 
       console.log(`[WebRTC] Initiating offer for peer ${peerId}`);
-      updateTracksForPeer(pc, peerId);
+      await updateTracksForPeer(pc, peerId);
 
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -598,7 +598,7 @@ export function useWebRTC({
         }
         candidateQueues.current.delete(fromUserId);
 
-        updateTracksForPeer(pc, fromUserId);
+        await updateTracksForPeer(pc, fromUserId);
 
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
@@ -771,6 +771,12 @@ export function useWebRTC({
   useEffect(() => {
     if (!isMediaChannel) return;
 
+    console.log('[WebRTC] Renegotiation effect triggered. Media meta update:', {
+      hasVideo: !!cameraStream,
+      isScreenSharing: !!screenStream,
+      isVertical
+    });
+
     const mediaMeta: MediaTrackMeta = {
       cameraStreamId: cameraStream?.id || null,
       screenStreamId: screenStream?.id || null,
@@ -780,15 +786,18 @@ export function useWebRTC({
       isVertical: isVertical,
     };
 
-    peerConnections.current.forEach((pc, peerId) => {
-      updateTracksForPeer(pc, peerId);
+    peerConnections.current.forEach(async (pc, peerId) => {
+      console.log(`[WebRTC] Updating tracks for peer ${peerId} and sending track-meta`);
+      await updateTracksForPeer(pc, peerId);
       sendRtcSignal(peerId, {
         type: 'track-meta',
         mediaMeta,
       });
       if (pc.signalingState === 'stable') {
+        console.log(`[WebRTC] Peer ${peerId} stable, calling initiateOffer`);
         initiateOfferRef.current(peerId);
       } else {
+        console.log(`[WebRTC] Peer ${peerId} signalingState ${pc.signalingState}, setting needsRenegotiation`);
         needsRenegotiation.current.set(peerId, true);
       }
     });
