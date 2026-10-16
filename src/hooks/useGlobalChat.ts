@@ -21,7 +21,7 @@ export interface InAppNotification {
   channel_id: string;
 }
 
-// Pure Web Audio API chime generator - guaranteed zero-latency playback across all browsers
+// Pure Web Audio API chime generator
 export function playNotificationSound() {
   try {
     const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -79,6 +79,8 @@ export function useGlobalChat({ isChatTabActive }: { isChatTabActive: boolean })
 
   const lastMessageId = useRef<string | null>(null);
   const registeredKeyRef = useRef<string>('');
+  const pageStartTimeRef = useRef<number>(Date.now());
+  const hasInitializedMessagesRef = useRef<boolean>(false);
 
   // Call state
   const [incomingCall, setIncomingCall] = useState<ActiveCall | null>(null);
@@ -91,7 +93,7 @@ export function useGlobalChat({ isChatTabActive }: { isChatTabActive: boolean })
     setActiveNotification(null);
   }, []);
 
-  // Sync user profile with server when user connects or profile attributes change (prevents infinite loop!)
+  // Sync user profile with server when user connects or profile attributes change
   useEffect(() => {
     const userKey = `${currentUser.id}:${currentUser.username}:${currentUser.avatar_color}:${currentUser.avatar_url}:${(currentUser as any).current_channel}`;
     if (isConnected && registeredKeyRef.current !== userKey) {
@@ -109,7 +111,6 @@ export function useGlobalChat({ isChatTabActive }: { isChatTabActive: boolean })
         callType,
       });
 
-      // Subtle incoming call sound
       try {
         const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/1344/1344-preview.mp3');
         audio.volume = 0.5;
@@ -142,15 +143,34 @@ export function useGlobalChat({ isChatTabActive }: { isChatTabActive: boolean })
     setOutgoingCall(null);
   }, []);
 
-  // Message notifications: Play chime, trigger in-app notification UI on any page, and browser notification
+  // Message notifications: Only trigger for NEW messages sent during the active session!
+  // Prevents historical messages sent an hour ago from triggering sounds or toasts when entering the site.
   useEffect(() => {
     if (messages.length === 0) return;
     const lastMessage = messages[messages.length - 1];
-    
+
+    // On initial cold page load / first snapshot: mark initialized and do NOT fire notifications
+    if (!hasInitializedMessagesRef.current) {
+      hasInitializedMessagesRef.current = true;
+      lastMessageId.current = lastMessage.id;
+      return;
+    }
+
     if (lastMessage.id !== lastMessageId.current) {
       lastMessageId.current = lastMessage.id;
-      
-      if (lastMessage.sender_id !== currentUser.id && lastMessage.sender_name !== 'Frosted System') {
+
+      const messageCreatedAt = Number(lastMessage.created_at) || 0;
+      const isCreatedDuringSession = messageCreatedAt >= pageStartTimeRef.current - 2000;
+      const isFresh = (Date.now() - messageCreatedAt) < 15000;
+
+      // Only notify if message was newly created in real-time, not sent an hour ago, and user isn't in chat
+      if (
+        isCreatedDuringSession &&
+        isFresh &&
+        !isChatTabActive &&
+        lastMessage.sender_id !== currentUser.id &&
+        lastMessage.sender_name !== 'Frosted System'
+      ) {
         // Play instant Web Audio API chime
         playNotificationSound();
 
@@ -174,7 +194,7 @@ export function useGlobalChat({ isChatTabActive }: { isChatTabActive: boolean })
         }
       }
     }
-  }, [messages, currentUser.id]);
+  }, [messages, currentUser.id, isChatTabActive]);
 
   return {
     currentUser,

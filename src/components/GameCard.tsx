@@ -8,7 +8,6 @@ interface GameCardProps {
   onToggleFavorite: (id: number) => void;
   isFavorite: boolean;
   onAboutBlank: (game: GameItem) => void;
-  isCached?: boolean;
 }
 
 export const GameCard: React.FC<GameCardProps> = React.memo(({
@@ -17,7 +16,6 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
   onToggleFavorite,
   isFavorite,
   onAboutBlank,
-  isCached = false,
 }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);

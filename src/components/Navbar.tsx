@@ -6,14 +6,10 @@ import {
   EyeOff, 
   Heart, 
   X, 
-  WifiOff, 
   Gamepad2, 
-  MessageSquare,
-  Zap
+  MessageSquare
 } from 'lucide-react';
 import { CloakPreset } from '../hooks/useCloak';
-import { PWAInstallButton } from './PWAInstallButton';
-import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { GameCategory } from '../types/game';
 
 interface NavbarProps {
@@ -49,15 +45,12 @@ export const Navbar: React.FC<NavbarProps> = ({
   presets,
   onSelectPreset,
   onGoHome,
-  selectedCategory = 'All',
-  onSelectCategory,
   onlineCount = 0,
   isConnected = false,
 }) => {
   const [isCloakOpen, setIsCloakOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const cloakDropdownRef = useRef<HTMLDivElement>(null);
-  const isOnline = useOnlineStatus();
 
   // Keyboard shortcut '/' to focus search
   useEffect(() => {
@@ -105,11 +98,6 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <span className="text-xl font-black tracking-tight text-white font-heading group-hover:text-[#0066ff] transition-colors">
                   Frosted
                 </span>
-                {!isOnline && (
-                  <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                    <WifiOff className="w-3 h-3" /> Offline
-                  </span>
-                )}
               </div>
             </div>
           </button>
@@ -117,10 +105,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Primary View Switcher: All Games vs Chat */}
           <div className="hidden sm:flex items-center bg-[#121214] p-1 rounded-xl border border-[#222225] gap-0.5">
             <button
-              onClick={() => {
-                onTabChange('games');
-                if (onSelectCategory) onSelectCategory('All');
-              }}
+              onClick={() => onTabChange('games')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 currentTab === 'games'
                   ? 'bg-[#0066ff] text-white shadow-sm'
@@ -197,9 +182,6 @@ export const Navbar: React.FC<NavbarProps> = ({
             <MessageSquare className="w-3.5 h-3.5" />
             <span>Chat</span>
           </button>
-
-          {/* In-App PWA Install Prompt */}
-          <PWAInstallButton />
 
           {/* Random Game */}
           <button

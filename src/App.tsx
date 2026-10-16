@@ -5,12 +5,10 @@ import { CategoryFilter } from './components/CategoryFilter';
 import { GameCard } from './components/GameCard';
 import { GamePlayer } from './components/GamePlayer';
 import { ChatView } from './components/ChatView';
-import { OfflineIndicator } from './components/OfflineIndicator';
 import { FrostedLoadingScreen } from './components/FrostedLoadingScreen';
 import { InAppNotificationToast } from './components/InAppNotificationToast';
-import { fetchGames, getAllGames, resolveGameUrl } from './services/gameService';
+import { getAllGames, resolveGameUrl } from './services/gameService';
 import { useCloak, launchAboutBlank } from './hooks/useCloak';
-import { useGameCache } from './hooks/useGameCache';
 import { useGlobalChat } from './hooks/useGlobalChat';
 import { useDeviceAdaptation } from './hooks/useDeviceAdaptation';
 import { DeviceAdaptationBar } from './components/DeviceAdaptationBar';
@@ -19,13 +17,11 @@ import {
   Snowflake, 
   Search, 
   ShieldCheck, 
-  Layers, 
+  Zap, 
   ArrowRight,
   Gamepad2,
   MessageSquare,
-  Zap,
-  Video,
-  PhoneOff
+  Video
 } from 'lucide-react';
 
 const PAGE_SIZE = 36;
@@ -49,7 +45,7 @@ export default function App() {
   } = useCloak();
 
   // Master Games State - Pre-populated with initial catalogue so UI renders instantly
-  const [allGames, setAllGames] = useState<GameItem[]>(() => {
+  const [allGames] = useState<GameItem[]>(() => {
     try {
       return getAllGames();
     } catch {
@@ -58,9 +54,6 @@ export default function App() {
   });
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
   const [activeGame, setActiveGame] = useState<GameItem | null>(null);
-
-  // Offline caching hook
-  const { isGameCached, cacheProgress, cachedIds } = useGameCache(allGames);
 
   // Global Chat and Notifications
   const globalChat = useGlobalChat({ isChatTabActive: currentTab === 'chat' });
@@ -256,7 +249,7 @@ export default function App() {
     }`}>
       <FrostedLoadingScreen isLoading={isCatalogLoading} />
       
-      {/* Top Navigation Bar: Sleek Black and Electric Blue */}
+      {/* Top Navigation Bar */}
       <Navbar
         currentTab={currentTab}
         onTabChange={setCurrentTab}
@@ -284,7 +277,7 @@ export default function App() {
         isConnected={globalChat.isConnected}
       />
 
-      {/* Multi-Device Adaptation Bar (Console Gamepad HUD & Mobile Bottom Navigation) */}
+      {/* Multi-Device Adaptation Bar */}
       <DeviceAdaptationBar
         deviceInfo={deviceInfo}
         currentTab={currentTab}
@@ -301,7 +294,7 @@ export default function App() {
         isConnected={globalChat.isConnected}
       />
 
-      {/* Persistent Global Chat & WebRTC Voice/Video View (Kept mounted globally so calls and screen shares never drop!) */}
+      {/* Persistent Global Chat & WebRTC Voice/Video View */}
       <div 
         className={`flex-1 min-h-0 w-full overflow-hidden flex flex-col ${deviceInfo.isMobile ? 'pb-16' : ''} ${
           currentTab === 'chat' ? 'flex' : 'hidden'
@@ -380,7 +373,7 @@ export default function App() {
               </button>
             </div>
           ) : (
-            /* Game Grid: Responsive 2-columns on mobile, 3 on tablet, 4-5 on desktop & console */
+            /* Game Grid */
             <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-5">
               {visibleGames.map((game) => (
                 <GameCard
@@ -390,7 +383,6 @@ export default function App() {
                   onToggleFavorite={handleToggleFavorite}
                   isFavorite={favorites.includes(game.id)}
                   onAboutBlank={handleAboutBlank}
-                  isCached={isGameCached(game.id)}
                 />
               ))}
             </div>
@@ -423,7 +415,7 @@ export default function App() {
         </main>
       )}
 
-      {/* Footer: Clean, Precise, Robotic Alignment */}
+      {/* Footer */}
       {currentTab === 'games' && (
         <footer className="mt-16 border-t border-[#1c1c20] bg-[#050505] py-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -444,7 +436,7 @@ export default function App() {
                   </span>
                 </button>
                 <p className="text-xs text-zinc-400 max-w-sm leading-relaxed">
-                  High-performance unblocked gaming portal featuring instant titles with full offline support.
+                  High-performance unblocked gaming portal featuring instant titles with 60 FPS in-browser play.
                 </p>
                 <div className="flex items-center gap-2 text-[11px] text-zinc-400 pt-1">
                   <span className="flex items-center gap-1 text-[#0066ff] font-semibold">
@@ -452,7 +444,7 @@ export default function App() {
                   </span>
                   <span>·</span>
                   <span className="flex items-center gap-1 text-zinc-300 font-semibold">
-                    <Layers className="w-3.5 h-3.5 text-[#0066ff]" /> Offline Ready
+                    <Zap className="w-3.5 h-3.5 text-[#0066ff]" /> High-Performance
                   </span>
                 </div>
               </div>
@@ -520,7 +512,7 @@ export default function App() {
 
             <div className="pt-6 border-t border-[#19191c] flex flex-col sm:flex-row items-center justify-between text-[11px] text-zinc-400 gap-2">
               <div>
-                &copy; {new Date().getFullYear()} Frosted. Fast, instant offline gaming.
+                &copy; {new Date().getFullYear()} Frosted. Fast, instant arcade gaming.
               </div>
               <div>
                 Instant 60 FPS in-browser gameplay
@@ -529,13 +521,6 @@ export default function App() {
           </div>
         </footer>
       )}
-
-      {/* Floating Offline Notification */}
-      <OfflineIndicator
-        cachedCount={cachedIds.size}
-        isPreCaching={false}
-        cacheProgress={cacheProgress}
-      />
 
       {/* Game Player Modal */}
       {activeGame && (

@@ -813,7 +813,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         setLocalAudioStream(micStreamRef.current);
       }
     }
-  }, [screenStream, isMuted, micStreamRef.current]); // Added micStreamRef.current? No, that's a ref. Should be fine to not include it if I don't need it as dependency or add a trigger if it changes. Actually, micStreamRef.current is the mic stream. Need to track mic changes too? Yes, if mic status changes. But mic stream itself is set on join.
+  }, [screenStream, isMuted]);
 
 
   const [micError, setMicError] = useState<string | null>(null);

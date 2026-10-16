@@ -1,6 +1,9 @@
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import fs from 'fs';
+import http from 'http';
+import { initWebSocketDatabase } from './src/server/wsDatabase';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,8 +14,6 @@ const IS_PROD = process.env.NODE_ENV === 'production';
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
-
-import fs from 'fs';
 
 // Ensure uploads directory exists for persistent local file hosting
 const uploadsDir = path.resolve(__dirname, 'uploads');
@@ -95,42 +96,13 @@ app.get('/api/download', async (req, res) => {
   }
 });
 
-// 14-Minute Self-Ping Keep-Alive for Render
-const FOURTEEN_MINUTES_MS = 14 * 60 * 1000;
-
-function startRenderKeepAlive() {
-  console.log(`[Render Keep-Alive] 14-minute periodic ping initiated.`);
-
-  setInterval(async () => {
-    try {
-      const baseUrl =
-        process.env.RENDER_EXTERNAL_URL ||
-        process.env.APP_URL ||
-        `http://localhost:${PORT}`;
-
-      const target = `${baseUrl.replace(/\/$/, '')}/api/health`;
-      console.log(`[Render Keep-Alive 14m] Ping sent to ${target} at ${new Date().toISOString()}`);
-
-      const res = await fetch(target, {
-        headers: { 'User-Agent': 'Render-KeepAlive-14min/1.0' },
-        signal: AbortSignal.timeout(15000),
-      });
-
-      console.log(`[Render Keep-Alive 14m] Response status: ${res.status}`);
-    } catch (err: any) {
-      console.warn(`[Render Keep-Alive 14m] Ping error:`, err?.message || err);
-    }
-  }, FOURTEEN_MINUTES_MS);
-}
-
-// Health check endpoint (used for keep-alive ping & Render health checks)
+// Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
     status: 'ok',
     uptime: process.uptime(),
-    keepAliveEvery: '14 minutes',
     timestamp: new Date().toISOString(),
-    service: 'Melted - Unblocked Arcade',
+    service: 'Frosted - Arcade & Chat',
   });
 });
 
@@ -138,143 +110,7 @@ app.get('/ping', (req, res) => {
   res.status(200).send('pong');
 });
 
-// Cross-Link Global State Sync Store (bridges users across different URLs/links)
-let globalSyncUsers: Record<string, any> = {};
-let globalSyncMessages: any[] = [];
-let sseClients: Array<any> = [];
-
-app.get('/api/events', (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.flushHeaders?.();
-
-  sseClients.push(res);
-
-  res.write(`data: ${JSON.stringify({ type: 'CONNECTED', timestamp: Date.now() })}\n\n`);
-
-  req.on('close', () => {
-    sseClients = sseClients.filter(c => c !== res);
-  });
-});
-
-function broadcastSSE(data: any) {
-  const payload = `data: ${JSON.stringify(data)}\n\n`;
-  sseClients.forEach(client => {
-    try {
-      client.write(payload);
-    } catch {}
-  });
-}
-
-// Keep-alive heartbeat every 15 seconds for SSE
-setInterval(() => {
-  broadcastSSE({ type: 'PING', timestamp: Date.now() });
-}, 15000);
-
-app.get('/api/sync/state', (req, res) => {
-  const now = Date.now();
-  Object.keys(globalSyncUsers).forEach((id) => {
-    // Extended to 15 minutes (900,000ms) so users never leave unexpectedly
-    if (now - globalSyncUsers[id].updated_at > 900000) {
-      delete globalSyncUsers[id];
-    }
-  });
-
-  res.json({
-    success: true,
-    users: Object.values(globalSyncUsers),
-    messages: globalSyncMessages.slice(-150),
-  });
-});
-
-app.post('/api/sync/user', (req, res) => {
-  const user = req.body;
-  if (user && user.id) {
-    globalSyncUsers[user.id] = { ...user, updated_at: Date.now() };
-    broadcastSSE({ type: 'USERS_UPDATE', users: Object.values(globalSyncUsers) });
-  }
-  res.json({ success: true, users: Object.values(globalSyncUsers) });
-});
-
-app.post('/api/sync/message', (req, res) => {
-  const msg = req.body;
-  if (msg && (msg.content || msg.attachment_url)) {
-    const newMsg = {
-      id: 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
-      channel_id: msg.channel_id || 'text-general',
-      sender_id: msg.sender_id,
-      sender_name: msg.sender_name,
-      avatar_color: msg.avatar_color || '#0066ff',
-      sender_avatar_url: msg.sender_avatar_url || '',
-      content: msg.content || '',
-      attachment_url: msg.attachment_url,
-      attachment_type: msg.attachment_type,
-      attachment_name: msg.attachment_name,
-      timestamp: msg.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      created_at: Date.now(),
-    };
-    globalSyncMessages.push(newMsg);
-    if (globalSyncMessages.length > 300) globalSyncMessages.shift();
-  }
-  res.json({ success: true, messages: globalSyncMessages.slice(-150) });
-});
-
-// Cross-Link WebRTC Signaling Relay Store (bridges peer connections across different URLs/links)
-let globalRtcSignals: Array<{ targetUserId: string; fromUserId: string; signal: any; timestamp: number }> = [];
-
-app.post('/api/sync/signal', (req, res) => {
-  const { fromUserId, targetUserId, signal } = req.body;
-  if (fromUserId && targetUserId && signal) {
-    globalRtcSignals.push({
-      fromUserId,
-      targetUserId,
-      signal,
-      timestamp: Date.now(),
-    });
-    if (globalRtcSignals.length > 500) globalRtcSignals.shift();
-  }
-  res.json({ success: true });
-});
-
-app.get('/api/sync/signals/:userId', (req, res) => {
-  const userId = req.params.userId;
-  const now = Date.now();
-  globalRtcSignals = globalRtcSignals.filter(s => now - s.timestamp < 15000);
-
-  const pending = globalRtcSignals.filter(s => s.targetUserId === userId);
-  globalRtcSignals = globalRtcSignals.filter(s => s.targetUserId !== userId);
-
-  res.json({ success: true, signals: pending });
-});
-
-// Real-time Media Frame Relay Endpoints (HTTP fallback)
-let globalMediaFrames: Record<string, { fromUserId: string; kind: 'camera' | 'screen'; frame: string; timestamp: number }> = {};
-
-app.post('/api/sync/media-frame', (req, res) => {
-  const { fromUserId, kind, frame } = req.body;
-  if (fromUserId && kind && frame) {
-    globalMediaFrames[`${fromUserId}_${kind}`] = {
-      fromUserId,
-      kind,
-      frame,
-      timestamp: Date.now(),
-    };
-  }
-  res.json({ success: true });
-});
-
-app.get('/api/sync/media-frames', (req, res) => {
-  const now = Date.now();
-  Object.keys(globalMediaFrames).forEach((k) => {
-    if (now - globalMediaFrames[k].timestamp > 8000) {
-      delete globalMediaFrames[k];
-    }
-  });
-  res.json({ success: true, frames: Object.values(globalMediaFrames) });
-});
-
-// Giphy Search & Trending API Proxy (Supports full Giphy library, limit=50, pagination)
+// Giphy Search & Trending API Proxy
 app.get('/api/giphy/search', async (req, res) => {
   const query = (req.query.q as string) || '';
   const limit = (req.query.limit as string) || '50';
@@ -295,7 +131,6 @@ app.get('/api/giphy/search', async (req, res) => {
 });
 
 // Proxy game files to guarantee 100% reliable iframe loading
-// Fetches from RawGitHack first, with resilient fallback to GitHub Raw if Cloudflare restricts it
 app.get('/api/raw/:filename', async (req, res) => {
   let filename = req.params.filename;
   if (!filename) {
@@ -317,7 +152,6 @@ app.get('/api/raw/:filename', async (req, res) => {
       signal: AbortSignal.timeout(8000),
     });
 
-    // If raw.githack returns 403 or error, fallback to upstream GitHub Raw
     if (!response.ok) {
       response = await fetch(githubRawUrl, {
         signal: AbortSignal.timeout(8000),
@@ -330,7 +164,7 @@ app.get('/api/raw/:filename', async (req, res) => {
 
     let html = await response.text();
 
-    // Desktop Spoofing, GPU Acceleration, Inactivity Wake-Up, & Batch Save Sync for School Chromebooks
+    // Desktop Spoofing & GPU Optimization script injection
     const desktopSpoof = `<script>(function(){try{
 var u='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
 Object.defineProperty(navigator,'userAgent',{get:function(){return u},configurable:true});
@@ -342,7 +176,6 @@ var s=document.createElement('style');
 s.textContent='canvas,#canvas,body{image-rendering:pixelated;image-rendering:-webkit-optimize-contrast;image-rendering:crisp-edges;transform:translate3d(0,0,0);backface-visibility:hidden;}';
 (document.head||document.documentElement).appendChild(s);
 
-// High-Performance WebGL/Canvas context override for Chromebook GPUs
 var origGetContext=HTMLCanvasElement.prototype.getContext;
 HTMLCanvasElement.prototype.getContext=function(type,attrs){
   attrs=attrs||{};
@@ -375,7 +208,6 @@ function wakeGameEngine(){
     trackedAudio.forEach(function(ctx){
       if(ctx&&ctx.state==='suspended'){ctx.resume().catch(function(){});}
     });
-    // Unpause GameMaker HTML5 (Undertale / Undertale Yellow)
     if(typeof window.g_isWindowBlurred!=='undefined') window.g_isWindowBlurred=false;
     if(typeof window.g_WindowHasFocus!=='undefined') window.g_WindowHasFocus=true;
     if(window.g_pGMEntityManager){
@@ -400,7 +232,6 @@ window.addEventListener('keydown',wakeGameEngine,true);
 window.addEventListener('touchstart',wakeGameEngine,true);
 document.addEventListener('visibilitychange',function(){if(!document.hidden)wakeGameEngine();});
 
-// Watchdog to immediately revive audio and game loop after inactive tab backgrounding
 setInterval(function(){
   if(!document.hidden){
     try{
@@ -412,46 +243,6 @@ setInterval(function(){
     }catch(e){}
   }
 },1000);
-
-var pendingSaveBatch={};
-var saveFlushTimer=null;
-function sendPendingSaves(){
-  if(Object.keys(pendingSaveBatch).length===0)return;
-  try{
-    window.parent.postMessage({type:'FROSTED_SAVE_BATCH',data:pendingSaveBatch},'*');
-    pendingSaveBatch={};
-  }catch(e){}
-}
-
-var origSetItem=localStorage.setItem;
-localStorage.setItem=function(k,v){
-  try{
-    origSetItem.apply(this,arguments);
-    pendingSaveBatch[k]=String(v);
-    if(!saveFlushTimer){
-      saveFlushTimer=setTimeout(function(){
-        saveFlushTimer=null;
-        sendPendingSaves();
-      },1000);
-    }
-  }catch(e){
-    origSetItem.apply(this,arguments);
-  }
-};
-
-window.addEventListener('beforeunload',sendPendingSaves);
-window.addEventListener('pagehide',sendPendingSaves);
-
-window.addEventListener('message',function(e){
-  if(!e.data)return;
-  if(e.data.type==='FROSTED_RESTORE_SAVES'&&e.data.saves){
-    Object.keys(e.data.saves).forEach(function(k){try{origSetItem.call(localStorage,k,e.data.saves[k]);}catch(err){}});
-    wakeGameEngine();
-  }
-  if(e.data.type==='RESUME_GAME'||e.data.type==='WAKE_GAME'){
-    wakeGameEngine();
-  }
-});
 }catch(e){}})();</script>`;
 
     if (html.includes('<head>')) {
@@ -462,11 +253,9 @@ window.addEventListener('message',function(e){
       html = `${desktopSpoof}${html}`;
     }
 
-    // Serve with permissive headers and long-term caching for offline speed
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('X-Frame-Options', 'ALLOWALL');
-    res.setHeader('Cache-Control', 'public, max-age=2592000, immutable');
     res.send(html);
   } catch (error: any) {
     console.error(`Error loading game ${filename}:`, error);
@@ -474,14 +263,11 @@ window.addEventListener('message',function(e){
   }
 });
 
-import http from 'http';
-import { initWebSocketDatabase } from './src/server/wsDatabase';
-
 // Serve frontend: Vite dev middlewares in development, static files in production
 async function startServer() {
   const server = http.createServer(app);
 
-  // Initialize PostgreSQL-like WebSocket Database on /ws-db
+  // Initialize Pure WebSocket Database on /ws-db
   initWebSocketDatabase(server);
 
   if (!IS_PROD) {
@@ -500,8 +286,7 @@ async function startServer() {
   }
 
   server.listen(Number(PORT), '0.0.0.0', () => {
-    console.log(`🔥 Melted server running on http://0.0.0.0:${PORT} (Mode: ${IS_PROD ? 'Production' : 'Development'})`);
-    startRenderKeepAlive();
+    console.log(`🔥 Frosted server running on http://0.0.0.0:${PORT} (Mode: ${IS_PROD ? 'Production' : 'Development'})`);
   });
 }
 
