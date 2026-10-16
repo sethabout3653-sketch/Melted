@@ -50,6 +50,9 @@ class WebSocketDatabase {
       try {
         this.client = createClient({ url, authToken });
         console.log('[Turso DB] Initialized client for:', url);
+        this.ensureInit().catch((err) => {
+          console.error('[Turso DB] Initial schema setup error:', err?.message || err);
+        });
       } catch (err) {
         console.error('[Turso DB] Failed to create client:', err);
       }
@@ -60,7 +63,10 @@ class WebSocketDatabase {
 
   public ensureInit(): Promise<void> {
     if (!this.initPromise) {
-      this.initPromise = this.init();
+      this.initPromise = this.init().catch((err) => {
+        this.initPromise = null;
+        throw err;
+      });
     }
     return this.initPromise;
   }
@@ -122,7 +128,7 @@ class WebSocketDatabase {
   }
 
   public async selectUsers(_where?: any): Promise<DbUser[]> {
-    await this.ensureInit();
+    await this.ensureInit().catch(() => {});
 
     if (this.client) {
       try {
@@ -149,6 +155,32 @@ class WebSocketDatabase {
         }
         return users;
       } catch (err: any) {
+        if (err?.message?.includes('no such table')) {
+          console.warn('[Turso DB] Table users missing, initializing tables now...');
+          await this.init().catch(() => {});
+          try {
+            const retry = await this.client.execute('SELECT * FROM users ORDER BY updated_at DESC');
+            const users: DbUser[] = retry.rows.map((r: any) => ({
+              id: String(r.id),
+              username: String(r.username),
+              avatar_color: String(r.avatar_color),
+              avatar_url: r.avatar_url ? String(r.avatar_url) : '',
+              current_channel: (r.current_channel || 'text-general') as any,
+              is_speaking: Boolean(r.is_speaking),
+              is_muted: Boolean(r.is_muted),
+              is_deafened: Boolean(r.is_deafened),
+              has_video: Boolean(r.has_video),
+              is_screen_sharing: Boolean(r.is_screen_sharing),
+              activity: r.activity ? String(r.activity) : '',
+              updated_at: Number(r.updated_at),
+            }));
+            this.memoryUsers.clear();
+            for (const u of users) {
+              this.memoryUsers.set(u.id, u);
+            }
+            return users;
+          } catch {}
+        }
         console.error('[Turso DB] selectUsers failed, falling back to memory:', err?.message || err);
       }
     }
@@ -188,18 +220,18 @@ class WebSocketDatabase {
   }
 
   public async upsertUser(user: DbUser): Promise<void> {
-    await this.ensureInit();
+    await this.ensureInit().catch(() => {});
 
     // Always update memory cache immediately
     this.memoryUsers.set(user.id, { ...user, updated_at: Date.now() });
 
     if (this.client) {
-      try {
+      const executeUpsert = async () => {
         if (user.is_screen_sharing) {
-          await this.client.execute({ sql: 'UPDATE users SET is_screen_sharing = 0 WHERE id != ?', args: [user.id] });
+          await this.client!.execute({ sql: 'UPDATE users SET is_screen_sharing = 0 WHERE id != ?', args: [user.id] });
         }
 
-        await this.client.execute({
+        await this.client!.execute({
           sql: `
           INSERT INTO users (
             id, username, avatar_color, avatar_url, current_channel,
@@ -233,14 +265,26 @@ class WebSocketDatabase {
             Date.now()
           ]
         });
+      };
+
+      try {
+        await executeUpsert();
       } catch (err: any) {
-        console.error('[Turso DB] upsertUser failed:', err?.message || err);
+        if (err?.message?.includes('no such table')) {
+          console.warn('[Turso DB] Table missing during upsertUser, re-initializing schemas...');
+          await this.init().catch(() => {});
+          try {
+            await executeUpsert();
+          } catch {}
+        } else {
+          console.error('[Turso DB] upsertUser failed:', err?.message || err);
+        }
       }
     }
   }
 
   public async deleteUser(userId: string): Promise<void> {
-    await this.ensureInit();
+    await this.ensureInit().catch(() => {});
     this.memoryUsers.delete(userId);
 
     if (this.client) {
@@ -253,7 +297,7 @@ class WebSocketDatabase {
   }
 
   public async insertMessage(msg: DbMessage): Promise<void> {
-    await this.ensureInit();
+    await this.ensureInit().catch(() => {});
 
     this.memoryMessages.push(msg);
     if (this.memoryMessages.length > 500) {
@@ -261,8 +305,8 @@ class WebSocketDatabase {
     }
 
     if (this.client) {
-      try {
-        await this.client.execute({
+      const executeInsert = async () => {
+        await this.client!.execute({
           sql: `
           INSERT OR REPLACE INTO messages (
             id, channel_id, sender_id, sender_name, avatar_color, sender_avatar_url,
@@ -284,14 +328,26 @@ class WebSocketDatabase {
             msg.created_at
           ]
         });
+      };
+
+      try {
+        await executeInsert();
       } catch (err: any) {
-        console.error('[Turso DB] insertMessage failed:', err?.message || err);
+        if (err?.message?.includes('no such table')) {
+          console.warn('[Turso DB] Table missing during insertMessage, re-initializing schemas...');
+          await this.init().catch(() => {});
+          try {
+            await executeInsert();
+          } catch {}
+        } else {
+          console.error('[Turso DB] insertMessage failed:', err?.message || err);
+        }
       }
     }
   }
 
   public async selectAllMessages(): Promise<DbMessage[]> {
-    await this.ensureInit();
+    await this.ensureInit().catch(() => {});
 
     if (this.client) {
       try {
@@ -314,6 +370,29 @@ class WebSocketDatabase {
         this.memoryMessages = msgs;
         return msgs;
       } catch (err: any) {
+        if (err?.message?.includes('no such table')) {
+          console.warn('[Turso DB] Table messages missing, creating now...');
+          await this.init().catch(() => {});
+          try {
+            const retry = await this.client.execute('SELECT * FROM messages ORDER BY created_at ASC LIMIT 500');
+            const msgs: DbMessage[] = retry.rows.map((r: any) => ({
+              id: String(r.id),
+              channel_id: String(r.channel_id),
+              sender_id: String(r.sender_id),
+              sender_name: String(r.sender_name),
+              avatar_color: String(r.avatar_color),
+              sender_avatar_url: r.sender_avatar_url ? String(r.sender_avatar_url) : undefined,
+              content: String(r.content),
+              attachment_url: r.attachment_url ? String(r.attachment_url) : undefined,
+              attachment_type: r.attachment_type ? String(r.attachment_type) : undefined,
+              attachment_name: r.attachment_name ? String(r.attachment_name) : undefined,
+              timestamp: String(r.timestamp),
+              created_at: Number(r.created_at),
+            }));
+            this.memoryMessages = msgs;
+            return msgs;
+          } catch {}
+        }
         console.error('[Turso DB] selectAllMessages failed, returning memory copy:', err?.message || err);
       }
     }
