@@ -248,46 +248,65 @@ export function useWebRTC({
       } catch {}
     }
 
-    // 2. Camera Video Track: Add ONLY when camera is actually ON
+    // 2. Camera Video Track: Use replaceTrack to prevent duplicate transceivers on toggle
     const cameraTrack = cameraStreamRef.current?.getVideoTracks().find((t) => t.readyState === 'live') || null;
-    if (cameraTrack && cameraStreamRef.current) {
-      cameraTrack.enabled = true;
-      if (senders.camera && pcSenders.includes(senders.camera)) {
+    
+    if (!senders.camera) {
+      const videoTransceivers = pc.getTransceivers().filter((t) => t.receiver.track.kind === 'video' || t.sender.track?.kind === 'video');
+      // Pick the first available video sender or create one
+      if (videoTransceivers.length > 0) {
+        senders.camera = videoTransceivers[0].sender;
+      }
+    }
+
+    if (senders.camera && pcSenders.includes(senders.camera)) {
+      if (cameraTrack) {
+        cameraTrack.enabled = true;
         if (senders.camera.track !== cameraTrack) {
           await senders.camera.replaceTrack(cameraTrack).catch(() => {});
         }
       } else {
-        try {
-          senders.camera = pc.addTrack(cameraTrack, cameraStreamRef.current);
-        } catch (e) {
-          console.error(`[WebRTC] Failed to add camera track for ${peerId}:`, e);
+        if (senders.camera.track !== null) {
+          await senders.camera.replaceTrack(null).catch(() => {});
         }
       }
-    } else if (senders.camera && pcSenders.includes(senders.camera)) {
+    } else if (cameraTrack && cameraStreamRef.current) {
       try {
-        pc.removeTrack(senders.camera);
-      } catch {}
-      senders.camera = null;
+        cameraTrack.enabled = true;
+        senders.camera = pc.addTrack(cameraTrack, cameraStreamRef.current);
+      } catch (e) {
+        console.error(`[WebRTC] Failed to add camera track for ${peerId}:`, e);
+      }
     }
 
-    // 3. Screen Share Video Track: Add ONLY when screen share is actually ON
+    // 3. Screen Share Video Track: Use replaceTrack to prevent duplicate transceivers
     const screenTrack = screenStreamRef.current?.getVideoTracks().find((t) => t.readyState === 'live') || null;
-    if (screenTrack && screenStreamRef.current) {
-      screenTrack.enabled = true;
-      if (senders.screen && pcSenders.includes(senders.screen)) {
+    
+    if (!senders.screen) {
+      const videoTransceivers = pc.getTransceivers().filter((t) => (t.receiver.track.kind === 'video' || t.sender.track?.kind === 'video') && t.sender !== senders.camera);
+      if (videoTransceivers.length > 0) {
+        senders.screen = videoTransceivers[0].sender;
+      }
+    }
+
+    if (senders.screen && pcSenders.includes(senders.screen)) {
+      if (screenTrack) {
+        screenTrack.enabled = true;
         if (senders.screen.track !== screenTrack) {
           await senders.screen.replaceTrack(screenTrack).catch(() => {});
         }
       } else {
-        try {
-          senders.screen = pc.addTrack(screenTrack, screenStreamRef.current);
-        } catch {}
+        if (senders.screen.track !== null) {
+          await senders.screen.replaceTrack(null).catch(() => {});
+        }
       }
-    } else if (senders.screen && pcSenders.includes(senders.screen)) {
+    } else if (screenTrack && screenStreamRef.current) {
       try {
-        pc.removeTrack(senders.screen);
-      } catch {}
-      senders.screen = null;
+        screenTrack.enabled = true;
+        senders.screen = pc.addTrack(screenTrack, screenStreamRef.current);
+      } catch (e) {
+        console.error(`[WebRTC] Failed to add screen track for ${peerId}:`, e);
+      }
     }
 
     peerSenders.current.set(peerId, senders);
