@@ -237,7 +237,7 @@ const SingleAudioTrackPlayer: React.FC<{ track: MediaStreamTrack; isDeafened: bo
     };
   }, [track, isDeafened, volume]);
 
-  return <audio ref={audioRef} autoPlay playsInline className="fixed -top-96 -left-96 w-1 h-1 opacity-0 pointer-events-none" />;
+  return <audio ref={audioRef} autoPlay playsInline style={{ position: 'fixed', top: -9999, left: -9999, width: 1, height: 1, pointerEvents: 'none' }} />;
 };
 
 // Dedicated audio player for WebRTC voice peers (plays both microphone and screen share audio tracks!)
@@ -318,6 +318,9 @@ const RemoteVideoPlayer: React.FC<{
 
     const tryPlay = () => {
       if (video) {
+        if (video.srcObject !== stream) {
+          video.srcObject = stream;
+        }
         video.play().then(() => {
           checkOrientationRef.current();
         }).catch((err) => {
@@ -336,6 +339,14 @@ const RemoteVideoPlayer: React.FC<{
       t.addEventListener('unmute', handleUnmute);
     });
 
+    const handleAddTrack = (e: MediaStreamTrackEvent) => {
+      if (e.track.kind === 'video') {
+        e.track.addEventListener('unmute', handleUnmute);
+        tryPlay();
+      }
+    };
+    stream.addEventListener('addtrack', handleAddTrack);
+
     tryPlay();
 
     // Fallback on global user interaction in case autoplay policy blocked initial play
@@ -351,6 +362,7 @@ const RemoteVideoPlayer: React.FC<{
       tracks.forEach((t) => {
         t.removeEventListener('unmute', handleUnmute);
       });
+      stream.removeEventListener('addtrack', handleAddTrack);
       window.removeEventListener('click', onUserGesture);
       window.removeEventListener('touchstart', onUserGesture);
       window.removeEventListener('keydown', onUserGesture);
@@ -2533,11 +2545,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     {/* Remote Peers Tiles */}
                     {voiceUsers.map((u: any) => {
                       const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
-                      const camStream = remoteCameraStreams[u.id];
-                      const scrStream = remoteScreenStreams[u.id];
+                      const rawCamStream = remoteCameraStreams[u.id];
+                      const rawScrStream = remoteScreenStreams[u.id];
 
-                      const hasCamera = Boolean(u.has_video);
-                      const hasScreen = Boolean(u.is_screen_sharing);
+                      const camLiveTrack = rawCamStream?.getVideoTracks().find((t) => t.readyState === 'live');
+                      const scrLiveTrack = rawScrStream?.getVideoTracks().find((t) => t.readyState === 'live');
+
+                      // Smart fallback: If only one media mode is active, ensure the arriving video track is mapped to that mode
+                      const camStream = rawCamStream || (!u.is_screen_sharing && scrLiveTrack ? rawScrStream : undefined);
+                      const scrStream = rawScrStream || (!u.has_video && camLiveTrack ? rawCamStream : undefined);
+
+                      const hasCamera = Boolean(u.has_video || (camStream && camStream.getVideoTracks().some((t) => t.readyState === 'live')));
+                      const hasScreen = Boolean(u.is_screen_sharing || (scrStream && scrStream.getVideoTracks().some((t) => t.readyState === 'live')));
                       const isPeerCameraVertical = Boolean(peerOrientations[`${u.id}-camera`]);
 
                       return (
@@ -2957,6 +2976,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
           </div>
         </div>
       )}
+
+      {/* Global Remote Audio Output for Voice Channel Peers (Microphone & Screen Share Audio) */}
+      {Object.entries(remoteStreams).map(([peerId, stream]) => (
+        <RemoteAudioPlayer
+          key={peerId}
+          stream={stream}
+          isDeafened={isDeafened}
+        />
+      ))}
 
     </div>
   );
