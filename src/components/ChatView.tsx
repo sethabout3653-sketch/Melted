@@ -2701,8 +2701,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       const camStream = remoteCameraStreams[u.id];
                       const scrStream = remoteScreenStreams[u.id];
 
-                      const hasCamera = Boolean(u.has_video);
-                      const hasScreen = Boolean(u.is_screen_sharing);
+                      const hasCamera = Boolean(u.has_video || (camStream && camStream.getVideoTracks().some(t => t.readyState === 'live')));
+                      const hasScreen = Boolean(u.is_screen_sharing || (scrStream && scrStream.getVideoTracks().some(t => t.readyState === 'live')));
                       const isPeerCameraVertical = Boolean(peerOrientations[`${u.id}-camera`]);
 
                       return (
