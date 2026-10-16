@@ -274,13 +274,13 @@ export function useWebSocketDatabase(currentUser: { id: string; username: string
   }, [startHeartbeat, stopHeartbeat, enableFallbackMode]);
 
   useEffect(() => {
-    // connect(); // WebSocket disabled
+    connect();
     return () => {
       stopHeartbeat();
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (wsRef.current) wsRef.current.close();
     };
-  }, [stopHeartbeat]); // connect removed from dependencies
+  }, [connect, stopHeartbeat]);
 
   const updateUser = useCallback((set: Partial<DbUser>) => {
     const u = currentUserRef.current;

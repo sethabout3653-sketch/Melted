@@ -33,23 +33,23 @@ export interface DbMessage {
   created_at: number;
 }
 
-// Persistent Relational Tables backed by SQLite (WAL mode)
+import { createClient, Client } from '@libsql/client';
+
+// Persistent Relational Tables backed by Turso (SQLite Cloud)
 class WebSocketDatabase {
-  private db: DatabaseSync;
+  private client: Client;
   public channels = [
     { id: 'text-general', name: 'general', type: 'text' },
     { id: 'voice-general', name: 'general', type: 'voice' },
     { id: 'video-general', name: 'general', type: 'video' },
   ];
 
-  constructor(dbPath: string = path.join(process.cwd(), 'chat.sqlite')) {
-    this.db = new DatabaseSync(dbPath);
-    this.db.exec('PRAGMA journal_mode = WAL;');
-    this.db.exec('PRAGMA synchronous = NORMAL;');
-    this.db.exec('PRAGMA busy_timeout = 5000;');
-    this.db.exec('PRAGMA foreign_keys = ON;');
+  constructor(url: string, authToken: string) {
+    this.client = createClient({ url, authToken });
+  }
 
-    this.db.exec(`
+  public async init() {
+    await this.client.execute(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         username TEXT NOT NULL,
@@ -84,21 +84,13 @@ class WebSocketDatabase {
       CREATE INDEX IF NOT EXISTS idx_messages_channel_id ON messages(channel_id);
     `);
 
-    try {
-      this.db.exec("ALTER TABLE users ADD COLUMN activity TEXT DEFAULT '';");
-    } catch {}
-
-    try {
-      this.db.exec("ALTER TABLE users ADD COLUMN avatar_url TEXT DEFAULT '';");
-    } catch {}
-
-    // Reset transient users on server restart to keep presence accurate
-    this.db.exec("DELETE FROM users WHERE current_channel = 'offline' OR updated_at < " + (Date.now() - 3600000));
+    // Reset transient users
+    await this.client.execute("DELETE FROM users WHERE current_channel = 'offline' OR updated_at < " + (Date.now() - 3600000));
   }
 
-  public selectUsers(where?: Partial<DbUser>): DbUser[] {
-    const rows = this.db.prepare('SELECT * FROM users ORDER BY updated_at DESC').all() as any[];
-    const list: DbUser[] = rows.map((r) => ({
+  public async selectUsers(): Promise<DbUser[]> {
+    const result = await this.client.execute('SELECT * FROM users ORDER BY updated_at DESC');
+    return result.rows.map((r: any) => ({
       id: String(r.id),
       username: String(r.username),
       avatar_color: String(r.avatar_color),
@@ -112,15 +104,12 @@ class WebSocketDatabase {
       activity: r.activity ? String(r.activity) : '',
       updated_at: Number(r.updated_at),
     }));
-    if (!where) return list;
-    return list.filter((user) => {
-      return Object.entries(where).every(([key, val]) => (user as any)[key] === val);
-    });
   }
 
-  public getUser(userId: string): DbUser | null {
-    const row = this.db.prepare('SELECT * FROM users WHERE id = ?').get(userId) as any;
-    if (!row) return null;
+  public async getUser(userId: string): Promise<DbUser | null> {
+    const result = await this.client.execute({ sql: 'SELECT * FROM users WHERE id = ?', args: [userId] });
+    if (result.rows.length === 0) return null;
+    const row = result.rows[0] as any;
     return {
       id: String(row.id),
       username: String(row.username),
@@ -137,15 +126,13 @@ class WebSocketDatabase {
     };
   }
 
-  public upsertUser(user: DbUser) {
-    // If this user is starting screen sharing, instantly turn off screen sharing for all other users (only one screen share at a time!)
+  public async upsertUser(user: DbUser) {
     if (user.is_screen_sharing) {
-      try {
-        this.db.prepare('UPDATE users SET is_screen_sharing = 0 WHERE id != ?').run(user.id);
-      } catch {}
+      await this.client.execute({ sql: 'UPDATE users SET is_screen_sharing = 0 WHERE id != ?', args: [user.id] });
     }
 
-    const stmt = this.db.prepare(`
+    await this.client.execute({
+      sql: `
       INSERT INTO users (
         id, username, avatar_color, avatar_url, current_channel,
         is_speaking, is_muted, is_deafened, has_video, is_screen_sharing, activity, updated_at
@@ -162,53 +149,56 @@ class WebSocketDatabase {
         is_screen_sharing = excluded.is_screen_sharing,
         activity = excluded.activity,
         updated_at = excluded.updated_at
-    `);
-    stmt.run(
-      user.id,
-      user.username,
-      user.avatar_color,
-      user.avatar_url || '',
-      user.current_channel,
-      user.is_speaking ? 1 : 0,
-      user.is_muted ? 1 : 0,
-      user.is_deafened ? 1 : 0,
-      user.has_video ? 1 : 0,
-      user.is_screen_sharing ? 1 : 0,
-      user.activity || '',
-      Date.now()
-    );
+    `,
+      args: [
+        user.id,
+        user.username,
+        user.avatar_color,
+        user.avatar_url || '',
+        user.current_channel,
+        user.is_speaking ? 1 : 0,
+        user.is_muted ? 1 : 0,
+        user.is_deafened ? 1 : 0,
+        user.has_video ? 1 : 0,
+        user.is_screen_sharing ? 1 : 0,
+        user.activity || '',
+        Date.now()
+      ]
+    });
   }
 
-  public deleteUser(userId: string) {
-    this.db.prepare('DELETE FROM users WHERE id = ?').run(userId);
+  public async deleteUser(userId: string) {
+    await this.client.execute({ sql: 'DELETE FROM users WHERE id = ?', args: [userId] });
   }
 
-  public insertMessage(msg: DbMessage) {
-    const stmt = this.db.prepare(`
+  public async insertMessage(msg: DbMessage) {
+    await this.client.execute({
+      sql: `
       INSERT OR REPLACE INTO messages (
         id, channel_id, sender_id, sender_name, avatar_color, sender_avatar_url,
         content, attachment_url, attachment_type, attachment_name, timestamp, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    stmt.run(
-      msg.id,
-      msg.channel_id,
-      msg.sender_id,
-      msg.sender_name,
-      msg.avatar_color,
-      msg.sender_avatar_url ?? '',
-      msg.content,
-      msg.attachment_url ?? null,
-      msg.attachment_type ?? null,
-      msg.attachment_name ?? null,
-      msg.timestamp,
-      msg.created_at
-    );
+    `,
+      args: [
+        msg.id,
+        msg.channel_id,
+        msg.sender_id,
+        msg.sender_name,
+        msg.avatar_color,
+        msg.sender_avatar_url ?? '',
+        msg.content,
+        msg.attachment_url ?? null,
+        msg.attachment_type ?? null,
+        msg.attachment_name ?? null,
+        msg.timestamp,
+        msg.created_at
+      ]
+    });
   }
 
-  public selectAllMessages(): DbMessage[] {
-    const rows = this.db.prepare('SELECT * FROM messages ORDER BY created_at ASC LIMIT 500').all() as any[];
-    return rows.map((r) => ({
+  public async selectAllMessages(): Promise<DbMessage[]> {
+    const result = await this.client.execute('SELECT * FROM messages ORDER BY created_at ASC LIMIT 500');
+    return result.rows.map((r: any) => ({
       id: String(r.id),
       channel_id: String(r.channel_id),
       sender_id: String(r.sender_id),
@@ -224,9 +214,9 @@ class WebSocketDatabase {
     }));
   }
 
-  public selectMessages(channelId: string): DbMessage[] {
-    const rows = this.db.prepare('SELECT * FROM messages WHERE channel_id = ? ORDER BY created_at ASC LIMIT 500').all(channelId) as any[];
-    return rows.map((r) => ({
+  public async selectMessages(channelId: string): Promise<DbMessage[]> {
+    const result = await this.client.execute({ sql: 'SELECT * FROM messages WHERE channel_id = ? ORDER BY created_at ASC LIMIT 500', args: [channelId] });
+    return result.rows.map((r: any) => ({
       id: String(r.id),
       channel_id: String(r.channel_id),
       sender_id: String(r.sender_id),
@@ -242,9 +232,11 @@ class WebSocketDatabase {
     }));
   }
 
-  public deleteMessage(id: string) {
-    this.db.prepare('DELETE FROM messages WHERE id = ?').run(id);
+  public async deleteMessage(id: string) {
+    await this.client.execute({ sql: 'DELETE FROM messages WHERE id = ?', args: [id] });
   }
+}
+
 }
 
 export function initWebSocketDatabase(server: Server) {
