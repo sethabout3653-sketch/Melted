@@ -31,7 +31,6 @@ import {
 } from 'lucide-react';
 import { GiphyFetch } from '@giphy/js-fetch-api';
 import { useWebRTC } from '../services/useWebRTC';
-import { MediaRecorderStreamer } from './MediaRecorderStreamer';
 
 interface ChatViewProps {
   globalChat: any;
@@ -282,7 +281,7 @@ const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened:
   );
 };
 
-// Remote Video Player with orientation detection and frame decoder validation
+// Remote Video Player with robust frame detection, orientation checking, and black screen prevention
 const RemoteVideoPlayer: React.FC<{ 
   stream: MediaStream | undefined;
   username: string;
@@ -317,22 +316,6 @@ const RemoteVideoPlayer: React.FC<{
   }, [checkOrientation]);
 
   useEffect(() => {
-    checkOrientation();
-    const interval = setInterval(checkOrientation, 300);
-    const timeout = setTimeout(() => clearInterval(interval), 4000);
-
-    window.addEventListener('resize', checkOrientation);
-    window.addEventListener('orientationchange', checkOrientation);
-
-    return () => {
-      clearInterval(interval);
-      clearTimeout(timeout);
-      window.removeEventListener('resize', checkOrientation);
-      window.removeEventListener('orientationchange', checkOrientation);
-    };
-  }, [checkOrientation]);
-
-  useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
@@ -343,70 +326,86 @@ const RemoteVideoPlayer: React.FC<{
     }
 
     const liveTracks = stream.getVideoTracks().filter((t) => t.readyState === 'live');
-    if (liveTracks.length > 0) {
-      liveTracks.forEach((t) => { t.enabled = true; });
-      if (video.srcObject !== stream) {
-        video.srcObject = stream;
-      }
-      // Ensure video is visible after brief buffer period even if videoWidth reporting is slow
-      const timer = setTimeout(() => {
-        setHasVideoFrame(true);
-      }, 400);
-
-      const tryPlay = () => {
-        if (video && video.srcObject) {
-          video.play().then(() => {
-            setHasVideoFrame(true);
-            checkOrientationRef.current();
-          }).catch((err) => {
-            console.warn('[RemoteVideoPlayer] Play waiting for user gesture:', err);
-          });
-        }
-      };
-
-      tryPlay();
-
-      const handleUnmute = () => {
-        liveTracks.forEach((t) => { t.enabled = true; });
-        setHasVideoFrame(true);
-        tryPlay();
-      };
-
-      liveTracks.forEach((t) => {
-        t.addEventListener('unmute', handleUnmute);
-      });
-
-      const handleAddTrack = (e: MediaStreamTrackEvent) => {
-        if (e.track.kind === 'video') {
-          e.track.enabled = true;
-          e.track.addEventListener('unmute', handleUnmute);
-          setHasVideoFrame(true);
-          tryPlay();
-        }
-      };
-      stream.addEventListener('addtrack', handleAddTrack);
-
-      const onUserGesture = () => {
-        tryPlay();
-      };
-
-      window.addEventListener('click', onUserGesture, { once: true });
-      window.addEventListener('touchstart', onUserGesture, { once: true });
-      window.addEventListener('keydown', onUserGesture, { once: true });
-
-      return () => {
-        clearTimeout(timer);
-        liveTracks.forEach((t) => {
-          t.removeEventListener('unmute', handleUnmute);
-        });
-        stream.removeEventListener('addtrack', handleAddTrack);
-        window.removeEventListener('click', onUserGesture);
-        window.removeEventListener('touchstart', onUserGesture);
-        window.removeEventListener('keydown', onUserGesture);
-      };
-    } else {
+    if (liveTracks.length === 0) {
+      video.srcObject = null;
       setHasVideoFrame(false);
+      return;
     }
+
+    liveTracks.forEach((t) => { t.enabled = true; });
+
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
+
+    video.muted = true;
+    video.defaultMuted = true;
+
+    const checkFrame = () => {
+      if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+        setHasVideoFrame(true);
+        checkOrientationRef.current();
+      }
+    };
+
+    const tryPlay = () => {
+      if (video && video.srcObject) {
+        video.play().then(() => {
+          checkFrame();
+        }).catch((err) => {
+          console.warn('[RemoteVideoPlayer] Play waiting for user interaction:', err);
+        });
+      }
+    };
+
+    tryPlay();
+
+    const handleUnmute = () => {
+      liveTracks.forEach((t) => { t.enabled = true; });
+      tryPlay();
+    };
+
+    liveTracks.forEach((t) => {
+      t.addEventListener('unmute', handleUnmute);
+    });
+
+    const handleAddTrack = (e: MediaStreamTrackEvent) => {
+      if (e.track.kind === 'video') {
+        e.track.enabled = true;
+        e.track.addEventListener('unmute', handleUnmute);
+        tryPlay();
+      }
+    };
+    stream.addEventListener('addtrack', handleAddTrack);
+
+    video.addEventListener('loadeddata', checkFrame);
+    video.addEventListener('loadedmetadata', checkFrame);
+    video.addEventListener('timeupdate', checkFrame);
+    video.addEventListener('canplay', checkFrame);
+    video.addEventListener('playing', checkFrame);
+
+    const onUserGesture = () => {
+      tryPlay();
+    };
+
+    window.addEventListener('click', onUserGesture, { once: true });
+    window.addEventListener('touchstart', onUserGesture, { once: true });
+    window.addEventListener('keydown', onUserGesture, { once: true });
+
+    return () => {
+      liveTracks.forEach((t) => {
+        t.removeEventListener('unmute', handleUnmute);
+      });
+      stream.removeEventListener('addtrack', handleAddTrack);
+      video.removeEventListener('loadeddata', checkFrame);
+      video.removeEventListener('loadedmetadata', checkFrame);
+      video.removeEventListener('timeupdate', checkFrame);
+      video.removeEventListener('canplay', checkFrame);
+      video.removeEventListener('playing', checkFrame);
+      window.removeEventListener('click', onUserGesture);
+      window.removeEventListener('touchstart', onUserGesture);
+      window.removeEventListener('keydown', onUserGesture);
+    };
   }, [stream]);
 
   return (
@@ -430,25 +429,27 @@ const RemoteVideoPlayer: React.FC<{
         playsInline
         muted
         onLoadedMetadata={(e) => {
-          setHasVideoFrame(true);
           checkOrientation();
           (e.target as HTMLVideoElement).play().catch(() => {});
         }}
-        onLoadedData={(e) => {
-          setHasVideoFrame(true);
-          checkOrientation();
-          (e.target as HTMLVideoElement).play().catch(() => {});
+        onLoadedData={() => {
+          const video = videoRef.current;
+          if (video && video.videoWidth > 0) {
+            setHasVideoFrame(true);
+          }
         }}
         onCanPlay={() => {
-          setHasVideoFrame(true);
-          checkOrientation();
+          const video = videoRef.current;
+          if (video && video.videoWidth > 0) {
+            setHasVideoFrame(true);
+          }
         }}
         onPlaying={() => {
           setHasVideoFrame(true);
           checkOrientation();
         }}
         onResize={checkOrientation}
-        className={`w-full h-full ${isScreen ? 'object-contain' : (isVertical ? 'object-cover' : 'object-cover')} rounded-3xl ${hasVideoFrame ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}
+        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl ${hasVideoFrame ? 'opacity-100' : 'opacity-0'} transition-opacity duration-200`}
       />
     </div>
   );
@@ -464,11 +465,13 @@ const LocalVideoPlayer: React.FC<{
   isScreen?: boolean;
 }> = ({ stream, user, renderAvatar, onOrientationChange, isMirrored = true, isScreen = false }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [hasFrame, setHasFrame] = useState(false);
 
   const checkOrientation = useCallback(() => {
     const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const video = videoRef.current;
     if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+      setHasFrame(true);
       const vertical = video.videoHeight > video.videoWidth;
       onOrientationChange?.(vertical);
       return;
@@ -476,6 +479,7 @@ const LocalVideoPlayer: React.FC<{
     const track = stream?.getVideoTracks()[0];
     const settings = track?.getSettings?.();
     if (settings && settings.width && settings.height) {
+      setHasFrame(true);
       const vertical = settings.height > settings.width;
       onOrientationChange?.(vertical);
       return;
@@ -486,51 +490,52 @@ const LocalVideoPlayer: React.FC<{
   }, [onOrientationChange, stream]);
 
   useEffect(() => {
-    checkOrientation();
-    const interval = setInterval(checkOrientation, 350);
-    const timeout = setTimeout(() => clearInterval(interval), 4000);
-
-    window.addEventListener('resize', checkOrientation);
-    window.addEventListener('orientationchange', checkOrientation);
-
-    return () => {
-      clearInterval(interval);
-      clearTimeout(timeout);
-      window.removeEventListener('resize', checkOrientation);
-      window.removeEventListener('orientationchange', checkOrientation);
-    };
-  }, [checkOrientation]);
-
-  useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    if (stream && video.srcObject !== stream) {
-      video.srcObject = stream;
-      video.play().catch(() => {});
+    if (!stream) {
+      video.srcObject = null;
+      setHasFrame(false);
+      return;
     }
 
-    const tryPlay = () => {
-      if (stream) {
-        video.play().catch(() => {});
+    const liveTracks = stream.getVideoTracks().filter((t) => t.readyState === 'live');
+    if (liveTracks.length === 0) {
+      video.srcObject = null;
+      setHasFrame(false);
+      return;
+    }
+
+    liveTracks.forEach((t) => { t.enabled = true; });
+
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
+
+    video.muted = true;
+    video.defaultMuted = true;
+
+    const checkFrame = () => {
+      if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+        setHasFrame(true);
         checkOrientation();
       }
     };
 
-    tryPlay();
+    video.play().then(() => {
+      checkFrame();
+    }).catch(() => {});
 
-    const onUserGesture = () => {
-      tryPlay();
-    };
-
-    window.addEventListener('click', onUserGesture, { once: true });
-    window.addEventListener('touchstart', onUserGesture, { once: true });
-    window.addEventListener('keydown', onUserGesture, { once: true });
+    video.addEventListener('loadeddata', checkFrame);
+    video.addEventListener('loadedmetadata', checkFrame);
+    video.addEventListener('timeupdate', checkFrame);
+    video.addEventListener('playing', checkFrame);
 
     return () => {
-      window.removeEventListener('click', onUserGesture);
-      window.removeEventListener('touchstart', onUserGesture);
-      window.removeEventListener('keydown', onUserGesture);
+      video.removeEventListener('loadeddata', checkFrame);
+      video.removeEventListener('loadedmetadata', checkFrame);
+      video.removeEventListener('timeupdate', checkFrame);
+      video.removeEventListener('playing', checkFrame);
     };
   }, [stream, checkOrientation]);
 
@@ -544,6 +549,16 @@ const LocalVideoPlayer: React.FC<{
 
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-black">
+      {!hasFrame && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-[#0c0c10] z-10 text-zinc-400 p-4 text-center">
+          <div className="w-10 h-10 rounded-2xl bg-blue-600/15 border border-blue-500/25 flex items-center justify-center text-blue-400 animate-pulse">
+            {isScreen ? <Monitor className="w-5 h-5" /> : <Video className="w-5 h-5" />}
+          </div>
+          <span className="text-xs font-semibold text-zinc-400">
+            {isScreen ? 'Starting screen preview...' : 'Starting camera...'}
+          </span>
+        </div>
+      )}
       {/* Local Video Stream with optional mirror preview */}
       <video
         ref={videoRef}
@@ -555,7 +570,7 @@ const LocalVideoPlayer: React.FC<{
           (e.target as HTMLVideoElement).play().catch(() => {});
         }}
         onResize={checkOrientation}
-        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl ${isMirrored ? 'transform scale-x-[-1]' : ''} opacity-100`}
+        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl ${isMirrored && !isScreen ? 'transform scale-x-[-1]' : ''} ${hasFrame ? 'opacity-100' : 'opacity-0'} transition-opacity duration-200`}
       />
     </div>
   );
@@ -616,7 +631,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   // Call & Audio Level States
   const [audioLevel, setAudioLevel] = useState<number>(0);
   const [isMicTesting, setIsMicTesting] = useState(false);
-  const [showMediaStreamerModal, setShowMediaStreamerModal] = useState(false);
 
   useEffect(() => {
     setEditName(currentUser.username);
@@ -2588,21 +2602,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   <button
                     onClick={toggleScreenShare}
                     className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 sm:gap-2 border transition-all cursor-pointer ${
-                      isScreenSharing ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white/5 border-white/10 hover:bg-white/10 text-zinc-200'
+                      isScreenSharing ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-600/30' : 'bg-white/5 border-white/10 hover:bg-white/10 text-zinc-200'
                     }`}
                   >
                     <Monitor className="w-4 h-4" />
                     <span className="hidden sm:inline">{isScreenSharing ? 'Stop Screen' : 'Share Screen'}</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setShowMediaStreamerModal(true)}
-                    className="px-3 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-                    title="Open WebSocket Media Streamer (No WebRTC)"
-                  >
-                    <Video className="w-4 h-4 text-purple-400" />
-                    <span className="hidden sm:inline">WS Streamer</span>
                   </button>
 
                   {/* Mobile / Tablet Members drawer toggle button */}
@@ -2667,23 +2671,31 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       </div>
                     )}
 
-                    {/* Local Screen Share Tile - Clean indicator card preventing hall of mirrors */}
+                    {/* Local Screen Share Tile - Shows live screen preview with stop control when actively sharing */}
                     {isScreenSharing && screenStream && (
-                      <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px] p-6 text-center gap-4">
-                        <div className="w-14 h-14 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shadow-lg animate-pulse">
-                          <Monitor className="w-7 h-7" />
+                      <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/40 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
+                        <LocalVideoPlayer 
+                          stream={screenStream} 
+                          user={currentUser}
+                          renderAvatar={renderAvatar}
+                          isMirrored={false}
+                          isScreen={true}
+                        />
+
+                        {/* Bottom-Left Overlay */}
+                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-auto">
+                          <div className="text-sm font-extrabold text-white flex items-center gap-2">
+                            <Monitor className="w-4 h-4 text-blue-400" />
+                            <span>Your Screen (Sharing)</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={toggleScreenShare}
+                            className="px-3 py-1.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-md shadow-red-600/30 transition-all cursor-pointer"
+                          >
+                            Stop Sharing
+                          </button>
                         </div>
-                        <div className="space-y-1">
-                          <h3 className="text-base font-extrabold text-white">You are sharing your screen</h3>
-                          <p className="text-xs text-zinc-400">Other participants in the call can see your screen.</p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={toggleScreenShare}
-                          className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-lg shadow-red-600/30 transition-all cursor-pointer"
-                        >
-                          Stop Sharing
-                        </button>
                       </div>
                     )}
 
@@ -2713,8 +2725,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       const camStream = remoteCameraStreams[u.id];
                       const scrStream = remoteScreenStreams[u.id];
 
-                      const hasCamera = Boolean(u.has_video || (camStream && camStream.getVideoTracks().some(t => t.readyState === 'live')));
-                      const hasScreen = Boolean(u.is_screen_sharing || (scrStream && scrStream.getVideoTracks().some(t => t.readyState === 'live')));
+                      const hasCamera = Boolean(u.has_video && camStream && camStream.getVideoTracks().some(t => t.readyState === 'live'));
+                      const hasScreen = Boolean(u.is_screen_sharing && scrStream && scrStream.getVideoTracks().some(t => t.readyState === 'live'));
                       const isPeerCameraVertical = Boolean(peerOrientations[`${u.id}-camera`]);
 
                       return (
@@ -2848,7 +2860,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     {/* Camera Toggle Button */}
                     <button 
                       onClick={() => toggleCamera()}
-                      className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500"
+                      className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
+                        isVideoEnabled 
+                          ? 'bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500' 
+                          : 'bg-[#181820] text-zinc-400 hover:text-white hover:bg-[#252530] border border-white/10'
+                      }`}
                       title={isVideoEnabled ? 'Turn Off Camera' : 'Turn On Camera'}
                     >
                       {isVideoEnabled ? <Video className="w-5 h-5 sm:w-6 sm:h-6" /> : <VideoOff className="w-5 h-5 sm:w-6 sm:h-6" />}
@@ -2857,8 +2873,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     {/* Screen Share Button */}
                     <button 
                       onClick={toggleScreenShare}
-                      className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500"
-                      title="Share Screen"
+                      className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
+                        isScreenSharing 
+                          ? 'bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500' 
+                          : 'bg-[#181820] text-zinc-400 hover:text-white hover:bg-[#252530] border border-white/10'
+                      }`}
+                      title={isScreenSharing ? 'Stop Screen Share' : 'Share Screen'}
                     >
                       <Monitor className="w-5 h-5 sm:w-6 sm:h-6" />
                     </button>
@@ -3143,11 +3163,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
           isDeafened={isDeafened}
         />
       ))}
-
-      {/* WebSocket Media Streamer Modal (No WebRTC) */}
-      {showMediaStreamerModal && (
-        <MediaRecorderStreamer onClose={() => setShowMediaStreamerModal(false)} />
-      )}
 
     </div>
   );
