@@ -2645,29 +2645,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                           isMirrored={true}
                         />
 
-                        {/* Orientation Badge & Manual Override */}
-                        <div className="absolute top-3 right-3 flex items-center gap-1.5 z-20 pointer-events-auto">
-                          <button
-                            type="button"
-                            onClick={() => setLocalIsVertical(!localIsVertical)}
-                            className="px-2.5 py-1 rounded-xl bg-black/60 hover:bg-black/80 backdrop-blur-md text-[10px] font-bold text-zinc-300 hover:text-white flex items-center gap-1.5 border border-white/10 transition-all cursor-pointer shadow-md"
-                            title="Click to toggle between Portrait (vertical) and Landscape (horizontal)"
-                          >
-                            {localIsVertical ? (
-                              <>
-                                <Smartphone className="w-3.5 h-3.5 text-blue-400" />
-                                <span>Portrait</span>
-                              </>
-                            ) : (
-                              <>
-                                <Monitor className="w-3.5 h-3.5 text-zinc-400" />
-                                <span>Landscape</span>
-                              </>
-                            )}
-                            <RotateCw className="w-2.5 h-2.5 text-zinc-500 ml-0.5" />
-                          </button>
-                        </div>
-
                         {/* Bottom-Left Overlay */}
                         <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
                           <div className="text-sm font-extrabold text-white">
