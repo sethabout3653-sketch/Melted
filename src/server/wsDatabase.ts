@@ -698,6 +698,16 @@ export function initWebSocketDatabase(server: Server) {
             break;
           }
 
+          case 'MEDIA_CHUNK': {
+            const payload = JSON.stringify(msg);
+            wss.clients.forEach((client) => {
+              if (client !== ws && client.readyState === WebSocket.OPEN) {
+                client.send(payload);
+              }
+            });
+            break;
+          }
+
           case 'USER_CALL': {
             if (msg.targetUserId) {
               const targetSockets = userIdToSockets.get(msg.targetUserId);

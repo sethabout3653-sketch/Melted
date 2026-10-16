@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { GiphyFetch } from '@giphy/js-fetch-api';
 import { useWebRTC } from '../services/useWebRTC';
+import { MediaRecorderStreamer } from './MediaRecorderStreamer';
 
 interface ChatViewProps {
   globalChat: any;
@@ -615,6 +616,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   // Call & Audio Level States
   const [audioLevel, setAudioLevel] = useState<number>(0);
   const [isMicTesting, setIsMicTesting] = useState(false);
+  const [showMediaStreamerModal, setShowMediaStreamerModal] = useState(false);
 
   useEffect(() => {
     setEditName(currentUser.username);
@@ -2593,6 +2595,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     <span className="hidden sm:inline">{isScreenSharing ? 'Stop Screen' : 'Share Screen'}</span>
                   </button>
 
+                  <button
+                    type="button"
+                    onClick={() => setShowMediaStreamerModal(true)}
+                    className="px-3 py-2 rounded-xl bg-purple-600/20 hover:bg-purple-600/30 text-purple-300 border border-purple-500/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                    title="Open WebSocket Media Streamer (No WebRTC)"
+                  >
+                    <Video className="w-4 h-4 text-purple-400" />
+                    <span className="hidden sm:inline">WS Streamer</span>
+                  </button>
+
                   {/* Mobile / Tablet Members drawer toggle button */}
                   <button
                     type="button"
@@ -3131,6 +3143,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
           isDeafened={isDeafened}
         />
       ))}
+
+      {/* WebSocket Media Streamer Modal (No WebRTC) */}
+      {showMediaStreamerModal && (
+        <MediaRecorderStreamer onClose={() => setShowMediaStreamerModal(false)} />
+      )}
 
     </div>
   );
