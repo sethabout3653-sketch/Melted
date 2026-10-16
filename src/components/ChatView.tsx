@@ -2655,23 +2655,23 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       </div>
                     )}
 
-                    {/* Screen Share Tile */}
+                    {/* Local Screen Share Tile - Clean indicator card preventing hall of mirrors */}
                     {isScreenSharing && screenStream && (
-                      <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]`}>
-                        <LocalVideoPlayer 
-                          stream={screenStream} 
-                          user={currentUser}
-                          renderAvatar={renderAvatar}
-                          isMirrored={false}
-                          isScreen={true}
-                        />
-                        {/* Bottom-Left Overlay */}
-                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
-                          <div className="text-sm font-extrabold text-white flex items-center gap-2">
-                            <Monitor className="w-4 h-4 text-blue-400" />
-                            <span>{currentUser.username} (You - Screen)</span>
-                          </div>
+                      <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px] p-6 text-center gap-4">
+                        <div className="w-14 h-14 rounded-2xl bg-blue-600/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shadow-lg animate-pulse">
+                          <Monitor className="w-7 h-7" />
                         </div>
+                        <div className="space-y-1">
+                          <h3 className="text-base font-extrabold text-white">You are sharing your screen</h3>
+                          <p className="text-xs text-zinc-400">Other participants in the call can see your screen.</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={toggleScreenShare}
+                          className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-lg shadow-red-600/30 transition-all cursor-pointer"
+                        >
+                          Stop Sharing
+                        </button>
                       </div>
                     )}
 

@@ -320,7 +320,24 @@ export function useWebRTC({
       }
     }
 
+    [audioTrack, cameraTrack, screenTrack].forEach(track => {
+      if (track) {
+        track.onended = () => console.warn("Track ended by system/user!");
+        track.onmute = () => console.warn("Track muted by browser!");
+        track.onunmute = () => console.log("Track unmuted!");
+      }
+    });
+
     peerSenders.current.set(peerId, senders);
+  }, []);
+
+  // Proper cleanup on disconnect or rejoining as requested
+  const cleanupOldConnection = useCallback((peerId: string) => {
+    const pc = peerConnections.current.get(peerId);
+    if (pc) {
+      pc.close();
+      peerConnections.current.delete(peerId);
+    }
   }, []);
 
   // Synchronize remote tracks for a peer based on peer state & metadata
