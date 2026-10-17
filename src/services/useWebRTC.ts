@@ -360,22 +360,21 @@ export function useWebRTC({
     }
 
     // Process active video receivers
-    if (peerUser?.has_video || peerUser?.is_screen_sharing) {
-      const videoReceivers = pc.getReceivers().filter(
-        (r) => r.track && r.track.kind === 'video' && r.track.readyState !== 'ended'
-      );
+    const videoReceivers = pc.getReceivers().filter(
+      (r) => r.track && r.track.kind === 'video' && r.track.readyState !== 'ended'
+    );
+    const videoTransceivers = pc.getTransceivers().filter((t) => t.receiver.track.kind === 'video' || t.sender.track?.kind === 'video');
 
-      if (peerUser?.has_video && videoReceivers.length > 0) {
-        const camReceiver = videoReceivers.find((r) => r.track?.id === peerMeta?.cameraTrackId) || videoReceivers[0];
-        if (camReceiver && camReceiver.track) {
-          const track = camReceiver.track;
-          track.enabled = true;
-          setRemoteCameraStreams((prev) => {
-            const existing = prev[peerId];
-            if (existing && existing.getVideoTracks()[0]?.id === track.id) return prev;
-            return { ...prev, [peerId]: new MediaStream([track]) };
-          });
-        }
+    if (peerUser?.has_video && videoReceivers.length > 0) {
+      const camReceiver = videoTransceivers[0]?.receiver.track ? videoTransceivers[0].receiver : (videoReceivers.find((r) => r.track?.id === peerMeta?.cameraTrackId) || videoReceivers[0]);
+      if (camReceiver && camReceiver.track && camReceiver.track.readyState !== 'ended') {
+        const track = camReceiver.track;
+        track.enabled = true;
+        setRemoteCameraStreams((prev) => {
+          const existing = prev[peerId];
+          if (existing && existing.getVideoTracks()[0]?.id === track.id) return prev;
+          return { ...prev, [peerId]: new MediaStream([track]) };
+        });
       } else {
         setRemoteCameraStreams((prev) => {
           if (!prev[peerId]) return prev;
@@ -384,18 +383,25 @@ export function useWebRTC({
           return copy;
         });
       }
+    } else {
+      setRemoteCameraStreams((prev) => {
+        if (!prev[peerId]) return prev;
+        const copy = { ...prev };
+        delete copy[peerId];
+        return copy;
+      });
+    }
 
-      if (peerUser?.is_screen_sharing && videoReceivers.length > 0) {
-        const screenReceiver = videoReceivers.find((r) => r.track?.id === peerMeta?.screenTrackId) || (videoReceivers.length > 1 ? videoReceivers[1] : (peerUser?.has_video ? null : videoReceivers[0]));
-        if (screenReceiver && screenReceiver.track) {
-          const track = screenReceiver.track;
-          track.enabled = true;
-          setRemoteScreenStreams((prev) => {
-            const existing = prev[peerId];
-            if (existing && existing.getVideoTracks()[0]?.id === track.id) return prev;
-            return { ...prev, [peerId]: new MediaStream([track]) };
-          });
-        }
+    if (peerUser?.is_screen_sharing && videoReceivers.length > 0) {
+      const screenReceiver = (videoTransceivers[1]?.receiver.track && videoTransceivers[1].receiver.track.readyState !== 'ended') ? videoTransceivers[1].receiver : (videoReceivers.find((r) => r.track?.id === peerMeta?.screenTrackId) || (videoReceivers.length > 1 ? videoReceivers[1] : (peerUser?.has_video ? null : videoReceivers[0])));
+      if (screenReceiver && screenReceiver.track && screenReceiver.track.readyState !== 'ended' && screenReceiver.track.id !== peerMeta?.cameraTrackId) {
+        const track = screenReceiver.track;
+        track.enabled = true;
+        setRemoteScreenStreams((prev) => {
+          const existing = prev[peerId];
+          if (existing && existing.getVideoTracks()[0]?.id === track.id) return prev;
+          return { ...prev, [peerId]: new MediaStream([track]) };
+        });
       } else {
         setRemoteScreenStreams((prev) => {
           if (!prev[peerId]) return prev;
@@ -404,6 +410,13 @@ export function useWebRTC({
           return copy;
         });
       }
+    } else {
+      setRemoteScreenStreams((prev) => {
+        if (!prev[peerId]) return prev;
+        const copy = { ...prev };
+        delete copy[peerId];
+        return copy;
+      });
     }
 
     if (peerMeta?.isVertical !== undefined) {
@@ -489,18 +502,23 @@ export function useWebRTC({
         const peerMeta = peerTrackMeta.current.get(peerId);
         const peerUser = peersRef.current.find((p) => p.id === peerId);
 
-        const isScreenConfirmed =
+        const transceivers = pc.getTransceivers();
+        const videoTransceivers = transceivers.filter((t) => t.receiver.track.kind === 'video' || t.sender.track?.kind === 'video');
+        const transceiverIndex = videoTransceivers.findIndex((t) => t.receiver === event.receiver);
+
+        const isScreen =
+          transceiverIndex === 1 ||
           (peerMeta?.screenTrackId && track.id === peerMeta.screenTrackId) ||
           (peerMeta?.screenStreamId && remoteStream?.id === peerMeta.screenStreamId) ||
-          (peerUser?.is_screen_sharing && !peerUser?.has_video);
+          (peerUser?.is_screen_sharing && !peerUser?.has_video && transceiverIndex !== 0);
 
-        if (isScreenConfirmed && peerUser?.is_screen_sharing) {
+        if (isScreen && peerUser?.is_screen_sharing) {
           setRemoteScreenStreams((prev) => {
             const existing = prev[peerId];
             if (existing && existing.getVideoTracks()[0]?.id === track.id) return prev;
             return { ...prev, [peerId]: streamToUse };
           });
-        } else if (peerUser?.has_video) {
+        } else if (peerUser?.has_video || transceiverIndex === 0) {
           setRemoteCameraStreams((prev) => {
             const existing = prev[peerId];
             if (existing && existing.getVideoTracks()[0]?.id === track.id) return prev;

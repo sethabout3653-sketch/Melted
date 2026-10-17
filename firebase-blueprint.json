@@ -1,0 +1,41 @@
+{
+  "entities": {
+    "Message": {
+      "title": "Message",
+      "description": "Chat message entity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "text": { "type": "string", "maxLength": 1000 },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "text", "userId", "userName", "createdAt"]
+    },
+    "HighScore": {
+      "title": "HighScore",
+      "description": "Game high score entity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "gameId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "score": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "gameId", "userId", "userName", "score", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/Message" },
+      "description": "Global and room chat messages"
+    },
+    "/highScores/{scoreId}": {
+      "schema": { "$ref": "#/entities/HighScore" },
+      "description": "Game high scores"
+    }
+  }
+}
