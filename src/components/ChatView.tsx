@@ -2657,6 +2657,21 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                           isMirrored={true}
                         />
 
+                        {/* Orientation Badge */}
+                        <div className="absolute top-3 right-3 px-2.5 py-1 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none">
+                          {localIsVertical ? (
+                            <>
+                              <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+                              <span>Portrait</span>
+                            </>
+                          ) : (
+                            <>
+                              <Monitor className="w-3.5 h-3.5 text-blue-400" />
+                              <span>Landscape</span>
+                            </>
+                          )}
+                        </div>
+
                         {/* Bottom-Left Overlay */}
                         <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
                           <div className="text-sm font-extrabold text-white">
@@ -2755,6 +2770,22 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                                 onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [`${u.id}-camera`]: vert }))}
                                 isScreen={false}
                               />
+
+                              {/* Orientation Badge */}
+                              <div className="absolute top-3 right-3 px-2.5 py-1 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none">
+                                {isPeerCameraVertical ? (
+                                  <>
+                                    <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+                                    <span>Portrait</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Monitor className="w-3.5 h-3.5 text-blue-400" />
+                                    <span>Landscape</span>
+                                  </>
+                                )}
+                              </div>
+
                               <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
                                 <div className="text-sm font-extrabold text-white">
                                   {u.username} (Camera)

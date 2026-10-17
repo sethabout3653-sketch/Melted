@@ -1,27 +1,4 @@
 {
-  "messages": [
-    {
-      "id": "msg-1792268159027-8j23ke",
-      "channel_id": "text-general",
-      "sender_id": "user_1",
-      "sender_name": "Alice",
-      "avatar_color": "#0066ff",
-      "sender_avatar_url": "",
-      "content": "Hello from Alice",
-      "timestamp": "Today at 08:15 PM",
-      "created_at": 1792268159034
-    },
-    {
-      "id": "msg-1792268339044-tyzkcn",
-      "channel_id": "text-general",
-      "sender_id": "test_user_a",
-      "sender_name": "TesterA",
-      "avatar_color": "#0066ff",
-      "sender_avatar_url": "",
-      "content": "End to end test message",
-      "timestamp": "Today at 08:18 PM",
-      "created_at": 1792268339044
-    }
-  ],
-  "updated_at": 1792268339044
+  "messages": [],
+  "updated_at": 1792268500000
 }

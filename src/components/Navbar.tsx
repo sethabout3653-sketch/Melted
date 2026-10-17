@@ -7,14 +7,15 @@ import {
   Heart, 
   X, 
   Gamepad2, 
-  MessageSquare
+  MessageSquare,
+  Music
 } from 'lucide-react';
 import { CloakPreset } from '../hooks/useCloak';
 import { GameCategory } from '../types/game';
 
 interface NavbarProps {
-  currentTab: 'games' | 'chat';
-  onTabChange: (tab: 'games' | 'chat') => void;
+  currentTab: 'games' | 'music' | 'chat';
+  onTabChange: (tab: 'games' | 'music' | 'chat') => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onRandomGame: () => void;
@@ -114,6 +115,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <Gamepad2 className="w-3.5 h-3.5" />
               <span>All Games</span>
+            </button>
+
+            <button
+              onClick={() => onTabChange('music')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                currentTab === 'music'
+                  ? 'bg-[#0066ff] text-white shadow-sm'
+                  : 'text-zinc-400 hover:text-white'
+              }`}
+            >
+              <Music className="w-3.5 h-3.5" />
+              <span>Music</span>
             </button>
 
             <button
