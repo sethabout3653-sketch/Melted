@@ -12,6 +12,59 @@ const RTC_CONFIG: RTCConfiguration = {
   ],
 };
 
+// Optimizes Opus SDP to completely disable DTX (discontinuous transmission)
+// which causes browser silence suppression to mute quiet parts, pauses, or syllables of speech.
+function optimizeAudioSdp(sdp: string): string {
+  if (!sdp) return sdp;
+  const opusMatch = sdp.match(/a=rtpmap:(\d+)\s+opus\/48000/i);
+  const opusPt = opusMatch ? opusMatch[1] : null;
+
+  const lines = sdp.split('\r\n');
+  let foundFmtp = false;
+
+  const modifiedLines = lines.map((line) => {
+    if (opusPt && line.startsWith(`a=fmtp:${opusPt}`)) {
+      foundFmtp = true;
+      let params = line;
+      // Disable DTX so parts of speech are never cut off during quiet syllables or pauses
+      if (params.includes('usedtx=')) {
+        params = params.replace(/usedtx=\d+/g, 'usedtx=0');
+      } else {
+        params += ';usedtx=0';
+      }
+      // Enable in-band forward error correction to eliminate packet loss audio drops
+      if (params.includes('useinbandfec=')) {
+        params = params.replace(/useinbandfec=\d+/g, 'useinbandfec=1');
+      } else {
+        params += ';useinbandfec=1';
+      }
+      // Constant Bit Rate (cbr=1) prevents encoder volume ducking
+      if (!params.includes('cbr=')) {
+        params += ';cbr=1';
+      }
+      // Maximum audio fidelity
+      if (!params.includes('maxaveragebitrate=')) {
+        params += ';maxaveragebitrate=510000';
+      }
+      return params;
+    }
+    return line;
+  });
+
+  if (opusPt && !foundFmtp) {
+    const rtpmapIdx = modifiedLines.findIndex((l) => l.startsWith(`a=rtpmap:${opusPt}`));
+    if (rtpmapIdx !== -1) {
+      modifiedLines.splice(
+        rtpmapIdx + 1,
+        0,
+        `a=fmtp:${opusPt} minptime=10;useinbandfec=1;usedtx=0;cbr=1;maxaveragebitrate=510000`
+      );
+    }
+  }
+
+  return modifiedLines.join('\r\n');
+}
+
 interface UseWebRTCProps {
   currentUserId: string;
   activeChannel: 'text-general' | 'voice-general' | 'video-general';
@@ -198,8 +251,10 @@ export function useWebRTC({
       makingOfferRef.current.set(peerId, true);
       const offer = await pc.createOffer();
       if (pc.signalingState !== 'stable') return;
-      await pc.setLocalDescription(offer);
-      sendRtcSignal(peerId, { type: 'offer', offer });
+      const optimizedSdp = optimizeAudioSdp(offer.sdp || '');
+      const finalOffer = { type: offer.type, sdp: optimizedSdp };
+      await pc.setLocalDescription(finalOffer);
+      sendRtcSignal(peerId, { type: 'offer', offer: finalOffer });
     } catch (err) {
       console.warn('[useWebRTC] Offer creation error:', err);
     } finally {
@@ -281,10 +336,16 @@ export function useWebRTC({
             return;
           }
 
-          await pc.setRemoteDescription(new RTCSessionDescription(signal.offer));
+          const optimizedOffer = {
+            type: signal.offer.type,
+            sdp: optimizeAudioSdp(signal.offer.sdp || ''),
+          };
+          await pc.setRemoteDescription(new RTCSessionDescription(optimizedOffer));
           const answer = await pc.createAnswer();
-          await pc.setLocalDescription(answer);
-          sendRtcSignal(fromUserId, { type: 'answer', answer });
+          const optimizedAnswerSdp = optimizeAudioSdp(answer.sdp || '');
+          const finalAnswer = { type: answer.type, sdp: optimizedAnswerSdp };
+          await pc.setLocalDescription(finalAnswer);
+          sendRtcSignal(fromUserId, { type: 'answer', answer: finalAnswer });
 
           // Flush queued candidates
           const queued = pendingCandidates.current.get(fromUserId) || [];
@@ -294,7 +355,11 @@ export function useWebRTC({
           pendingCandidates.current.delete(fromUserId);
         } else if (signal.type === 'answer') {
           if (pc.signalingState === 'have-local-offer') {
-            await pc.setRemoteDescription(new RTCSessionDescription(signal.answer));
+            const optimizedAnswer = {
+              type: signal.answer.type,
+              sdp: optimizeAudioSdp(signal.answer.sdp || ''),
+            };
+            await pc.setRemoteDescription(new RTCSessionDescription(optimizedAnswer));
             const queued = pendingCandidates.current.get(fromUserId) || [];
             for (const c of queued) {
               try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {}

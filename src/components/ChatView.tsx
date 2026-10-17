@@ -842,7 +842,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
           echoCancellation: true,
           noiseSuppression: false,
           autoGainControl: false,
-        },
+          googEchoCancellation: true,
+          googAutoGainControl: false,
+          googNoiseSuppression: false,
+          googHighpassFilter: false,
+          googTypingNoiseDetection: false,
+          googAudioMirroring: false,
+        } as any,
         video: false,
       });
 
@@ -1106,7 +1112,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
           echoCancellation: true,
           noiseSuppression: false,
           autoGainControl: false,
-        },
+          googEchoCancellation: true,
+          googAutoGainControl: false,
+          googNoiseSuppression: false,
+          googHighpassFilter: false,
+          googTypingNoiseDetection: false,
+          googAudioMirroring: false,
+        } as any,
         video: false,
       });
     } catch {
