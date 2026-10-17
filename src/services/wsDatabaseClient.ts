@@ -70,10 +70,6 @@ export function useWebSocketDatabase(currentUser: {
           setUsers(data.users);
         } else if (data.type === 'SYNC_MESSAGES' && Array.isArray(data.messages)) {
           setMessages(data.messages);
-        } else if (data.type === 'RTC_SIGNAL' && data.targetUserId === currentUserRef.current.id) {
-          if (onRtcSignalRef.current) {
-            onRtcSignalRef.current(data.fromUserId, data.signal);
-          }
         }
       };
     } catch {}
@@ -371,10 +367,6 @@ export function useWebSocketDatabase(currentUser: {
       } catch (err) {
         console.warn('[wsDatabaseClient] sendRtcSignal ws send failed:', err);
       }
-    }
-
-    if (broadcastChannelRef.current) {
-      broadcastChannelRef.current.postMessage(payload);
     }
   }, []);
 
