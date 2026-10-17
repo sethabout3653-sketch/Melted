@@ -340,6 +340,8 @@ const RemoteVideoPlayer: React.FC<{
 
     video.muted = true;
     video.defaultMuted = true;
+    video.playsInline = true;
+    video.autoplay = true;
 
     const checkFrame = () => {
       if (video && video.videoWidth > 0 && video.videoHeight > 0) {
@@ -348,17 +350,24 @@ const RemoteVideoPlayer: React.FC<{
       }
     };
 
-    const tryPlay = () => {
+    const tryPlay = async () => {
       if (video && video.srcObject) {
-        video.play().then(() => {
+        try {
+          await video.play();
           checkFrame();
-        }).catch((err) => {
+        } catch (err) {
           console.warn('[RemoteVideoPlayer] Play waiting for user interaction:', err);
-        });
+        }
       }
     };
 
     tryPlay();
+
+    const handleLoadedMetadata = () => {
+      tryPlay();
+    };
+
+    video.addEventListener('loadedmetadata', handleLoadedMetadata);
 
     const handleUnmute = () => {
       liveTracks.forEach((t) => { t.enabled = true; });
@@ -379,7 +388,6 @@ const RemoteVideoPlayer: React.FC<{
     stream.addEventListener('addtrack', handleAddTrack);
 
     video.addEventListener('loadeddata', checkFrame);
-    video.addEventListener('loadedmetadata', checkFrame);
     video.addEventListener('canplay', checkFrame);
     video.addEventListener('playing', checkFrame);
 
@@ -392,14 +400,18 @@ const RemoteVideoPlayer: React.FC<{
     window.addEventListener('keydown', onUserGesture, { once: true });
 
     return () => {
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       liveTracks.forEach((t) => {
         t.removeEventListener('unmute', handleUnmute);
       });
-      stream.removeEventListener('addtrack', handleAddTrack);
-      video.removeEventListener('loadeddata', checkFrame);
-      video.removeEventListener('loadedmetadata', checkFrame);
-      video.removeEventListener('canplay', checkFrame);
-      video.removeEventListener('playing', checkFrame);
+      if (stream) {
+        stream.removeEventListener('addtrack', handleAddTrack);
+      }
+      if (video) {
+        video.removeEventListener('loadeddata', checkFrame);
+        video.removeEventListener('canplay', checkFrame);
+        video.removeEventListener('playing', checkFrame);
+      }
       window.removeEventListener('click', onUserGesture);
       window.removeEventListener('touchstart', onUserGesture);
       window.removeEventListener('keydown', onUserGesture);
