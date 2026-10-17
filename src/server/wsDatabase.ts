@@ -37,7 +37,7 @@ export interface DbMessage {
   created_at: number;
 }
 
-// Pure WebSocket Database: Authoritative in-memory state with local JSON persistence
+// Authoritative in-memory state with local JSON persistence
 class WebSocketDatabase {
   public users: Map<string, DbUser> = new Map();
   public messages: DbMessage[] = [];
@@ -61,9 +61,6 @@ class WebSocketDatabase {
         if (Array.isArray(data.messages)) {
           this.messages = data.messages.slice(-500);
         }
-        // Online users are strictly those currently connected with live WebSockets.
-        // Never load stale/offline users on server startup!
-        this.users.clear();
       }
     } catch (err) {
       console.warn('[WebSocket DB] Notice loading store:', err);
@@ -82,18 +79,7 @@ class WebSocketDatabase {
     }
   }
 
-  public getUsers(activeUserIds?: Set<string>): DbUser[] {
-    if (activeUserIds) {
-      // Clean up users that are no longer actively connected
-      for (const id of Array.from(this.users.keys())) {
-        if (!activeUserIds.has(id)) {
-          this.users.delete(id);
-        }
-      }
-      return Array.from(this.users.values())
-        .filter((u) => activeUserIds.has(u.id))
-        .sort((a, b) => b.updated_at - a.updated_at);
-    }
+  public getUsers(): DbUser[] {
     return Array.from(this.users.values()).sort((a, b) => b.updated_at - a.updated_at);
   }
 
@@ -116,7 +102,7 @@ class WebSocketDatabase {
   }
 
   public insertMessage(msg: DbMessage): void {
-    const existingIndex = this.messages.findIndex(m => m.id === msg.id);
+    const existingIndex = this.messages.findIndex((m) => m.id === msg.id);
     if (existingIndex >= 0) {
       this.messages[existingIndex] = msg;
     } else {
@@ -129,7 +115,7 @@ class WebSocketDatabase {
   }
 
   public deleteMessage(id: string): void {
-    this.messages = this.messages.filter(m => m.id !== id);
+    this.messages = this.messages.filter((m) => m.id !== id);
     this.saveStore();
   }
 }
@@ -140,14 +126,6 @@ export function initWebSocketDatabase(server: Server) {
 
   const userSockets = new Map<string, Set<WebSocket>>();
   const disconnectTimers = new Map<string, NodeJS.Timeout>();
-
-  function getActiveUserIds(): Set<string> {
-    const active = new Set<string>();
-    userSockets.forEach((sockets, uid) => {
-      if (sockets.size > 0) active.add(uid);
-    });
-    return active;
-  }
 
   function broadcast(payload: any) {
     const str = typeof payload === 'string' ? payload : JSON.stringify(payload);
@@ -182,14 +160,12 @@ export function initWebSocketDatabase(server: Server) {
     let boundUserId: string | null = null;
 
     // Send initial snapshot immediately upon connecting
-    const users = db.getUsers(getActiveUserIds());
-    const messages = db.messages;
     try {
       ws.send(JSON.stringify({
         type: 'DB_INIT',
         tables: {
-          users,
-          messages,
+          users: db.getUsers(),
+          messages: db.messages,
           channels: db.channels,
         },
       }));
@@ -205,6 +181,7 @@ export function initWebSocketDatabase(server: Server) {
               const uId: string = msg.user.id;
               boundUserId = uId;
 
+              // Cancel pending disconnect timer if user reconnected
               if (disconnectTimers.has(uId)) {
                 clearTimeout(disconnectTimers.get(uId)!);
                 disconnectTimers.delete(uId);
@@ -225,7 +202,6 @@ export function initWebSocketDatabase(server: Server) {
                 is_speaking: Boolean(msg.user.is_speaking),
                 is_muted: Boolean(msg.user.is_muted),
                 is_deafened: Boolean(msg.user.is_deafened),
-                // Camera and screen sharing are strictly false on register unless explicitly sent as true
                 has_video: msg.user.has_video === true,
                 is_screen_sharing: msg.user.is_screen_sharing === true,
                 activity: msg.user.activity ?? existingUser?.activity ?? '',
@@ -233,7 +209,7 @@ export function initWebSocketDatabase(server: Server) {
               };
 
               db.upsertUser(userObj);
-              broadcastTable('users', db.getUsers(getActiveUserIds()));
+              broadcastTable('users', db.getUsers());
 
               if (userObj.current_channel === 'voice-general' || userObj.current_channel === 'video-general') {
                 broadcastMediaPresence('USER_JOINED_MEDIA', uId, userObj.current_channel);
@@ -263,7 +239,7 @@ export function initWebSocketDatabase(server: Server) {
                 updated_at: Date.now(),
               };
 
-              // If switching to text-general or offline, strictly clear media active flags
+              // If switching to text-general or offline, clear media active flags
               if (updated.current_channel === 'text-general' || updated.current_channel === 'offline') {
                 updated.has_video = false;
                 updated.is_screen_sharing = false;
@@ -271,7 +247,7 @@ export function initWebSocketDatabase(server: Server) {
               }
 
               // Single screen sharer enforcement
-              if (msg.set.is_screen_sharing) {
+              if (msg.set?.is_screen_sharing) {
                 db.users.forEach((u, uid) => {
                   if (uid !== msg.id && u.is_screen_sharing) {
                     u.is_screen_sharing = false;
@@ -280,10 +256,10 @@ export function initWebSocketDatabase(server: Server) {
               }
 
               db.upsertUser(updated);
-              broadcastTable('users', db.getUsers(getActiveUserIds()));
+              broadcastTable('users', db.getUsers());
 
               // Channel media transitions
-              if (msg.set.current_channel !== undefined && msg.set.current_channel !== oldChannel) {
+              if (msg.set?.current_channel !== undefined && msg.set.current_channel !== oldChannel) {
                 if (msg.set.current_channel === 'voice-general' || msg.set.current_channel === 'video-general') {
                   broadcastMediaPresence('USER_JOINED_MEDIA', msg.id, msg.set.current_channel);
                 }
@@ -294,9 +270,9 @@ export function initWebSocketDatabase(server: Server) {
 
               // Explicit media updates
               if (
-                msg.set.has_video !== undefined ||
-                msg.set.is_muted !== undefined ||
-                msg.set.is_screen_sharing !== undefined
+                msg.set?.has_video !== undefined ||
+                msg.set?.is_muted !== undefined ||
+                msg.set?.is_screen_sharing !== undefined
               ) {
                 broadcastMediaPresence('USER_MEDIA_UPDATE', msg.id, updated.current_channel);
               }
@@ -305,7 +281,7 @@ export function initWebSocketDatabase(server: Server) {
           }
 
           case 'GET_USERS': {
-            broadcastTable('users', db.getUsers(getActiveUserIds()));
+            broadcastTable('users', db.getUsers());
             break;
           }
 
@@ -343,7 +319,7 @@ export function initWebSocketDatabase(server: Server) {
           case 'RTC_SIGNAL': {
             if (msg.targetUserId) {
               const sockets = userSockets.get(msg.targetUserId);
-              if (sockets) {
+              if (sockets && sockets.size > 0) {
                 const signalPayload = JSON.stringify({
                   type: 'RTC_SIGNAL',
                   fromUserId: msg.fromUserId || boundUserId,
@@ -402,7 +378,7 @@ export function initWebSocketDatabase(server: Server) {
           ws.send(JSON.stringify({ type: 'PING', timestamp: Date.now() }));
         } catch {}
       }
-    }, 20000);
+    }, 15000);
 
     ws.on('close', () => {
       clearInterval(pingTimer);
@@ -414,6 +390,7 @@ export function initWebSocketDatabase(server: Server) {
           if (sockets.size === 0) {
             userSockets.delete(uId);
 
+            // 5 second disconnect grace period before removing user from online roster
             const timer = setTimeout(() => {
               disconnectTimers.delete(uId);
               if (!userSockets.has(uId)) {
@@ -423,9 +400,9 @@ export function initWebSocketDatabase(server: Server) {
                 if (oldChannel === 'video-general' || oldChannel === 'voice-general') {
                   broadcastMediaPresence('USER_LEFT_MEDIA', uId, oldChannel);
                 }
-                broadcastTable('users', db.getUsers(getActiveUserIds()));
+                broadcastTable('users', db.getUsers());
               }
-            }, 3000);
+            }, 5000);
             disconnectTimers.set(uId, timer);
           }
         }

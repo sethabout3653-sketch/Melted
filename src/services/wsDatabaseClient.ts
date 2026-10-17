@@ -7,6 +7,59 @@ export interface RtcSignalPayload {
   signal: any;
 }
 
+export function resolveWebSocketUrl(): string {
+  try {
+    // 1. URL Query parameter override (?ws=... or ?server=...)
+    if (typeof window !== 'undefined' && window.location) {
+      const params = new URLSearchParams(window.location.search);
+      const queryWs = params.get('ws') || params.get('server');
+      if (queryWs) {
+        if (queryWs.startsWith('ws://') || queryWs.startsWith('wss://')) {
+          return queryWs.endsWith('/ws-db') ? queryWs : `${queryWs.replace(/\/$/, '')}/ws-db`;
+        }
+        const proto = queryWs.startsWith('https://') ? 'wss:' : 'ws:';
+        const clean = queryWs.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        return `${proto}//${clean}/ws-db`;
+      }
+
+      // 2. LocalStorage override
+      const storedWs = localStorage.getItem('frosted_ws_url') || localStorage.getItem('frosted_server_url') || localStorage.getItem('frosted_backend_url');
+      if (storedWs) {
+        if (storedWs.startsWith('ws://') || storedWs.startsWith('wss://')) {
+          return storedWs.endsWith('/ws-db') ? storedWs : `${storedWs.replace(/\/$/, '')}/ws-db`;
+        }
+        const proto = storedWs.startsWith('https://') ? 'wss:' : 'ws:';
+        const clean = storedWs.replace(/^https?:\/\//, '').replace(/\/$/, '');
+        return `${proto}//${clean}/ws-db`;
+      }
+    }
+
+    // 3. Environment Variables
+    const customWsUrl = (import.meta as any).env?.VITE_WS_URL;
+    if (customWsUrl) {
+      return customWsUrl.endsWith('/ws-db') ? customWsUrl : `${customWsUrl.replace(/\/$/, '')}/ws-db`;
+    }
+
+    const customBackendUrl = (import.meta as any).env?.VITE_BACKEND_URL;
+    if (customBackendUrl) {
+      const cleanBackend = customBackendUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      const wsProto = customBackendUrl.startsWith('https') ? 'wss:' : 'ws:';
+      return `${wsProto}//${cleanBackend}/ws-db`;
+    }
+
+    // 4. If running on Cloudflare Pages static site without custom server, connect to Render backend
+    if (typeof window !== 'undefined' && window.location?.hostname?.endsWith('.pages.dev')) {
+      return 'wss://melted-arcade.onrender.com/ws-db';
+    }
+
+    // 5. Default: Current origin (supports local dev server and Render web service)
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${window.location.host}/ws-db`;
+  } catch {
+    return 'ws://localhost:3000/ws-db';
+  }
+}
+
 export function useWebSocketDatabase(currentUser: { 
   id: string; 
   username: string; 
@@ -31,6 +84,7 @@ export function useWebSocketDatabase(currentUser: {
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<any>(null);
   const pingIntervalRef = useRef<any>(null);
+  const outgoingQueueRef = useRef<string[]>([]);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
 
   const currentUserRef = useRef(currentUser);
@@ -57,7 +111,22 @@ export function useWebSocketDatabase(currentUser: {
     onUserLeftMediaRef.current = onLeft;
   }, []);
 
-  // Multi-tab BroadcastChannel for instant inter-tab communication in same browser
+  // Safe send: Immediately sends if OPEN, otherwise queues until socket is ready
+  const safeSend = useCallback((payload: any) => {
+    const raw = typeof payload === 'string' ? payload : JSON.stringify(payload);
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      try {
+        wsRef.current.send(raw);
+      } catch (err) {
+        console.warn('[wsDatabaseClient] Send failed, queueing:', err);
+        outgoingQueueRef.current.push(raw);
+      }
+    } else {
+      outgoingQueueRef.current.push(raw);
+    }
+  }, []);
+
+  // Multi-tab BroadcastChannel for sync across tabs in same browser
   useEffect(() => {
     try {
       const bc = new BroadcastChannel('frosted_ws_channel');
@@ -96,7 +165,7 @@ export function useWebSocketDatabase(currentUser: {
           wsRef.current.send(JSON.stringify({ type: 'PING', timestamp: Date.now() }));
         } catch {}
       }
-    }, 15000);
+    }, 12000);
   }, []);
 
   const stopHeartbeat = useCallback(() => {
@@ -112,20 +181,7 @@ export function useWebSocketDatabase(currentUser: {
     }
 
     try {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const customWsUrl = (import.meta as any).env?.VITE_WS_URL;
-      const customBackendUrl = (import.meta as any).env?.VITE_BACKEND_URL;
-      
-      let wsUrl = customWsUrl;
-      if (!wsUrl && customBackendUrl) {
-        const cleanBackend = customBackendUrl.replace(/^https?:\/\//, '');
-        const wsProto = customBackendUrl.startsWith('https') ? 'wss:' : 'ws:';
-        wsUrl = `${wsProto}//${cleanBackend.replace(/\/$/, '')}/ws-db`;
-      }
-      if (!wsUrl) {
-        wsUrl = `${protocol}//${window.location.host}/ws-db`;
-      }
-
+      const wsUrl = resolveWebSocketUrl();
       console.log('[wsDatabaseClient] Connecting to WebSocket database at:', wsUrl);
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
@@ -151,6 +207,14 @@ export function useWebSocketDatabase(currentUser: {
             is_screen_sharing: false,
           },
         }));
+
+        // Flush any queued messages
+        while (outgoingQueueRef.current.length > 0) {
+          const item = outgoingQueueRef.current.shift();
+          if (item) {
+            try { ws.send(item); } catch {}
+          }
+        }
       };
 
       ws.onmessage = (event) => {
@@ -194,7 +258,6 @@ export function useWebSocketDatabase(currentUser: {
               onUserLeftMediaRef.current(msg.userId, msg.channel);
             }
           } else if (msg.type === 'USER_MEDIA_UPDATE') {
-            // Request a full user sync from server to ensure media flags are up-to-date
             if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
               wsRef.current.send(JSON.stringify({ type: 'GET_USERS' }));
             }
@@ -210,7 +273,7 @@ export function useWebSocketDatabase(currentUser: {
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectTimeoutRef.current = null;
             connect();
-          }, 1500);
+          }, 1200);
         }
       };
 
@@ -229,7 +292,16 @@ export function useWebSocketDatabase(currentUser: {
 
   useEffect(() => {
     connect();
+
+    const handleOnline = () => {
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        connect();
+      }
+    };
+    window.addEventListener('online', handleOnline);
+
     return () => {
+      window.removeEventListener('online', handleOnline);
       stopHeartbeat();
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (wsRef.current) {
@@ -249,15 +321,13 @@ export function useWebSocketDatabase(currentUser: {
       return next;
     });
 
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'SQL_UPDATE',
-        table: 'users',
-        id: u.id,
-        set,
-      }));
-    }
-  }, []);
+    safeSend({
+      type: 'SQL_UPDATE',
+      table: 'users',
+      id: u.id,
+      set,
+    });
+  }, [safeSend]);
 
   const insertMessage = useCallback((content: string, channelId: string = 'text-general', attachment?: { url: string; type: string; name?: string }) => {
     if (!content.trim() && !attachment) return;
@@ -280,20 +350,18 @@ export function useWebSocketDatabase(currentUser: {
     // Optimistic local state update
     setMessages((prev) => {
       const safePrev = Array.isArray(prev) ? prev : [];
-      if (safePrev.some(m => m.id === newMsg.id)) return safePrev;
+      if (safePrev.some((m) => m.id === newMsg.id)) return safePrev;
       const next = [...safePrev, newMsg];
       broadcastChannelRef.current?.postMessage({ type: 'SYNC_MESSAGES', messages: next });
       return next;
     });
 
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'SQL_INSERT',
-        table: 'messages',
-        row: newMsg,
-      }));
-    }
-  }, []);
+    safeSend({
+      type: 'SQL_INSERT',
+      table: 'messages',
+      row: newMsg,
+    });
+  }, [safeSend]);
 
   const deleteMessage = useCallback((messageId: string) => {
     setMessages((prev) => {
@@ -303,14 +371,12 @@ export function useWebSocketDatabase(currentUser: {
       return next;
     });
 
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'SQL_DELETE',
-        table: 'messages',
-        id: messageId,
-      }));
-    }
-  }, []);
+    safeSend({
+      type: 'SQL_DELETE',
+      table: 'messages',
+      id: messageId,
+    });
+  }, [safeSend]);
 
   const registerUser = useCallback((user: { 
     id: string; 
@@ -336,52 +402,40 @@ export function useWebSocketDatabase(currentUser: {
       updated_at: Date.now(),
     };
 
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({
-        type: 'REGISTER_USER',
-        user: dbUser,
-      }));
-    } else {
-      setUsers((prev) => {
-        const safePrev = Array.isArray(prev) ? prev : [];
-        const filtered = safePrev.filter((x) => x && x.id !== user.id);
-        const next = [dbUser, ...filtered];
-        broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: next });
-        return next;
-      });
-    }
-  }, []);
+    safeSend({
+      type: 'REGISTER_USER',
+      user: dbUser,
+    });
 
-  // WebRTC Signal Relay: Zero-latency pure WebSocket transmission
+    setUsers((prev) => {
+      const safePrev = Array.isArray(prev) ? prev : [];
+      const filtered = safePrev.filter((x) => x && x.id !== user.id);
+      const next = [dbUser, ...filtered];
+      broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: next });
+      return next;
+    });
+  }, [safeSend]);
+
+  // WebRTC Signal Relay: Zero-latency queued WebSocket transmission
   const sendRtcSignal = useCallback((targetUserId: string, signal: any) => {
-    const payload = {
+    safeSend({
       type: 'RTC_SIGNAL',
       fromUserId: currentUserRef.current.id,
       targetUserId,
       signal,
-    };
-
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      try {
-        wsRef.current.send(JSON.stringify(payload));
-      } catch (err) {
-        console.warn('[wsDatabaseClient] sendRtcSignal ws send failed:', err);
-      }
-    }
-  }, []);
+    });
+  }, [safeSend]);
 
   const callUser = useCallback((targetUserId: string, callType: 'audio' | 'video') => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      const u = currentUserRef.current;
-      wsRef.current.send(JSON.stringify({
-        type: 'USER_CALL',
-        fromUserId: u.id,
-        fromUserName: u.username,
-        targetUserId,
-        callType,
-      }));
-    }
-  }, []);
+    const u = currentUserRef.current;
+    safeSend({
+      type: 'USER_CALL',
+      fromUserId: u.id,
+      fromUserName: u.username,
+      targetUserId,
+      callType,
+    });
+  }, [safeSend]);
 
   return {
     users,
