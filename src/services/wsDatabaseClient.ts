@@ -1,7 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DbUser, DbMessage } from '../server/wsDatabase';
-import { db } from './firebase';
-import { collection, doc, setDoc, deleteDoc, onSnapshot, query, orderBy, limit } from 'firebase/firestore';
 
 export interface RtcSignalPayload {
   fromUserId: string;
@@ -87,62 +85,13 @@ export function useWebSocketDatabase(currentUser: {
     };
   }, []);
 
-  // Save messages to local cache
+  // Save messages to local cache for instant cold rendering
   useEffect(() => {
     try {
       localStorage.setItem('frosted_db_messages', JSON.stringify(messages.slice(-200)));
     } catch {}
   }, [messages]);
 
-  // Firestore Real-Time Sync (Guaranteed working on Vercel, Render, Netlify, and all platforms)
-  useEffect(() => {
-    try {
-      // 1. Messages Real-Time Listener
-      const messagesQuery = query(collection(db, 'messages'), orderBy('created_at', 'asc'), limit(150));
-      const unsubscribeMessages = onSnapshot(messagesQuery, (snapshot) => {
-        setIsConnected(true);
-        const cloudMessages: DbMessage[] = [];
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data() as DbMessage;
-          if (data && data.id) {
-            cloudMessages.push(data);
-          }
-        });
-        if (cloudMessages.length > 0) {
-          setMessages(cloudMessages);
-        }
-      }, (err) => {
-        console.warn('Firestore messages snapshot warning:', err);
-      });
-
-      // 2. Users / Presence Real-Time Listener
-      const usersQuery = query(collection(db, 'users'), limit(50));
-      const unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
-        setIsConnected(true);
-        const cloudUsers: DbUser[] = [];
-        snapshot.forEach((docSnap) => {
-          const data = docSnap.data() as DbUser;
-          if (data && data.id) {
-            cloudUsers.push(data);
-          }
-        });
-        if (cloudUsers.length > 0) {
-          setUsers(cloudUsers);
-        }
-      }, (err) => {
-        console.warn('Firestore users snapshot warning:', err);
-      });
-
-      return () => {
-        unsubscribeMessages();
-        unsubscribeUsers();
-      };
-    } catch (e) {
-      console.warn('Firestore real-time sync init error:', e);
-    }
-  }, []);
-
-  // WebSocket Connection (Optional local fallback for AI Studio dev server)
   const startHeartbeat = useCallback(() => {
     if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
     pingIntervalRef.current = setInterval(() => {
@@ -161,14 +110,27 @@ export function useWebSocketDatabase(currentUser: {
     }
   }, []);
 
-  const connectWs = useCallback(() => {
+  const connect = useCallback(() => {
     if (wsRef.current && (wsRef.current.readyState === WebSocket.CONNECTING || wsRef.current.readyState === WebSocket.OPEN)) {
       return;
     }
 
     try {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}/ws-db`;
+      const customWsUrl = (import.meta as any).env?.VITE_WS_URL;
+      const customBackendUrl = (import.meta as any).env?.VITE_BACKEND_URL;
+      
+      let wsUrl = customWsUrl;
+      if (!wsUrl && customBackendUrl) {
+        const cleanBackend = customBackendUrl.replace(/^https?:\/\//, '');
+        const wsProto = customBackendUrl.startsWith('https') ? 'wss:' : 'ws:';
+        wsUrl = `${wsProto}//${cleanBackend.replace(/\/$/, '')}/ws-db`;
+      }
+      if (!wsUrl) {
+        wsUrl = `${protocol}//${window.location.host}/ws-db`;
+      }
+
+      console.log('[wsDatabaseClient] Connecting to WebSocket database at:', wsUrl);
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -206,7 +168,20 @@ export function useWebSocketDatabase(currentUser: {
           }
           if (msg.type === 'PONG') return;
 
-          if (msg.type === 'RTC_SIGNAL') {
+          if (msg.type === 'DB_INIT') {
+            if (Array.isArray(msg.tables?.users)) {
+              setUsers(msg.tables.users);
+            }
+            if (Array.isArray(msg.tables?.messages)) {
+              setMessages(msg.tables.messages);
+            }
+          } else if (msg.type === 'DB_SYNC') {
+            if (msg.table === 'users' && Array.isArray(msg.data)) {
+              setUsers(msg.data);
+            } else if (msg.table === 'messages' && Array.isArray(msg.data)) {
+              setMessages(msg.data);
+            }
+          } else if (msg.type === 'RTC_SIGNAL') {
             if (onRtcSignalRef.current) {
               onRtcSignalRef.current(msg.fromUserId, msg.signal);
             }
@@ -214,81 +189,81 @@ export function useWebSocketDatabase(currentUser: {
             if (onUserCallRef.current) {
               onUserCallRef.current(msg.fromUserId, msg.fromUserName, msg.callType);
             }
+          } else if (msg.type === 'USER_JOINED_MEDIA') {
+            if (onUserJoinedMediaRef.current) {
+              onUserJoinedMediaRef.current(msg.userId, msg.channel);
+            }
+          } else if (msg.type === 'USER_LEFT_MEDIA') {
+            if (onUserLeftMediaRef.current) {
+              onUserLeftMediaRef.current(msg.userId, msg.channel);
+            }
+          } else if (msg.type === 'USER_MEDIA_UPDATE') {
+            // Request a full user sync from server to ensure media flags are up-to-date
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ type: 'GET_USERS' }));
+            }
           }
         } catch {}
       };
 
       ws.onclose = () => {
+        setIsConnected(false);
         stopHeartbeat();
         wsRef.current = null;
+        if (!reconnectTimeoutRef.current) {
+          reconnectTimeoutRef.current = setTimeout(() => {
+            reconnectTimeoutRef.current = null;
+            connect();
+          }, 1500);
+        }
       };
 
       ws.onerror = () => {
         try { ws.close(); } catch {}
       };
-    } catch {}
+    } catch {
+      if (!reconnectTimeoutRef.current) {
+        reconnectTimeoutRef.current = setTimeout(() => {
+          reconnectTimeoutRef.current = null;
+          connect();
+        }, 1500);
+      }
+    }
   }, [startHeartbeat, stopHeartbeat]);
 
   useEffect(() => {
-    connectWs();
+    connect();
     return () => {
       stopHeartbeat();
+      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (wsRef.current) {
         try { wsRef.current.close(); } catch {}
       }
     };
-  }, [connectWs, stopHeartbeat]);
+  }, [connect, stopHeartbeat]);
 
-  // Update user in Firestore & WS
-  const updateUser = useCallback(async (set: Partial<DbUser>) => {
+  const updateUser = useCallback((set: Partial<DbUser>) => {
     const u = currentUserRef.current;
     Object.assign(currentUserRef.current, set);
 
-    const updatedUserDoc: DbUser = {
-      id: u.id,
-      username: u.username,
-      avatar_color: u.avatar_color,
-      avatar_url: u.avatar_url || '',
-      current_channel: (u.current_channel || 'text-general') as any,
-      is_speaking: false,
-      is_muted: false,
-      is_deafened: false,
-      has_video: false,
-      is_screen_sharing: false,
-      activity: u.activity || '',
-      updated_at: Date.now(),
-      ...set,
-    };
-
-    // Save to Firestore (works on Vercel, Render, etc.)
-    try {
-      await setDoc(doc(db, 'users', u.id), updatedUserDoc, { merge: true });
-    } catch (err) {
-      console.warn('Firestore update user error:', err);
-    }
-
     setUsers((prev) => {
       const safePrev = Array.isArray(prev) ? prev : [];
-      const next = safePrev.map((user) => (user.id === u.id ? updatedUserDoc : user));
-      if (!next.some(x => x.id === u.id)) next.push(updatedUserDoc);
+      const next = safePrev.map((user) => (user.id === u.id ? { ...user, ...set, updated_at: Date.now() } : user));
       broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: next });
       return next;
     });
 
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      try {
-        wsRef.current.send(JSON.stringify({
-          type: 'SQL_UPDATE',
-          table: 'users',
-          id: u.id,
-          set,
-        }));
-      } catch {}
+      wsRef.current.send(JSON.stringify({
+        type: 'SQL_UPDATE',
+        table: 'users',
+        id: u.id,
+        set,
+      }));
     }
   }, []);
 
-  // Insert Message into Firestore & WS
-  const insertMessage = useCallback(async (content: string, channelId: string = 'text-general', attachment?: { url: string; type: string; name?: string }) => {
+  const insertMessage = useCallback((content: string, channelId: string = 'text-general', attachment?: { url: string; type: string; name?: string }) => {
     if (!content.trim() && !attachment) return;
     const u = currentUserRef.current;
     const newMsg: DbMessage = {
@@ -306,7 +281,7 @@ export function useWebSocketDatabase(currentUser: {
       created_at: Date.now(),
     };
 
-    // Optimistic local update
+    // Optimistic local state update
     setMessages((prev) => {
       const safePrev = Array.isArray(prev) ? prev : [];
       if (safePrev.some(m => m.id === newMsg.id)) return safePrev;
@@ -315,25 +290,16 @@ export function useWebSocketDatabase(currentUser: {
       return next;
     });
 
-    // Save to Firestore (works on Vercel, Render, etc.)
-    try {
-      await setDoc(doc(db, 'messages', newMsg.id), newMsg);
-    } catch (err) {
-      console.warn('Firestore insert message error:', err);
-    }
-
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      try {
-        wsRef.current.send(JSON.stringify({
-          type: 'SQL_INSERT',
-          table: 'messages',
-          row: newMsg,
-        }));
-      } catch {}
+      wsRef.current.send(JSON.stringify({
+        type: 'SQL_INSERT',
+        table: 'messages',
+        row: newMsg,
+      }));
     }
   }, []);
 
-  const deleteMessage = useCallback(async (messageId: string) => {
+  const deleteMessage = useCallback((messageId: string) => {
     setMessages((prev) => {
       const safePrev = Array.isArray(prev) ? prev : [];
       const next = safePrev.filter((m) => m && m.id !== messageId);
@@ -341,24 +307,16 @@ export function useWebSocketDatabase(currentUser: {
       return next;
     });
 
-    try {
-      await deleteDoc(doc(db, 'messages', messageId));
-    } catch (err) {
-      console.warn('Firestore delete message error:', err);
-    }
-
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      try {
-        wsRef.current.send(JSON.stringify({
-          type: 'SQL_DELETE',
-          table: 'messages',
-          id: messageId,
-        }));
-      } catch {}
+      wsRef.current.send(JSON.stringify({
+        type: 'SQL_DELETE',
+        table: 'messages',
+        id: messageId,
+      }));
     }
   }, []);
 
-  const registerUser = useCallback(async (user: { 
+  const registerUser = useCallback((user: { 
     id: string; 
     username: string; 
     avatar_color: string; 
@@ -382,22 +340,23 @@ export function useWebSocketDatabase(currentUser: {
       updated_at: Date.now(),
     };
 
-    try {
-      await setDoc(doc(db, 'users', dbUser.id), dbUser, { merge: true });
-    } catch (err) {
-      console.warn('Firestore register user error:', err);
-    }
-
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      try {
-        wsRef.current.send(JSON.stringify({
-          type: 'REGISTER_USER',
-          user: dbUser,
-        }));
-      } catch {}
+      wsRef.current.send(JSON.stringify({
+        type: 'REGISTER_USER',
+        user: dbUser,
+      }));
+    } else {
+      setUsers((prev) => {
+        const safePrev = Array.isArray(prev) ? prev : [];
+        const filtered = safePrev.filter((x) => x && x.id !== user.id);
+        const next = [dbUser, ...filtered];
+        broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: next });
+        return next;
+      });
     }
   }, []);
 
+  // WebRTC Signal Relay: Zero-latency pure WebSocket transmission
   const sendRtcSignal = useCallback((targetUserId: string, signal: any) => {
     const payload = {
       type: 'RTC_SIGNAL',
@@ -409,7 +368,9 @@ export function useWebSocketDatabase(currentUser: {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       try {
         wsRef.current.send(JSON.stringify(payload));
-      } catch {}
+      } catch (err) {
+        console.warn('[wsDatabaseClient] sendRtcSignal ws send failed:', err);
+      }
     }
 
     if (broadcastChannelRef.current) {
@@ -420,15 +381,13 @@ export function useWebSocketDatabase(currentUser: {
   const callUser = useCallback((targetUserId: string, callType: 'audio' | 'video') => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       const u = currentUserRef.current;
-      try {
-        wsRef.current.send(JSON.stringify({
-          type: 'USER_CALL',
-          fromUserId: u.id,
-          fromUserName: u.username,
-          targetUserId,
-          callType,
-        }));
-      } catch {}
+      wsRef.current.send(JSON.stringify({
+        type: 'USER_CALL',
+        fromUserId: u.id,
+        fromUserName: u.username,
+        targetUserId,
+        callType,
+      }));
     }
   }, []);
 
