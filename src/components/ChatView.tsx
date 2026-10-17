@@ -1277,6 +1277,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       setScreenStream(null);
       updateUser({ is_screen_sharing: false, has_video: isVideoEnabled });
     } else {
+      if (!isInVideo) {
+        await joinVoiceChannel(false);
+      }
+
       // Feature detection for iOS Apple OS limitation
       const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
       if (isIOS) {
@@ -2663,14 +2667,28 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       </div>
                     )}
 
-                    {/* Local Screen Share Tile - Shows static indicator when actively sharing */}
+                    {/* Local Screen Share Tile - Shows live screen preview when actively sharing */}
                     {isScreenSharing && (
                       <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/40 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
-                        
-                        <div className="flex flex-col items-center justify-center gap-4 text-blue-400">
-                           <Monitor className="w-16 h-16" />
-                           <span className="text-lg font-bold text-white">Sharing your screen</span>
-                        </div>
+                        {screenStream ? (
+                          <video
+                            autoPlay
+                            playsInline
+                            muted
+                            ref={(el) => {
+                              if (el && screenStream && el.srcObject !== screenStream) {
+                                el.srcObject = screenStream;
+                                el.play().catch(() => {});
+                              }
+                            }}
+                            className="w-full h-full object-contain rounded-3xl"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center justify-center gap-4 text-blue-400">
+                             <Monitor className="w-16 h-16" />
+                             <span className="text-lg font-bold text-white">Sharing your screen</span>
+                          </div>
+                        )}
 
                         {/* Bottom-Left Overlay */}
                         <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-auto">
@@ -2715,8 +2733,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       const camStream = remoteCameraStreams[u.id];
                       const scrStream = remoteScreenStreams[u.id];
 
-                      const hasCamera = Boolean(camStream && camStream.getVideoTracks().length > 0);
-                      const hasScreen = Boolean(scrStream && scrStream.getVideoTracks().length > 0);
+                      const hasCamera = Boolean(camStream && camStream.getVideoTracks().some((t) => t.readyState === 'live')) && u.has_video !== false;
+                      const hasScreen = Boolean(scrStream && scrStream.getVideoTracks().some((t) => t.readyState === 'live')) && u.is_screen_sharing !== false;
                       const isPeerCameraVertical = Boolean(peerOrientations[`${u.id}-camera`]);
 
                       return (

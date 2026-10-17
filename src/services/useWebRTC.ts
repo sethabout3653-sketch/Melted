@@ -65,6 +65,20 @@ function optimizeAudioSdp(sdp: string): string {
   return modifiedLines.join('\r\n');
 }
 
+interface PeerTrackMeta {
+  camTrackId?: string | null;
+  screenTrackId?: string | null;
+  hasCamera?: boolean;
+  isScreenSharing?: boolean;
+}
+
+interface PeerConnectionBundle {
+  pc: RTCPeerConnection;
+  audioSender: RTCRtpSender | null;
+  camSender: RTCRtpSender | null;
+  screenSender: RTCRtpSender | null;
+}
+
 interface UseWebRTCProps {
   currentUserId: string;
   activeChannel: 'text-general' | 'voice-general' | 'video-general';
@@ -98,9 +112,13 @@ export function useWebRTC({
   const [remoteScreenStreams, setRemoteScreenStreams] = useState<Record<string, MediaStream>>({});
   const [remoteSpeaking, setRemoteSpeaking] = useState<Record<string, boolean>>({});
 
-  const peerConnections = useRef<Map<string, RTCPeerConnection>>(new Map());
+  const peerBundles = useRef<Map<string, PeerConnectionBundle>>(new Map());
+  const peerTrackMetas = useRef<Map<string, PeerTrackMeta>>(new Map());
+  const remoteVideoTracks = useRef<Map<string, Map<string, { track: MediaStreamTrack; stream: MediaStream }>>>(new Map());
+  
   const pendingCandidates = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const makingOfferRef = useRef<Map<string, boolean>>(new Map());
+  const isNegotiatingRef = useRef<Map<string, boolean>>(new Map());
 
   const peersRef = useRef(peers);
   peersRef.current = peers;
@@ -124,15 +142,117 @@ export function useWebRTC({
     );
   }, [setMediaHandlers]);
 
+  // Route video tracks for a given peer based on current metadata & peer state
+  const routeVideoTracksForPeer = useCallback((peerId: string) => {
+    const peerMap = remoteVideoTracks.current.get(peerId);
+    if (!peerMap || peerMap.size === 0) {
+      setRemoteCameraStreams((prev) => {
+        if (!prev[peerId]) return prev;
+        const copy = { ...prev };
+        delete copy[peerId];
+        return copy;
+      });
+      setRemoteScreenStreams((prev) => {
+        if (!prev[peerId]) return prev;
+        const copy = { ...prev };
+        delete copy[peerId];
+        return copy;
+      });
+      return;
+    }
+
+    const meta = peerTrackMetas.current.get(peerId);
+    const peerDb = peersRef.current.find((p) => p.id === peerId);
+
+    let foundCamStream: MediaStream | null = null;
+    let foundScreenStream: MediaStream | null = null;
+
+    // Check each tracked video track
+    peerMap.forEach(({ track, stream }) => {
+      if (track.readyState !== 'live') return;
+
+      const isExplicitScreen = meta?.screenTrackId && track.id === meta.screenTrackId;
+      const isExplicitCam = meta?.camTrackId && track.id === meta.camTrackId;
+
+      if (isExplicitScreen) {
+        foundScreenStream = stream;
+        return;
+      }
+      if (isExplicitCam) {
+        foundCamStream = stream;
+        return;
+      }
+
+      // Check label heuristics
+      const label = track.label.toLowerCase();
+      const isScreenLabel = label.includes('screen') || label.includes('window') || label.includes('display');
+
+      if (isScreenLabel) {
+        foundScreenStream = stream;
+        return;
+      }
+
+      // Database status heuristics
+      if (peerDb?.is_screen_sharing && !peerDb?.has_video) {
+        foundScreenStream = stream;
+      } else if (peerDb?.has_video && !peerDb?.is_screen_sharing) {
+        foundCamStream = stream;
+      } else if (!foundCamStream) {
+        foundCamStream = stream;
+      } else if (!foundScreenStream) {
+        foundScreenStream = stream;
+      }
+    });
+
+    // Update remoteCameraStreams
+    setRemoteCameraStreams((prev) => {
+      if (foundCamStream && (!peerDb || peerDb.has_video !== false)) {
+        if (prev[peerId] === foundCamStream) return prev;
+        return { ...prev, [peerId]: foundCamStream };
+      }
+      if (prev[peerId]) {
+        const copy = { ...prev };
+        delete copy[peerId];
+        return copy;
+      }
+      return prev;
+    });
+
+    // Update remoteScreenStreams
+    setRemoteScreenStreams((prev) => {
+      if (foundScreenStream && (!peerDb || peerDb.is_screen_sharing !== false)) {
+        if (prev[peerId] === foundScreenStream) return prev;
+        return { ...prev, [peerId]: foundScreenStream };
+      }
+      if (prev[peerId]) {
+        const copy = { ...prev };
+        delete copy[peerId];
+        return copy;
+      }
+      return prev;
+    });
+  }, []);
+
+  // Synchronize remote stream states whenever peers database list updates
+  useEffect(() => {
+    if (!isMediaActive) return;
+    peers.forEach((p) => {
+      routeVideoTracksForPeer(p.id);
+    });
+  }, [peers, isMediaActive, routeVideoTracksForPeer]);
+
   // Clean up all connections when leaving media channels
   useEffect(() => {
     if (!isMediaActive) {
-      peerConnections.current.forEach((pc) => {
-        try { pc.close(); } catch {}
+      peerBundles.current.forEach((bundle) => {
+        try { bundle.pc.close(); } catch {}
       });
-      peerConnections.current.clear();
+      peerBundles.current.clear();
+      peerTrackMetas.current.clear();
+      remoteVideoTracks.current.clear();
       pendingCandidates.current.clear();
       makingOfferRef.current.clear();
+      isNegotiatingRef.current.clear();
       setRemoteStreams({});
       setRemoteCameraStreams({});
       setRemoteScreenStreams({});
@@ -140,41 +260,47 @@ export function useWebRTC({
     }
   }, [isMediaActive]);
 
-  // Create or get RTCPeerConnection
-  const getOrCreatePeerConnection = useCallback((peerId: string): RTCPeerConnection => {
-    let pc = peerConnections.current.get(peerId);
-    if (pc && pc.connectionState !== 'closed' && pc.connectionState !== 'failed') {
-      return pc;
+  // Create or get RTCPeerConnection Bundle
+  const getOrCreatePeerBundle = useCallback((peerId: string): PeerConnectionBundle => {
+    let bundle = peerBundles.current.get(peerId);
+    if (bundle && bundle.pc.connectionState !== 'closed' && bundle.pc.connectionState !== 'failed') {
+      return bundle;
     }
 
-    if (pc) {
-      try { pc.close(); } catch {}
+    if (bundle) {
+      try { bundle.pc.close(); } catch {}
     }
 
-    pc = new RTCPeerConnection(RTC_CONFIG);
-    peerConnections.current.set(peerId, pc);
+    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const newBundle: PeerConnectionBundle = {
+      pc,
+      audioSender: null,
+      camSender: null,
+      screenSender: null,
+    };
+    peerBundles.current.set(peerId, newBundle);
 
     // Attach local audio track if available
     const audioTrack = localAudioRef.current?.getAudioTracks()[0];
-    if (audioTrack) {
+    if (audioTrack && localAudioRef.current) {
       try {
-        pc.addTrack(audioTrack, localAudioRef.current!);
+        newBundle.audioSender = pc.addTrack(audioTrack, localAudioRef.current);
       } catch {}
     }
 
     // Attach local camera track if available
     const camTrack = cameraStreamRef.current?.getVideoTracks()[0];
-    if (camTrack) {
+    if (camTrack && cameraStreamRef.current) {
       try {
-        pc.addTrack(camTrack, cameraStreamRef.current!);
+        newBundle.camSender = pc.addTrack(camTrack, cameraStreamRef.current);
       } catch {}
     }
 
     // Attach local screen track if available
     const screenTrack = screenStreamRef.current?.getVideoTracks()[0];
-    if (screenTrack) {
+    if (screenTrack && screenStreamRef.current) {
       try {
-        pc.addTrack(screenTrack, screenStreamRef.current!);
+        newBundle.screenSender = pc.addTrack(screenTrack, screenStreamRef.current);
       } catch {}
     }
 
@@ -201,66 +327,87 @@ export function useWebRTC({
           [peerId]: streamToUse,
         }));
       } else if (track.kind === 'video') {
-        const peerObj = peersRef.current.find((p) => p.id === peerId);
-        const isScreen = track.label.toLowerCase().includes('screen') || 
-                        track.label.toLowerCase().includes('window') ||
-                        track.label.toLowerCase().includes('display') ||
-                        peerObj?.is_screen_sharing;
+        let peerMap = remoteVideoTracks.current.get(peerId);
+        if (!peerMap) {
+          peerMap = new Map();
+          remoteVideoTracks.current.set(peerId, peerMap);
+        }
+        peerMap.set(track.id, { track, stream: streamToUse });
 
-        const updateTile = () => {
-          if (isScreen) {
-            setRemoteScreenStreams((prev) => ({
-              ...prev,
-              [peerId]: new MediaStream([track]),
-            }));
-          } else {
-            setRemoteCameraStreams((prev) => ({
-              ...prev,
-              [peerId]: new MediaStream([track]),
-            }));
-          }
+        const onLive = () => {
+          routeVideoTracksForPeer(peerId);
         };
 
-        updateTile();
-        track.addEventListener('unmute', updateTile);
+        track.addEventListener('unmute', onLive);
         track.addEventListener('ended', () => {
-          if (isScreen) {
-            setRemoteScreenStreams((prev) => {
-              const copy = { ...prev };
-              delete copy[peerId];
-              return copy;
-            });
-          } else {
-            setRemoteCameraStreams((prev) => {
-              const copy = { ...prev };
-              delete copy[peerId];
-              return copy;
-            });
+          const map = remoteVideoTracks.current.get(peerId);
+          if (map) {
+            map.delete(track.id);
           }
+          routeVideoTracksForPeer(peerId);
         });
+
+        routeVideoTracksForPeer(peerId);
       }
     };
 
-    return pc;
-  }, [sendRtcSignal]);
+    return newBundle;
+  }, [sendRtcSignal, routeVideoTracksForPeer]);
 
-  // Renegotiate with a specific peer
+  // Renegotiate with a specific peer cleanly
   const renegotiateWithPeer = useCallback(async (peerId: string) => {
-    const pc = getOrCreatePeerConnection(peerId);
+    const bundle = getOrCreatePeerBundle(peerId);
+    const pc = bundle.pc;
+
+    if (isNegotiatingRef.current.get(peerId)) return;
+    isNegotiatingRef.current.set(peerId, true);
+
     try {
+      // If signaling is currently busy, wait for stable state
+      if (pc.signalingState !== 'stable') {
+        await new Promise<void>((resolve) => {
+          const handler = () => {
+            if (pc.signalingState === 'stable') {
+              pc.removeEventListener('signalingstatechange', handler);
+              resolve();
+            }
+          };
+          pc.addEventListener('signalingstatechange', handler);
+          setTimeout(() => {
+            pc.removeEventListener('signalingstatechange', handler);
+            resolve();
+          }, 1500);
+        });
+      }
+
+      if (pc.signalingState !== 'stable') return;
+
       makingOfferRef.current.set(peerId, true);
       const offer = await pc.createOffer();
       if (pc.signalingState !== 'stable') return;
+
       const optimizedSdp = optimizeAudioSdp(offer.sdp || '');
       const finalOffer = { type: offer.type, sdp: optimizedSdp };
       await pc.setLocalDescription(finalOffer);
-      sendRtcSignal(peerId, { type: 'offer', offer: finalOffer });
+
+      const camTrack = cameraStreamRef.current?.getVideoTracks()[0];
+      const screenTrack = screenStreamRef.current?.getVideoTracks()[0];
+
+      sendRtcSignal(peerId, {
+        type: 'offer',
+        offer: finalOffer,
+        camTrackId: camTrack?.id || null,
+        screenTrackId: screenTrack?.id || null,
+        hasCamera: Boolean(camTrack),
+        isScreenSharing: Boolean(screenTrack),
+      });
     } catch (err) {
       console.warn('[useWebRTC] Offer creation error:', err);
     } finally {
       makingOfferRef.current.set(peerId, false);
+      isNegotiatingRef.current.set(peerId, false);
     }
-  }, [getOrCreatePeerConnection, sendRtcSignal]);
+  }, [getOrCreatePeerBundle, sendRtcSignal]);
 
   // Sync local tracks across all active peer connections
   const syncLocalTracks = useCallback(() => {
@@ -270,49 +417,66 @@ export function useWebRTC({
     const camTrack = cameraStream?.getVideoTracks()[0] || null;
     const screenTrack = screenStream?.getVideoTracks()[0] || null;
 
-    peerConnections.current.forEach((pc, peerId) => {
-      const senders = pc.getSenders();
+    peerBundles.current.forEach((bundle, peerId) => {
+      const pc = bundle.pc;
       let needsRenegotiation = false;
 
-      // Audio track sync
-      const audioSender = senders.find((s) => s.track && s.track.kind === 'audio');
-      if (audioSender) {
-        audioSender.replaceTrack(audioTrack).catch(() => {});
-      } else if (audioTrack && localAudioStream) {
-        try {
-          pc.addTrack(audioTrack, localAudioStream);
-          needsRenegotiation = true;
-        } catch {}
+      // 1. Audio track sync
+      if (audioTrack && localAudioStream) {
+        if (bundle.audioSender) {
+          bundle.audioSender.replaceTrack(audioTrack).catch(() => {});
+        } else {
+          try {
+            bundle.audioSender = pc.addTrack(audioTrack, localAudioStream);
+            needsRenegotiation = true;
+          } catch {}
+        }
+      } else if (bundle.audioSender) {
+        bundle.audioSender.replaceTrack(null).catch(() => {});
       }
 
-      // Camera video track sync
-      const videoSenders = senders.filter((s) => s.track && s.track.kind === 'video');
-      const camSender = videoSenders[0];
-      if (camSender) {
-        camSender.replaceTrack(camTrack).catch(() => {});
-      } else if (camTrack && cameraStream) {
-        try {
-          pc.addTrack(camTrack, cameraStream);
-          needsRenegotiation = true;
-        } catch {}
+      // 2. Camera video track sync
+      if (camTrack && cameraStream) {
+        if (bundle.camSender) {
+          bundle.camSender.replaceTrack(camTrack).catch(() => {});
+        } else {
+          try {
+            bundle.camSender = pc.addTrack(camTrack, cameraStream);
+            needsRenegotiation = true;
+          } catch {}
+        }
+      } else if (bundle.camSender) {
+        bundle.camSender.replaceTrack(null).catch(() => {});
       }
 
-      // Screen share video track sync
-      const screenSender = videoSenders[1];
-      if (screenSender) {
-        screenSender.replaceTrack(screenTrack).catch(() => {});
-      } else if (screenTrack && screenStream) {
-        try {
-          pc.addTrack(screenTrack, screenStream);
-          needsRenegotiation = true;
-        } catch {}
+      // 3. Screen share video track sync
+      if (screenTrack && screenStream) {
+        if (bundle.screenSender) {
+          bundle.screenSender.replaceTrack(screenTrack).catch(() => {});
+        } else {
+          try {
+            bundle.screenSender = pc.addTrack(screenTrack, screenStream);
+            needsRenegotiation = true;
+          } catch {}
+        }
+      } else if (bundle.screenSender) {
+        bundle.screenSender.replaceTrack(null).catch(() => {});
       }
+
+      // Send track metadata so receiver immediately knows which track is camera or screen
+      sendRtcSignal(peerId, {
+        type: 'track-meta',
+        camTrackId: camTrack?.id || null,
+        screenTrackId: screenTrack?.id || null,
+        hasCamera: Boolean(camTrack),
+        isScreenSharing: Boolean(screenTrack),
+      });
 
       if (needsRenegotiation && pc.signalingState === 'stable') {
         renegotiateWithPeer(peerId);
       }
     });
-  }, [isMediaActive, localAudioStream, cameraStream, screenStream, renegotiateWithPeer]);
+  }, [isMediaActive, localAudioStream, cameraStream, screenStream, renegotiateWithPeer, sendRtcSignal]);
 
   useEffect(() => {
     syncLocalTracks();
@@ -324,11 +488,32 @@ export function useWebRTC({
       if (!isMediaActive) return;
       if (fromUserId === currentUserId) return;
 
-      const pc = getOrCreatePeerConnection(fromUserId);
+      const bundle = getOrCreatePeerBundle(fromUserId);
+      const pc = bundle.pc;
       const isPolite = currentUserId > fromUserId;
 
       try {
+        if (signal.type === 'track-meta') {
+          peerTrackMetas.current.set(fromUserId, {
+            camTrackId: signal.camTrackId,
+            screenTrackId: signal.screenTrackId,
+            hasCamera: signal.hasCamera,
+            isScreenSharing: signal.isScreenSharing,
+          });
+          routeVideoTracksForPeer(fromUserId);
+          return;
+        }
+
         if (signal.type === 'offer') {
+          if (signal.camTrackId !== undefined || signal.screenTrackId !== undefined) {
+            peerTrackMetas.current.set(fromUserId, {
+              camTrackId: signal.camTrackId,
+              screenTrackId: signal.screenTrackId,
+              hasCamera: signal.hasCamera,
+              isScreenSharing: signal.isScreenSharing,
+            });
+          }
+
           const isMakingOffer = Boolean(makingOfferRef.current.get(fromUserId));
           const offerCollision = isMakingOffer || pc.signalingState !== 'stable';
 
@@ -345,7 +530,18 @@ export function useWebRTC({
           const optimizedAnswerSdp = optimizeAudioSdp(answer.sdp || '');
           const finalAnswer = { type: answer.type, sdp: optimizedAnswerSdp };
           await pc.setLocalDescription(finalAnswer);
-          sendRtcSignal(fromUserId, { type: 'answer', answer: finalAnswer });
+
+          const myCamTrack = cameraStreamRef.current?.getVideoTracks()[0];
+          const myScreenTrack = screenStreamRef.current?.getVideoTracks()[0];
+
+          sendRtcSignal(fromUserId, {
+            type: 'answer',
+            answer: finalAnswer,
+            camTrackId: myCamTrack?.id || null,
+            screenTrackId: myScreenTrack?.id || null,
+            hasCamera: Boolean(myCamTrack),
+            isScreenSharing: Boolean(myScreenTrack),
+          });
 
           // Flush queued candidates
           const queued = pendingCandidates.current.get(fromUserId) || [];
@@ -353,7 +549,18 @@ export function useWebRTC({
             try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {}
           }
           pendingCandidates.current.delete(fromUserId);
+
+          routeVideoTracksForPeer(fromUserId);
         } else if (signal.type === 'answer') {
+          if (signal.camTrackId !== undefined || signal.screenTrackId !== undefined) {
+            peerTrackMetas.current.set(fromUserId, {
+              camTrackId: signal.camTrackId,
+              screenTrackId: signal.screenTrackId,
+              hasCamera: signal.hasCamera,
+              isScreenSharing: signal.isScreenSharing,
+            });
+          }
+
           if (pc.signalingState === 'have-local-offer') {
             const optimizedAnswer = {
               type: signal.answer.type,
@@ -365,6 +572,8 @@ export function useWebRTC({
               try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {}
             }
             pendingCandidates.current.delete(fromUserId);
+
+            routeVideoTracksForPeer(fromUserId);
           }
         } else if (signal.type === 'candidate') {
           if (pc.remoteDescription && pc.remoteDescription.type) {
@@ -384,7 +593,7 @@ export function useWebRTC({
         console.warn('[useWebRTC] Signal handling error:', err);
       }
     });
-  }, [isMediaActive, currentUserId, getOrCreatePeerConnection, sendRtcSignal, setRtcSignalHandler]);
+  }, [isMediaActive, currentUserId, getOrCreatePeerBundle, sendRtcSignal, setRtcSignalHandler, routeVideoTracksForPeer]);
 
   // Maintain active connections to all peers in the channel
   useEffect(() => {
@@ -393,49 +602,55 @@ export function useWebRTC({
     peers.forEach((peer) => {
       if (peer.id === currentUserId) return;
 
-      const existingPc = peerConnections.current.get(peer.id);
-      if (!existingPc || existingPc.connectionState === 'closed') {
-        // Initiator: Polite peer initiates offer
+      const existingBundle = peerBundles.current.get(peer.id);
+      if (!existingBundle || existingBundle.pc.connectionState === 'closed') {
         const isInitiator = currentUserId < peer.id;
         if (isInitiator) {
           renegotiateWithPeer(peer.id);
         } else {
-          getOrCreatePeerConnection(peer.id);
+          getOrCreatePeerBundle(peer.id);
         }
       }
     });
 
     // Cleanup disconnected peers
     const activePeerIds = new Set(peers.map((p) => p.id));
-    peerConnections.current.forEach((pc, peerId) => {
+    peerBundles.current.forEach((bundle, peerId) => {
       if (!activePeerIds.has(peerId) || peerId === currentUserId) {
-        try { pc.close(); } catch {}
-        peerConnections.current.delete(peerId);
+        try { bundle.pc.close(); } catch {}
+        peerBundles.current.delete(peerId);
+        peerTrackMetas.current.delete(peerId);
+        remoteVideoTracks.current.delete(peerId);
         pendingCandidates.current.delete(peerId);
         makingOfferRef.current.delete(peerId);
+        isNegotiatingRef.current.delete(peerId);
         setRemoteStreams((prev) => {
+          if (!prev[peerId]) return prev;
           const copy = { ...prev };
           delete copy[peerId];
           return copy;
         });
         setRemoteCameraStreams((prev) => {
+          if (!prev[peerId]) return prev;
           const copy = { ...prev };
           delete copy[peerId];
           return copy;
         });
         setRemoteScreenStreams((prev) => {
+          if (!prev[peerId]) return prev;
           const copy = { ...prev };
           delete copy[peerId];
           return copy;
         });
         setRemoteSpeaking((prev) => {
+          if (!prev[peerId]) return prev;
           const copy = { ...prev };
           delete copy[peerId];
           return copy;
         });
       }
     });
-  }, [isMediaActive, peers, currentUserId, renegotiateWithPeer, getOrCreatePeerConnection]);
+  }, [isMediaActive, peers, currentUserId, renegotiateWithPeer, getOrCreatePeerBundle]);
 
   return {
     remoteStreams,
