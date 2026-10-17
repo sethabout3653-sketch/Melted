@@ -340,8 +340,6 @@ const RemoteVideoPlayer: React.FC<{
 
     video.muted = true;
     video.defaultMuted = true;
-    video.playsInline = true;
-    video.autoplay = true;
 
     const checkFrame = () => {
       if (video && video.videoWidth > 0 && video.videoHeight > 0) {
@@ -350,24 +348,17 @@ const RemoteVideoPlayer: React.FC<{
       }
     };
 
-    const tryPlay = async () => {
+    const tryPlay = () => {
       if (video && video.srcObject) {
-        try {
-          await video.play();
+        video.play().then(() => {
           checkFrame();
-        } catch (err) {
+        }).catch((err) => {
           console.warn('[RemoteVideoPlayer] Play waiting for user interaction:', err);
-        }
+        });
       }
     };
 
     tryPlay();
-
-    const handleLoadedMetadata = () => {
-      tryPlay();
-    };
-
-    video.addEventListener('loadedmetadata', handleLoadedMetadata);
 
     const handleUnmute = () => {
       liveTracks.forEach((t) => { t.enabled = true; });
@@ -388,6 +379,7 @@ const RemoteVideoPlayer: React.FC<{
     stream.addEventListener('addtrack', handleAddTrack);
 
     video.addEventListener('loadeddata', checkFrame);
+    video.addEventListener('loadedmetadata', checkFrame);
     video.addEventListener('canplay', checkFrame);
     video.addEventListener('playing', checkFrame);
 
@@ -400,18 +392,14 @@ const RemoteVideoPlayer: React.FC<{
     window.addEventListener('keydown', onUserGesture, { once: true });
 
     return () => {
-      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
       liveTracks.forEach((t) => {
         t.removeEventListener('unmute', handleUnmute);
       });
-      if (stream) {
-        stream.removeEventListener('addtrack', handleAddTrack);
-      }
-      if (video) {
-        video.removeEventListener('loadeddata', checkFrame);
-        video.removeEventListener('canplay', checkFrame);
-        video.removeEventListener('playing', checkFrame);
-      }
+      stream.removeEventListener('addtrack', handleAddTrack);
+      video.removeEventListener('loadeddata', checkFrame);
+      video.removeEventListener('loadedmetadata', checkFrame);
+      video.removeEventListener('canplay', checkFrame);
+      video.removeEventListener('playing', checkFrame);
       window.removeEventListener('click', onUserGesture);
       window.removeEventListener('touchstart', onUserGesture);
       window.removeEventListener('keydown', onUserGesture);
@@ -852,8 +840,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          noiseSuppression: false,
+          autoGainControl: false,
         },
         video: false,
       });
@@ -1081,7 +1069,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
           setAudioLevel(normalized);
         }
 
-        const speakingThreshold = 14;
+        const speakingThreshold = 8;
         if (normalized > speakingThreshold) {
           speakingCounter = Math.min(speakingCounter + 1, 8);
         } else {
@@ -1110,20 +1098,29 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     }
   }, [localAudioStream, isMuted, isMicTesting]);
 
-  // Robust media acquisition that handles device switching
+  // Robust media acquisition allowing any noise with echo cancellation
   const acquireAudioStream = async (): Promise<MediaStream> => {
     try {
       return await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
+          noiseSuppression: false,
+          autoGainControl: false,
         },
         video: false,
       });
-    } catch (err) {
-      console.error('[WebRTC] Audio acquisition failed:', err);
-      throw err;
+    } catch {
+      try {
+        return await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+          },
+          video: false,
+        });
+      } catch (err) {
+        console.error('[WebRTC] Audio acquisition failed:', err);
+        throw err;
+      }
     }
   };
 
