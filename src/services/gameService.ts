@@ -1,272 +1,147 @@
-import rawGamesData from '../data/gnMathGames.json';
 import { RawGame, GameItem, GameCategory } from '../types/game';
+import localCatalog from '../data/gnMathCatalog.json';
 
-export const RAWGITHACK_BASE = 'https://raw.githack.com/freebuisness/html/main';
-export const COVER_BASE = 'https://cdn.jsdelivr.net/gh/freebuisness/covers@main';
+// RawGitHack CDNs for gn-math repository
+const GN_HTML_BASE = 'https://rawcdn.githack.com/gn-math/html/main';
+const GN_COVER_BASE = 'https://rawcdn.githack.com/gn-math/covers/main';
 
-export function resolveCoverUrl(rawCover?: string): string {
-  if (!rawCover) return '';
-  const clean = rawCover.replace('{COVER_URL}/', '').replace('{COVER_URL}', '');
-  return `/api/cover/${clean}`;
-}
-
-export function getDirectCoverUrl(rawCover?: string): string {
-  if (!rawCover) return '';
-  return rawCover.replace('{COVER_URL}', COVER_BASE);
-}
-
-// Seamless streaming endpoint via backend proxy with auto-resolution
-export function resolveGameUrl(rawUrl: string): string {
-  if (!rawUrl) return '';
-  if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
-    return rawUrl;
-  }
-  const filename = rawUrl.replace('{HTML_URL}/', '');
-  return `/api/raw/${filename}`;
-}
-
-export function getDirectRawGitHackUrl(rawUrl: string): string {
-  if (!rawUrl) return '';
-  if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
-    return rawUrl;
-  }
-  return rawUrl.replace('{HTML_URL}', RAWGITHACK_BASE);
-}
+const GN_ZONES_URL = 'https://rawcdn.githack.com/gn-math/assets/main/zones.json';
+const GN_ZONES_FALLBACK = 'https://raw.githubusercontent.com/gn-math/assets/main/zones.json';
 
 const FEATURED_NAMES = new Set([
-  'Drive Mad',
-  'OvO',
-  'OvO 2',
-  'Bowmasters',
-  "Five Nights at Freddy's",
-  'Friday Night Funkin',
-  'Jetpack Joyride',
-  'Gladihoppers',
-  'Retro Bowl',
   'Slope',
-  '1v1.lol',
   'Subway Surfers',
-  'Cookie Clicker',
+  '1v1.LOL',
+  'Retro Bowl',
+  'Drive Mad',
   'Moto X3M',
-  'Crossy Road',
-  'Bitlife',
-  'Superhot',
-  'Basketball Stars',
-  'Bad Time Simulator (Sans Fight)',
-  'Smash Karts',
-  'Duck Life 4',
-  'Undertale',
-  'Vex 7',
+  'Cookie Clicker',
   'Geometry Dash',
-  'FNAF 2',
+  'Flappy Bird',
+  'Super Mario 64',
+  'Bitlife',
+  'Bad Ice Cream',
+  'Crossy Road',
+  'Among Us',
+  '2048',
+  'Bowmasters',
+  'OvO',
+  'Gladihoppers',
+  'Temple Run 2',
+  'Stickman Hook',
 ]);
 
-export function detectCategory(game: RawGame): GameCategory {
-  const name = game.name.toLowerCase();
-  const special = (game.special || []).map((s) => s.toLowerCase());
-
-  if (
-    special.some((s) =>
-      ['n64', 'gba', 'nds', 'nes', 'psx', 'dos', 'emulator', 'port'].includes(s)
-    )
-  ) {
-    return 'Emulators & Ports';
-  }
-
-  if (
-    name.includes('freddy') ||
-    name.includes('fnaf') ||
-    name.includes('granny') ||
-    name.includes('horror') ||
-    name.includes('slender') ||
-    name.includes('bendy') ||
-    name.includes('neighbor') ||
-    name.includes('backrooms') ||
-    name.includes('baldi') ||
-    name.includes('zombie')
-  ) {
-    return 'Horror & Mystery';
-  }
-
-  if (
-    name.includes('drive') ||
-    name.includes('moto') ||
-    name.includes('car') ||
-    name.includes('racer') ||
-    name.includes('racing') ||
-    name.includes('drift') ||
-    name.includes('kart') ||
-    name.includes('truck') ||
-    name.includes('bike') ||
-    name.includes('speed')
-  ) {
+export function detectCategory(name: string): GameCategory {
+  const lower = name.toLowerCase();
+  if (lower.includes('drive') || lower.includes('moto') || lower.includes('car') || lower.includes('racing') || lower.includes('drift') || lower.includes('kart') || lower.includes('speed') || lower.includes('rider')) {
     return 'Driving & Racing';
   }
-
-  if (
-    name.includes('1v1') ||
-    name.includes('gun') ||
-    name.includes('shoot') ||
-    name.includes('doom') ||
-    name.includes('quake') ||
-    name.includes('bowmaster') ||
-    name.includes('combat') ||
-    name.includes('strike') ||
-    name.includes('tank') ||
-    name.includes('war') ||
-    name.includes('sniper') ||
-    name.includes('gladihopper') ||
-    name.includes('smash') ||
-    name.includes('bullet')
-  ) {
+  if (lower.includes('1v1') || lower.includes('shoot') || lower.includes('gun') || lower.includes('war') || lower.includes('battle') || lower.includes('bullet') || lower.includes('strike') || lower.includes('tank') || lower.includes('combat') || lower.includes('sniper') || lower.includes('bowmaster') || lower.includes('gladihopper')) {
     return 'Action & Shooters';
   }
-
-  if (
-    name.includes('bowl') ||
-    name.includes('basketball') ||
-    name.includes('soccer') ||
-    name.includes('football') ||
-    name.includes('tennis') ||
-    name.includes('golf') ||
-    name.includes('hockey') ||
-    name.includes('physics') ||
-    name.includes('pool') ||
-    name.includes('baseball')
-  ) {
-    return 'Sports & Physics';
-  }
-
-  if (
-    name.includes('ovo') ||
-    name.includes('slope') ||
-    name.includes('run ') ||
-    name.includes('run 2') ||
-    name.includes('run 3') ||
-    name.includes('vex') ||
-    name.includes('jump') ||
-    name.includes('fall') ||
-    name.includes('geometry') ||
-    name.includes('parkour') ||
-    name.includes('flappy') ||
-    name.includes('tower') ||
-    name.includes('subway') ||
-    name.includes('climb')
-  ) {
+  if (lower.includes('slope') || lower.includes('run') || lower.includes('jump') || lower.includes('fall') || lower.includes('flappy') || lower.includes('geometry') || lower.includes('subway') || lower.includes('parkour') || lower.includes('vex') || lower.includes('ovo') || lower.includes('hook')) {
     return 'Skill & Platformer';
   }
-
-  if (
-    name.includes('pac') ||
-    name.includes('mario') ||
-    name.includes('sonic') ||
-    name.includes('tetris') ||
-    name.includes('arcade') ||
-    name.includes('retro') ||
-    name.includes('galaga') ||
-    name.includes('asteroids') ||
-    name.includes('pinball') ||
-    name.includes('snake') ||
-    name.includes('pong') ||
-    name.includes('space') ||
-    special.includes('flash')
-  ) {
+  if (lower.includes('mario') || lower.includes('sonic') || lower.includes('pac') || lower.includes('retro') || lower.includes('arcade') || lower.includes('sm64') || lower.includes('pokemon') || lower.includes('zelda') || lower.includes('nes') || lower.includes('gba') || lower.includes('atari') || lower.includes('doom')) {
     return 'Retro & Arcade';
   }
-
-  if (
-    name.includes('clicker') ||
-    name.includes('2048') ||
-    name.includes('chess') ||
-    name.includes('sudoku') ||
-    name.includes('candy') ||
-    name.includes('cut the rope') ||
-    name.includes('block') ||
-    name.includes('word') ||
-    name.includes('puzzle') ||
-    name.includes('crossword') ||
-    name.includes('match')
-  ) {
+  if (lower.includes('horror') || lower.includes('fnaf') || lower.includes('freddy') || lower.includes('slender') || lower.includes('granny') || lower.includes('bendy') || lower.includes('scary') || lower.includes('creep')) {
+    return 'Horror & Mystery';
+  }
+  if (lower.includes('soccer') || lower.includes('bowl') || lower.includes('basketball') || lower.includes('football') || lower.includes('sports') || lower.includes('golf') || lower.includes('tennis') || lower.includes('baseball') || lower.includes('billiards') || lower.includes('8 ball')) {
+    return 'Sports & Physics';
+  }
+  if (lower.includes('puzzle') || lower.includes('clicker') || lower.includes('2048') || lower.includes('chess') || lower.includes('word') || lower.includes('candy') || lower.includes('match') || lower.includes('sudoku') || lower.includes('mahjong')) {
     return 'Puzzle & Casual';
   }
-
   return 'Action & Shooters';
 }
 
-export function getAllGames(): GameItem[] {
-  const validGames = (rawGamesData as RawGame[]).filter(
-    (g) => g.id >= 0 && g.name && !g.name.includes('.gg/')
-  );
-
-  return validGames.map((game) => {
-    const isFeatured = FEATURED_NAMES.has(game.name) || Boolean(game.featured);
-    const category = detectCategory(game);
-    const resolvedCover = resolveCoverUrl(game.cover);
-    const fallbackCover = getDirectCoverUrl(game.cover);
-    const resolvedUrl = resolveGameUrl(game.url);
-
-    return {
-      ...game,
-      featured: isFeatured,
-      category,
-      resolvedCover,
-      fallbackCover,
-      localCover: resolvedCover,
-      resolvedUrl,
-    };
-  });
+export function resolveCoverUrl(rawCover?: string): string {
+  if (!rawCover) return '';
+  return rawCover.replace('{COVER_URL}', GN_COVER_BASE);
 }
+
+export function resolveGameUrl(rawUrl: string): string {
+  if (!rawUrl) return '';
+  return rawUrl.replace('{HTML_URL}', GN_HTML_BASE);
+}
+
+function transformRawGnMathItem(raw: any, index: number): GameItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const id = typeof raw.id === 'number' ? raw.id : index;
+  // Skip discord promotion / suggestion placeholders
+  if (id < 0 || !raw.name || raw.name.includes('.gg/')) return null;
+
+  const name = String(raw.name).trim();
+  if (!name || name.length <= 1) return null;
+
+  const rawUrl = raw.url || '';
+  const gameUrl = rawUrl.startsWith('http')
+    ? rawUrl
+    : rawUrl.replace('{HTML_URL}', GN_HTML_BASE);
+
+  const rawCover = raw.cover || '';
+  const coverUrl = rawCover.startsWith('http')
+    ? rawCover
+    : rawCover.replace('{COVER_URL}', GN_COVER_BASE);
+
+  const fallbackCover = rawCover.startsWith('http')
+    ? rawCover
+    : rawCover.replace('{COVER_URL}', 'https://raw.githubusercontent.com/gn-math/covers/main');
+
+  const category = detectCategory(name);
+  const isFeatured = FEATURED_NAMES.has(name) || (id < 12);
+
+  return {
+    id,
+    name,
+    url: gameUrl,
+    cover: coverUrl,
+    fallbackCover,
+    localCover: coverUrl,
+    resolvedCover: coverUrl,
+    resolvedUrl: gameUrl,
+    category,
+    featured: isFeatured,
+    author: raw.author,
+    authorLink: raw.authorLink,
+  };
+}
+
+// Transform the local backup catalog immediately for instant load
+const initialCatalog: GameItem[] = (Array.isArray(localCatalog) ? localCatalog : [])
+  .map((item, idx) => transformRawGnMathItem(item, idx))
+  .filter((g): g is GameItem => g !== null);
+
+let cachedGames: GameItem[] = initialCatalog;
 
 export async function fetchGames(): Promise<GameItem[]> {
-  return getAllGames();
-}
-
-const FAVORITES_KEY = 'melted_favorite_ids';
-const RECENT_KEY = 'melted_recent_ids';
-
-export function getFavorites(): number[] {
   try {
-    const stored = localStorage.getItem(FAVORITES_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function toggleFavorite(id: number): boolean {
-  try {
-    const current = getFavorites();
-    const index = current.indexOf(id);
-    let updated: number[];
-    let added = false;
-    if (index >= 0) {
-      updated = current.filter((x) => x !== id);
-    } else {
-      updated = [id, ...current];
-      added = true;
+    let res = await fetch(GN_ZONES_URL).catch(() => null);
+    if (!res || !res.ok) {
+      res = await fetch(GN_ZONES_FALLBACK).catch(() => null);
     }
-    localStorage.setItem(FAVORITES_KEY, JSON.stringify(updated));
-    return added;
-  } catch {
-    return false;
+
+    if (res && res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        const transformed = data
+          .map((item, idx) => transformRawGnMathItem(item, idx))
+          .filter((g): g is GameItem => g !== null);
+
+        if (transformed.length > 0) {
+          cachedGames = transformed;
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('Using local gn-math catalog fallback:', error);
   }
+
+  return cachedGames;
 }
 
-export function getRecentPlayed(): number[] {
-  try {
-    const stored = localStorage.getItem(RECENT_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function recordRecentPlay(id: number): void {
-  try {
-    const current = getRecentPlayed().filter((x) => x !== id);
-    const updated = [id, ...current].slice(0, 20);
-    localStorage.setItem(RECENT_KEY, JSON.stringify(updated));
-  } catch {
-    // Ignore storage errors
-  }
+export function getAllGames(): GameItem[] {
+  return cachedGames;
 }

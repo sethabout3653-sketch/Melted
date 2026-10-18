@@ -5,12 +5,13 @@ import { CategoryFilter } from './components/CategoryFilter';
 import { GameCard } from './components/GameCard';
 import { GamePlayer } from './components/GamePlayer';
 import { ChatView } from './components/ChatView';
+import { MusicView } from './components/MusicView';
 import { AdsterraBanner468 } from './components/AdsterraBanner468';
 import { AdsterraCpmWidget } from './components/AdsterraCpmWidget';
 import { AdsterraAd } from './components/AdsterraAd';
 import { FrostedLoadingScreen } from './components/FrostedLoadingScreen';
 import { InAppNotificationToast } from './components/InAppNotificationToast';
-import { getAllGames, resolveGameUrl } from './services/gameService';
+import { getAllGames, fetchGames, resolveGameUrl } from './services/gameService';
 import { useCloak, launchAboutBlank } from './hooks/useCloak';
 import { useGlobalChat } from './hooks/useGlobalChat';
 import { useDeviceAdaptation } from './hooks/useDeviceAdaptation';
@@ -30,7 +31,7 @@ import {
 const PAGE_SIZE = 36;
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'games' | 'chat'>('games');
+  const [currentTab, setCurrentTab] = useState<'games' | 'music' | 'chat'>('games');
   const [searchQuery, setSearchQuery] = useState('');
   const deferredQuery = useDeferredValue(searchQuery);
 
@@ -47,8 +48,8 @@ export default function App() {
     presets,
   } = useCloak();
 
-  // Master Games State - Pre-populated with initial catalogue so UI renders instantly
-  const [allGames] = useState<GameItem[]>(() => {
+  // Master Games State - Pre-populated with fallback catalogue, updated from gmshelf
+  const [allGames, setAllGames] = useState<GameItem[]>(() => {
     try {
       return getAllGames();
     } catch {
@@ -57,6 +58,14 @@ export default function App() {
   });
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
   const [activeGame, setActiveGame] = useState<GameItem | null>(null);
+
+  useEffect(() => {
+    fetchGames().then((games) => {
+      if (games && games.length > 0) {
+        setAllGames(games);
+      }
+    }).catch(() => {});
+  }, []);
 
   // Global Chat and Notifications
   const globalChat = useGlobalChat({ isChatTabActive: currentTab === 'chat' });
@@ -304,6 +313,15 @@ export default function App() {
         }`}
       >
         <ChatView globalChat={globalChat} />
+      </div>
+
+      {/* Music Station View */}
+      <div 
+        className={`flex-1 min-h-0 w-full overflow-hidden flex flex-col ${deviceInfo.isMobile ? 'pb-16' : ''} ${
+          currentTab === 'music' ? 'flex' : 'hidden'
+        }`}
+      >
+        <MusicView />
       </div>
 
       {/* Main View: Games Catalog */}

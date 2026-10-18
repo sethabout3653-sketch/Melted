@@ -27,12 +27,9 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
   const ratingNumber = (4.7 + ((game.id * 13) % 30) / 100).toFixed(1);
 
   const handleImageError = () => {
-    if (!triedFallback && game.fallbackCover && game.fallbackCover !== currentCover) {
-      setTriedFallback(true);
+    if (game.fallbackCover && currentCover !== game.fallbackCover) {
       setCurrentCover(game.fallbackCover);
-    } else if (!triedFallback && game.localCover && game.localCover !== currentCover) {
-      setTriedFallback(true);
-      setCurrentCover(game.localCover);
+      setImageLoaded(true);
     } else {
       setImageError(true);
     }

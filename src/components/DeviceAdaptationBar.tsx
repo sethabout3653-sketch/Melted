@@ -1,11 +1,11 @@
 import React from 'react';
-import { Gamepad2, MessageSquare, Heart, Shuffle } from 'lucide-react';
+import { Gamepad2, MessageSquare, Heart, Shuffle, Music } from 'lucide-react';
 import { DeviceAdaptationInfo } from '../hooks/useDeviceAdaptation';
 
 interface DeviceAdaptationBarProps {
   deviceInfo: DeviceAdaptationInfo;
-  currentTab: 'games' | 'chat';
-  onTabChange: (tab: 'games' | 'chat') => void;
+  currentTab: 'games' | 'music' | 'chat';
+  onTabChange: (tab: 'games' | 'music' | 'chat') => void;
   favoritesCount: number;
   showFavoritesOnly: boolean;
   onToggleFavoritesOnly: () => void;
@@ -38,7 +38,7 @@ export const DeviceAdaptationBar: React.FC<DeviceAdaptationBarProps> = ({
           {/* Games Tab */}
           <button
             onClick={() => onTabChange('games')}
-            className={`flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl transition-all ${
+            className={`flex flex-col items-center justify-center gap-1 py-1 px-2.5 rounded-xl transition-all ${
               currentTab === 'games' && !showFavoritesOnly
                 ? 'text-[#0066ff] font-bold'
                 : 'text-zinc-400 hover:text-white'
@@ -48,10 +48,23 @@ export const DeviceAdaptationBar: React.FC<DeviceAdaptationBarProps> = ({
             <span className="text-[10px] tracking-tight">Games</span>
           </button>
 
+          {/* Music Tab */}
+          <button
+            onClick={() => onTabChange('music')}
+            className={`flex flex-col items-center justify-center gap-1 py-1 px-2.5 rounded-xl transition-all ${
+              currentTab === 'music'
+                ? 'text-purple-400 font-bold'
+                : 'text-zinc-400 hover:text-white'
+            }`}
+          >
+            <Music className="w-5 h-5" />
+            <span className="text-[10px] tracking-tight">Music</span>
+          </button>
+
           {/* Chat Tab with Live Activity Indicator */}
           <button
             onClick={() => onTabChange('chat')}
-            className={`flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl relative transition-all ${
+            className={`flex flex-col items-center justify-center gap-1 py-1 px-2.5 rounded-xl relative transition-all ${
               currentTab === 'chat'
                 ? 'text-[#0066ff] font-bold'
                 : 'text-zinc-400 hover:text-white'
@@ -76,7 +89,7 @@ export const DeviceAdaptationBar: React.FC<DeviceAdaptationBarProps> = ({
               if (currentTab !== 'games') onTabChange('games');
               onToggleFavoritesOnly();
             }}
-            className={`flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl transition-all ${
+            className={`flex flex-col items-center justify-center gap-1 py-1 px-2.5 rounded-xl transition-all ${
               showFavoritesOnly
                 ? 'text-[#0066ff] font-bold'
                 : 'text-zinc-400 hover:text-white'
@@ -99,7 +112,7 @@ export const DeviceAdaptationBar: React.FC<DeviceAdaptationBarProps> = ({
               if (currentTab !== 'games') onTabChange('games');
               onRandomGame();
             }}
-            className="flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl text-zinc-400 hover:text-[#0066ff] transition-all"
+            className="flex flex-col items-center justify-center gap-1 py-1 px-2.5 rounded-xl text-zinc-400 hover:text-[#0066ff] transition-all"
           >
             <Shuffle className="w-5 h-5" />
             <span className="text-[10px] tracking-tight">Surprise</span>
@@ -109,4 +122,3 @@ export const DeviceAdaptationBar: React.FC<DeviceAdaptationBarProps> = ({
     </>
   );
 };
-
