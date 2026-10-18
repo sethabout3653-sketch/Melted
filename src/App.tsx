@@ -5,6 +5,9 @@ import { CategoryFilter } from './components/CategoryFilter';
 import { GameCard } from './components/GameCard';
 import { GamePlayer } from './components/GamePlayer';
 import { ChatView } from './components/ChatView';
+import { AdsterraBanner468 } from './components/AdsterraBanner468';
+import { AdsterraCpmWidget } from './components/AdsterraCpmWidget';
+import { AdsterraAd } from './components/AdsterraAd';
 import { FrostedLoadingScreen } from './components/FrostedLoadingScreen';
 import { InAppNotificationToast } from './components/InAppNotificationToast';
 import { getAllGames, resolveGameUrl } from './services/gameService';
@@ -316,6 +319,12 @@ export default function App() {
             />
           )}
 
+          {/* Adsterra Top Sponsored Banner */}
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 my-6">
+            <AdsterraBanner468 />
+            <AdsterraCpmWidget />
+          </div>
+
           {/* Categories & Sorting */}
           <CategoryFilter
             selectedCategory={selectedCategory}
@@ -508,6 +517,11 @@ export default function App() {
                 </ul>
               </div>
 
+            </div>
+
+            {/* Footer Adsterra Ad Unit */}
+            <div className="my-8 flex justify-center">
+              <AdsterraAd className="max-w-md w-full" />
             </div>
 
             <div className="pt-6 border-t border-[#19191c] flex flex-col sm:flex-row items-center justify-between text-[11px] text-zinc-400 gap-2">

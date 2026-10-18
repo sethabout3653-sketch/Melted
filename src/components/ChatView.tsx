@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { AdsterraAd } from './AdsterraAd';
 import { 
   Hash, 
   Video, 
@@ -747,57 +748,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     }
   }, [cameraStream, screenStream]);
 
-  // Mix Microphone + Screen Share audio into localAudioStream for WebRTC so remote users hear screen audio!
-  const localAudioStreamRef = useRef<MediaStream | null>(null);
-
+  // Keep microphone and screen share audio strictly separated!
+  // localAudioStream contains purely the microphone stream with echo cancellation.
   useEffect(() => {
-    try {
-      const micTracks = micStreamRef.current?.getAudioTracks().filter((t) => t.readyState === 'live') || [];
-      const screenAudioTracks = screenStream?.getAudioTracks().filter((t) => t.readyState === 'live') || [];
-
-      if (micTracks.length === 0 && screenAudioTracks.length === 0) {
-        if (localAudioStreamRef.current !== null) {
-          localAudioStreamRef.current = null;
-          setLocalAudioStream(null);
-        }
-        return;
-      }
-
-      let audioTracks: MediaStreamTrack[] = [];
-      if (micTracks.length > 0 && !isMuted) {
-        audioTracks.push(micTracks[0]);
-      }
-      if (screenAudioTracks.length > 0 && isScreenSharing) {
-        audioTracks.push(screenAudioTracks[0]);
-      }
-
-      if (audioTracks.length === 0) {
-        if (localAudioStreamRef.current !== null) {
-          localAudioStreamRef.current = null;
-          setLocalAudioStream(null);
-        }
-        return;
-      }
-
-      // Check if tracks have actually changed
-      const currentTrackIds = audioTracks.map(t => t.id).join(',');
-      const previousTrackIds = localAudioStreamRef.current ? 
-          localAudioStreamRef.current.getAudioTracks().map(t => t.id).join(',') : '';
-
-      if (currentTrackIds !== previousTrackIds) {
-        // Need to create a new stream if tracks changed
-        const newStream = new MediaStream(audioTracks);
-        localAudioStreamRef.current = newStream;
-        setLocalAudioStream(newStream);
-      }
-    } catch (err) {
-      console.warn('[Audio Mixer] error mixing audio:', err);
-      if (micStreamRef.current) {
-        // Fallback
-        setLocalAudioStream(micStreamRef.current);
-      }
+    if (micStreamRef.current) {
+      micStreamRef.current.getAudioTracks().forEach((track) => {
+        track.enabled = !isMuted;
+      });
     }
-  }, [screenStream, isMuted]);
+  }, [isMuted]);
 
 
   const [micError, setMicError] = useState<string | null>(null);
@@ -953,7 +912,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     return voiceUsers;
   }, [voiceUsers, isMediaActive]);
 
-  const { remoteStreams, remoteCameraStreams, remoteScreenStreams, remoteSpeaking } = useWebRTC({
+  const { remoteStreams, remoteScreenAudioStreams, remoteCameraStreams, remoteScreenStreams, remoteSpeaking } = useWebRTC({
     currentUserId: currentUser.id,
     activeChannel: isMediaActive ? 'video-general' : 'text-general',
     localAudioStream,
@@ -1311,13 +1270,24 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
           try {
             stream = await navigator.mediaDevices.getDisplayMedia({
               video: true,
-              audio: true,
+              audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+              } as any,
             });
           } catch {
-            stream = await navigator.mediaDevices.getDisplayMedia({
-              video: true,
-              audio: false,
-            });
+            try {
+              stream = await navigator.mediaDevices.getDisplayMedia({
+                video: true,
+                audio: true,
+              });
+            } catch {
+              stream = await navigator.mediaDevices.getDisplayMedia({
+                video: true,
+                audio: false,
+              });
+            }
           }
         }
       } catch (err: any) {
@@ -1630,15 +1600,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         accept="*"
       />
 
-      {/* Render Remote WebRTC Peer Audio Elements for all active streams */}
-      {Object.entries(remoteStreams).map(([peerId, stream]) => (
-        <RemoteAudioPlayer
-          key={peerId}
-          stream={stream}
-          isDeafened={isDeafened}
-        />
-      ))}
-
       {/* LEFT NAVIGATION SIDEBAR - Desktop view */}
       <aside className="hidden md:flex w-64 bg-[#0c0c0f] border-r border-[#1a1a20] flex-col justify-between shrink-0 overflow-hidden">
         <div className="p-4 space-y-6 shrink-0">
@@ -1712,6 +1673,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               </button>
             </div>
 
+          </div>
+
+          {/* Adsterra Ad Unit */}
+          <div className="pt-4 px-2">
+            <AdsterraAd />
           </div>
 
         </div>
@@ -2502,6 +2468,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 ))}
               </div>
 
+              {/* Adsterra Ad Unit */}
+              <div className="shrink-0 pt-2 border-t border-[#14141a]">
+                <AdsterraAd />
+              </div>
+
             </aside>
 
             {/* Mobile / Tablet Members Drawer Overlay */}
@@ -2682,28 +2653,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       </div>
                     )}
 
-                    {/* Local Screen Share Tile - Shows live screen preview when actively sharing */}
+                    {/* Local Screen Share Tile - Shows you are sharing (no video preview for self) */}
                     {isScreenSharing && (
                       <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/40 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
-                        {screenStream ? (
-                          <video
-                            autoPlay
-                            playsInline
-                            muted
-                            ref={(el) => {
-                              if (el && screenStream && el.srcObject !== screenStream) {
-                                el.srcObject = screenStream;
-                                el.play().catch(() => {});
-                              }
-                            }}
-                            className="w-full h-full object-contain rounded-3xl"
-                          />
-                        ) : (
-                          <div className="flex flex-col items-center justify-center gap-4 text-blue-400">
-                             <Monitor className="w-16 h-16" />
-                             <span className="text-lg font-bold text-white">Sharing your screen</span>
+                        <div className="flex flex-col items-center justify-center gap-4 text-blue-400">
+                          <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shadow-lg shadow-blue-500/10">
+                            <Monitor className="w-8 h-8 text-blue-400 animate-pulse" />
                           </div>
-                        )}
+                          <div className="text-center px-4">
+                            <span className="text-base font-bold text-white block">You are sharing your screen</span>
+                            <span className="text-xs text-zinc-400 mt-1 block">Live stream is visible to other participants</span>
+                          </div>
+                        </div>
 
                         {/* Bottom-Left Overlay */}
                         <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-auto">
@@ -3194,10 +3155,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         </div>
       )}
 
-      {/* Global Remote Audio Output for Voice Channel Peers (Microphone & Screen Share Audio) */}
+      {/* Remote Peer Voice Audio (Microphone Speech) */}
       {Object.entries(remoteStreams).map(([peerId, stream]) => (
         <RemoteAudioPlayer
-          key={peerId}
+          key={`mic-${peerId}`}
+          stream={stream}
+          isDeafened={isDeafened}
+        />
+      ))}
+
+      {/* Remote Screen Share Audio (Separate stream, pristine audio, no mic echo) */}
+      {Object.entries(remoteScreenAudioStreams).map(([peerId, stream]) => (
+        <RemoteAudioPlayer
+          key={`screen-audio-${peerId}`}
           stream={stream}
           isDeafened={isDeafened}
         />
