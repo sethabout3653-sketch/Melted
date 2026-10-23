@@ -36,24 +36,24 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
   };
 
   return (
-    <div className="group relative bg-[#0e0e10] hover:bg-[#131316] border border-[#202024] hover:border-[#0066ff]/40 rounded-2xl p-4 transition-all duration-200 hover:shadow-xl hover:shadow-[#0066ff]/5 flex flex-col justify-between transform-gpu">
+    <div className="group relative bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] border border-[var(--bg-navy)] hover:border-[var(--vibrant-cyan)]/40 rounded-2xl p-4 transition-all duration-200 hover:shadow-xl hover:shadow-[var(--vibrant-cyan)]/5 flex flex-col justify-between transform-gpu">
       
       {/* Top Section */}
       <div>
         {/* Large Thumbnail with 16px radius */}
         <div 
           onClick={() => onPlay(game)}
-          className="relative w-full aspect-[16/10] rounded-[16px] overflow-hidden bg-[#161619] cursor-pointer mb-3.5 border border-[#26262a]"
+          className="relative w-full aspect-[16/10] rounded-[16px] overflow-hidden bg-[var(--bg-navy)] cursor-pointer mb-3.5 border border-[var(--bg-navy)]"
         >
           {/* Skeleton placeholder while loading */}
           {!imageLoaded && !imageError && (
-            <div className="absolute inset-0 bg-[#161619] animate-pulse" />
+            <div className="absolute inset-0 bg-[var(--bg-navy)] animate-pulse" />
           )}
 
           {/* Fallback styling container if image fails to load */}
           {imageError || !currentCover ? (
-            <div className="absolute inset-0 bg-gradient-to-br from-[#121216] to-[#1c1c24] flex flex-col items-center justify-center p-4 text-center select-none">
-              <div className="w-10 h-10 rounded-xl bg-[#0066ff]/15 border border-[#0066ff]/30 flex items-center justify-center text-[#0066ff] mb-2 shadow-inner">
+            <div className="absolute inset-0 bg-gradient-to-br from-[var(--bg-navy)] to-[var(--bg-navy)] flex flex-col items-center justify-center p-4 text-center select-none">
+              <div className="w-10 h-10 rounded-xl bg-[var(--vibrant-cyan)]/15 border border-[var(--vibrant-cyan)]/30 flex items-center justify-center text-[var(--vibrant-cyan)] mb-2 shadow-inner">
                 <Gamepad2 className="w-5 h-5" />
               </div>
               <span className="text-xs font-bold text-zinc-200 font-heading line-clamp-1">
@@ -81,7 +81,7 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
           {/* Subtle dark gradient scrim at bottom */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-3">
             <span className="text-[11px] font-bold text-white drop-shadow-md flex items-center gap-1 font-heading">
-              <Play className="w-3 h-3 fill-[#0066ff] text-[#0066ff]" /> Launch Game
+              <Play className="w-3 h-3 fill-[var(--vibrant-cyan)] text-[var(--vibrant-cyan)]" /> Launch Game
             </span>
           </div>
 
@@ -96,7 +96,7 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
           >
             <Heart
               className={`w-3.5 h-3.5 transition-colors ${
-                isFavorite ? 'fill-[#0066ff] text-[#0066ff]' : 'text-zinc-400 hover:text-white'
+                isFavorite ? 'fill-[var(--vibrant-cyan)] text-[var(--vibrant-cyan)]' : 'text-zinc-400 hover:text-white'
               }`}
             />
           </button>
@@ -106,7 +106,7 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
         <div className="space-y-1.5">
           <h3 
             onClick={() => onPlay(game)}
-            className="font-extrabold text-[15px] text-zinc-100 hover:text-[#0066ff] transition-colors leading-snug line-clamp-1 cursor-pointer font-heading"
+            className="font-extrabold text-[15px] text-zinc-100 hover:text-[var(--vibrant-cyan)] transition-colors leading-snug line-clamp-1 cursor-pointer font-heading"
             title={game.name}
           >
             {game.name}
@@ -126,10 +126,10 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
       </div>
 
       {/* Bottom Action Footer */}
-      <div className="mt-4 pt-3 border-t border-[#1c1c20] flex items-center justify-between gap-2">
+      <div className="mt-4 pt-3 border-t border-[var(--bg-navy)] flex items-center justify-between gap-2">
         <button
           onClick={() => onPlay(game)}
-          className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-[#18181b] hover:bg-[#0066ff] text-zinc-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-[#27272a] hover:border-[#0066ff] font-heading shadow-sm"
+          className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 bg-[var(--bg-navy)] hover:bg-[var(--vibrant-cyan)] text-zinc-200 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer border border-[var(--bg-navy)] hover:border-[var(--vibrant-cyan)] font-heading shadow-sm"
         >
           <Play className="w-3.5 h-3.5 fill-current" />
           <span>Play</span>
@@ -137,7 +137,7 @@ export const GameCard: React.FC<GameCardProps> = React.memo(({
 
         <button
           onClick={() => onAboutBlank(game)}
-          className="p-2 bg-[#18181b] hover:bg-[#222226] text-zinc-400 hover:text-white rounded-xl border border-[#27272a] transition-all cursor-pointer"
+          className="p-2 bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] text-zinc-400 hover:text-white rounded-xl border border-[var(--bg-navy)] transition-all cursor-pointer"
           title="Open in stealth about:blank window"
         >
           <ExternalLink className="w-3.5 h-3.5" />

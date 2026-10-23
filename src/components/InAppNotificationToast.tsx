@@ -74,10 +74,10 @@ export const InAppNotificationToast: React.FC<InAppNotificationToastProps> = ({
   return (
     <div 
       role="alert"
-      className="fixed top-5 right-4 sm:right-6 z-[250] max-w-sm w-full bg-[#0d0d12]/95 border border-[#232332] rounded-2xl shadow-2xl shadow-black/80 backdrop-blur-xl overflow-hidden animate-in fade-in slide-in-from-top-4 duration-200 transition-all select-none"
+      className="fixed top-5 right-4 sm:right-6 z-[250] max-w-sm w-full bg-[var(--bg-navy)]/95 border border-[var(--bg-navy)] rounded-2xl shadow-2xl shadow-black/80 backdrop-blur-xl overflow-hidden animate-in fade-in slide-in-from-top-4 duration-200 transition-all select-none"
     >
       {/* Header Bar */}
-      <div className="px-3.5 pt-3 pb-2 flex items-center justify-between border-b border-[#1b1b26] bg-[#0a0a0f]">
+      <div className="px-3.5 pt-3 pb-2 flex items-center justify-between border-b border-[var(--bg-navy)] bg-[var(--bg-navy)]">
         <div className="flex items-center gap-1.5 text-[11px] font-bold text-blue-400">
           <MessageSquare className="w-3.5 h-3.5" />
           <span>New message in #general</span>
@@ -102,7 +102,7 @@ export const InAppNotificationToast: React.FC<InAppNotificationToastProps> = ({
         ) : (
           <div
             className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-black text-black shrink-0 shadow-md ring-2 ring-white/10"
-            style={{ backgroundColor: notification.avatar_color || '#0066ff' }}
+            style={{ backgroundColor: notification.avatar_color || 'var(--vibrant-cyan)' }}
           >
             {notification.sender_name.slice(0, 2).toUpperCase()}
           </div>
@@ -144,7 +144,7 @@ export const InAppNotificationToast: React.FC<InAppNotificationToastProps> = ({
       </div>
 
       {/* Countdown progress bar */}
-      <div className="h-1 w-full bg-[#181824]">
+      <div className="h-1 w-full bg-[var(--bg-navy)]">
         <div
           className="h-full bg-blue-500 transition-all duration-75"
           style={{ width: `${progress}%` }}

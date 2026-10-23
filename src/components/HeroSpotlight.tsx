@@ -20,9 +20,9 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
   const activeGame = featuredGames[selectedIndex] || featuredGames[0];
 
   return (
-    <div className="relative mb-8 overflow-hidden rounded-2xl bg-[#0e0e10] border border-[#222226] p-6 lg:p-8 shadow-2xl">
+    <div className="relative mb-8 overflow-hidden rounded-2xl bg-[var(--bg-navy)] border border-[var(--bg-navy)] p-6 lg:p-8 shadow-2xl">
       {/* Background ambient blue glow */}
-      <div className="absolute -top-24 right-1/4 w-96 h-96 bg-[#0066ff]/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -top-24 right-1/4 w-96 h-96 bg-[var(--vibrant-cyan)]/10 rounded-full blur-3xl pointer-events-none" />
 
       <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
         
@@ -49,7 +49,7 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
           <div className="flex flex-wrap items-center gap-3 pt-2">
             <button
               onClick={() => onPlay(activeGame)}
-              className="flex items-center gap-2 px-6 py-3 bg-[#0066ff] hover:bg-[#0052cc] text-white text-sm font-extrabold rounded-xl shadow-lg shadow-[#0066ff]/25 active:scale-[0.98] transition-all cursor-pointer font-heading"
+              className="flex items-center gap-2 px-6 py-3 bg-[var(--vibrant-cyan)] hover:bg-[var(--bg-navy)] text-white text-sm font-extrabold rounded-xl shadow-lg shadow-[var(--vibrant-cyan)]/25 active:scale-[0.98] transition-all cursor-pointer font-heading"
             >
               <Play className="w-4 h-4 fill-white text-white" />
               <span>Play Now</span>
@@ -57,7 +57,7 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
 
             <button
               onClick={() => onAboutBlank(activeGame)}
-              className="flex items-center gap-2 px-5 py-3 bg-[#18181b] hover:bg-[#222226] text-zinc-200 hover:text-white text-sm font-semibold rounded-xl border border-[#27272a] hover:border-[#0066ff]/40 transition-all cursor-pointer"
+              className="flex items-center gap-2 px-5 py-3 bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] text-zinc-200 hover:text-white text-sm font-semibold rounded-xl border border-[var(--bg-navy)] hover:border-[var(--vibrant-cyan)]/40 transition-all cursor-pointer"
               title="Open in an unblockable stealth about:blank window"
             >
               <ExternalLink className="w-4 h-4 text-zinc-400" />
@@ -73,7 +73,7 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
           {/* Main Visual Card */}
           <div 
             onClick={() => onPlay(activeGame)}
-            className="group relative w-full aspect-[16/10] rounded-xl overflow-hidden bg-[#161619] border border-[#26262a] shadow-2xl cursor-pointer"
+            className="group relative w-full aspect-[16/10] rounded-xl overflow-hidden bg-[var(--bg-navy)] border border-[var(--bg-navy)] shadow-2xl cursor-pointer"
           >
             <img
               src={activeGame.localCover || activeGame.resolvedCover || activeGame.cover || undefined}
@@ -88,7 +88,7 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-4">
               <div>
-                <span className="text-[10px] uppercase font-black tracking-wider text-white bg-[#0066ff] px-2 py-0.5 rounded-full">
+                <span className="text-[10px] uppercase font-black tracking-wider text-white bg-[var(--vibrant-cyan)] px-2 py-0.5 rounded-full">
                   Trending
                 </span>
                 <div className="text-base font-bold text-white mt-1">
@@ -108,8 +108,8 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
                   onClick={() => setSelectedIndex(idx)}
                   className={`relative rounded-lg overflow-hidden aspect-[4/3] border transition-all cursor-pointer ${
                     isSelected 
-                      ? 'border-[#0066ff] ring-2 ring-[#0066ff]/50' 
-                      : 'border-[#27272a] opacity-60 hover:opacity-100'
+                      ? 'border-[var(--vibrant-cyan)] ring-2 ring-[var(--vibrant-cyan)]/50' 
+                      : 'border-[var(--bg-navy)] opacity-60 hover:opacity-100'
                   }`}
                   title={game.name}
                 >

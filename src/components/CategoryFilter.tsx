@@ -56,8 +56,8 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
               onClick={() => onSelectCategory(cat.id)}
               className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all cursor-pointer border ${
                 isSelected
-                  ? 'bg-[#0066ff] text-white border-[#0066ff] shadow-md shadow-[#0066ff]/25 font-bold'
-                  : 'bg-[#111113] hover:bg-[#17171a] text-zinc-300 border-[#222225] hover:border-[#0066ff]/40'
+                  ? 'bg-[var(--vibrant-cyan)] text-white border-[var(--vibrant-cyan)] shadow-md shadow-[var(--vibrant-cyan)]/25 font-bold'
+                  : 'bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] text-zinc-300 border-[var(--bg-navy)] hover:border-[var(--vibrant-cyan)]/40'
               }`}
             >
               <span>{cat.icon}</span>
@@ -66,7 +66,7 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
                 className={`text-[10px] px-1.5 py-0.2 rounded-md font-mono ${
                   isSelected
                     ? 'bg-black/25 text-white font-black'
-                    : 'bg-[#1c1c20] text-zinc-400'
+                    : 'bg-[var(--bg-navy)] text-zinc-400'
                 }`}
               >
                 {count}
@@ -77,7 +77,7 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
       </div>
 
       {/* Sorting & count info */}
-      <div className="flex items-center justify-between gap-3 text-xs text-zinc-400 pt-2 border-t border-[#1c1c20]">
+      <div className="flex items-center justify-between gap-3 text-xs text-zinc-400 pt-2 border-t border-[var(--bg-navy)]">
         <div className="text-zinc-400 flex items-center gap-2">
           <span>Showing</span>
           <strong className="text-white font-bold">{categoryCounts[selectedCategory] || 0}</strong>
@@ -85,17 +85,17 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
         </div>
 
         {/* Sort Selector */}
-        <div className="flex items-center gap-1.5 bg-[#111113] px-3 py-1.5 rounded-xl border border-[#222225]">
+        <div className="flex items-center gap-1.5 bg-[var(--bg-navy)] px-3 py-1.5 rounded-xl border border-[var(--bg-navy)]">
           <ArrowUpDown className="w-3 h-3 text-zinc-400" />
           <select
             value={sortBy}
             onChange={(e) => onSortChange(e.target.value as any)}
             className="bg-transparent text-zinc-200 font-semibold focus:outline-none cursor-pointer text-xs"
           >
-            <option value="popular" className="bg-[#111113] text-white">Popular & Trending</option>
-            <option value="alpha-asc" className="bg-[#111113] text-white">Alphabetical (A-Z)</option>
-            <option value="alpha-desc" className="bg-[#111113] text-white">Alphabetical (Z-A)</option>
-            <option value="random" className="bg-[#111113] text-white">🔀 Surprise Me (Random)</option>
+            <option value="popular" className="bg-[var(--bg-navy)] text-white">Popular & Trending</option>
+            <option value="alpha-asc" className="bg-[var(--bg-navy)] text-white">Alphabetical (A-Z)</option>
+            <option value="alpha-desc" className="bg-[var(--bg-navy)] text-white">Alphabetical (Z-A)</option>
+            <option value="random" className="bg-[var(--bg-navy)] text-white">🔀 Surprise Me (Random)</option>
           </select>
         </div>
       </div>

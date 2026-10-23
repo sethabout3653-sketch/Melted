@@ -78,7 +78,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   }, []);
 
   return (
-    <header className="sticky top-0 z-40 w-full bg-[#050505]/95 backdrop-blur-md border-b border-[#1f1f1f] shrink-0">
+    <header className="sticky top-0 z-40 w-full bg-[#0a1128]/95 backdrop-blur-md border-b border-[#1e293b] shrink-0">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
         
         {/* Brand Zone */}
@@ -91,12 +91,12 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="flex items-center gap-2.5 group cursor-pointer text-left focus:outline-none"
             title="Go to Home"
           >
-            <div className="w-9 h-9 rounded-xl bg-[#0066ff] flex items-center justify-center shadow-lg shadow-[#0066ff]/25 group-hover:scale-105 transition-transform">
-              <Snowflake className="w-5 h-5 text-white fill-none animate-spin-[spin_3s_linear_infinite]" />
+            <div className="w-9 h-9 rounded-xl bg-[var(--vibrant-cyan)] flex items-center justify-center shadow-lg shadow-[var(--vibrant-cyan)]/25 group-hover:scale-105 transition-transform">
+              <Snowflake className="w-5 h-5 text-black fill-none animate-spin-[spin_3s_linear_infinite]" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xl font-black tracking-tight text-white font-heading group-hover:text-[#0066ff] transition-colors">
+                <span className="text-xl font-black tracking-tight text-white font-heading group-hover:text-[var(--vibrant-cyan)] transition-colors">
                   Frosted
                 </span>
               </div>
@@ -104,12 +104,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           {/* Primary View Switcher: All Games vs Chat */}
-          <div className="hidden sm:flex items-center bg-[#121214] p-1 rounded-xl border border-[#222225] gap-0.5">
+          <div className="hidden sm:flex items-center bg-[#000000] p-1 rounded-xl border border-[#1e293b] gap-0.5">
             <button
               onClick={() => onTabChange('games')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 currentTab === 'games'
-                  ? 'bg-[#0066ff] text-white shadow-sm'
+                  ? 'bg-[var(--vibrant-cyan)] text-black shadow-sm'
                   : 'text-zinc-400 hover:text-white'
               }`}
             >
@@ -121,7 +121,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => onTabChange('music')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 currentTab === 'music'
-                  ? 'bg-[#0066ff] text-white shadow-sm'
+                  ? 'bg-[var(--vibrant-cyan)] text-white shadow-sm'
                   : 'text-zinc-400 hover:text-white'
               }`}
             >
@@ -133,7 +133,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               onClick={() => onTabChange('chat')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 currentTab === 'chat'
-                  ? 'bg-[#0066ff] text-white shadow-sm'
+                  ? 'bg-[var(--vibrant-cyan)] text-white shadow-sm'
                   : 'text-zinc-400 hover:text-white'
               }`}
             >
@@ -162,7 +162,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onSearchChange(e.target.value);
               }}
               placeholder="what are we going to play"
-              className="w-full bg-[#121214] hover:bg-[#161619] focus:bg-[#161619] text-sm text-zinc-100 placeholder-zinc-400 rounded-xl pl-10 pr-10 py-2 border border-[#222225] focus:border-[#0066ff] focus:outline-none focus:ring-1 focus:ring-[#0066ff] transition-all"
+              className="w-full bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] focus:bg-[var(--bg-navy)] text-sm text-zinc-100 placeholder-zinc-400 rounded-xl pl-10 pr-10 py-2 border border-[var(--bg-navy)] focus:border-[var(--vibrant-cyan)] focus:outline-none focus:ring-1 focus:ring-[var(--vibrant-cyan)] transition-all"
             />
             {searchQuery ? (
               <button
@@ -173,7 +173,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <X className="w-3.5 h-3.5" />
               </button>
             ) : (
-              <kbd className="hidden md:inline-block absolute right-3 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 bg-[#1c1c1f] rounded border border-[#2c2c30]">
+              <kbd className="hidden md:inline-block absolute right-3 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 bg-[var(--bg-navy)] rounded border border-[var(--bg-navy)]">
                 /
               </kbd>
             )}
@@ -188,8 +188,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             onClick={() => onTabChange(currentTab === 'games' ? 'chat' : 'games')}
             className={`sm:hidden flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
               currentTab === 'chat'
-                ? 'bg-[#0066ff] text-white border-[#0066ff] shadow-sm'
-                : 'bg-[#121214] text-zinc-200 border-[#222225]'
+                ? 'bg-[var(--vibrant-cyan)] text-white border-[var(--vibrant-cyan)] shadow-sm'
+                : 'bg-[var(--bg-navy)] text-zinc-200 border-[var(--bg-navy)]'
             }`}
           >
             <MessageSquare className="w-3.5 h-3.5" />
@@ -202,10 +202,10 @@ export const Navbar: React.FC<NavbarProps> = ({
               if (currentTab !== 'games') onTabChange('games');
               onRandomGame();
             }}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-zinc-200 bg-[#121214] hover:bg-[#1c1c20] hover:text-[#0066ff] rounded-xl border border-[#222225] hover:border-[#0066ff]/40 transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-zinc-200 bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] hover:text-[var(--vibrant-cyan)] rounded-xl border border-[var(--bg-navy)] hover:border-[var(--vibrant-cyan)]/40 transition-all cursor-pointer"
             title="Pick a random game"
           >
-            <Shuffle className="w-3.5 h-3.5 text-[#0066ff]" />
+            <Shuffle className="w-3.5 h-3.5 text-[var(--vibrant-cyan)]" />
             <span className="hidden lg:inline">Random</span>
           </button>
 
@@ -217,16 +217,16 @@ export const Navbar: React.FC<NavbarProps> = ({
             }}
             className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
               showFavoritesOnly 
-                ? 'bg-[#0066ff] text-white font-bold border-[#0066ff] shadow-sm'
-                : 'bg-[#121214] hover:bg-[#1c1c20] text-zinc-200 border-[#222225] hover:border-[#0066ff]/40'
+                ? 'bg-[var(--vibrant-cyan)] text-white font-bold border-[var(--vibrant-cyan)] shadow-sm'
+                : 'bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] text-zinc-200 border-[var(--bg-navy)] hover:border-[var(--vibrant-cyan)]/40'
             }`}
             title="Show saved favorites"
           >
-            <Heart className={`w-3.5 h-3.5 ${showFavoritesOnly ? 'fill-white text-white' : 'text-[#0066ff]'}`} />
+            <Heart className={`w-3.5 h-3.5 ${showFavoritesOnly ? 'fill-white text-white' : 'text-[var(--vibrant-cyan)]'}`} />
             <span className="hidden lg:inline">Saved</span>
             {favoritesCount > 0 && (
               <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                showFavoritesOnly ? 'bg-black/30 text-white' : 'bg-[#0066ff]/20 text-[#60a5fa]'
+                showFavoritesOnly ? 'bg-black/30 text-white' : 'bg-[var(--vibrant-cyan)]/20 text-[var(--bg-navy)]'
               }`}>
                 {favoritesCount}
               </span>
@@ -237,7 +237,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="relative" ref={cloakDropdownRef}>
             <button
               onClick={() => setIsCloakOpen(!isCloakOpen)}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-zinc-200 bg-[#121214] hover:bg-[#1c1c20] hover:text-[#0066ff] rounded-xl border border-[#222225] hover:border-[#0066ff]/40 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-zinc-200 bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] hover:text-[var(--vibrant-cyan)] rounded-xl border border-[var(--bg-navy)] hover:border-[var(--vibrant-cyan)]/40 transition-all cursor-pointer"
               title="Disguise browser tab"
             >
               <EyeOff className="w-3.5 h-3.5 text-zinc-300" />
@@ -245,8 +245,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
 
             {isCloakOpen && (
-              <div className="absolute right-0 mt-2 w-64 bg-[#111113] border border-[#262629] rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
-                <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-zinc-400 border-b border-[#222226]">
+              <div className="absolute right-0 mt-2 w-64 bg-[var(--bg-navy)] border border-[var(--bg-navy)] rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
+                <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-zinc-400 border-b border-[var(--bg-navy)]">
                   Tab Camouflage
                 </div>
                 <div className="py-1 max-h-64 overflow-y-auto">
@@ -261,8 +261,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                         }}
                         className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left rounded-xl transition-colors cursor-pointer ${
                           isSelected 
-                            ? 'bg-[#0066ff] text-white font-bold' 
-                            : 'text-zinc-300 hover:bg-[#1a1a1d]'
+                            ? 'bg-[var(--vibrant-cyan)] text-white font-bold' 
+                            : 'text-zinc-300 hover:bg-[var(--bg-navy)]'
                         }`}
                       >
                         <img 

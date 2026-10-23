@@ -50,7 +50,7 @@ export const FrostedLoadingScreen: React.FC<FrostedLoadingScreenProps> = ({ isLo
         setIsFadingOut(true);
         setTimeout(() => setShouldRender(false), 400);
       }}
-      className={`fixed inset-0 z-50 bg-[#020203] flex flex-col items-center justify-center overflow-hidden select-none transition-all duration-700 ease-in-out transform-gpu cursor-pointer ${
+      className={`fixed inset-0 z-50 bg-[var(--bg-navy)] flex flex-col items-center justify-center overflow-hidden select-none transition-all duration-700 ease-in-out transform-gpu cursor-pointer ${
         isFadingOut ? 'opacity-0 scale-[1.03] blur-[15px] pointer-events-none' : 'opacity-100 scale-100'
       }`}
     >
@@ -99,7 +99,7 @@ export const FrostedLoadingScreen: React.FC<FrostedLoadingScreenProps> = ({ isLo
           font-weight: 900;
           font-size: 6rem; /* Slightly larger, perfectly centered */
           line-height: 1;
-          background: linear-gradient(135deg, #ffffff 20%, #cbd5e1 45%, #3b82f6 75%, #1e3a8a 100%);
+          background: linear-gradient(135deg, var(--bg-navy) 20%, var(--bg-navy) 45%, var(--bg-navy) 75%, var(--bg-navy) 100%);
           -webkit-background-clip: text;
           -webkit-text-fill-color: transparent;
           
