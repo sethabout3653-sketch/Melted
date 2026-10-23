@@ -23,17 +23,19 @@ export const AdsterraBanner468: React.FC<{ className?: string }> = ({ className 
   `;
 
   return (
-    <div className={`adsterra-banner-468 flex flex-col items-center justify-center overflow-hidden my-3 rounded-2xl bg-[var(--bg-navy)] border border-white/10 p-3 shadow-xl ${className}`}>
+    <div className={`adsterra-banner-468 flex flex-col items-center justify-center overflow-hidden my-3 rounded-2xl bg-[#0c0c10] border border-white/10 p-3 shadow-xl max-w-full ${className}`}>
       <div className="text-[10px] uppercase font-bold tracking-wider text-zinc-500 mb-1.5">Sponsored Advertisement</div>
-      <iframe
-        srcDoc={adHtml}
-        width="468"
-        height="60"
-        style={{ border: 'none', overflow: 'hidden', width: '468px', height: '60px' }}
-        scrolling="no"
-        frameBorder="0"
-        title="Sponsored Banner"
-      />
+      <div className="max-w-full overflow-hidden flex items-center justify-center">
+        <iframe
+          srcDoc={adHtml}
+          width="468"
+          height="60"
+          style={{ border: 'none', overflow: 'hidden', maxWidth: '100%', height: '60px' }}
+          scrolling="no"
+          frameBorder="0"
+          title="Sponsored Banner"
+        />
+      </div>
     </div>
   );
 };

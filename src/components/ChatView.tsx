@@ -113,7 +113,7 @@ const AudioAttachmentPlayer: React.FC<{
   };
 
   return (
-    <div className="p-3 bg-[var(--bg-navy)] border border-[var(--bg-navy)] rounded-2xl max-w-md w-full shadow-lg space-y-2">
+    <div className="p-3 bg-[#0e0e14] border border-[#1f1f2c] rounded-2xl max-w-md w-full shadow-lg space-y-2">
       <audio
         ref={audioRef}
         src={url}
@@ -161,7 +161,7 @@ const AudioAttachmentPlayer: React.FC<{
             value={currentTime}
             onChange={handleSeek}
             disabled={!duration}
-            className="w-full h-1.5 bg-[var(--bg-navy)] rounded-lg appearance-none cursor-pointer accent-blue-500 transition-all"
+            className="w-full h-1.5 bg-[#1f1f2e] rounded-lg appearance-none cursor-pointer accent-blue-500 transition-all"
           />
           <div className="flex items-center justify-between text-[10px] text-zinc-400 font-mono">
             <span>{formatTime(currentTime)}</span>
@@ -409,7 +409,7 @@ const RemoteVideoPlayer: React.FC<{
   }, [stream]);
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-[var(--bg-navy)]">
+    <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-[#0f0f12]">
       <video
         ref={videoRef}
         autoPlay
@@ -527,7 +527,7 @@ const LocalVideoPlayer: React.FC<{
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-black">
       {!stream && (
-        <div className="absolute inset-0 flex items-center justify-center bg-[var(--bg-navy)]">
+        <div className="absolute inset-0 flex items-center justify-center bg-[#1c1c22]">
           {renderAvatar(user, 'w-24 h-24 text-3xl')}
         </div>
       )}
@@ -1590,7 +1590,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   };
 
   return (
-    <div className="flex flex-1 min-h-0 h-full w-full bg-[var(--bg-navy)] text-zinc-100 font-sans antialiased overflow-hidden select-none">
+    <div className="flex flex-1 min-h-0 h-full w-full bg-[#08080a] text-zinc-100 font-sans antialiased overflow-hidden select-none">
       
       {/* Hidden Global File Input */}
       <input 
@@ -1602,11 +1602,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       />
 
       {/* LEFT NAVIGATION SIDEBAR - Desktop view */}
-      <aside className="hidden md:flex w-64 bg-[var(--bg-navy)] border-r border-[var(--bg-navy)] flex-col justify-between shrink-0 overflow-hidden">
+      <aside className="hidden md:flex w-64 bg-[#0c0c0f] border-r border-[#1a1a20] flex-col justify-between shrink-0 overflow-hidden">
         <div className="p-4 space-y-6 shrink-0">
           
           {/* Header Branding */}
-          <div className="flex items-center justify-between pb-2 border-b border-[var(--bg-navy)]">
+          <div className="flex items-center justify-between pb-2 border-b border-[#18181f]">
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-sm shadow-lg shadow-blue-600/30">
                 <Gamepad2 className="w-5 h-5" />
@@ -1676,15 +1676,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
           </div>
 
-          {/* Adsterra Ad Unit */}
-          <div className="pt-4 px-2">
-            <AdsterraAd />
+          {/* Channels footer note */}
+          <div className="pt-2 px-2 text-[10px] text-zinc-600 text-center font-medium">
+            Frosted Voice & Text
           </div>
 
         </div>
 
         {/* CURRENT USER FOOTER */}
-        <div className="p-3 bg-[var(--bg-navy)] border-t border-[var(--bg-navy)] flex items-center justify-between shrink-0">
+        <div className="p-3 bg-[#0a0a0d] border-t border-[#1a1a20] flex items-center justify-between shrink-0">
           <div 
             onClick={() => setIsProfileModalOpen(true)}
             className="flex items-center gap-2.5 min-w-0 cursor-pointer p-1.5 rounded-xl hover:bg-white/5 transition-colors flex-1"
@@ -1696,7 +1696,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               >
                 {currentUser.username.slice(0, 2).toUpperCase()}
               </div>
-              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[var(--bg-navy)]" />
+              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#0a0a0d]" />
             </div>
 
             <div className="min-w-0">
@@ -1709,7 +1709,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
           <div className="flex items-center gap-1">
             <button
               onClick={toggleMute}
-              className={`p-1.5 rounded-lg hover:bg-[var(--bg-navy)] transition-colors cursor-pointer ${
+              className={`p-1.5 rounded-lg hover:bg-[#17171a] transition-colors cursor-pointer ${
                 isMuted ? 'text-red-400 bg-red-500/10' : 'hover:text-white text-zinc-400'
               }`}
               title={isMuted ? 'Unmute' : 'Mute'}
@@ -1719,7 +1719,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
             <button
               onClick={toggleDeafen}
-              className={`p-1.5 rounded-lg hover:bg-[var(--bg-navy)] transition-colors cursor-pointer ${
+              className={`p-1.5 rounded-lg hover:bg-[#17171a] transition-colors cursor-pointer ${
                 isDeafened ? 'text-amber-400' : 'hover:text-white text-zinc-400'
               }`}
               title={isDeafened ? 'Undeafen' : 'Deafen'}
@@ -1738,11 +1738,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             className="fixed inset-0 bg-black/75 backdrop-blur-sm"
             onClick={() => setIsMobileChannelsOpen(false)}
           />
-          <aside className="relative w-72 max-w-[85vw] h-full bg-[var(--bg-navy)] border-r border-[var(--bg-navy)] flex flex-col justify-between z-10 shadow-2xl animate-in slide-in-from-left duration-200">
+          <aside className="relative w-72 max-w-[85vw] h-full bg-[#0c0c0f] border-r border-[#1a1a20] flex flex-col justify-between z-10 shadow-2xl animate-in slide-in-from-left duration-200">
             <div className="p-4 space-y-6 shrink-0">
               
               {/* Header Branding with Close Button */}
-              <div className="flex items-center justify-between pb-2 border-b border-[var(--bg-navy)]">
+              <div className="flex items-center justify-between pb-2 border-b border-[#18181f]">
                 <div className="flex items-center gap-2.5">
                   <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-sm shadow-lg shadow-blue-600/30">
                     <Gamepad2 className="w-5 h-5" />
@@ -1829,14 +1829,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             </div>
 
             {/* CURRENT USER FOOTER */}
-            <div className="p-3 bg-[var(--bg-navy)] border-t border-[var(--bg-navy)] flex items-center justify-between shrink-0">
+            <div className="p-3 bg-[#0a0a0d] border-t border-[#1a1a20] flex items-center justify-between shrink-0">
               <div 
                 onClick={() => setIsProfileModalOpen(true)}
                 className="flex items-center gap-2.5 min-w-0 cursor-pointer p-1.5 rounded-xl hover:bg-white/5 transition-colors flex-1"
               >
                 <div className="relative shrink-0">
                   {renderAvatar(currentUser, 'w-9 h-9 text-xs')}
-                  <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[var(--bg-navy)]" />
+                  <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#0a0a0d]" />
                 </div>
 
                 <div className="min-w-0">
@@ -1849,7 +1849,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               <div className="flex items-center gap-1">
                 <button
                   onClick={toggleMute}
-                  className={`p-1.5 rounded-lg hover:bg-[var(--bg-navy)] transition-colors cursor-pointer ${
+                  className={`p-1.5 rounded-lg hover:bg-[#17171a] transition-colors cursor-pointer ${
                     isMuted ? 'text-red-400 bg-red-500/10' : 'hover:text-white text-zinc-400'
                   }`}
                   title={isMuted ? 'Unmute' : 'Mute'}
@@ -1859,7 +1859,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                 <button
                   onClick={toggleDeafen}
-                  className={`p-1.5 rounded-lg hover:bg-[var(--bg-navy)] transition-colors cursor-pointer ${
+                  className={`p-1.5 rounded-lg hover:bg-[#17171a] transition-colors cursor-pointer ${
                     isDeafened ? 'text-amber-400' : 'hover:text-white text-zinc-400'
                   }`}
                   title={isDeafened ? 'Undeafen' : 'Deafen'}
@@ -1883,7 +1883,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             accept="image/*" 
             style={{ display: 'none' }} 
           />
-          <div className="bg-[var(--bg-navy)] p-6 rounded-2xl border border-[var(--bg-navy)] w-full max-w-sm space-y-4 shadow-2xl">
+          <div className="bg-[#0b0b0e] p-6 rounded-2xl border border-[#1f1f1f] w-full max-w-sm space-y-4 shadow-2xl">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-bold text-white">Edit Profile</h2>
               <button onClick={() => setIsProfileModalOpen(false)} className="text-zinc-500 hover:text-white cursor-pointer">
@@ -1898,7 +1898,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   type="text"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full bg-[var(--bg-navy)] border border-[var(--bg-navy)] rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
+                  className="w-full bg-[#121215] border border-[#222226] rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
                   placeholder="Username"
                 />
               </div>
@@ -1931,7 +1931,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       value={editAvatarUrl}
                       onChange={(e) => setEditAvatarUrl(e.target.value)}
                       placeholder="Or enter Image URL..."
-                      className="w-full bg-[var(--bg-navy)] border border-[var(--bg-navy)] rounded-xl px-3 py-1.5 text-white text-xs focus:outline-none focus:border-blue-500 transition-colors"
+                      className="w-full bg-[#121215] border border-[#222226] rounded-xl px-3 py-1.5 text-white text-xs focus:outline-none focus:border-blue-500 transition-colors"
                     />
                   </div>
                 </div>
@@ -1954,7 +1954,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             <div className="flex gap-3 pt-2">
               <button 
                 onClick={() => setIsProfileModalOpen(false)} 
-                className="flex-1 py-2.5 rounded-xl bg-[var(--bg-navy)] text-zinc-300 hover:text-white hover:bg-[var(--bg-navy)] font-bold text-xs transition-colors cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl bg-[#1c1c1f] text-zinc-300 hover:text-white hover:bg-[#25252a] font-bold text-xs transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -1972,7 +1972,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       {/* Microphone Permission Request Modal */}
       {showMicPermissionModal && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 select-none">
-          <div className="bg-[var(--bg-navy)] p-6 rounded-3xl border border-[var(--bg-navy)] w-full max-w-sm space-y-4 shadow-2xl text-center">
+          <div className="bg-[#0b0b0e] p-6 rounded-3xl border border-[#232330] w-full max-w-sm space-y-4 shadow-2xl text-center">
             <div className="w-16 h-16 rounded-2xl bg-blue-600/15 border border-blue-500/30 text-blue-400 flex items-center justify-center mx-auto shadow-lg shadow-blue-600/20">
               <Mic className="w-8 h-8" />
             </div>
@@ -1995,7 +1995,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               <button
                 type="button"
                 onClick={() => setShowMicPermissionModal(false)}
-                className="flex-1 py-2.5 rounded-xl bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] text-zinc-300 hover:text-white font-bold text-xs transition-colors cursor-pointer"
+                className="flex-1 py-2.5 rounded-xl bg-[#1c1c20] hover:bg-[#25252e] text-zinc-300 hover:text-white font-bold text-xs transition-colors cursor-pointer"
               >
                 Not Now
               </button>
@@ -2013,7 +2013,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       )}
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col bg-[var(--bg-navy)] min-w-0 min-h-0 relative overflow-hidden">
+      <main className="flex-1 flex flex-col bg-[#050507] min-w-0 min-h-0 relative overflow-hidden">
         
         {/* TEXT CHANNEL VIEW */}
         {activeChannel === 'text-general' && (
@@ -2023,7 +2023,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             <div className="flex-1 min-h-0 flex flex-col min-w-0 relative overflow-hidden">
               
               {/* Top Header */}
-              <header className="h-14 px-3 sm:px-4 border-b border-[var(--bg-navy)] flex items-center justify-between bg-[var(--bg-navy)] shrink-0 gap-2">
+              <header className="h-14 px-3 sm:px-4 border-b border-[#1a1a20] flex items-center justify-between bg-[#08080a] shrink-0 gap-2">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   {/* Mobile Channels button */}
                   <button
@@ -2037,10 +2037,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                   <Hash className="w-5 h-5 text-white shrink-0" />
                   <span className="font-extrabold text-white text-sm sm:text-base truncate">general</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-bold bg-blue-600/15 text-blue-400 border border-blue-500/20 flex items-center gap-1.5 shrink-0">
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileMembersOpen(true)}
+                    className="px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-bold bg-blue-600/15 hover:bg-blue-600/25 text-blue-400 border border-blue-500/20 flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+                    title="View Online Members"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
                     <span>{users.length} online</span>
-                  </span>
+                  </button>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -2049,7 +2054,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     <input 
                       type="text" 
                       placeholder="Search messages"
-                      className="bg-[var(--bg-navy)] border border-[var(--bg-navy)] text-xs text-white placeholder-zinc-500 rounded-xl pl-9 pr-3 py-2 w-36 sm:w-48 focus:outline-none focus:border-blue-500"
+                      className="bg-[#121215] border border-[#222228] text-xs text-white placeholder-zinc-500 rounded-xl pl-9 pr-3 py-2 w-36 sm:w-48 focus:outline-none focus:border-blue-500"
                     />
                   </div>
 
@@ -2130,7 +2135,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                                 <button
                                   type="button"
                                   onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'video.mp4')}
-                                  className="inline-flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] px-3 py-1.5 rounded-lg border border-white/10 transition-colors cursor-pointer"
+                                  className="inline-flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white bg-[#1a1a24] hover:bg-[#252534] px-3 py-1.5 rounded-lg border border-white/10 transition-colors cursor-pointer"
                                 >
                                   <Download className="w-3.5 h-3.5" />
                                   <span>Download</span>
@@ -2158,7 +2163,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                                 <button
                                   type="button"
                                   onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'image.png')}
-                                  className="inline-flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] px-3 py-1.5 rounded-lg border border-white/10 transition-colors cursor-pointer"
+                                  className="inline-flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white bg-[#1a1a24] hover:bg-[#252534] px-3 py-1.5 rounded-lg border border-white/10 transition-colors cursor-pointer"
                                 >
                                   <Download className="w-3.5 h-3.5" />
                                   <span>Download</span>
@@ -2170,7 +2175,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                         // Unknown attachment fallback
                         return (
-                          <div className="mt-2 p-3 bg-[var(--bg-navy)] border border-[var(--bg-navy)] rounded-xl max-w-sm flex items-center justify-between gap-3">
+                          <div className="mt-2 p-3 bg-[#121218] border border-[#22222e] rounded-xl max-w-sm flex items-center justify-between gap-3">
                             <span className="text-xs font-semibold text-white truncate max-w-[200px]">
                               {msg.attachment_name || 'Attachment'}
                             </span>
@@ -2203,7 +2208,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
               {/* Attachment Preview Before Sending */}
               {pendingFile && (
-                <div className="shrink-0 mx-4 mb-2 p-3 bg-[var(--bg-navy)] border border-[var(--bg-navy)] rounded-2xl relative shadow-lg">
+                <div className="shrink-0 mx-4 mb-2 p-3 bg-[#0e0e13] border border-[#20202c] rounded-2xl relative shadow-lg">
                   <div className="flex items-start gap-3">
                     {/* If Image: Show actual image preview */}
                     {pendingFile.type === 'image' && pendingFile.previewUrl && (
@@ -2241,7 +2246,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                     {/* If File/Other: Clean file info */}
                     {pendingFile.type === 'file' && (
-                      <div className="flex items-center gap-2.5 p-2.5 bg-[var(--bg-navy)] rounded-xl border border-white/5">
+                      <div className="flex items-center gap-2.5 p-2.5 bg-[#14141c] rounded-xl border border-white/5">
                         <FileText className="w-6 h-6 text-blue-400 shrink-0" />
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-white truncate max-w-xs">{pendingFile.filename}</p>
@@ -2258,7 +2263,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                             <span>Uploading...</span>
                             <span>{pendingFile.uploadProgress}%</span>
                           </div>
-                          <div className="h-1.5 w-full bg-[var(--bg-navy)] rounded-full overflow-hidden">
+                          <div className="h-1.5 w-full bg-[#1c1c28] rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-blue-500 transition-all duration-150 rounded-full" 
                               style={{ width: `${pendingFile.uploadProgress}%` }} 
@@ -2283,10 +2288,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
               {/* GIPHY POPOVER MODAL */}
               {isGiphyOpen && (
-                <div className="absolute bottom-20 left-4 right-4 z-50 bg-[var(--bg-navy)]/95 border border-[var(--bg-navy)] rounded-2xl shadow-2xl p-4 max-w-xl mx-auto flex flex-col space-y-3 backdrop-blur-xl">
+                <div className="absolute bottom-20 left-4 right-4 z-50 bg-[#0c0c12]/95 border border-[#222230] rounded-2xl shadow-2xl p-4 max-w-xl mx-auto flex flex-col space-y-3 backdrop-blur-xl">
                   
                   {/* Modal Header */}
-                  <div className="flex items-center justify-between pb-2 border-b border-[var(--bg-navy)]">
+                  <div className="flex items-center justify-between pb-2 border-b border-[#1f1f2d]">
                     <span className="text-sm font-bold text-white">GIFs</span>
                     <button 
                       onClick={() => setIsGiphyOpen(false)}
@@ -2307,7 +2312,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         setActiveCategoryLabel('');
                       }}
                       placeholder="Search GIFs..."
-                      className="w-full bg-[var(--bg-navy)] border border-[var(--bg-navy)] text-xs text-white placeholder-zinc-500 rounded-xl pl-10 pr-9 py-2.5 focus:outline-none focus:border-blue-500 transition-colors"
+                      className="w-full bg-[#161622] border border-[#2a2a3c] text-xs text-white placeholder-zinc-500 rounded-xl pl-10 pr-9 py-2.5 focus:outline-none focus:border-blue-500 transition-colors"
                       autoFocus
                     />
                     {giphySearch && (
@@ -2334,7 +2339,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                           className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer shrink-0 border ${
                             isActive
                               ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/30'
-                              : 'bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] text-zinc-300 border-white/5 hover:border-blue-500/30'
+                              : 'bg-[#181824] hover:bg-[#222232] text-zinc-300 border-white/5 hover:border-blue-500/30'
                           }`}
                         >
                           {cat.label}
@@ -2344,7 +2349,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   </div>
 
                   {/* Native GIF Grid */}
-                  <div className="max-h-80 overflow-y-auto pr-1 bg-[var(--bg-navy)] p-2 rounded-xl border border-white/5">
+                  <div className="max-h-80 overflow-y-auto pr-1 bg-[#08080c] p-2 rounded-xl border border-white/5">
                     {isGifsLoading ? (
                       <div className="py-12 flex items-center justify-center text-xs text-zinc-500">
                         Loading GIFs...
@@ -2358,7 +2363,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                               key={gif.id}
                               type="button"
                               onClick={() => selectGiphyGif(gif)}
-                              className="relative aspect-video rounded-xl overflow-hidden bg-[var(--bg-navy)] hover:opacity-90 hover:scale-[1.02] transition-all cursor-pointer group border border-white/5"
+                              className="relative aspect-video rounded-xl overflow-hidden bg-[#161622] hover:opacity-90 hover:scale-[1.02] transition-all cursor-pointer group border border-white/5"
                             >
                               <img
                                 src={previewImg}
@@ -2382,7 +2387,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
               {/* Message Input Box */}
               <div className="p-4 pt-0 shrink-0">
-                <form onSubmit={handleSendMessage} className="bg-[var(--bg-navy)] border border-[var(--bg-navy)] focus-within:border-blue-500 rounded-2xl px-4 py-3 flex items-center gap-3 transition-colors shadow-lg">
+                <form onSubmit={handleSendMessage} className="bg-[#121215] border border-[#222228] focus-within:border-blue-500 rounded-2xl px-4 py-3 flex items-center gap-3 transition-colors shadow-lg">
                   <input
                     type="text"
                     value={inputText}
@@ -2433,10 +2438,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             </div>
 
             {/* Right Sidebar: Member List - Desktop */}
-            <aside className="hidden lg:flex w-64 bg-[var(--bg-navy)] border-l border-[var(--bg-navy)] p-4 flex-col shrink-0 overflow-hidden">
+            <aside className="hidden lg:flex w-64 bg-[#08080a] border-l border-[#1a1a20] p-4 flex-col shrink-0 overflow-hidden">
               
               {/* ONLINE MEMBERS HEADER */}
-              <div className="shrink-0 pb-3 flex items-center justify-between border-b border-[var(--bg-navy)]">
+              <div className="shrink-0 pb-3 flex items-center justify-between border-b border-[#14141a]">
                 <div className="text-xs font-bold text-zinc-500 tracking-wider">
                   <span>ONLINE — {users.length}</span>
                 </div>
@@ -2448,7 +2453,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   <div key={u.id} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] transition-colors">
                     <div className="relative shrink-0">
                       {renderAvatar(u, 'w-9 h-9 text-xs')}
-                      <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[var(--bg-navy)]" />
+                      <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                     </div>
 
                     <div className="flex-1 min-w-0">
@@ -2469,10 +2474,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 ))}
               </div>
 
-              {/* Adsterra Ad Unit */}
-              <div className="shrink-0 pt-2 border-t border-[var(--bg-navy)]">
-                <Adsterra160x600 />
-              </div>
+
 
             </aside>
 
@@ -2483,8 +2485,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   className="fixed inset-0 bg-black/75 backdrop-blur-sm"
                   onClick={() => setIsMobileMembersOpen(false)}
                 />
-                <aside className="relative w-72 max-w-[85vw] h-full bg-[var(--bg-navy)] border-l border-[var(--bg-navy)] p-4 flex flex-col z-10 shadow-2xl animate-in slide-in-from-right duration-200">
-                  <div className="shrink-0 pb-3 flex items-center justify-between border-b border-[var(--bg-navy)]">
+                <aside className="relative w-72 max-w-[85vw] h-full bg-[#08080a] border-l border-[#1a1a20] p-4 flex flex-col z-10 shadow-2xl animate-in slide-in-from-right duration-200">
+                  <div className="shrink-0 pb-3 flex items-center justify-between border-b border-[#14141a]">
                     <div className="text-xs font-bold text-zinc-500 tracking-wider">
                       <span>ONLINE — {users.length}</span>
                     </div>
@@ -2507,7 +2509,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                           >
                             {u.username.slice(0, 2).toUpperCase()}
                           </div>
-                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[var(--bg-navy)]" />
+                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                         </div>
 
                         <div className="flex-1 min-w-0">
@@ -2538,10 +2540,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
           <div className="flex-1 min-h-0 flex overflow-hidden">
             
             {/* Main Stage Area */}
-            <div className="flex-1 min-h-0 flex flex-col bg-[var(--bg-navy)] relative overflow-hidden">
+            <div className="flex-1 min-h-0 flex flex-col bg-[#050507] relative overflow-hidden">
               
               {/* Top Header */}
-              <div className="px-4 sm:px-6 py-3.5 border-b border-[var(--bg-navy)] bg-[var(--bg-navy)] flex items-center justify-between shrink-0 gap-2">
+              <div className="px-4 sm:px-6 py-3.5 border-b border-[#1a1a20] bg-[#08080a] flex items-center justify-between shrink-0 gap-2">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   {/* Mobile Channels button */}
                   <button
@@ -2614,7 +2616,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     
                     {/* Camera Tile */}
                     {isVideoEnabled && cameraStream && (
-                      <div className={`relative rounded-3xl overflow-hidden bg-[var(--bg-navy)] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                      <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
                         localIsVertical 
                           ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
                           : 'aspect-video w-full max-w-[500px]'
@@ -2656,7 +2658,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                     {/* Local Screen Share Tile - Shows you are sharing (no video preview for self) */}
                     {isScreenSharing && (
-                      <div className="relative rounded-3xl overflow-hidden bg-[var(--bg-navy)] border border-blue-500/40 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
+                      <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/40 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
                         <div className="flex flex-col items-center justify-center gap-4 text-blue-400">
                           <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shadow-lg shadow-blue-500/10">
                             <Monitor className="w-8 h-8 text-blue-400 animate-pulse" />
@@ -2686,11 +2688,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                     {/* Avatar Tile (ALWAYS shown when camera is off, even if screen sharing!) */}
                     {(!isVideoEnabled || !cameraStream) && (
-                      <div className={`relative rounded-3xl overflow-hidden bg-[var(--bg-navy)] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px] ${
+                      <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px] ${
                         isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
                       }`}>
                         <div className="relative flex items-center justify-center">
-                          <div className={`transition-all ${isUserSpeaking ? 'ring-4 ring-amber-500 rounded-full shadow-[0_0_30px_var(--bg-navy)]' : ''}`}>
+                          <div className={`transition-all ${isUserSpeaking ? 'ring-4 ring-amber-500 rounded-full shadow-[0_0_30px_#f59e0b]' : ''}`}>
                             {renderAvatar(currentUser, 'w-28 h-28 text-3xl')}
                           </div>
                         </div>
@@ -2718,7 +2720,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         <React.Fragment key={u.id}>
                           {/* Dedicated Remote Camera Tile (when camera is on) */}
                           {hasCamera && (
-                            <div className={`relative rounded-3xl overflow-hidden bg-[var(--bg-navy)] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                            <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
                               isPeerCameraVertical 
                                 ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
                                 : 'aspect-video w-full max-w-[500px]'
@@ -2759,7 +2761,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                           {/* Dedicated Remote Screen Share Tile (when screen share is on) */}
                           {hasScreen && (
-                            <div className="relative rounded-3xl overflow-hidden bg-[var(--bg-navy)] border border-blue-500/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
+                            <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
                               <RemoteVideoPlayer 
                                 stream={scrStream} 
                                 username={`${u.username}'s Screen`}
@@ -2778,11 +2780,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                           {/* Dedicated Remote Avatar Tile (shown when camera is off so peer is ALWAYS visible, even during screen share) */}
                           {!hasCamera && (
-                            <div className={`relative rounded-3xl overflow-hidden bg-[var(--bg-navy)] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px] ${
+                            <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px] ${
                               isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
                             }`}>
                               <div className="relative flex items-center justify-center">
-                                <div className={`transition-all ${isPeerSpeaking ? 'ring-4 ring-amber-500 rounded-full shadow-[0_0_30px_var(--bg-navy)]' : ''}`}>
+                                <div className={`transition-all ${isPeerSpeaking ? 'ring-4 ring-amber-500 rounded-full shadow-[0_0_30px_#f59e0b]' : ''}`}>
                                   {renderAvatar(u, 'w-28 h-28 text-3xl')}
                                 </div>
                               </div>
@@ -2801,7 +2803,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   </div>
                 ) : (
                   /* Join Prompt Card when not connected */
-                  <div className="text-center space-y-5 max-w-md bg-[var(--bg-navy)] border border-[var(--bg-navy)] p-8 rounded-3xl shadow-2xl">
+                  <div className="text-center space-y-5 max-w-md bg-[#0d0d12] border border-[#20202c] p-8 rounded-3xl shadow-2xl">
                     <div className="w-20 h-20 rounded-3xl bg-blue-600/15 border border-blue-500/30 text-blue-400 flex items-center justify-center mx-auto shadow-xl shadow-blue-600/20">
                       <Mic className="w-10 h-10" />
                     </div>
@@ -2864,7 +2866,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
                         isVideoEnabled 
                           ? 'bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500' 
-                          : 'bg-[var(--bg-navy)] text-zinc-400 hover:text-white hover:bg-[var(--bg-navy)] border border-white/10'
+                          : 'bg-[#181820] text-zinc-400 hover:text-white hover:bg-[#252530] border border-white/10'
                       }`}
                       title={isVideoEnabled ? 'Turn Off Camera' : 'Turn On Camera'}
                     >
@@ -2877,7 +2879,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
                         isScreenSharing 
                           ? 'bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500' 
-                          : 'bg-[var(--bg-navy)] text-zinc-400 hover:text-white hover:bg-[var(--bg-navy)] border border-white/10'
+                          : 'bg-[#181820] text-zinc-400 hover:text-white hover:bg-[#252530] border border-white/10'
                       }`}
                       title={isScreenSharing ? 'Stop Screen Share' : 'Share Screen'}
                     >
@@ -2899,10 +2901,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             </div>
 
             {/* Right Sidebar in Voice Channel - Desktop */}
-            <aside className="hidden lg:flex w-64 bg-[var(--bg-navy)] border-l border-[var(--bg-navy)] p-4 flex-col shrink-0 overflow-hidden">
+            <aside className="hidden lg:flex w-64 bg-[#08080a] border-l border-[#1a1a20] p-4 flex-col shrink-0 overflow-hidden">
               
               {/* VOICE USERS LIST */}
-              <div className="shrink-0 pb-3 border-b border-[var(--bg-navy)]">
+              <div className="shrink-0 pb-3 border-b border-[#14141a]">
                 <div className="flex items-center gap-2 text-xs font-bold text-blue-400 tracking-wider uppercase">
                   <Mic className="w-4 h-4" />
                   <span>VOICE — {voiceUsers.length + (isInVideo ? 1 : 0)}</span>
@@ -2922,7 +2924,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                           >
                             {currentUser.username.slice(0, 2).toUpperCase()}
                           </div>
-                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[var(--bg-navy)]" />
+                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                         </div>
                         <div className="min-w-0 leading-tight">
                           <div className="flex items-center gap-1">
@@ -2946,7 +2948,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                           >
                             {u.username.slice(0, 2).toUpperCase()}
                           </div>
-                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[var(--bg-navy)]" />
+                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                         </div>
                         <div className="min-w-0 leading-tight">
                           <span className="font-extrabold text-white text-xs truncate block">{u.username}</span>
@@ -2959,7 +2961,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 </div>
 
                 {/* ONLINE MEMBERS IN VOICE */}
-                <div className="space-y-2 pt-2 border-t border-[var(--bg-navy)]">
+                <div className="space-y-2 pt-2 border-t border-[#14141a]">
                   <div className="text-xs font-bold text-zinc-500 tracking-wider">
                     <span>ONLINE — {Math.max(0, users.length - (voiceUsers.length + (isInVideo ? 1 : 0)))}</span>
                   </div>
@@ -2972,7 +2974,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         >
                           {u.username.slice(0, 2).toUpperCase()}
                         </div>
-                        <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-blue-500 border-2 border-[var(--bg-navy)]" />
+                        <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                       </div>
                       <div className="min-w-0 flex-1 leading-tight">
                         <span className="font-bold text-zinc-300 text-xs truncate block">{u.username}</span>
@@ -2992,8 +2994,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   className="fixed inset-0 bg-black/75 backdrop-blur-sm"
                   onClick={() => setIsMobileMembersOpen(false)}
                 />
-                <aside className="relative w-72 max-w-[85vw] h-full bg-[var(--bg-navy)] border-l border-[var(--bg-navy)] p-4 flex flex-col z-10 shadow-2xl animate-in slide-in-from-right duration-200">
-                  <div className="shrink-0 pb-3 flex items-center justify-between border-b border-[var(--bg-navy)]">
+                <aside className="relative w-72 max-w-[85vw] h-full bg-[#08080a] border-l border-[#1a1a20] p-4 flex flex-col z-10 shadow-2xl animate-in slide-in-from-right duration-200">
+                  <div className="shrink-0 pb-3 flex items-center justify-between border-b border-[#14141a]">
                     <div className="flex items-center gap-2 text-xs font-bold text-blue-400 tracking-wider uppercase">
                       <Mic className="w-4 h-4" />
                       <span>VOICE — {voiceUsers.length + (isInVideo ? 1 : 0)}</span>
@@ -3019,7 +3021,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                               >
                                 {currentUser.username.slice(0, 2).toUpperCase()}
                               </div>
-                              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[var(--bg-navy)]" />
+                              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                             </div>
                             <div className="min-w-0 leading-tight">
                               <div className="flex items-center gap-1">
@@ -3043,7 +3045,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                               >
                                 {u.username.slice(0, 2).toUpperCase()}
                               </div>
-                              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[var(--bg-navy)]" />
+                              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                             </div>
                             <div className="min-w-0 leading-tight">
                               <span className="font-extrabold text-white text-xs truncate block">{u.username}</span>
@@ -3055,7 +3057,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       ))}
                     </div>
 
-                    <div className="space-y-2 pt-2 border-t border-[var(--bg-navy)]">
+                    <div className="space-y-2 pt-2 border-t border-[#14141a]">
                       <div className="text-xs font-bold text-zinc-500 tracking-wider">
                         <span>ONLINE — {Math.max(0, users.length - (voiceUsers.length + (isInVideo ? 1 : 0)))}</span>
                       </div>
@@ -3068,7 +3070,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                             >
                               {u.username.slice(0, 2).toUpperCase()}
                             </div>
-                            <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-blue-500 border-2 border-[var(--bg-navy)]" />
+                            <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                           </div>
                           <div className="min-w-0 flex-1 leading-tight">
                             <span className="font-bold text-zinc-300 text-xs truncate block">{u.username}</span>
@@ -3090,7 +3092,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       {/* INCOMING CALL MODAL */}
       {incomingCall && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-          <div className="bg-[var(--bg-navy)] p-7 rounded-3xl border border-[var(--bg-navy)] w-full max-w-sm flex flex-col items-center text-center space-y-5 shadow-2xl">
+          <div className="bg-[#0e0e13] p-7 rounded-3xl border border-[#262630] w-full max-w-sm flex flex-col items-center text-center space-y-5 shadow-2xl">
             <div className="relative">
               <div className="w-20 h-20 rounded-full bg-blue-600 text-black font-black text-2xl flex items-center justify-center ring-4 ring-blue-500/40 animate-pulse shadow-lg shadow-blue-600/30">
                 {(incomingCall.fromUserName || 'P').slice(0, 2).toUpperCase()}
@@ -3130,7 +3132,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       {/* OUTGOING CALL MODAL */}
       {outgoingCall && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-          <div className="bg-[var(--bg-navy)] p-7 rounded-3xl border border-[var(--bg-navy)] w-full max-w-sm flex flex-col items-center text-center space-y-5 shadow-2xl">
+          <div className="bg-[#0e0e13] p-7 rounded-3xl border border-[#262630] w-full max-w-sm flex flex-col items-center text-center space-y-5 shadow-2xl">
             <div className="relative">
               <div className="w-20 h-20 rounded-full bg-blue-600 text-black font-black text-2xl flex items-center justify-center ring-4 ring-blue-500/40 animate-pulse shadow-lg shadow-blue-600/30">
                 {(outgoingCall.targetUserName || 'P').slice(0, 2).toUpperCase()}

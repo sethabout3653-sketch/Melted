@@ -11,7 +11,7 @@ import { AdsterraCpmWidget } from './components/AdsterraCpmWidget';
 import { AdsterraAd } from './components/AdsterraAd';
 import { FrostedLoadingScreen } from './components/FrostedLoadingScreen';
 import { InAppNotificationToast } from './components/InAppNotificationToast';
-import { getAllGames, fetchGames, resolveGameUrl } from './services/gameService';
+import { getAllGames, resolveGameUrl } from './services/gameService';
 import { useCloak, launchAboutBlank } from './hooks/useCloak';
 import { useGlobalChat } from './hooks/useGlobalChat';
 import { useDeviceAdaptation } from './hooks/useDeviceAdaptation';
@@ -31,7 +31,7 @@ import {
 const PAGE_SIZE = 36;
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'games' | 'music' | 'chat'>('games');
+  const [currentTab, setCurrentTab] = useState<'games' | 'chat' | 'music'>('games');
   const [searchQuery, setSearchQuery] = useState('');
   const deferredQuery = useDeferredValue(searchQuery);
 
@@ -48,8 +48,8 @@ export default function App() {
     presets,
   } = useCloak();
 
-  // Master Games State - Pre-populated with fallback catalogue, updated from gmshelf
-  const [allGames, setAllGames] = useState<GameItem[]>(() => {
+  // Master Games State - Pre-populated with initial catalogue so UI renders instantly
+  const [allGames] = useState<GameItem[]>(() => {
     try {
       return getAllGames();
     } catch {
@@ -58,14 +58,6 @@ export default function App() {
   });
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
   const [activeGame, setActiveGame] = useState<GameItem | null>(null);
-
-  useEffect(() => {
-    fetchGames().then((games) => {
-      if (games && games.length > 0) {
-        setAllGames(games);
-      }
-    }).catch(() => {});
-  }, []);
 
   // Global Chat and Notifications
   const globalChat = useGlobalChat({ isChatTabActive: currentTab === 'chat' });
@@ -256,8 +248,8 @@ export default function App() {
   }, [currentTab]);
 
   return (
-    <div className={`bg-[#050505] text-[#f4f4f5] flex flex-col font-sans selection:bg-[#0066ff] selection:text-white ${
-      currentTab === 'chat' ? 'h-screen h-[100dvh] max-h-screen overflow-hidden' : 'min-h-screen'
+    <div className={`bg-[var(--bg-navy)] text-[var(--text-white)] flex flex-col font-sans selection:bg-[var(--vibrant-cyan)] selection:text-white ${
+      currentTab === 'chat' || currentTab === 'music' ? 'h-screen h-[100dvh] max-h-screen overflow-hidden' : 'min-h-screen'
     }`}>
       <FrostedLoadingScreen isLoading={isCatalogLoading} />
       
@@ -315,7 +307,7 @@ export default function App() {
         <ChatView globalChat={globalChat} />
       </div>
 
-      {/* Music Station View */}
+      {/* Persistent Music View - Spotify / YouTube Music Style */}
       <div 
         className={`flex-1 min-h-0 w-full overflow-hidden flex flex-col ${deviceInfo.isMobile ? 'pb-16' : ''} ${
           currentTab === 'music' ? 'flex' : 'hidden'
@@ -358,16 +350,16 @@ export default function App() {
 
           {/* Search status */}
           {searchQuery && (
-            <div className="mb-6 flex items-center justify-between bg-[#111114] px-4 py-3 rounded-xl border border-[#202024]">
+            <div className="mb-6 flex items-center justify-between bg-[var(--bg-navy)] px-4 py-3 rounded-xl border border-[var(--bg-navy)]">
               <div className="flex items-center gap-2 text-sm text-zinc-300">
-                <Search className="w-4 h-4 text-[#0066ff]" />
+                <Search className="w-4 h-4 text-[var(--vibrant-cyan)]" />
                 <span>
                   Found <strong className="text-white">{filteredGames.length}</strong> games for &ldquo;{searchQuery}&rdquo;
                 </span>
               </div>
               <button
                 onClick={() => setSearchQuery('')}
-                className="text-xs text-[#0066ff] hover:underline font-semibold cursor-pointer"
+                className="text-xs text-[var(--vibrant-cyan)] hover:underline font-semibold cursor-pointer"
               >
                 Clear search
               </button>
@@ -376,8 +368,8 @@ export default function App() {
 
           {/* Empty State */}
           {filteredGames.length === 0 ? (
-            <div className="py-20 text-center bg-[#0e0e10] rounded-2xl border border-[#222225] p-8 max-w-lg mx-auto space-y-4">
-              <div className="w-14 h-14 rounded-2xl bg-[#0066ff]/15 border border-[#0066ff]/30 text-[#0066ff] flex items-center justify-center mx-auto">
+            <div className="py-20 text-center bg-[var(--bg-navy)] rounded-2xl border border-[var(--bg-navy)] p-8 max-w-lg mx-auto space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-[var(--vibrant-cyan)]/15 border border-[var(--vibrant-cyan)]/30 text-[var(--vibrant-cyan)] flex items-center justify-center mx-auto">
                 <Gamepad2 className="w-7 h-7" />
               </div>
               <h3 className="text-xl font-black text-white font-heading">
@@ -394,7 +386,7 @@ export default function App() {
                   setSelectedCategory('All');
                   setShowFavoritesOnly(false);
                 }}
-                className="px-5 py-2.5 bg-[#0066ff] hover:bg-[#0052cc] text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer font-heading"
+                className="px-5 py-2.5 bg-[var(--vibrant-cyan)] hover:bg-[var(--bg-navy)] text-white text-xs font-bold rounded-xl shadow-md transition-all cursor-pointer font-heading"
               >
                 View All {allGames.length} Games
               </button>
@@ -420,18 +412,18 @@ export default function App() {
             <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
               <button
                 onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE * 2)}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-[#111114] hover:bg-[#18181c] text-white hover:text-[#0066ff] font-bold text-xs sm:text-sm rounded-xl border border-[#242428] hover:border-[#0066ff]/40 transition-all cursor-pointer font-heading shadow-lg"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] text-white hover:text-[var(--vibrant-cyan)] font-bold text-xs sm:text-sm rounded-xl border border-[var(--bg-navy)] hover:border-[var(--vibrant-cyan)]/40 transition-all cursor-pointer font-heading shadow-lg"
               >
                 <span>Load More Games</span>
                 <span className="text-xs text-zinc-400">
                   ({visibleCount} of {filteredGames.length})
                 </span>
-                <ArrowRight className="w-4 h-4 text-[#0066ff]" />
+                <ArrowRight className="w-4 h-4 text-[var(--vibrant-cyan)]" />
               </button>
 
               <button
                 onClick={() => setVisibleCount(filteredGames.length)}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-[#0066ff] hover:bg-[#0052cc] text-white font-extrabold text-xs sm:text-sm rounded-xl transition-all cursor-pointer font-heading shadow-md shadow-[#0066ff]/20"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--vibrant-cyan)] hover:bg-[var(--bg-navy)] text-white font-extrabold text-xs sm:text-sm rounded-xl transition-all cursor-pointer font-heading shadow-md shadow-[var(--vibrant-cyan)]/20"
               >
                 <Zap className="w-4 h-4 fill-white text-white" />
                 <span>Show All {filteredGames.length} Games</span>
@@ -444,7 +436,7 @@ export default function App() {
 
       {/* Footer */}
       {currentTab === 'games' && (
-        <footer className="mt-16 border-t border-[#1c1c20] bg-[#050505] py-10">
+        <footer className="mt-16 border-t border-[var(--bg-navy)] bg-[var(--bg-navy)] py-10">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
               
@@ -455,10 +447,10 @@ export default function App() {
                   className="flex items-center gap-2.5 group cursor-pointer text-left focus:outline-none"
                   title="Go to Home"
                 >
-                  <div className="w-7 h-7 rounded-lg bg-[#0066ff] flex items-center justify-center group-hover:scale-105 transition-transform">
+                  <div className="w-7 h-7 rounded-lg bg-[var(--vibrant-cyan)] flex items-center justify-center group-hover:scale-105 transition-transform">
                     <Snowflake className="w-4 h-4 text-white fill-none" />
                   </div>
-                  <span className="text-lg font-black text-white font-heading tracking-tight group-hover:text-[#0066ff] transition-colors">
+                  <span className="text-lg font-black text-white font-heading tracking-tight group-hover:text-[var(--vibrant-cyan)] transition-colors">
                     Frosted
                   </span>
                 </button>
@@ -466,12 +458,12 @@ export default function App() {
                   High-performance unblocked gaming portal featuring instant titles with 60 FPS in-browser play.
                 </p>
                 <div className="flex items-center gap-2 text-[11px] text-zinc-400 pt-1">
-                  <span className="flex items-center gap-1 text-[#0066ff] font-semibold">
+                  <span className="flex items-center gap-1 text-[var(--vibrant-cyan)] font-semibold">
                     <ShieldCheck className="w-3.5 h-3.5" /> 100% Unblocked
                   </span>
                   <span>·</span>
                   <span className="flex items-center gap-1 text-zinc-300 font-semibold">
-                    <Zap className="w-3.5 h-3.5 text-[#0066ff]" /> High-Performance
+                    <Zap className="w-3.5 h-3.5 text-[var(--vibrant-cyan)]" /> High-Performance
                   </span>
                 </div>
               </div>
@@ -483,22 +475,22 @@ export default function App() {
                 </div>
                 <ul className="space-y-1.5 text-xs text-zinc-400">
                   <li>
-                    <button onClick={() => setSelectedCategory('Action & Shooters')} className="hover:text-[#0066ff] transition-colors cursor-pointer">
+                    <button onClick={() => setSelectedCategory('Action & Shooters')} className="hover:text-[var(--vibrant-cyan)] transition-colors cursor-pointer">
                       Action & Shooters
                     </button>
                   </li>
                   <li>
-                    <button onClick={() => setSelectedCategory('Driving & Racing')} className="hover:text-[#0066ff] transition-colors cursor-pointer">
+                    <button onClick={() => setSelectedCategory('Driving & Racing')} className="hover:text-[var(--vibrant-cyan)] transition-colors cursor-pointer">
                       Driving & Racing
                     </button>
                   </li>
                   <li>
-                    <button onClick={() => setSelectedCategory('Skill & Platformer')} className="hover:text-[#0066ff] transition-colors cursor-pointer">
+                    <button onClick={() => setSelectedCategory('Skill & Platformer')} className="hover:text-[var(--vibrant-cyan)] transition-colors cursor-pointer">
                       Skill & Platformer
                     </button>
                   </li>
                   <li>
-                    <button onClick={() => setSelectedCategory('Horror & Mystery')} className="hover:text-[#0066ff] transition-colors cursor-pointer">
+                    <button onClick={() => setSelectedCategory('Horror & Mystery')} className="hover:text-[var(--vibrant-cyan)] transition-colors cursor-pointer">
                       Horror / Mystery
                     </button>
                   </li>
@@ -512,23 +504,23 @@ export default function App() {
                 </div>
                 <ul className="space-y-1.5 text-xs text-zinc-400">
                   <li>
-                    <button onClick={() => setCurrentTab('chat')} className="hover:text-[#0066ff] transition-colors cursor-pointer flex items-center gap-1.5 text-zinc-300">
-                      <MessageSquare className="w-3.5 h-3.5 text-[#0066ff]" />
+                    <button onClick={() => setCurrentTab('chat')} className="hover:text-[var(--vibrant-cyan)] transition-colors cursor-pointer flex items-center gap-1.5 text-zinc-300">
+                      <MessageSquare className="w-3.5 h-3.5 text-[var(--vibrant-cyan)]" />
                       <span>Community Chat</span>
                     </button>
                   </li>
                   <li>
-                    <button onClick={() => applyPreset('classroom')} className="hover:text-[#0066ff] transition-colors cursor-pointer">
+                    <button onClick={() => applyPreset('classroom')} className="hover:text-[var(--vibrant-cyan)] transition-colors cursor-pointer">
                       Disguise as Classroom
                     </button>
                   </li>
                   <li>
-                    <button onClick={() => applyPreset('drive')} className="hover:text-[#0066ff] transition-colors cursor-pointer">
+                    <button onClick={() => applyPreset('drive')} className="hover:text-[var(--vibrant-cyan)] transition-colors cursor-pointer">
                       Disguise as Google Drive
                     </button>
                   </li>
                   <li>
-                    <button onClick={handleRandomGame} className="hover:text-[#0066ff] transition-colors cursor-pointer">
+                    <button onClick={handleRandomGame} className="hover:text-[var(--vibrant-cyan)] transition-colors cursor-pointer">
                       Surprise Game
                     </button>
                   </li>
@@ -542,7 +534,7 @@ export default function App() {
               <AdsterraAd className="max-w-md w-full" />
             </div>
 
-            <div className="pt-6 border-t border-[#19191c] flex flex-col sm:flex-row items-center justify-between text-[11px] text-zinc-400 gap-2">
+            <div className="pt-6 border-t border-[var(--bg-navy)] flex flex-col sm:flex-row items-center justify-between text-[11px] text-zinc-400 gap-2">
               <div>
                 &copy; {new Date().getFullYear()} Frosted. Fast, instant arcade gaming.
               </div>
@@ -579,7 +571,7 @@ export default function App() {
         const isConnectedToVoice = currentDbUser?.current_channel === 'video-general' || currentDbUser?.current_channel === 'voice-general';
         if (!isConnectedToVoice) return null;
         return (
-          <aside aria-label="Active voice call" className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-40 bg-[#0d0d12]/95 backdrop-blur-xl border border-blue-500/50 rounded-2xl p-3 shadow-2xl flex items-center gap-3">
+          <aside aria-label="Active voice call" className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-40 bg-[var(--bg-navy)]/95 backdrop-blur-xl border border-blue-500/50 rounded-2xl p-3 shadow-2xl flex items-center gap-3">
             <div className="flex items-center gap-2.5">
               <span className="relative flex h-3 w-3">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
