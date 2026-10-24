@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Play, Star, ExternalLink, Zap, ShieldCheck } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { GameItem } from '../types/game';
 
 interface HeroSpotlightProps {
@@ -20,115 +21,120 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
   const activeGame = featuredGames[selectedIndex] || featuredGames[0];
 
   return (
-    <div className="relative mb-8 overflow-hidden rounded-2xl bg-[var(--bg-navy)] border border-[var(--bg-navy)] p-6 lg:p-8 shadow-2xl">
-      {/* Background ambient blue glow */}
-      <div className="absolute -top-24 right-1/4 w-96 h-96 bg-[var(--vibrant-cyan)]/10 rounded-full blur-3xl pointer-events-none" />
+    <div className="relative mb-20 overflow-hidden rounded-[40px] bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800/80 p-8 lg:p-16 shadow-[0_40px_80px_-20px_rgba(0,0,0,0.05)] dark:shadow-none">
+      {/* Background soft glow */}
+      <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-br from-blue-50/30 dark:from-blue-900/10 via-transparent to-transparent pointer-events-none" />
 
-      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+      <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
         
-        {/* Left Column: Spotlight details */}
-        <div className="lg:col-span-7 space-y-4">
+        {/* Left Column: Content */}
+        <div className="lg:col-span-6 space-y-10">
           
-          {/* Heading */}
-          <div>
-            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight font-heading leading-tight">
+          <motion.div
+            key={activeGame.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: "spring", stiffness: 200, damping: 25 }}
+            className="space-y-6"
+          >
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 text-[11px] font-black uppercase tracking-[0.2em]">
+              <Zap className="w-3.5 h-3.5 fill-current" />
+              Featured Experience
+            </div>
+
+            <h2 className="text-5xl sm:text-6xl lg:text-7xl font-black text-slate-900 dark:text-white tracking-tight font-heading leading-[1.05]">
               {activeGame.name}
             </h2>
-            <div className="flex items-center gap-2 text-xs sm:text-sm text-zinc-400 mt-2 font-medium">
-              <span>{activeGame.author ? `By ${activeGame.author}` : activeGame.category}</span>
-            </div>
-          </div>
-
-          {/* Blurb */}
-          <p className="text-sm text-zinc-300 max-w-xl font-normal leading-relaxed">
-            Instant 60 FPS unblocked gameplay streamed seamlessly in-browser. 
-            Responsive controls with built-in tab camouflage.
-          </p>
+            
+            <p className="text-xl text-slate-500 dark:text-slate-400 max-w-xl font-medium leading-relaxed">
+              Experience the web's most refined unblocked performance. Precision controls, zero latency, and seamless integration.
+            </p>
+          </motion.div>
 
           {/* Action CTAs */}
-          <div className="flex flex-wrap items-center gap-3 pt-2">
-            <button
+          <div className="flex flex-wrap items-center gap-6">
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.02, y: -4 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => onPlay(activeGame)}
-              className="flex items-center gap-2 px-6 py-3 bg-[var(--vibrant-cyan)] hover:bg-[var(--bg-navy)] text-white text-sm font-extrabold rounded-xl shadow-lg shadow-[var(--vibrant-cyan)]/25 active:scale-[0.98] transition-all cursor-pointer font-heading"
+              className="px-10 py-5 bg-blue-600 hover:bg-blue-700 text-white text-base font-black rounded-2xl shadow-2xl shadow-blue-600/30 transition-all cursor-pointer font-heading tracking-tight border border-blue-500"
             >
-              <Play className="w-4 h-4 fill-white text-white" />
-              <span>Play Now</span>
-            </button>
+              Start Playing Now
+            </motion.button>
 
-            <button
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               onClick={() => onAboutBlank(activeGame)}
-              className="flex items-center gap-2 px-5 py-3 bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] text-zinc-200 hover:text-white text-sm font-semibold rounded-xl border border-[var(--bg-navy)] hover:border-[var(--vibrant-cyan)]/40 transition-all cursor-pointer"
-              title="Open in an unblockable stealth about:blank window"
+              className="px-8 py-5 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 text-base font-bold rounded-2xl border border-slate-200 dark:border-slate-800 transition-all cursor-pointer shadow-sm"
             >
-              <ExternalLink className="w-4 h-4 text-zinc-400" />
-              <span>Stealth Window</span>
-            </button>
+              Stealth Tab
+            </motion.button>
           </div>
 
-        </div>
-
-        {/* Right Column: Hero Visual + Quick Pickers */}
-        <div className="lg:col-span-5 space-y-3">
-          
-          {/* Main Visual Card */}
-          <div 
-            onClick={() => onPlay(activeGame)}
-            className="group relative w-full aspect-[16/10] rounded-xl overflow-hidden bg-[var(--bg-navy)] border border-[var(--bg-navy)] shadow-2xl cursor-pointer"
-          >
-            <img
-              src={activeGame.localCover || activeGame.resolvedCover || activeGame.cover || undefined}
-              alt={activeGame.name}
-              referrerPolicy="no-referrer"
-              onError={(e) => {
-                if (activeGame.fallbackCover && e.currentTarget.src !== activeGame.fallbackCover) {
-                  e.currentTarget.src = activeGame.fallbackCover;
-                }
-              }}
-              className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent flex items-end p-4">
-              <div>
-                <span className="text-[10px] uppercase font-black tracking-wider text-white bg-[var(--vibrant-cyan)] px-2 py-0.5 rounded-full">
-                  Trending
-                </span>
-                <div className="text-base font-bold text-white mt-1">
-                  {activeGame.name}
-                </div>
-              </div>
+          {/* Trust markers */}
+          <div className="flex items-center gap-8 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2 text-slate-400 font-bold text-[10px] uppercase tracking-widest">
+              <ShieldCheck className="w-4 h-4 text-emerald-500" />
+              Verified Unblocked
+            </div>
+            <div className="flex items-center gap-2 text-slate-400 font-bold text-[10px] uppercase tracking-widest">
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+              60 FPS Optimized
             </div>
           </div>
+        </div>
 
-          {/* Quick Switch Strip */}
-          <div className="grid grid-cols-4 gap-2">
-            {featuredGames.slice(0, 4).map((game, idx) => {
+        {/* Right Column: Visual */}
+        <div className="lg:col-span-6">
+          <AnimatePresence mode="wait">
+            <motion.div 
+              key={activeGame.id}
+              initial={{ opacity: 0, scale: 0.9, rotate: -2 }}
+              animate={{ opacity: 1, scale: 1, rotate: 0 }}
+              exit={{ opacity: 0, scale: 1.1, rotate: 2 }}
+              transition={{ type: "spring", stiffness: 150, damping: 20 }}
+              className="relative aspect-square sm:aspect-[4/3] rounded-[48px] overflow-hidden bg-slate-50 dark:bg-slate-950 border-[12px] border-white dark:border-slate-800 shadow-2xl shadow-slate-200/60 dark:shadow-none group cursor-pointer"
+              onClick={() => onPlay(activeGame)}
+            >
+              <img
+                src={activeGame.localCover || activeGame.resolvedCover || activeGame.cover || undefined}
+                alt={activeGame.name}
+                referrerPolicy="no-referrer"
+                onError={(e) => {
+                  if (activeGame.fallbackCover && e.currentTarget.src !== activeGame.fallbackCover) {
+                    e.currentTarget.src = activeGame.fallbackCover;
+                  }
+                }}
+                className="w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-110"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-900/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-10">
+                <div className="text-white font-heading">
+                  <div className="text-3xl font-black">{activeGame.name}</div>
+                  <div className="text-sm font-bold opacity-80 uppercase tracking-widest mt-1">Ready to stream</div>
+                </div>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+
+          {/* Quick pickers underneath */}
+          <div className="flex items-center gap-3 mt-8 px-4 justify-center lg:justify-start">
+            {featuredGames.slice(0, 5).map((game, idx) => {
               const isSelected = selectedIndex === idx;
               return (
                 <button
                   key={game.id}
                   onClick={() => setSelectedIndex(idx)}
-                  className={`relative rounded-lg overflow-hidden aspect-[4/3] border transition-all cursor-pointer ${
-                    isSelected 
-                      ? 'border-[var(--vibrant-cyan)] ring-2 ring-[var(--vibrant-cyan)]/50' 
-                      : 'border-[var(--bg-navy)] opacity-60 hover:opacity-100'
+                  className={`w-3 h-3 rounded-full transition-all ${
+                    isSelected ? 'w-10 bg-blue-600' : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600'
                   }`}
                   title={game.name}
-                >
-                  <img
-                    src={game.localCover || game.resolvedCover || game.cover || undefined}
-                    alt={game.name}
-                    referrerPolicy="no-referrer"
-                    onError={(e) => {
-                      if (game.fallbackCover && e.currentTarget.src !== game.fallbackCover) {
-                        e.currentTarget.src = game.fallbackCover;
-                      }
-                    }}
-                    className="w-full h-full object-cover"
-                  />
-                </button>
+                />
               );
             })}
           </div>
-
         </div>
 
       </div>

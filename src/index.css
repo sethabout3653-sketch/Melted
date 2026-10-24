@@ -1,19 +1,21 @@
 @import "tailwindcss";
 
+@variant dark (&:where(.dark, .dark *));
+
 @layer base {
   :root {
-    --bg-navy: #0a1128;
-    --bg-black: #000000;
-    --vibrant-cyan: #00d4ff;
-    --text-light: #e2e8f0;
-    --text-muted: #94a3b8;
-    --border-navy: #1e293b;
+    --bg-light: #f8fafc;
+    --bg-white: #ffffff;
+    --brand-blue: #2563eb;
+    --text-slate: #0f172a;
+    --text-muted: #64748b;
+    --border-slate: #f1f5f9;
   }
 
   body {
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    background-color: var(--bg-navy);
-    color: var(--text-light);
+    background-color: var(--bg-white);
+    color: var(--text-slate);
     overflow-x: hidden;
     letter-spacing: -0.015em;
   }
@@ -34,16 +36,24 @@
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--bg-black);
+  background: #f1f5f9;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: #0f172a;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #1c1c22;
+  background: #cbd5e1;
   border-radius: 9999px;
 }
 
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--vibrant-cyan);
+  background: #2563eb;
 }
 
 .glow-blue {

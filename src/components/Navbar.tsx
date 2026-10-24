@@ -8,14 +8,16 @@ import {
   X, 
   Gamepad2, 
   MessageSquare,
-  Music
+  Sun,
+  Moon
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { CloakPreset } from '../hooks/useCloak';
 import { GameCategory } from '../types/game';
 
 interface NavbarProps {
-  currentTab: 'games' | 'music' | 'chat';
-  onTabChange: (tab: 'games' | 'music' | 'chat') => void;
+  currentTab: 'games' | 'chat';
+  onTabChange: (tab: 'games' | 'chat') => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onRandomGame: () => void;
@@ -31,6 +33,8 @@ interface NavbarProps {
   onSelectCategory?: (category: GameCategory) => void;
   onlineCount?: number;
   isConnected?: boolean;
+  theme?: 'light' | 'dark';
+  onToggleTheme?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -48,111 +52,63 @@ export const Navbar: React.FC<NavbarProps> = ({
   onGoHome,
   onlineCount = 0,
   isConnected = false,
+  theme = 'light',
+  onToggleTheme,
 }) => {
   const [isCloakOpen, setIsCloakOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const cloakDropdownRef = useRef<HTMLDivElement>(null);
 
-  // Keyboard shortcut '/' to focus search
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if ((e.key === '/' || (e.ctrlKey && e.key === 'k')) && document.activeElement !== searchInputRef.current) {
-        e.preventDefault();
-        onTabChange('games');
-        searchInputRef.current?.focus();
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onTabChange]);
-
-  // Close cloak dropdown on click outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (cloakDropdownRef.current && !cloakDropdownRef.current.contains(e.target as Node)) {
-        setIsCloakOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
   return (
-    <header className="sticky top-0 z-40 w-full bg-[#0a1128]/95 backdrop-blur-md border-b border-[#1e293b] shrink-0">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+    <header className="sticky top-0 z-50 w-full bg-white/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800 shrink-0 shadow-sm transition-colors">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-12">
         
-        {/* Brand Zone */}
-        <div className="flex items-center gap-4 shrink-0">
+        {/* Zone 1: Brand */}
+        <div className="flex items-center gap-8 shrink-0">
           <button 
+            type="button"
             onClick={() => {
               onTabChange('games');
               onGoHome();
             }}
-            className="flex items-center gap-2.5 group cursor-pointer text-left focus:outline-none"
-            title="Go to Home"
+            className="flex items-center gap-2 group cursor-pointer focus:outline-none"
           >
-            <div className="w-9 h-9 rounded-xl bg-[var(--vibrant-cyan)] flex items-center justify-center shadow-lg shadow-[var(--vibrant-cyan)]/25 group-hover:scale-105 transition-transform">
-              <Snowflake className="w-5 h-5 text-black fill-none animate-spin-[spin_3s_linear_infinite]" />
+            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-600/20">
+              <Snowflake className="w-6 h-6 text-white fill-none" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xl font-black tracking-tight text-white font-heading group-hover:text-[var(--vibrant-cyan)] transition-colors">
-                  Frosted
-                </span>
-              </div>
-            </div>
+            <span className="text-2xl font-black tracking-tight text-slate-900 dark:text-white font-heading">
+              Frosted
+            </span>
           </button>
 
-          {/* Primary View Switcher: All Games vs Chat */}
-          <div className="hidden sm:flex items-center bg-[#000000] p-1 rounded-xl border border-[#1e293b] gap-0.5">
-            <button
+          {/* Navigation Links */}
+          <nav className="hidden md:flex items-center gap-6">
+            <button 
+              type="button"
               onClick={() => onTabChange('games')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                currentTab === 'games'
-                  ? 'bg-[var(--vibrant-cyan)] text-black shadow-sm'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
+              className={`text-sm font-bold transition-all px-4 py-2 rounded-xl border ${currentTab === 'games' ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/30 border-blue-100 dark:border-blue-800' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border-transparent hover:border-slate-100 dark:hover:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'}`}
             >
-              <Gamepad2 className="w-3.5 h-3.5" />
-              <span>All Games</span>
+              Games
             </button>
-
-            <button
-              onClick={() => onTabChange('music')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                currentTab === 'music'
-                  ? 'bg-[var(--vibrant-cyan)] text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
-            >
-              <Music className="w-3.5 h-3.5" />
-              <span>Music</span>
-            </button>
-
-            <button
+            <button 
+              type="button"
               onClick={() => onTabChange('chat')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
-                currentTab === 'chat'
-                  ? 'bg-[var(--vibrant-cyan)] text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-white'
-              }`}
+              className={`text-sm font-bold transition-all flex items-center gap-2 px-4 py-2 rounded-xl border ${currentTab === 'chat' ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/30 border-blue-100 dark:border-blue-800' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border-transparent hover:border-slate-100 dark:hover:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'}`}
             >
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span>Chat</span>
+              Community
               {onlineCount > 0 && (
-                <div className="flex items-center gap-1 ml-1 pl-1.5 border-l border-white/20">
-                  <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-blue-400 shadow-[0_0_5px_rgba(96,165,250,0.5)]' : 'bg-red-400'}`} />
-                  <span className="text-[10px] font-black">{onlineCount}</span>
-                </div>
+                <span className="bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 text-[10px] px-1.5 py-0.5 rounded-full border border-blue-100 dark:border-blue-800">
+                  {onlineCount}
+                </span>
               )}
             </button>
-          </div>
+          </nav>
         </div>
 
-        {/* Search Bar Zone */}
-        <div className="flex-1 max-w-md mx-2">
-          <div className="relative flex items-center">
-            <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 pointer-events-none" />
+        {/* Zone 2: Search (Integrated) */}
+        <div className="flex-1 max-w-xl hidden lg:block">
+          <div className="relative group">
+            <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2 group-focus-within:text-blue-600 dark:group-focus-within:text-blue-400 transition-colors" />
             <input
               ref={searchInputRef}
               type="text"
@@ -161,135 +117,121 @@ export const Navbar: React.FC<NavbarProps> = ({
                 if (currentTab !== 'games') onTabChange('games');
                 onSearchChange(e.target.value);
               }}
-              placeholder="what are we going to play"
-              className="w-full bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] focus:bg-[var(--bg-navy)] text-sm text-zinc-100 placeholder-zinc-400 rounded-xl pl-10 pr-10 py-2 border border-[var(--bg-navy)] focus:border-[var(--vibrant-cyan)] focus:outline-none focus:ring-1 focus:ring-[var(--vibrant-cyan)] transition-all"
+              placeholder="Search 1,000+ premium titles..."
+              className="w-full bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800/80 focus:bg-white dark:focus:bg-slate-900 text-sm text-slate-900 dark:text-white placeholder-slate-400 rounded-2xl pl-12 pr-12 py-3 border border-slate-100 dark:border-slate-800 focus:border-blue-200 dark:focus:border-blue-700 transition-all focus:outline-none shadow-sm"
             />
-            {searchQuery ? (
+            {searchQuery && (
               <button
+                type="button"
                 onClick={() => onSearchChange('')}
-                className="absolute right-3 p-1 text-zinc-400 hover:text-white rounded-full transition-colors cursor-pointer"
-                title="Clear search"
+                className="absolute right-4 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
               >
-                <X className="w-3.5 h-3.5" />
+                <X className="w-4 h-4" />
               </button>
-            ) : (
-              <kbd className="hidden md:inline-block absolute right-3 px-1.5 py-0.5 text-[10px] font-mono text-zinc-400 bg-[var(--bg-navy)] rounded border border-[var(--bg-navy)]">
-                /
-              </kbd>
             )}
           </div>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-2 shrink-0">
-
-          {/* Mobile Chat switcher button */}
-          <button
-            onClick={() => onTabChange(currentTab === 'games' ? 'chat' : 'games')}
-            className={`sm:hidden flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border transition-all cursor-pointer ${
-              currentTab === 'chat'
-                ? 'bg-[var(--vibrant-cyan)] text-white border-[var(--vibrant-cyan)] shadow-sm'
-                : 'bg-[var(--bg-navy)] text-zinc-200 border-[var(--bg-navy)]'
-            }`}
-          >
-            <MessageSquare className="w-3.5 h-3.5" />
-            <span>Chat</span>
-          </button>
-
-          {/* Random Game */}
-          <button
-            onClick={() => {
-              if (currentTab !== 'games') onTabChange('games');
-              onRandomGame();
-            }}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-zinc-200 bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] hover:text-[var(--vibrant-cyan)] rounded-xl border border-[var(--bg-navy)] hover:border-[var(--vibrant-cyan)]/40 transition-all cursor-pointer"
-            title="Pick a random game"
-          >
-            <Shuffle className="w-3.5 h-3.5 text-[var(--vibrant-cyan)]" />
-            <span className="hidden lg:inline">Random</span>
-          </button>
-
-          {/* Favorites Filter */}
-          <button
-            onClick={() => {
-              if (currentTab !== 'games') onTabChange('games');
-              onToggleFavoritesOnly();
-            }}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-all cursor-pointer ${
-              showFavoritesOnly 
-                ? 'bg-[var(--vibrant-cyan)] text-white font-bold border-[var(--vibrant-cyan)] shadow-sm'
-                : 'bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] text-zinc-200 border-[var(--bg-navy)] hover:border-[var(--vibrant-cyan)]/40'
-            }`}
-            title="Show saved favorites"
-          >
-            <Heart className={`w-3.5 h-3.5 ${showFavoritesOnly ? 'fill-white text-white' : 'text-[var(--vibrant-cyan)]'}`} />
-            <span className="hidden lg:inline">Saved</span>
-            {favoritesCount > 0 && (
-              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
-                showFavoritesOnly ? 'bg-black/30 text-white' : 'bg-[var(--vibrant-cyan)]/20 text-[var(--bg-navy)]'
-              }`}>
-                {favoritesCount}
-              </span>
-            )}
-          </button>
-
-          {/* Tab Cloak Dropdown */}
-          <div className="relative" ref={cloakDropdownRef}>
+        {/* Zone 3: Primary Action */}
+        <div className="flex items-center gap-4 shrink-0">
+          <div className="flex items-center gap-2 pr-4 border-r border-slate-100 dark:border-slate-800 hidden sm:flex">
             <button
-              onClick={() => setIsCloakOpen(!isCloakOpen)}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-zinc-200 bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] hover:text-[var(--vibrant-cyan)] rounded-xl border border-[var(--bg-navy)] hover:border-[var(--vibrant-cyan)]/40 transition-all cursor-pointer"
-              title="Disguise browser tab"
+              type="button"
+              onClick={onRandomGame}
+              className="p-2.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-all cursor-pointer border border-transparent hover:border-blue-100 dark:hover:border-blue-800"
+              title="Surprise Me"
             >
-              <EyeOff className="w-3.5 h-3.5 text-zinc-300" />
-              <span className="hidden sm:inline">Cloak</span>
+              <Shuffle className="w-5 h-5" />
+            </button>
+            
+            <button
+              type="button"
+              onClick={onToggleFavoritesOnly}
+              className={`p-2.5 rounded-xl transition-all cursor-pointer border ${
+                showFavoritesOnly ? 'bg-red-50 dark:bg-red-900/30 text-red-500 border-red-100 dark:border-red-800' : 'text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 border-transparent hover:border-red-100 dark:hover:border-red-800'
+              }`}
+              title="Saved Games"
+            >
+              <Heart className={`w-5 h-5 ${showFavoritesOnly ? 'fill-current' : ''}`} />
             </button>
 
-            {isCloakOpen && (
-              <div className="absolute right-0 mt-2 w-64 bg-[var(--bg-navy)] border border-[var(--bg-navy)] rounded-2xl shadow-2xl p-2 z-50 animate-in fade-in zoom-in-95 duration-150">
-                <div className="px-3 py-2 text-[11px] font-bold uppercase tracking-wider text-zinc-400 border-b border-[var(--bg-navy)]">
-                  Tab Camouflage
-                </div>
-                <div className="py-1 max-h-64 overflow-y-auto">
-                  {presets.map((preset) => {
-                    const isSelected = preset.id === activePreset;
-                    return (
-                      <button
-                        key={preset.id}
-                        onClick={() => {
-                          onSelectPreset(preset.id);
-                          setIsCloakOpen(false);
-                        }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left rounded-xl transition-colors cursor-pointer ${
-                          isSelected 
-                            ? 'bg-[var(--vibrant-cyan)] text-white font-bold' 
-                            : 'text-zinc-300 hover:bg-[var(--bg-navy)]'
-                        }`}
-                      >
-                        <img 
-                          src={preset.favicon || undefined} 
-                          alt="" 
-                          className="w-4 h-4 rounded-sm object-contain"
-                          onError={(e) => {
-                            (e.target as HTMLElement).style.display = 'none';
-                          }}
-                        />
-                        <div className="truncate">
-                          <div className="truncate">{preset.name}</div>
-                          <div className={`text-[10px] truncate ${isSelected ? 'text-white/80' : 'text-zinc-400'}`}>
-                            {preset.title}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+            {/* Theme Toggle Button */}
+            {onToggleTheme && (
+              <button
+                type="button"
+                onClick={onToggleTheme}
+                className="p-2.5 rounded-xl transition-all cursor-pointer border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-200 dark:hover:border-blue-800"
+                title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+              >
+                {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
+              </button>
             )}
           </div>
 
+          <div className="relative" ref={cloakDropdownRef}>
+            <motion.button
+              type="button"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setIsCloakOpen(!isCloakOpen)}
+              className="bg-slate-900 dark:bg-blue-600 hover:bg-black dark:hover:bg-blue-700 text-white px-6 py-3 rounded-2xl text-sm font-black shadow-xl shadow-slate-900/10 transition-all cursor-pointer flex items-center gap-2 border border-slate-800 dark:border-blue-500"
+            >
+              <EyeOff className="w-4 h-4" />
+              <span>Cloak</span>
+            </motion.button>
+
+            <AnimatePresence>
+              {isCloakOpen && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                  transition={{ type: "spring", stiffness: 400, damping: 20 }}
+                  className="absolute right-0 mt-3 w-72 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.1)] p-3 z-50 overflow-hidden"
+                >
+                  <div className="px-4 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 border-b border-slate-50 dark:border-slate-800 mb-2">
+                    Tab Displacement
+                  </div>
+                  <div className="max-h-80 overflow-y-auto custom-scrollbar space-y-1">
+                    {presets.map((preset) => {
+                      const isSelected = preset.id === activePreset;
+                      return (
+                        <button
+                          type="button"
+                          key={preset.id}
+                          onClick={() => {
+                            onSelectPreset(preset.id);
+                            setIsCloakOpen(false);
+                          }}
+                          className={`w-full flex items-center gap-3 px-4 py-3 text-xs text-left rounded-xl transition-all cursor-pointer ${
+                            isSelected 
+                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' 
+                              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+                          }`}
+                        >
+                          <img 
+                            src={preset.favicon || undefined} 
+                            alt="" 
+                            className="w-5 h-5 rounded-md object-contain bg-white p-0.5 shadow-sm"
+                          />
+                          <div className="truncate">
+                            <div className="font-black tracking-tight">{preset.name}</div>
+                            <div className={`text-[10px] truncate ${isSelected ? 'text-white/70' : 'text-slate-400 font-medium'}`}>
+                              {preset.title}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
 
       </div>
     </header>
   );
 };
+

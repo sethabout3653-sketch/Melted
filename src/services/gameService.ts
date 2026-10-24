@@ -1,13 +1,17 @@
 import rawGamesData from '../data/gnMathGames.json';
 import { RawGame, GameItem, GameCategory } from '../types/game';
 
-export const RAWGITHACK_BASE = 'https://raw.githack.com/freebuisness/html/main';
-export const COVER_BASE = 'https://cdn.jsdelivr.net/gh/freebuisness/covers@main';
+import fileMapData from '../data/gnMathFileMap.json';
+
+const fileMap = fileMapData as Record<string, string>;
+
+export const RAWGITHACK_BASE = 'https://raw.githack.com/gn-math/html/main';
+export const COVER_BASE = 'https://cdn.jsdelivr.net/gh/gn-math/covers@main';
 
 export function resolveCoverUrl(rawCover?: string): string {
   if (!rawCover) return '';
   const clean = rawCover.replace('{COVER_URL}/', '').replace('{COVER_URL}', '');
-  return `/api/cover/${clean}`;
+  return `https://cdn.jsdelivr.net/gh/gn-math/covers@main/${clean}`;
 }
 
 export function getDirectCoverUrl(rawCover?: string): string {
@@ -15,14 +19,19 @@ export function getDirectCoverUrl(rawCover?: string): string {
   return rawCover.replace('{COVER_URL}', COVER_BASE);
 }
 
-// Seamless streaming endpoint via backend proxy with auto-resolution
+// Direct rawgithack game streaming URL with auto-mapped filename resolution
 export function resolveGameUrl(rawUrl: string): string {
   if (!rawUrl) return '';
   if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
     return rawUrl;
   }
-  const filename = rawUrl.replace('{HTML_URL}/', '');
-  return `/api/raw/${filename}`;
+  let filename = rawUrl.replace('{HTML_URL}/', '').replace('{HTML_URL}', '').trim();
+  
+  // Look up in gnMathFileMap
+  const mapped = fileMap[filename] || fileMap[`${filename}.html`] || fileMap[filename.replace(/\.html$/, '')];
+  const finalFile = mapped || (filename.includes('.') ? filename : `${filename}.html`);
+
+  return `https://raw.githack.com/gn-math/html/main/${finalFile}`;
 }
 
 export function getDirectRawGitHackUrl(rawUrl: string): string {

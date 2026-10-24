@@ -1,168 +1,61 @@
 import React, { useEffect, useState } from 'react';
+import { motion } from 'motion/react';
 
 interface FrostedLoadingScreenProps {
   isLoading: boolean;
 }
 
 export const FrostedLoadingScreen: React.FC<FrostedLoadingScreenProps> = ({ isLoading }) => {
-  const letters = ['F', 'r', 'o', 's', 't', 'e', 'd'];
-  const [isFadingOut, setIsFadingOut] = useState(false);
-  const [shouldRender, setShouldRender] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
+  const [isDone, setIsDone] = useState(false);
 
-  // School Chromebook & Slow Wi-Fi fail-safe: Never stay mounted for more than 1.8s
-  useEffect(() => {
-    const hardTimer = setTimeout(() => {
-      setIsFadingOut(true);
-      const renderTimer = setTimeout(() => {
-        setShouldRender(false);
-      }, 600);
-      return () => clearTimeout(renderTimer);
-    }, 1800);
-
-    const handleInteraction = () => {
-      setIsFadingOut(true);
-      setTimeout(() => setShouldRender(false), 400);
-    };
-
-    window.addEventListener('keydown', handleInteraction);
-    return () => {
-      clearTimeout(hardTimer);
-      window.removeEventListener('keydown', handleInteraction);
-    };
-  }, []);
-
-  // Monitor loading state and trigger smooth fade-out
   useEffect(() => {
     if (!isLoading) {
-      setIsFadingOut(true);
-      const timer = setTimeout(() => {
-        setShouldRender(false);
-      }, 700); // Matches CSS transition duration
-      return () => clearTimeout(timer);
+      // Trigger Samsung TV Cinemascope bars opening
+      const openTimer = setTimeout(() => {
+        setIsOpen(true);
+      }, 100);
+
+      const doneTimer = setTimeout(() => {
+        setIsDone(true);
+      }, 1100);
+
+      return () => {
+        clearTimeout(openTimer);
+        clearTimeout(doneTimer);
+      };
     }
   }, [isLoading]);
 
-  if (!shouldRender) return null;
+  if (isDone) return null;
 
   return (
-    <div 
-      onClick={() => {
-        setIsFadingOut(true);
-        setTimeout(() => setShouldRender(false), 400);
-      }}
-      className={`fixed inset-0 z-50 bg-[var(--bg-navy)] flex flex-col items-center justify-center overflow-hidden select-none transition-all duration-700 ease-in-out transform-gpu cursor-pointer ${
-        isFadingOut ? 'opacity-0 scale-[1.03] blur-[15px] pointer-events-none' : 'opacity-100 scale-100'
-      }`}
-    >
-      
-      {/* 0.05s Letter Delay & 0.5s Word Resting Loop with Premium Metallic Shaders */}
-      <style>{`
-        @keyframes snappyFrostedBounce {
-          0% {
-            transform: translateY(0) scale(1, 1) rotate(0deg);
-          }
-          14% {
-            /* Smooth jump peak with 3D lean */
-            transform: translateY(-65px) scale(0.92, 1.08) rotate(7deg);
-          }
-          26% {
-            /* Gravity apex transition */
-            transform: translateY(-70px) scale(0.96, 1.04) rotate(-4deg);
-          }
-          38% {
-            /* Squash on landing impact */
-            transform: translateY(0) scale(1.18, 0.8) rotate(0deg);
-          }
-          43% {
-            /* Quick rebound */
-            transform: translateY(-8px) scale(0.98, 1.02) rotate(0deg);
-          }
-          46.7% {
-            /* Settled flat */
-            transform: translateY(0) scale(1, 1) rotate(0deg);
-          }
-          46.7%, 100% {
-            transform: translateY(0) scale(1, 1) rotate(0deg);
-          }
-        }
+    <div className="fixed inset-0 z-[9999] pointer-events-none overflow-hidden select-none">
+      {/* Top Samsung TV Cinemascope Black Bar */}
+      <motion.div
+        initial={{ y: 0 }}
+        animate={{ y: isOpen ? '-100%' : 0 }}
+        transition={{ duration: 0.9, ease: [0.77, 0, 0.175, 1] }}
+        className="absolute top-0 inset-x-0 h-[50.5vh] bg-black z-10 border-b-2 border-blue-500 shadow-[0_10px_40px_rgba(59,130,246,0.6)]"
+      />
 
-        .frosted-letter-container {
-          perspective: 1000px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
+      {/* Bottom Samsung TV Cinemascope Black Bar */}
+      <motion.div
+        initial={{ y: 0 }}
+        animate={{ y: isOpen ? '100%' : 0 }}
+        transition={{ duration: 0.9, ease: [0.77, 0, 0.175, 1] }}
+        className="absolute bottom-0 inset-x-0 h-[50.5vh] bg-black z-10 border-t-2 border-blue-500 shadow-[0_-10px_40px_rgba(59,130,246,0.6)]"
+      />
 
-        .frosted-letter {
-          display: inline-block;
-          font-family: 'Outfit', sans-serif;
-          font-weight: 900;
-          font-size: 6rem; /* Slightly larger, perfectly centered */
-          line-height: 1;
-          background: linear-gradient(135deg, var(--bg-navy) 20%, var(--bg-navy) 45%, var(--bg-navy) 75%, var(--bg-navy) 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-          
-          /* Layered premium 3D bevel shadows */
-          filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.6))
-                  drop-shadow(0 15px 15px rgba(0, 102, 255, 0.15));
-          
-          animation: snappyFrostedBounce 1.5s infinite cubic-bezier(0.25, 1, 0.5, 1);
-          transform-origin: bottom center;
-          margin: 0 2px;
-        }
-
-        /* Accent floor reflection with smooth silver-blue gradient mask */
-        .glowing-floor {
-          width: 550px;
-          height: 40px;
-          background: radial-gradient(ellipse at center, rgba(0, 102, 255, 0.3) 0%, rgba(0, 0, 0, 0) 75%);
-          border-radius: 50%;
-          filter: blur(12px);
-          margin-top: 20px;
-          transform: scaleY(0.3);
-          pointer-events: none;
-        }
-      `}</style>
-
-      {/* Main Letters Centered Container */}
-      <div className="flex flex-col items-center justify-center relative translate-y-[-10px]">
-        
-        {/* Row of Letters */}
-        <div className="frosted-letter-container">
-          {letters.map((char, index) => (
-            <span
-              key={index}
-              className="frosted-letter"
-              style={{
-                animationDelay: `${index * 0.05}s`,
-              }}
-            >
-              {char}
-            </span>
-          ))}
-        </div>
-
-        {/* Ambient Floor Glow */}
-        <div className="glowing-floor" />
-
-        {/* Upside Down Reflection */}
-        <div className="flex items-start justify-center opacity-15 mt-2 pointer-events-none scale-y-[-0.6] transform origin-top blur-[1px]">
-          {letters.map((char, index) => (
-            <span
-              key={`ref-${index}`}
-              className="frosted-letter"
-              style={{
-                animationDelay: `${index * 0.05}s`,
-              }}
-            >
-              {char}
-            </span>
-          ))}
-        </div>
-
-      </div>
-
+      {/* Center Laser Beam Line pulse during TV aperture split */}
+      {isOpen && (
+        <motion.div
+          initial={{ scaleX: 0, opacity: 1 }}
+          animate={{ scaleX: 1, opacity: 0 }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+          className="absolute top-1/2 left-0 right-0 h-[3px] -translate-y-1/2 bg-blue-400 shadow-[0_0_30px_#60a5fa] z-15 pointer-events-none origin-center"
+        />
+      )}
     </div>
   );
 };

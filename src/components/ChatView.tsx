@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { AdsterraAd } from './AdsterraAd';
-import { Adsterra160x600 } from './Adsterra160x600';
+import { motion, AnimatePresence } from 'motion/react';
 import { 
   Hash, 
   Video, 
@@ -29,7 +28,8 @@ import {
   VolumeX,
   ShieldAlert,
   ShieldCheck,
-  Check
+  Check,
+  Snowflake
 } from 'lucide-react';
 import { GiphyFetch } from '@giphy/js-fetch-api';
 import { useWebRTC } from '../services/useWebRTC';
@@ -113,7 +113,7 @@ const AudioAttachmentPlayer: React.FC<{
   };
 
   return (
-    <div className="p-3 bg-[#0e0e14] border border-[#1f1f2c] rounded-2xl max-w-md w-full shadow-lg space-y-2">
+    <div className="p-3 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl max-w-md w-full shadow-lg space-y-2">
       <audio
         ref={audioRef}
         src={url}
@@ -131,7 +131,7 @@ const AudioAttachmentPlayer: React.FC<{
 
       {/* Attachment Name */}
       {name && (
-        <p className="text-xs font-semibold text-white truncate max-w-full">
+        <p className="text-xs font-semibold text-slate-900 dark:text-white truncate max-w-full">
           {name}
         </p>
       )}
@@ -1590,7 +1590,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   };
 
   return (
-    <div className="flex flex-1 min-h-0 h-full w-full bg-[#08080a] text-zinc-100 font-sans antialiased overflow-hidden select-none">
+    <div className="flex flex-1 min-h-0 h-full w-full bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans antialiased overflow-hidden select-none transition-colors">
       
       {/* Hidden Global File Input */}
       <input 
@@ -1602,418 +1602,118 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       />
 
       {/* LEFT NAVIGATION SIDEBAR - Desktop view */}
-      <aside className="hidden md:flex w-64 bg-[#0c0c0f] border-r border-[#1a1a20] flex-col justify-between shrink-0 overflow-hidden">
-        <div className="p-4 space-y-6 shrink-0">
+      <aside className="hidden md:flex w-72 bg-slate-50 dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 flex-col justify-between shrink-0 overflow-hidden">
+        <div className="p-6 space-y-8 shrink-0">
           
           {/* Header Branding */}
-          <div className="flex items-center justify-between pb-2 border-b border-[#18181f]">
-            <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-sm shadow-lg shadow-blue-600/30">
-                <Gamepad2 className="w-5 h-5" />
-              </div>
-              <div className="flex items-center gap-2">
-                <h1 className="font-black text-white text-sm tracking-wide">Frosted</h1>
-                <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-blue-400' : 'bg-amber-400'}`} />
-              </div>
+          <div className="flex items-center gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
+            <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-xl shadow-blue-600/20">
+              <Snowflake className="w-6 h-6 fill-none" />
             </div>
+            <h1 className="font-black text-slate-900 dark:text-white text-lg tracking-tight">Community</h1>
           </div>
 
           {/* CHANNELS SECTION */}
-          <div className="space-y-4">
+          <div className="space-y-6">
             
             {/* Text Channels */}
-            <div className="space-y-1">
-              <div className="px-2 text-[10px] font-extrabold text-blue-400/80 tracking-wider uppercase">
-                TEXT CHANNELS
+            <div className="space-y-2">
+              <div className="px-2 text-[10px] font-black text-slate-400 dark:text-slate-500 tracking-[0.2em] uppercase">
+                Text Channels
               </div>
 
-              <button
+              <motion.button
+                whileHover={{ x: 4 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={() => handleChannelSelect('text-general')}
-                className={`w-full px-3 py-2.5 rounded-xl flex items-center justify-between transition-all cursor-pointer ${
+                className={`w-full px-4 py-3 rounded-2xl flex items-center justify-between transition-all cursor-pointer border ${
                   activeChannel === 'text-general'
-                    ? 'bg-blue-600 text-white font-extrabold shadow-md shadow-blue-600/20'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/5 font-semibold'
+                    ? 'bg-blue-600 text-white font-black shadow-xl shadow-blue-600/20 border-blue-500'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 border-transparent'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
-                  <Hash className="w-4 h-4" />
-                  <span className="text-xs">general</span>
+                <div className="flex items-center gap-3">
+                  <Hash className="w-4 h-4 opacity-70" />
+                  <span className="text-sm font-bold">general</span>
                 </div>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/30 font-bold">
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-black border ${
+                  activeChannel === 'text-general' ? 'bg-white/20 border-white/20' : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-300'
+                }`}>
                   {messages.length}
                 </span>
-              </button>
+              </motion.button>
             </div>
 
             {/* Voice Channels */}
-            <div className="space-y-1">
-              <div className="px-2 text-[10px] font-extrabold text-blue-400/80 tracking-wider uppercase flex items-center justify-between">
-                <span>VOICE CHANNELS</span>
-                {isInVideo && (
-                  <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-600/20 text-blue-400 border border-blue-500/30 font-black">
-                    Connected
-                  </span>
-                )}
+            <div className="space-y-2">
+              <div className="px-2 text-[10px] font-black text-slate-400 dark:text-slate-500 tracking-[0.2em] uppercase flex items-center justify-between">
+                <span>Voice Channels</span>
               </div>
 
-              <button
+              <motion.button
+                whileHover={{ x: 4 }}
+                whileTap={{ scale: 0.98 }}
                 onClick={() => handleChannelSelect('video-general')}
-                className={`w-full px-3 py-2.5 rounded-xl flex items-center justify-between transition-all cursor-pointer ${
+                className={`w-full px-4 py-3 rounded-2xl flex items-center justify-between transition-all cursor-pointer border ${
                   activeChannel === 'video-general'
-                    ? 'bg-blue-600 text-white font-extrabold shadow-md shadow-blue-600/20'
-                    : 'text-zinc-400 hover:text-white hover:bg-white/5 font-semibold'
+                    ? 'bg-blue-600 text-white font-black shadow-xl shadow-blue-600/20 border-blue-500'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 border-transparent'
                 }`}
               >
-                <div className="flex items-center gap-2.5">
-                  <Mic className="w-4 h-4 text-blue-400" />
-                  <span className="text-xs">General Voice</span>
+                <div className="flex items-center gap-3">
+                  <Mic className={`w-4 h-4 ${activeChannel === 'video-general' ? 'text-white' : 'text-blue-500'}`} />
+                  <span className="text-sm font-bold">General Voice</span>
                 </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-600/20 text-blue-400 font-bold border border-blue-500/30">
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-black border ${
+                  activeChannel === 'video-general' ? 'bg-white/20 border-white/20' : 'bg-blue-50 dark:bg-blue-900/40 border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400'
+                }`}>
                   {voiceUsers.length + (isInVideo ? 1 : 0)}
                 </span>
-              </button>
+              </motion.button>
             </div>
 
           </div>
-
-          {/* Channels footer note */}
-          <div className="pt-2 px-2 text-[10px] text-zinc-600 text-center font-medium">
-            Frosted Voice & Text
-          </div>
-
         </div>
 
         {/* CURRENT USER FOOTER */}
-        <div className="p-3 bg-[#0a0a0d] border-t border-[#1a1a20] flex items-center justify-between shrink-0">
-          <div 
+        <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
+          <motion.div 
+            whileHover={{ scale: 1.01 }}
             onClick={() => setIsProfileModalOpen(true)}
-            className="flex items-center gap-2.5 min-w-0 cursor-pointer p-1.5 rounded-xl hover:bg-white/5 transition-colors flex-1"
+            className="flex items-center gap-3 min-w-0 cursor-pointer p-2 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex-1"
           >
             <div className="relative shrink-0">
-              <div 
-                className="w-9 h-9 rounded-full text-black font-extrabold flex items-center justify-center text-xs shadow-md"
-                style={{ backgroundColor: currentUser.avatar_color || 'var(--vibrant-cyan)' }}
-              >
-                {currentUser.username.slice(0, 2).toUpperCase()}
-              </div>
-              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#0a0a0d]" />
+              {renderAvatar(currentUser, 'w-10 h-10 text-xs')}
+              <div className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" />
             </div>
 
             <div className="min-w-0">
-              <div className="font-extrabold text-white text-xs truncate">
+              <div className="font-black text-slate-900 dark:text-white text-sm truncate tracking-tight">
                 {currentUser.username}
               </div>
+              <div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Active Now</div>
             </div>
-          </div>
+          </motion.div>
 
           <div className="flex items-center gap-1">
-            <button
+            <motion.button
+              whileHover={{ scale: 1.1 }}
+              whileTap={{ scale: 0.9 }}
               onClick={toggleMute}
-              className={`p-1.5 rounded-lg hover:bg-[#17171a] transition-colors cursor-pointer ${
-                isMuted ? 'text-red-400 bg-red-500/10' : 'hover:text-white text-zinc-400'
+              className={`p-2 rounded-xl transition-all cursor-pointer ${
+                isMuted ? 'text-red-600 bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50' : 'text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
               }`}
               title={isMuted ? 'Unmute' : 'Mute'}
             >
               {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-            </button>
-
-            <button
-              onClick={toggleDeafen}
-              className={`p-1.5 rounded-lg hover:bg-[#17171a] transition-colors cursor-pointer ${
-                isDeafened ? 'text-amber-400' : 'hover:text-white text-zinc-400'
-              }`}
-              title={isDeafened ? 'Undeafen' : 'Deafen'}
-            >
-              <Headphones className="w-4 h-4" />
-            </button>
+            </motion.button>
           </div>
         </div>
 
       </aside>
 
-      {/* LEFT NAVIGATION DRAWER - Mobile overlay */}
-      {isMobileChannelsOpen && (
-        <div className="fixed inset-0 z-50 md:hidden flex animate-in fade-in duration-200">
-          <div 
-            className="fixed inset-0 bg-black/75 backdrop-blur-sm"
-            onClick={() => setIsMobileChannelsOpen(false)}
-          />
-          <aside className="relative w-72 max-w-[85vw] h-full bg-[#0c0c0f] border-r border-[#1a1a20] flex flex-col justify-between z-10 shadow-2xl animate-in slide-in-from-left duration-200">
-            <div className="p-4 space-y-6 shrink-0">
-              
-              {/* Header Branding with Close Button */}
-              <div className="flex items-center justify-between pb-2 border-b border-[#18181f]">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white font-black text-sm shadow-lg shadow-blue-600/30">
-                    <Gamepad2 className="w-5 h-5" />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <h1 className="font-black text-white text-sm tracking-wide">Frosted</h1>
-                    <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-blue-400' : 'bg-amber-400'}`} />
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => setIsMobileChannelsOpen(false)}
-                  className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {/* CHANNELS SECTION */}
-              <div className="space-y-4">
-                
-                {/* Text Channels */}
-                <div className="space-y-1">
-                  <div className="px-2 text-[10px] font-extrabold text-blue-400/80 tracking-wider uppercase">
-                    TEXT CHANNELS
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      handleChannelSelect('text-general');
-                      setIsMobileChannelsOpen(false);
-                    }}
-                    className={`w-full px-3 py-2.5 rounded-xl flex items-center justify-between transition-all cursor-pointer ${
-                      activeChannel === 'text-general'
-                        ? 'bg-blue-600 text-white font-extrabold shadow-md shadow-blue-600/20'
-                        : 'text-zinc-400 hover:text-white hover:bg-white/5 font-semibold'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Hash className="w-4 h-4" />
-                      <span className="text-xs">general</span>
-                    </div>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-black/30 font-bold">
-                      {messages.length}
-                    </span>
-                  </button>
-                </div>
-
-                {/* Voice Channels */}
-                <div className="space-y-1">
-                  <div className="px-2 text-[10px] font-extrabold text-blue-400/80 tracking-wider uppercase flex items-center justify-between">
-                    <span>VOICE CHANNELS</span>
-                    {isInVideo && (
-                      <span className="text-[9px] px-1.5 py-0.2 rounded bg-blue-600/20 text-blue-400 border border-blue-500/30 font-black">
-                        Connected
-                      </span>
-                    )}
-                  </div>
-
-                  <button
-                    onClick={() => {
-                      handleChannelSelect('video-general');
-                      setIsMobileChannelsOpen(false);
-                    }}
-                    className={`w-full px-3 py-2.5 rounded-xl flex items-center justify-between transition-all cursor-pointer ${
-                      activeChannel === 'video-general'
-                        ? 'bg-blue-600 text-white font-extrabold shadow-md shadow-blue-600/20'
-                        : 'text-zinc-400 hover:text-white hover:bg-white/5 font-semibold'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <Mic className="w-4 h-4 text-blue-400" />
-                      <span className="text-xs">General Voice</span>
-                    </div>
-                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-600/20 text-blue-400 font-bold border border-blue-500/30">
-                      {voiceUsers.length + (isInVideo ? 1 : 0)}
-                    </span>
-                  </button>
-                </div>
-
-              </div>
-
-            </div>
-
-            {/* CURRENT USER FOOTER */}
-            <div className="p-3 bg-[#0a0a0d] border-t border-[#1a1a20] flex items-center justify-between shrink-0">
-              <div 
-                onClick={() => setIsProfileModalOpen(true)}
-                className="flex items-center gap-2.5 min-w-0 cursor-pointer p-1.5 rounded-xl hover:bg-white/5 transition-colors flex-1"
-              >
-                <div className="relative shrink-0">
-                  {renderAvatar(currentUser, 'w-9 h-9 text-xs')}
-                  <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#0a0a0d]" />
-                </div>
-
-                <div className="min-w-0">
-                  <div className="font-extrabold text-white text-xs truncate">
-                    {currentUser.username}
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={toggleMute}
-                  className={`p-1.5 rounded-lg hover:bg-[#17171a] transition-colors cursor-pointer ${
-                    isMuted ? 'text-red-400 bg-red-500/10' : 'hover:text-white text-zinc-400'
-                  }`}
-                  title={isMuted ? 'Unmute' : 'Mute'}
-                >
-                  {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                </button>
-
-                <button
-                  onClick={toggleDeafen}
-                  className={`p-1.5 rounded-lg hover:bg-[#17171a] transition-colors cursor-pointer ${
-                    isDeafened ? 'text-amber-400' : 'hover:text-white text-zinc-400'
-                  }`}
-                  title={isDeafened ? 'Undeafen' : 'Deafen'}
-                >
-                  <Headphones className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-          </aside>
-        </div>
-      )}
-
-      {/* Profile Edit Modal */}
-      {isProfileModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
-          <input 
-            type="file" 
-            ref={profileAvatarInputRef} 
-            onChange={handleProfileAvatarFileSelect} 
-            accept="image/*" 
-            style={{ display: 'none' }} 
-          />
-          <div className="bg-[#0b0b0e] p-6 rounded-2xl border border-[#1f1f1f] w-full max-w-sm space-y-4 shadow-2xl">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-white">Edit Profile</h2>
-              <button onClick={() => setIsProfileModalOpen(false)} className="text-zinc-500 hover:text-white cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="space-y-4 py-2">
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Username</label>
-                <input
-                  type="text"
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  className="w-full bg-[#121215] border border-[#222226] rounded-xl px-4 py-2.5 text-white text-sm focus:outline-none focus:border-blue-500 transition-colors"
-                  placeholder="Username"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Profile Picture / Avatar</label>
-                <div className="flex items-center gap-3">
-                  <div className="w-14 h-14 rounded-full overflow-hidden shrink-0 border border-white/10 bg-black flex items-center justify-center">
-                    {editAvatarUrl ? (
-                      <img src={editAvatarUrl} alt="Avatar Preview" className="w-full h-full object-cover" />
-                    ) : (
-                      <div 
-                        className="w-full h-full flex items-center justify-center text-sm font-black text-black"
-                        style={{ backgroundColor: editColor }}
-                      >
-                        {editName.slice(0, 2).toUpperCase()}
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0 space-y-2">
-                    <button
-                      type="button"
-                      onClick={() => profileAvatarInputRef.current?.click()}
-                      className="w-full py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-colors cursor-pointer text-center"
-                    >
-                      Upload Image File
-                    </button>
-                    <input
-                      type="text"
-                      value={editAvatarUrl}
-                      onChange={(e) => setEditAvatarUrl(e.target.value)}
-                      placeholder="Or enter Image URL..."
-                      className="w-full bg-[#121215] border border-[#222226] rounded-xl px-3 py-1.5 text-white text-xs focus:outline-none focus:border-blue-500 transition-colors"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider">Fallback Avatar Color</label>
-                <div className="flex items-center gap-3">
-                  <input
-                    type="color"
-                    value={editColor}
-                    onChange={(e) => setEditColor(e.target.value)}
-                    className="w-10 h-10 bg-transparent border-none p-0 cursor-pointer"
-                  />
-                  <span className="text-xs text-zinc-400">Used if no profile picture is set</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <button 
-                onClick={() => setIsProfileModalOpen(false)} 
-                className="flex-1 py-2.5 rounded-xl bg-[#1c1c1f] text-zinc-300 hover:text-white hover:bg-[#25252a] font-bold text-xs transition-colors cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button 
-                onClick={saveProfile} 
-                className="flex-1 py-2.5 rounded-xl bg-blue-600 text-white hover:bg-blue-500 font-bold text-xs shadow-md shadow-blue-600/30 transition-colors cursor-pointer"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Microphone Permission Request Modal */}
-      {showMicPermissionModal && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 select-none">
-          <div className="bg-[#0b0b0e] p-6 rounded-3xl border border-[#232330] w-full max-w-sm space-y-4 shadow-2xl text-center">
-            <div className="w-16 h-16 rounded-2xl bg-blue-600/15 border border-blue-500/30 text-blue-400 flex items-center justify-center mx-auto shadow-lg shadow-blue-600/20">
-              <Mic className="w-8 h-8" />
-            </div>
-
-            <div className="space-y-1">
-              <h2 className="text-lg font-black text-white">Microphone Access</h2>
-              <p className="text-xs text-zinc-400 leading-relaxed">
-                Frosted Voice Chat requires permission to access your microphone so other players can hear you talk.
-              </p>
-            </div>
-
-            {micError && (
-              <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-xl text-xs text-red-300 text-left flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                <span>{micError}</span>
-              </div>
-            )}
-
-            <div className="flex gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setShowMicPermissionModal(false)}
-                className="flex-1 py-2.5 rounded-xl bg-[#1c1c20] hover:bg-[#25252e] text-zinc-300 hover:text-white font-bold text-xs transition-colors cursor-pointer"
-              >
-                Not Now
-              </button>
-              <button
-                type="button"
-                onClick={() => requestMicrophonePermission(false)}
-                className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-black text-xs shadow-md shadow-blue-600/30 transition-all cursor-pointer flex items-center justify-center gap-1.5"
-              >
-                <Check className="w-4 h-4" />
-                <span>Allow Microphone</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col bg-[#050507] min-w-0 min-h-0 relative overflow-hidden">
+      <main className="flex-1 flex flex-col bg-white dark:bg-slate-950 min-w-0 min-h-0 relative overflow-hidden">
         
         {/* TEXT CHANNEL VIEW */}
         {activeChannel === 'text-general' && (
@@ -2023,38 +1723,38 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             <div className="flex-1 min-h-0 flex flex-col min-w-0 relative overflow-hidden">
               
               {/* Top Header */}
-              <header className="h-14 px-3 sm:px-4 border-b border-[#1a1a20] flex items-center justify-between bg-[#08080a] shrink-0 gap-2">
+              <header className="h-20 px-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white/80 dark:bg-slate-950/80 backdrop-blur-md shrink-0 gap-6">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   {/* Mobile Channels button */}
                   <button
                     type="button"
                     onClick={() => setIsMobileChannelsOpen(true)}
-                    className="md:hidden p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                    className="md:hidden p-2 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                     title="Open Channels"
                   >
                     <Menu className="w-5 h-5" />
                   </button>
 
-                  <Hash className="w-5 h-5 text-white shrink-0" />
-                  <span className="font-extrabold text-white text-sm sm:text-base truncate">general</span>
+                  <Hash className="w-5 h-5 text-slate-900 dark:text-white shrink-0" />
+                  <span className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base truncate">general</span>
                   <button
                     type="button"
                     onClick={() => setIsMobileMembersOpen(true)}
-                    className="px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-bold bg-blue-600/15 hover:bg-blue-600/25 text-blue-400 border border-blue-500/20 flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+                    className="px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-bold bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800 flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
                     title="View Online Members"
                   >
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
                     <span>{users.length} online</span>
                   </button>
                 </div>
 
                 <div className="flex items-center gap-2">
                   <div className="relative hidden sm:block">
-                    <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-2.5" />
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                     <input 
                       type="text" 
                       placeholder="Search messages"
-                      className="bg-[#121215] border border-[#222228] text-xs text-white placeholder-zinc-500 rounded-xl pl-9 pr-3 py-2 w-36 sm:w-48 focus:outline-none focus:border-blue-500"
+                      className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-9 pr-3 py-2 w-36 sm:w-48 focus:outline-none focus:border-blue-500"
                     />
                   </div>
 
@@ -2062,11 +1762,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   <button
                     type="button"
                     onClick={() => setIsMobileMembersOpen(true)}
-                    className="lg:hidden p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+                    className="lg:hidden p-2 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold"
                     title="View Members"
                   >
                     <Users className="w-4 h-4" />
-                    <span className="hidden xs:inline text-[11px] text-zinc-400">{users.length}</span>
+                    <span className="hidden xs:inline text-[11px] text-slate-400">{users.length}</span>
                   </button>
                 </div>
               </header>
@@ -2078,22 +1778,22 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                 {/* Messages List */}
                 {messages.map((msg: any) => (
-                  <div key={msg.id} className="flex items-start gap-3.5 group hover:bg-white/[0.02] -mx-4 px-4 py-1.5 rounded-xl transition-colors">
+                  <div key={msg.id} className="flex items-start gap-3.5 group hover:bg-slate-50 dark:hover:bg-slate-900/40 -mx-4 px-4 py-1.5 rounded-xl transition-colors">
                     <div className="shrink-0">
                       {renderAvatar({ username: msg.sender_name, avatar_color: msg.avatar_color, avatar_url: msg.sender_avatar_url }, 'w-10 h-10 text-xs')}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-baseline gap-2">
-                        <span className="font-extrabold text-white text-sm hover:underline cursor-pointer">
+                        <span className="font-extrabold text-slate-900 dark:text-white text-sm hover:underline cursor-pointer">
                           {msg.sender_name}
                         </span>
-                        <span className="text-[10px] text-zinc-500">
+                        <span className="text-[10px] text-slate-400 dark:text-slate-500">
                           {msg.timestamp}
                         </span>
                       </div>
                       
                       {msg.content && (
-                        <p className="text-sm text-zinc-200 leading-relaxed break-words whitespace-pre-wrap mt-0.5">
+                        <p className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed break-words whitespace-pre-wrap mt-0.5">
                           {msg.content}
                         </p>
                       )}
@@ -2195,7 +1895,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     {msg.sender_id === currentUser.id && (
                       <button
                         onClick={() => deleteMessage(msg.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-all cursor-pointer"
+                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all cursor-pointer"
                         title="Delete message"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -2208,7 +1908,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
               {/* Attachment Preview Before Sending */}
               {pendingFile && (
-                <div className="shrink-0 mx-4 mb-2 p-3 bg-[#0e0e13] border border-[#20202c] rounded-2xl relative shadow-lg">
+                <div className="shrink-0 mx-4 mb-2 p-3 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl relative shadow-lg">
                   <div className="flex items-start gap-3">
                     {/* If Image: Show actual image preview */}
                     {pendingFile.type === 'image' && pendingFile.previewUrl && (
@@ -2246,11 +1946,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                     {/* If File/Other: Clean file info */}
                     {pendingFile.type === 'file' && (
-                      <div className="flex items-center gap-2.5 p-2.5 bg-[#14141c] rounded-xl border border-white/5">
-                        <FileText className="w-6 h-6 text-blue-400 shrink-0" />
+                      <div className="flex items-center gap-2.5 p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                        <FileText className="w-6 h-6 text-blue-500 shrink-0" />
                         <div className="min-w-0">
-                          <p className="text-xs font-semibold text-white truncate max-w-xs">{pendingFile.filename}</p>
-                          <p className="text-[11px] text-zinc-400">{(pendingFile.size / 1024).toFixed(1)} KB</p>
+                          <p className="text-xs font-semibold text-slate-900 dark:text-white truncate max-w-xs">{pendingFile.filename}</p>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400">{(pendingFile.size / 1024).toFixed(1)} KB</p>
                         </div>
                       </div>
                     )}
@@ -2259,11 +1959,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     {pendingFile.isUploading && (
                       <div className="flex-1 min-w-0 self-center">
                         <div className="space-y-1.5">
-                          <div className="flex items-center justify-between text-xs text-zinc-300">
+                          <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">
                             <span>Uploading...</span>
                             <span>{pendingFile.uploadProgress}%</span>
                           </div>
-                          <div className="h-1.5 w-full bg-[#1c1c28] rounded-full overflow-hidden">
+                          <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
                             <div 
                               className="h-full bg-blue-500 transition-all duration-150 rounded-full" 
                               style={{ width: `${pendingFile.uploadProgress}%` }} 
@@ -2277,7 +1977,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     <button 
                       type="button"
                       onClick={cancelPendingFile}
-                      className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
                       title="Remove attachment"
                     >
                       <X className="w-4 h-4" />
@@ -2288,14 +1988,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
               {/* GIPHY POPOVER MODAL */}
               {isGiphyOpen && (
-                <div className="absolute bottom-20 left-4 right-4 z-50 bg-[#0c0c12]/95 border border-[#222230] rounded-2xl shadow-2xl p-4 max-w-xl mx-auto flex flex-col space-y-3 backdrop-blur-xl">
+                <div className="absolute bottom-20 left-4 right-4 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-4 max-w-xl mx-auto flex flex-col space-y-3 backdrop-blur-xl">
                   
                   {/* Modal Header */}
-                  <div className="flex items-center justify-between pb-2 border-b border-[#1f1f2d]">
-                    <span className="text-sm font-bold text-white">GIFs</span>
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                    <span className="text-sm font-bold text-slate-900 dark:text-white">GIFs</span>
                     <button 
                       onClick={() => setIsGiphyOpen(false)}
-                      className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -2303,7 +2003,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                   {/* Search Bar Input */}
                   <div className="relative">
-                    <Search className="w-4 h-4 text-zinc-400 absolute left-3.5 top-3" />
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                     <input 
                       type="text" 
                       value={giphySearch}
@@ -2312,7 +2012,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         setActiveCategoryLabel('');
                       }}
                       placeholder="Search GIFs..."
-                      className="w-full bg-[#161622] border border-[#2a2a3c] text-xs text-white placeholder-zinc-500 rounded-xl pl-10 pr-9 py-2.5 focus:outline-none focus:border-blue-500 transition-colors"
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-10 pr-9 py-2.5 focus:outline-none focus:border-blue-500 transition-colors"
                       autoFocus
                     />
                     {giphySearch && (
@@ -2321,7 +2021,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                           setGiphySearch('');
                           setActiveCategoryLabel('🔥 Trending');
                         }}
-                        className="absolute right-3 top-2.5 p-1 text-zinc-400 hover:text-white cursor-pointer"
+                        className="absolute right-3 top-2.5 p-1 text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
                       >
                         <X className="w-3.5 h-3.5" />
                       </button>
@@ -2339,7 +2039,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                           className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer shrink-0 border ${
                             isActive
                               ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/30'
-                              : 'bg-[#181824] hover:bg-[#222232] text-zinc-300 border-white/5 hover:border-blue-500/30'
+                              : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
                           }`}
                         >
                           {cat.label}
@@ -2349,9 +2049,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   </div>
 
                   {/* Native GIF Grid */}
-                  <div className="max-h-80 overflow-y-auto pr-1 bg-[#08080c] p-2 rounded-xl border border-white/5">
+                  <div className="max-h-80 overflow-y-auto pr-1 bg-slate-50 dark:bg-slate-950 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
                     {isGifsLoading ? (
-                      <div className="py-12 flex items-center justify-center text-xs text-zinc-500">
+                      <div className="py-12 flex items-center justify-center text-xs text-slate-400">
                         Loading GIFs...
                       </div>
                     ) : gifs.length > 0 ? (
@@ -2363,7 +2063,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                               key={gif.id}
                               type="button"
                               onClick={() => selectGiphyGif(gif)}
-                              className="relative aspect-video rounded-xl overflow-hidden bg-[#161622] hover:opacity-90 hover:scale-[1.02] transition-all cursor-pointer group border border-white/5"
+                              className="relative aspect-video rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 hover:opacity-90 hover:scale-[1.02] transition-all cursor-pointer group border border-slate-200 dark:border-slate-700"
                             >
                               <img
                                 src={previewImg}
@@ -2376,7 +2076,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         })}
                       </div>
                     ) : (
-                      <div className="py-12 text-center text-xs text-zinc-500">
+                      <div className="py-12 text-center text-xs text-slate-400">
                         No GIFs found
                       </div>
                     )}
@@ -2385,64 +2085,70 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 </div>
               )}
 
-              {/* Message Input Box */}
               <div className="p-4 pt-0 shrink-0">
-                <form onSubmit={handleSendMessage} className="bg-[#121215] border border-[#222228] focus-within:border-blue-500 rounded-2xl px-4 py-3 flex items-center gap-3 transition-colors shadow-lg">
+                <form onSubmit={handleSendMessage} className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus-within:border-blue-500 dark:focus-within:border-blue-500 rounded-2xl px-4 py-3 flex items-center gap-3 transition-colors shadow-lg">
                   <input
                     type="text"
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     placeholder="Message #general..."
-                    className="flex-1 bg-transparent text-sm text-white placeholder-zinc-500 focus:outline-none"
+                    className="flex-1 bg-transparent text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none"
                   />
 
                   {/* File Attachment Button */}
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="w-8 h-8 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 flex items-center justify-center transition-colors cursor-pointer"
+                    className="w-8 h-8 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer border border-transparent"
                     title="Upload File or Media"
                   >
                     <PlusCircle className="w-5 h-5" />
-                  </button>
+                  </motion.button>
 
                   {/* GIF Button */}
-                  <button
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
                     type="button"
                     onClick={() => setIsGiphyOpen(!isGiphyOpen)}
-                    className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center justify-center ${
+                    className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center justify-center border ${
                       isGiphyOpen 
-                        ? 'bg-blue-600 text-white shadow-sm' 
-                        : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+                        ? 'bg-blue-600 text-white shadow-sm border-blue-400' 
+                        : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
                     }`}
                     title="GIFs"
                   >
                     GIF
-                  </button>
+                  </motion.button>
 
                   {/* Send Button */}
-                  <button
+                  <motion.button
+                    whileHover={(inputText.trim() || pendingFile) ? { scale: 1.05 } : {}}
+                    whileTap={(inputText.trim() || pendingFile) ? { scale: 0.95 } : {}}
                     type="submit"
                     disabled={!inputText.trim() && !pendingFile}
-                    className={`px-3.5 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                    className={`px-3.5 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer border ${
                       (inputText.trim() || pendingFile)
-                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30' 
-                        : 'bg-zinc-800 text-zinc-500 opacity-50 cursor-not-allowed'
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 border-blue-400' 
+                        : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 opacity-50 cursor-not-allowed border-transparent'
                     }`}
                   >
                     <Send className="w-4 h-4 fill-current" />
-                  </button>
+                  </motion.button>
                 </form>
               </div>
+
 
             </div>
 
             {/* Right Sidebar: Member List - Desktop */}
-            <aside className="hidden lg:flex w-64 bg-[#08080a] border-l border-[#1a1a20] p-4 flex-col shrink-0 overflow-hidden">
+            <aside className="hidden lg:flex w-64 bg-slate-50 dark:bg-slate-900 border-l border-slate-100 dark:border-slate-800 p-4 flex-col shrink-0 overflow-hidden">
               
               {/* ONLINE MEMBERS HEADER */}
-              <div className="shrink-0 pb-3 flex items-center justify-between border-b border-[#14141a]">
-                <div className="text-xs font-bold text-zinc-500 tracking-wider">
+              <div className="shrink-0 pb-3 flex items-center justify-between border-b border-slate-200 dark:border-slate-800">
+                <div className="text-xs font-bold text-slate-400 dark:text-slate-500 tracking-wider">
                   <span>ONLINE — {users.length}</span>
                 </div>
               </div>
@@ -2450,19 +2156,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               {/* ONLY ONLINE LIST IS SCROLLABLE */}
               <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pt-3 pr-1">
                 {users.map((u: any) => (
-                  <div key={u.id} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] transition-colors">
+                  <div key={u.id} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors">
                     <div className="relative shrink-0">
                       {renderAvatar(u, 'w-9 h-9 text-xs')}
-                      <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
+                      <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5">
-                        <span className="font-extrabold text-white text-xs truncate">
+                        <span className="font-extrabold text-slate-900 dark:text-white text-xs truncate">
                           {u.username}
                         </span>
                         {u.id === currentUser.id && (
-                          <span className="text-[10px] text-zinc-500 font-medium shrink-0">
+                          <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium shrink-0">
                             (you)
                           </span>
                         )}
@@ -3154,6 +2860,106 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             >
               Cancel Call
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* PROFILE EDIT MODAL */}
+      {isProfileModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 sm:p-8 rounded-3xl w-full max-w-md shadow-2xl space-y-6">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-lg font-black text-slate-900 dark:text-white font-heading">
+                User Profile Settings
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsProfileModalOpen(false)}
+                className="p-1.5 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Avatar Preview & Upload */}
+            <div className="flex flex-col items-center gap-3">
+              <input
+                type="file"
+                ref={profileAvatarInputRef}
+                onChange={handleProfileAvatarFileSelect}
+                accept="image/*"
+                className="hidden"
+              />
+              <div 
+                onClick={() => profileAvatarInputRef.current?.click()}
+                className="relative cursor-pointer group"
+                title="Click to upload custom avatar image"
+              >
+                {renderAvatar({ username: editName || 'P', avatar_color: editColor, avatar_url: editAvatarUrl }, 'w-20 h-20 text-xl')}
+                <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity">
+                  Upload
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => profileAvatarInputRef.current?.click()}
+                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
+              >
+                Change Avatar Image
+              </button>
+            </div>
+
+            {/* Display Name Input */}
+            <div className="space-y-2">
+              <label className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                Display Name
+              </label>
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Enter username..."
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-900 dark:text-white rounded-2xl px-4 py-3 focus:outline-none focus:border-blue-500 transition-colors font-bold"
+              />
+            </div>
+
+            {/* Avatar Color Picker */}
+            <div className="space-y-2">
+              <label className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
+                Avatar Theme Accent
+              </label>
+              <div className="flex items-center gap-2">
+                {['var(--vibrant-cyan)', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444'].map((color) => (
+                  <button
+                    key={color}
+                    type="button"
+                    onClick={() => setEditColor(color)}
+                    className={`w-8 h-8 rounded-full border-2 transition-all cursor-pointer ${
+                      editColor === color ? 'border-slate-900 dark:border-white scale-110 shadow-md' : 'border-transparent opacity-80 hover:opacity-100'
+                    }`}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setIsProfileModalOpen(false)}
+                className="px-4 py-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-bold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveProfile}
+                className="px-6 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black shadow-lg shadow-blue-600/30 transition-colors cursor-pointer"
+              >
+                Save Changes
+              </button>
+            </div>
           </div>
         </div>
       )}

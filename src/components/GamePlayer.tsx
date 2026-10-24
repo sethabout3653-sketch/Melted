@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { motion } from 'motion/react';
 import { 
   Heart, 
   RotateCw, 
@@ -204,30 +205,31 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         className={`relative flex flex-col w-full bg-black overflow-hidden transition-all ${
           isFullscreen 
             ? 'h-screen w-screen border-none rounded-none' 
-            : 'max-w-6xl h-full sm:h-[88vh] max-h-[100dvh] sm:max-h-[850px] bg-[var(--bg-navy)] border-0 sm:border border-[var(--bg-navy)] rounded-none sm:rounded-2xl shadow-2xl'
+            : 'max-w-6xl h-full sm:h-[88vh] max-h-[100dvh] sm:max-h-[850px] bg-slate-900 border-0 sm:border border-slate-800 rounded-none sm:rounded-2xl shadow-2xl'
         }`}
       >
         
         {/* Top Header Bar: ONLY shown when NOT fullscreen */}
         {!isFullscreen && (
-          <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 bg-[var(--bg-navy)] border-b border-[var(--bg-navy)] select-none gap-2 shrink-0">
+          <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-3 bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800 select-none gap-2 shrink-0 transition-colors">
             
             {/* Left info */}
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-8 h-8 rounded-lg overflow-hidden bg-[var(--bg-navy)] shrink-0 border border-[var(--bg-navy)]">
+              <div className="w-9 h-9 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 shrink-0 border border-slate-200 dark:border-slate-700 shadow-sm">
                 <img 
-                  src={game.resolvedCover || undefined} 
-                  alt="" 
+                  src={game.localCover || game.resolvedCover || game.cover || game.fallbackCover || ''} 
+                  alt={game.name} 
+                  referrerPolicy="no-referrer"
                   className="w-full h-full object-cover" 
                 />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <h3 className="font-extrabold text-white text-sm sm:text-base truncate font-heading">
+                  <h3 className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base truncate font-heading">
                     {game.name}
                   </h3>
                 </div>
-                <div className="text-[11px] text-zinc-400 truncate">
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate font-bold">
                   {game.author ? `By ${game.author}` : game.category}
                 </div>
               </div>
@@ -237,61 +239,77 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             <div className="flex items-center gap-1.5 shrink-0">
               
               {/* Favorite Button */}
-              <button
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.92 }}
                 onClick={() => onToggleFavorite(game.id)}
-                className={`p-2 rounded-lg border transition-colors cursor-pointer ${
+                className={`p-2 rounded-xl border transition-all cursor-pointer ${
                   isFavorite
-                    ? 'bg-[var(--vibrant-cyan)]/20 text-[var(--vibrant-cyan)] border-[var(--vibrant-cyan)]/50'
-                    : 'bg-[var(--bg-navy)] text-zinc-400 hover:text-white border-[var(--bg-navy)]'
+                    ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-600/20'
+                    : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 border-slate-200 dark:border-slate-700 hover:border-blue-200 dark:hover:border-blue-700'
                 }`}
                 title={isFavorite ? 'Saved to Favorites' : 'Add to Favorites'}
               >
-                <Heart className={`w-4 h-4 ${isFavorite ? 'fill-[var(--vibrant-cyan)]' : ''}`} />
-              </button>
+                <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
+              </motion.button>
 
               {/* Stealth about:blank button */}
               {playableUrl && (
-                <button
+                <motion.button
+                  type="button"
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
                   onClick={() => launchAboutBlank(playableUrl, game.name)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] text-zinc-200 hover:text-[var(--vibrant-cyan)] text-xs font-semibold rounded-lg border border-[var(--bg-navy)] hover:border-[var(--vibrant-cyan)]/40 transition-colors cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-200 dark:hover:border-blue-700 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
                   title="Open stealth tab (about:blank cloak)"
                 >
-                  <EyeOff className="w-3.5 h-3.5 text-[var(--vibrant-cyan)]" />
+                  <EyeOff className="w-3.5 h-3.5" />
                   <span className="hidden sm:inline">Stealth Window</span>
-                </button>
+                </motion.button>
               )}
 
               {/* Reload button */}
-              <button
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.08, rotate: 180 }}
+                whileTap={{ scale: 0.92 }}
                 onClick={reloadGame}
-                className="p-2 bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] text-zinc-400 hover:text-white rounded-lg border border-[var(--bg-navy)] hover:border-[var(--vibrant-cyan)]/40 transition-colors cursor-pointer"
+                className="p-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
                 title="Reload game"
               >
                 <RotateCw className="w-4 h-4" />
-              </button>
+              </motion.button>
 
               {/* Fullscreen button */}
-              <button
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.92 }}
                 onClick={toggleFullscreen}
-                className="p-2 bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] text-zinc-400 hover:text-white rounded-lg border border-[var(--bg-navy)] hover:border-[var(--vibrant-cyan)]/40 transition-colors cursor-pointer"
+                className="p-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
                 title="Enter Fullscreen"
               >
                 <Maximize2 className="w-4 h-4" />
-              </button>
+              </motion.button>
 
               {/* Close button */}
-              <button
+              <motion.button
+                type="button"
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.92 }}
                 onClick={onClose}
-                className="p-2 bg-[var(--vibrant-cyan)] hover:bg-[var(--bg-navy)] text-white font-bold rounded-lg transition-colors cursor-pointer ml-1"
+                className="p-2 bg-blue-600 hover:bg-red-500 text-white font-bold rounded-xl transition-all cursor-pointer ml-1 border border-blue-500 hover:border-red-500 shadow-lg shadow-blue-600/20"
                 title="Close game (Esc)"
               >
                 <X className="w-4 h-4 stroke-[3]" />
-              </button>
+              </motion.button>
 
             </div>
 
           </div>
         )}
+
 
         {/* Game Canvas Container: Occupies full screen in fullscreen */}
         <div 
@@ -329,21 +347,21 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
           {/* Loading Screen Overlay */}
           {isLoading && !hasError && (
-            <div className="absolute inset-0 bg-[var(--bg-navy)]/90 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-10 select-none animate-in fade-in duration-200">
+            <div className="absolute inset-0 bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-10 select-none animate-in fade-in duration-200">
               <div className="relative mb-4">
-                <div className="w-14 h-14 rounded-2xl bg-[var(--vibrant-cyan)]/20 border border-[var(--vibrant-cyan)]/40 flex items-center justify-center text-[var(--vibrant-cyan)] shadow-xl shadow-[var(--vibrant-cyan)]/20 animate-pulse">
-                  <Zap className="w-7 h-7 fill-[var(--vibrant-cyan)]" />
+                <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-900/40 border border-blue-100 dark:border-blue-800 flex items-center justify-center text-blue-600 dark:text-blue-400 shadow-xl shadow-blue-600/10 animate-pulse">
+                  <Zap className="w-7 h-7 fill-current" />
                 </div>
               </div>
-              <h4 className="text-white font-extrabold text-sm sm:text-base font-heading">
+              <h4 className="text-slate-900 dark:text-white font-extrabold text-sm sm:text-base font-heading">
                 Starting Unblocked Stream...
               </h4>
-              <p className="text-zinc-400 text-xs mt-1 max-w-xs font-mono">
-                Optimized for school Chromebooks & restrictive Wi-Fi
+              <p className="text-slate-400 dark:text-slate-400 text-xs mt-1 max-w-xs font-bold uppercase tracking-widest">
+                Optimized for school networks
               </p>
               <button
                 onClick={() => setIsLoading(false)}
-                className="mt-4 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-zinc-300 hover:text-white text-[11px] font-bold transition-all cursor-pointer"
+                className="mt-6 px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-[11px] font-black uppercase tracking-widest transition-all cursor-pointer border border-slate-100 dark:border-slate-700"
               >
                 Skip / Play Now
               </button>
@@ -380,7 +398,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
           {/* Fallback */}
           {hasError && (
-            <div className="absolute inset-0 bg-[var(--bg-navy)] flex flex-col items-center justify-center p-6 text-center z-20 space-y-4">
+            <div className="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center p-6 text-center z-20 space-y-4">
               <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400">
                 <AlertCircle className="w-6 h-6" />
               </div>
@@ -388,21 +406,21 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 <h4 className="text-base font-bold text-white font-heading">
                   Failed to Load Game Stream
                 </h4>
-                <p className="text-xs text-zinc-400 mt-1 max-w-sm">
+                <p className="text-xs text-slate-400 mt-1 max-w-sm">
                   The upstream game server may be blocking direct embedding. Try opening in a Stealth Window or reload.
                 </p>
               </div>
               <div className="flex items-center gap-3 pt-2">
                 <button
                   onClick={reloadGame}
-                  className="px-4 py-2 bg-[var(--bg-navy)] hover:bg-[var(--bg-navy)] text-white text-xs font-bold rounded-xl border border-[var(--bg-navy)] transition-all cursor-pointer"
+                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl border border-slate-700 transition-all cursor-pointer"
                 >
                   Try Again
                 </button>
                 {playableUrl && (
                   <button
                     onClick={() => launchAboutBlank(playableUrl, game.name)}
-                    className="px-4 py-2 bg-[var(--vibrant-cyan)] hover:bg-[var(--bg-navy)] text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-lg shadow-[var(--vibrant-cyan)]/20"
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-lg shadow-blue-600/20"
                   >
                     Open Stealth Window
                   </button>
