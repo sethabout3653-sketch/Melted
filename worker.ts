@@ -1,5 +1,4 @@
 import { Hono } from 'hono';
-import { searchOfficialCatalog, ALL_OFFICIAL_ARTISTS, ALL_OFFICIAL_ALBUMS, ALL_OFFICIAL_TRACKS } from './src/data/musicCatalog';
 
 const app = new Hono();
 
@@ -45,127 +44,40 @@ app.get('/api/giphy/search', async (c) => {
   }
 });
 
-// Tidal Integration
-const TIDAL_CLIENT_ID = 'txNoH4kkV41MfH25';
-const TIDAL_CLIENT_SECRET = 'dQjy0MinCEvxi1O4UmxvxWnDjt4cgHBPw8ll6nYBk98=';
-let cachedTidalToken: { token: string; exp: number } | null = null;
-
-async function getTidalToken(): Promise<string | null> {
-  if (cachedTidalToken && Date.now() < cachedTidalToken.exp) {
-    return cachedTidalToken.token;
-  }
-  try {
-    const res = await fetch('https://auth.tidal.com/v1/oauth2/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-        Authorization: 'Basic ' + btoa(`${TIDAL_CLIENT_ID}:${TIDAL_CLIENT_SECRET}`),
-      },
-      body: new URLSearchParams({
-        client_id: TIDAL_CLIENT_ID,
-        client_secret: TIDAL_CLIENT_SECRET,
-        grant_type: 'client_credentials',
-      }),
-    });
-    if (!res.ok) return null;
-    const data: any = await res.json();
-    if (data.access_token) {
-      cachedTidalToken = {
-        token: data.access_token,
-        exp: Date.now() + (data.expires_in || 3600) * 1000 - 60000,
-      };
-      return cachedTidalToken.token;
-    }
-  } catch (err) {
-    console.warn('[Tidal] Token fetch failed:', err);
-  }
-  return null;
-}
-
 // Music API Routes
 app.get('/api/music/search', async (c) => {
   const query = c.req.query('q') || '';
   const limit = Math.min(parseInt(c.req.query('limit') || '30', 10), 50);
 
+  if (!query.trim()) {
+    return c.json({ success: true, count: 0, artists: [], albums: [], tracks: [] });
+  }
+
   try {
-    let tracks: any[] = [];
-    let artists: any[] = [];
-    let albums: any[] = [];
-
-    const lowerQ = query.toLowerCase().trim();
-
-    // 1. Official catalog
-    const officialMatches = searchOfficialCatalog(query);
-    artists.push(...officialMatches.artists);
-    albums.push(...officialMatches.albums);
-    tracks.push(...officialMatches.tracks);
-
-    // 2. Tidal
-    const tidalToken = await getTidalToken();
-    if (tidalToken && lowerQ.length > 0) {
-      const tidalRes = await fetch(`https://api.tidal.com/v1/search?query=${encodeURIComponent(query)}&limit=${Math.min(limit, 30)}&countryCode=US`, {
-        headers: { Authorization: `Bearer ${tidalToken}` },
-      });
-
-      if (tidalRes.ok) {
-        const tData: any = await tidalRes.json();
-        if (tData.artists?.items) {
-           artists.push(...tData.artists.items.map((a: any) => ({
-               id: `tidal-artist-${a.id}`,
-               name: a.name || 'Unknown Artist',
-               avatar: a.picture ? `https://resources.tidal.com/images/${a.picture.replace(/-/g, '/')}/640x640.jpg` : '',
-               popularTracks: [],
-               albums: []
-           })));
-        }
-        if (tData.albums?.items) {
-           albums.push(...tData.albums.items.map((a: any) => ({
-               id: `tidal-album-${a.id}`,
-               title: a.title || 'Unknown Album',
-               artist: a.artist?.name || 'Unknown Artist',
-               artwork: a.cover ? `https://resources.tidal.com/images/${a.cover.replace(/-/g, '/')}/640x640.jpg` : '',
-               year: a.releaseDate ? a.releaseDate.split('-')[0] : '',
-               tracksCount: a.numberOfTracks || 0,
-               totalDuration: '',
-               tracks: []
-           })));
-        }
-        if (tData.tracks?.items) {
-           tracks.push(...tData.tracks.items.map((t: any) => ({
-               id: `tidal-track-${t.id}`,
-               title: t.title || 'Unknown Track',
-               artist: t.artist?.name || 'Unknown Artist',
-               album: t.album?.title || 'Unknown Album',
-               artwork: t.album?.cover ? `https://resources.tidal.com/images/${t.album.cover.replace(/-/g, '/')}/640x640.jpg` : '',
-               duration: t.duration ? Math.floor(t.duration / 60) + ':' + (t.duration % 60).toString().padStart(2, '0') : '0:00',
-               rawDuration: t.duration || 0,
-               previewUrl: t.url || '',
-               streamUrl: `/api/music/stream?url=${encodeURIComponent(t.url || '')}`,
-               isFullLength: true
-           })));
-        }
-      }
+    const itunesRes = await fetch(`https://itunes.apple.com/search?term=${encodeURIComponent(query)}&entity=song&limit=${limit}`);
+    if (!itunesRes.ok) {
+      return c.json({ success: true, count: 0, artists: [], albums: [], tracks: [] });
     }
-
-    if (tracks.length < 5) {
-      tracks = [...tracks, ...ALL_OFFICIAL_TRACKS.slice(0, 30)];
-    }
-
-    tracks = tracks.filter((t) => t.title && (t.previewUrl || t.streamUrl));
-    const seenTracks = new Set<string>();
-    tracks = tracks.filter((t) => {
-      const key = `${t.title.toLowerCase()}-${t.artist.toLowerCase()}`;
-      if (seenTracks.has(key)) return false;
-      seenTracks.add(key);
-      return true;
-    });
+    const data: any = await itunesRes.json();
+    const tracks = (data.results || []).map((t: any) => ({
+      id: `itunes-${t.trackId}`,
+      title: t.trackName || 'Unknown Track',
+      artist: t.artistName || 'Unknown Artist',
+      album: t.collectionName || 'Unknown Album',
+      artwork: (t.artworkUrl100 || '').replace('100x100bb', '600x600bb'),
+      duration: t.trackTimeMillis ? Math.floor(t.trackTimeMillis / 60000) + ':' + Math.floor((t.trackTimeMillis % 60000) / 1000).toString().padStart(2, '0') : '0:00',
+      rawDuration: Math.floor((t.trackTimeMillis || 0) / 1000),
+      previewUrl: t.previewUrl || '',
+      streamUrl: t.previewUrl || '',
+      isFullLength: false,
+    }));
 
     return c.json({
       success: true,
       count: tracks.length,
-      artists: artists.slice(0, 12),
-      albums: albums.slice(0, 15),
-      tracks: tracks.slice(0, 30),
+      artists: [],
+      albums: [],
+      tracks,
     });
   } catch (err: any) {
     return c.json({ success: false, error: 'Failed to search music', message: err?.message }, 500);
@@ -173,17 +85,11 @@ app.get('/api/music/search', async (c) => {
 });
 
 app.get('/api/music/artist/:id', (c) => {
-  const id = c.req.param('id');
-  const match = ALL_OFFICIAL_ARTISTS.find((a) => a.id === id || a.name.toLowerCase() === id.toLowerCase());
-  if (match) return c.json({ success: true, artist: match });
-  return c.json({ success: false, error: 'Artist not found' }, 404);
+  return c.json({ success: false, error: 'Artist catalog offline' }, 404);
 });
 
 app.get('/api/music/album/:id', (c) => {
-  const id = c.req.param('id');
-  const match = ALL_OFFICIAL_ALBUMS.find((al) => al.id === id || al.title.toLowerCase() === id.toLowerCase());
-  if (match) return c.json({ success: true, album: match });
-  return c.json({ success: false, error: 'Album not found' }, 404);
+  return c.json({ success: false, error: 'Album catalog offline' }, 404);
 });
 
 // Audio Stream Proxy
