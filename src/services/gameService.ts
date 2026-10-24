@@ -5,33 +5,93 @@ import fileMapData from '../data/gnMathFileMap.json';
 
 const fileMap = fileMapData as Record<string, string>;
 
-export const RAWGITHACK_BASE = 'https://raw.githack.com/gn-math/html/main';
-export const COVER_BASE = 'https://cdn.jsdelivr.net/gh/gn-math/covers@main';
+// ============================================================================
+// 1. GAME COVERS RESOLUTION SYSTEM (IMAGES ONLY)
+// ============================================================================
+export const COVER_BASE = 'https://raw.githubusercontent.com/gn-math/covers/main';
+export const COVER_PRIMARY_BASE = 'https://raw.githubusercontent.com/gn-math/covers/main';
+export const FALLBACK_COVER_BASE = 'https://cdn.statically.io/gh/gn-math/covers/main';
+export const COVER_PROXY_BASE = '/api/cover';
 
 export function resolveCoverUrl(rawCover?: string): string {
   if (!rawCover) return '';
-  const clean = rawCover.replace('{COVER_URL}/', '').replace('{COVER_URL}', '');
-  return `https://cdn.jsdelivr.net/gh/gn-math/covers@main/${clean}`;
+  if (rawCover.startsWith('http://') || rawCover.startsWith('https://')) {
+    if (rawCover.includes('covers@main') || rawCover.includes('/covers/')) {
+      const filename = rawCover.split('/').pop() || '';
+      return `${COVER_PRIMARY_BASE}/${filename}`;
+    }
+    return rawCover;
+  }
+  const clean = rawCover.replace('{COVER_URL}/', '').replace('{COVER_URL}', '').trim();
+  return `${COVER_PRIMARY_BASE}/${clean}`;
 }
 
 export function getDirectCoverUrl(rawCover?: string): string {
   if (!rawCover) return '';
-  return rawCover.replace('{COVER_URL}', COVER_BASE);
+  if (rawCover.startsWith('http://') || rawCover.startsWith('https://')) {
+    const filename = rawCover.split('/').pop() || '';
+    return `${FALLBACK_COVER_BASE}/${filename}`;
+  }
+  const clean = rawCover.replace('{COVER_URL}/', '').replace('{COVER_URL}', '').trim();
+  return `${FALLBACK_COVER_BASE}/${clean}`;
 }
 
-// Direct rawgithack game streaming URL with auto-mapped filename resolution
-export function resolveGameUrl(rawUrl: string): string {
+export function getProxyCoverUrl(rawCover?: string): string {
+  if (!rawCover) return '';
+  const clean = rawCover.replace('{COVER_URL}/', '').replace('{COVER_URL}', '').trim();
+  const filename = clean.startsWith('http') ? clean.split('/').pop() || '' : clean;
+  return `${COVER_PROXY_BASE}/${filename}`;
+}
+
+// ============================================================================
+// 2. GAME PLAYABLE URL RESOLUTION SYSTEM (HTML & IFRAME GAME STREAMS ONLY)
+// ============================================================================
+export const RAWGITHACK_BASE = 'https://raw.githack.com/gn-math/html/main';
+export const GAME_PROXY_BASE = '/api/raw';
+
+/**
+ * Resolves the canonical streaming URL for a game payload.
+ * Strictly decoupled from image covers.
+ */
+export function resolveGameUrl(rawUrl: string, gameId?: number): string {
   if (!rawUrl) return '';
   if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
     return rawUrl;
   }
-  let filename = rawUrl.replace('{HTML_URL}/', '').replace('{HTML_URL}', '').trim();
-  
-  // Look up in gnMathFileMap
-  const mapped = fileMap[filename] || fileMap[`${filename}.html`] || fileMap[filename.replace(/\.html$/, '')];
-  const finalFile = mapped || (filename.includes('.') ? filename : `${filename}.html`);
+  const clean = rawUrl.replace('{HTML_URL}/', '').replace('{HTML_URL}', '').trim();
+  const numPrefix = clean.match(/^\d+/)?.[0];
 
-  return `https://raw.githack.com/gn-math/html/main/${finalFile}`;
+  // 5-step fallback hierarchy against gnMathFileMap
+  const mapped =
+    fileMap[clean] ||
+    fileMap[clean.replace(/\.html$/, '')] ||
+    (gameId !== undefined && gameId !== null ? fileMap[String(gameId)] : null) ||
+    (numPrefix ? fileMap[numPrefix] : null);
+
+  const targetFile = mapped || (clean.includes('.') ? clean : `${clean}.html`);
+  return `${RAWGITHACK_BASE}/${targetFile}`;
+}
+
+/**
+ * Provides a local backend streaming proxy URL for the game payload,
+ * ensuring seamless gameplay even if upstream CDN or school firewalls block rawgithack.
+ */
+export function getProxyGameUrl(rawUrl: string, gameId?: number): string {
+  if (!rawUrl) return '';
+  if (rawUrl.startsWith('http://') || rawUrl.startsWith('https://')) {
+    return rawUrl;
+  }
+  const clean = rawUrl.replace('{HTML_URL}/', '').replace('{HTML_URL}', '').trim();
+  const numPrefix = clean.match(/^\d+/)?.[0];
+
+  const mapped =
+    fileMap[clean] ||
+    fileMap[clean.replace(/\.html$/, '')] ||
+    (gameId !== undefined && gameId !== null ? fileMap[String(gameId)] : null) ||
+    (numPrefix ? fileMap[numPrefix] : null);
+
+  const targetFile = mapped || (clean.includes('.') ? clean : `${clean}.html`);
+  return `${GAME_PROXY_BASE}/${targetFile}`;
 }
 
 export function getDirectRawGitHackUrl(rawUrl: string): string {
@@ -212,7 +272,9 @@ export function getAllGames(): GameItem[] {
     const category = detectCategory(game);
     const resolvedCover = resolveCoverUrl(game.cover);
     const fallbackCover = getDirectCoverUrl(game.cover);
-    const resolvedUrl = resolveGameUrl(game.url);
+    const localCover = getProxyCoverUrl(game.cover);
+    const resolvedUrl = resolveGameUrl(game.url, game.id);
+    const proxyUrl = getProxyGameUrl(game.url, game.id);
 
     return {
       ...game,
@@ -220,8 +282,9 @@ export function getAllGames(): GameItem[] {
       category,
       resolvedCover,
       fallbackCover,
-      localCover: resolvedCover,
+      localCover,
       resolvedUrl,
+      proxyUrl,
     };
   });
 }

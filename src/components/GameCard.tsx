@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Play, Heart, ExternalLink, Gamepad2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { GameItem } from '../types/game';
@@ -23,13 +23,24 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
   const [imageError, setImageError] = useState(false);
   const [triedFallback, setTriedFallback] = useState(false);
 
-  const initialCover = game.localCover || game.resolvedCover || game.cover || '';
-  const [currentCover, setCurrentCover] = useState<string>(initialCover);
+  const primaryCover = game.resolvedCover || game.cover || '';
+  const [currentCover, setCurrentCover] = useState<string>(primaryCover);
+  const [fallbackAttempt, setFallbackAttempt] = useState<number>(0);
+
+  useEffect(() => {
+    setImageLoaded(false);
+    setImageError(false);
+    setFallbackAttempt(0);
+    setCurrentCover(primaryCover);
+  }, [game.id, primaryCover]);
 
   const handleImageError = () => {
-    if (!triedFallback && game.fallbackCover && game.fallbackCover !== currentCover) {
-      setTriedFallback(true);
+    if (fallbackAttempt === 0 && game.fallbackCover && game.fallbackCover !== currentCover) {
+      setFallbackAttempt(1);
       setCurrentCover(game.fallbackCover);
+    } else if (fallbackAttempt <= 1 && game.localCover && game.localCover !== currentCover) {
+      setFallbackAttempt(2);
+      setCurrentCover(game.localCover);
     } else {
       setImageError(true);
     }

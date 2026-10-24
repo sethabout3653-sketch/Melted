@@ -9,7 +9,8 @@ import {
   Gamepad2, 
   MessageSquare,
   Sun,
-  Moon
+  Moon,
+  Flame
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CloakPreset } from '../hooks/useCloak';
@@ -35,6 +36,8 @@ interface NavbarProps {
   isConnected?: boolean;
   theme?: 'light' | 'dark';
   onToggleTheme?: () => void;
+  onOpenFirebase?: () => void;
+  firebaseUser?: any;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -54,6 +57,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   isConnected = false,
   theme = 'light',
   onToggleTheme,
+  onOpenFirebase,
+  firebaseUser,
 }) => {
   const [isCloakOpen, setIsCloakOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -164,6 +169,28 @@ export const Navbar: React.FC<NavbarProps> = ({
                 title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
               >
                 {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
+              </button>
+            )}
+
+            {/* Firebase Cloud Engine Button */}
+            {onOpenFirebase && (
+              <button
+                type="button"
+                onClick={onOpenFirebase}
+                className={`p-2.5 rounded-xl transition-all cursor-pointer border flex items-center gap-1.5 ${
+                  firebaseUser 
+                    ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800 shadow-sm' 
+                    : 'text-slate-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 border-transparent hover:border-amber-100 dark:hover:border-amber-800'
+                }`}
+                title={firebaseUser ? `Firebase: ${firebaseUser.displayName || firebaseUser.email || 'Connected'}` : "Firebase Cloud Sync"}
+              >
+                <Flame className={`w-5 h-5 ${firebaseUser ? 'fill-current text-amber-500' : ''}`} />
+                <span className="hidden xl:inline text-xs font-bold">
+                  {firebaseUser ? 'Cloud' : 'Firebase'}
+                </span>
+                {firebaseUser && (
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                )}
               </button>
             )}
           </div>

@@ -38,5 +38,19 @@ service cloud.firestore {
         && request.resource.data.score is number && request.resource.data.score >= 0;
       allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
+
+    match /userFavorites/{userId} {
+      allow get: if isSignedIn() && userId == request.auth.uid;
+      allow create, update: if isSignedIn()
+        && userId == request.auth.uid
+        && isValidId(userId)
+        && request.resource.data.keys().hasAll(['id', 'userId', 'favoriteGameIds', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['id', 'userId', 'favoriteGameIds', 'updatedAt'])
+        && request.resource.data.id == userId
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.favoriteGameIds is list
+        && request.resource.data.favoriteGameIds.size() <= 1000;
+      allow delete: if isSignedIn() && userId == request.auth.uid;
+    }
   }
 }

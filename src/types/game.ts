@@ -28,7 +28,10 @@ export type GameCategory =
 export interface GameItem extends RawGame {
   category: GameCategory;
   resolvedCover: string;
+  fallbackCover: string;
+  localCover: string;
   resolvedUrl: string;
+  proxyUrl?: string;
 }
 
 export interface TabCloakPreset {

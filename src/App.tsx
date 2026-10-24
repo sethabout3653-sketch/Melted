@@ -8,9 +8,11 @@ import { GamePlayer } from './components/GamePlayer';
 import { ChatView } from './components/ChatView';
 import { FrostedLoadingScreen } from './components/FrostedLoadingScreen';
 import { InAppNotificationToast } from './components/InAppNotificationToast';
+import { FirebaseModal } from './components/FirebaseModal';
 import { getAllGames, resolveGameUrl } from './services/gameService';
 import { useCloak, launchAboutBlank } from './hooks/useCloak';
 import { useGlobalChat } from './hooks/useGlobalChat';
+import { useFirebaseAuth } from './hooks/useFirebaseAuth';
 import { useDeviceAdaptation } from './hooks/useDeviceAdaptation';
 import { DeviceAdaptationBar } from './components/DeviceAdaptationBar';
 import { GameItem, GameCategory } from './types/game';
@@ -37,6 +39,15 @@ export default function App() {
   const [favorites, setFavorites] = useState<number[]>(() => getFavorites());
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState(false);
+
+  // Reactive Firebase Authentication & Firestore Cloud Sync
+  const firebaseAuth = useFirebaseAuth(favorites, (merged) => {
+    setFavorites(merged);
+    try {
+      localStorage.setItem('frosted_favorites', JSON.stringify(merged));
+    } catch {}
+  });
 
   // Theme state: light by default
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -130,6 +141,7 @@ export default function App() {
   const handleToggleFavorite = (id: number) => {
     const updated = toggleFavoriteStorage(id);
     setFavorites(updated);
+    firebaseAuth.syncToCloud(updated);
   };
 
   const handlePlayGame = (game: GameItem) => {
@@ -157,7 +169,7 @@ export default function App() {
   };
 
   const handleAboutBlank = (game: GameItem) => {
-    const url = resolveGameUrl(game.url);
+    const url = game.resolvedUrl || resolveGameUrl(game.url, game.id);
     launchAboutBlank(url, game.name);
   };
 
@@ -247,6 +259,8 @@ export default function App() {
         isConnected={globalChat.isConnected}
         theme={theme}
         onToggleTheme={toggleTheme}
+        onOpenFirebase={() => setIsFirebaseModalOpen(true)}
+        firebaseUser={firebaseAuth.user}
       />
 
       {/* Main Content Scrollable Area with Smooth Transitions */}
@@ -500,6 +514,25 @@ export default function App() {
         onOpenChat={() => {
           setCurrentTab('chat');
         }}
+      />
+
+      {/* Firebase Cloud Engine & Auth Modal */}
+      <FirebaseModal
+        isOpen={isFirebaseModalOpen}
+        onClose={() => setIsFirebaseModalOpen(false)}
+        user={firebaseAuth.user}
+        authLoading={firebaseAuth.authLoading}
+        onLogin={firebaseAuth.handleLogin}
+        onLogout={firebaseAuth.handleLogout}
+        projectId={firebaseAuth.projectId}
+        databaseId={firebaseAuth.databaseId}
+        isSyncing={firebaseAuth.isSyncing}
+        lastSyncedTime={firebaseAuth.lastSyncedTime}
+        favoritesCount={favorites.length}
+        pingLatency={firebaseAuth.pingLatency}
+        pingStatus={firebaseAuth.pingStatus}
+        onRunDiagnostics={firebaseAuth.runDiagnostics}
+        authError={firebaseAuth.authError}
       />
 
       {/* Persistent Global Voice HUD when browsing games while connected to Voice */}

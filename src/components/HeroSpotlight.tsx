@@ -100,12 +100,15 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
               onClick={() => onPlay(activeGame)}
             >
               <img
-                src={activeGame.localCover || activeGame.resolvedCover || activeGame.cover || undefined}
+                src={activeGame.resolvedCover || activeGame.fallbackCover || activeGame.localCover || undefined}
                 alt={activeGame.name}
                 referrerPolicy="no-referrer"
                 onError={(e) => {
-                  if (activeGame.fallbackCover && e.currentTarget.src !== activeGame.fallbackCover) {
-                    e.currentTarget.src = activeGame.fallbackCover;
+                  const target = e.currentTarget;
+                  if (activeGame.fallbackCover && target.src !== activeGame.fallbackCover) {
+                    target.src = activeGame.fallbackCover;
+                  } else if (activeGame.localCover && target.src !== activeGame.localCover) {
+                    target.src = activeGame.localCover;
                   }
                 }}
                 className="w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-110"

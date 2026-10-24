@@ -24,6 +24,38 @@ app.get('/api/health', (c) => {
 
 app.get('/ping', (c) => c.text('pong'));
 
+// Game Cover Image Proxy
+app.get('/api/cover/:path{.*}', async (c) => {
+  const coverPath = c.req.param('path');
+  if (!coverPath) {
+    return c.text('Invalid cover path', 400);
+  }
+
+  const primaryUrl = `https://raw.githubusercontent.com/gn-math/covers/main/${coverPath}`;
+  const fallbackUrl = `https://cdn.statically.io/gh/gn-math/covers/main/${coverPath}`;
+
+  try {
+    let res = await fetch(primaryUrl);
+    if (!res.ok) {
+      res = await fetch(fallbackUrl);
+    }
+    if (!res.ok) {
+      return c.text('Cover not found', 404);
+    }
+
+    return new Response(res.body, {
+      status: 200,
+      headers: {
+        'Content-Type': res.headers.get('content-type') || 'image/png',
+        'Cache-Control': 'public, max-age=86400',
+        'Access-Control-Allow-Origin': '*',
+      },
+    });
+  } catch (err: any) {
+    return c.text('Error fetching cover', 500);
+  }
+});
+
 // Giphy Search & Trending API Proxy
 app.get('/api/giphy/search', async (c) => {
   const query = c.req.query('q') || '';

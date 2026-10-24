@@ -26,6 +26,18 @@
         "createdAt": { "type": "string" }
       },
       "required": ["id", "gameId", "userId", "userName", "score", "createdAt"]
+    },
+    "UserFavorite": {
+      "title": "UserFavorite",
+      "description": "User cloud synced favorites entity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "favoriteGameIds": { "type": "array" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "favoriteGameIds", "updatedAt"]
     }
   },
   "firestore": {
@@ -36,6 +48,10 @@
     "/highScores/{scoreId}": {
       "schema": { "$ref": "#/entities/HighScore" },
       "description": "Game high scores"
+    },
+    "/userFavorites/{userId}": {
+      "schema": { "$ref": "#/entities/UserFavorite" },
+      "description": "User cloud synced favorites"
     }
   }
 }

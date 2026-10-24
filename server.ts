@@ -138,14 +138,25 @@ app.get('/api/cover/:path(*)', async (req, res) => {
     return res.status(400).send('Invalid cover path');
   }
 
-  const coverCdnUrl = `https://cdn.jsdelivr.net/gh/gn-math/covers@main/${coverPath}`;
+  const primaryUrl = `https://raw.githubusercontent.com/gn-math/covers/main/${coverPath}`;
+  const fallbackUrl = `https://cdn.statically.io/gh/gn-math/covers/main/${coverPath}`;
+
   try {
-    const response = await fetch(coverCdnUrl, {
+    let response = await fetch(primaryUrl, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
       },
       signal: AbortSignal.timeout(6000),
     });
+
+    if (!response.ok) {
+      response = await fetch(fallbackUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        },
+        signal: AbortSignal.timeout(6000),
+      });
+    }
 
     if (!response.ok) {
       return res.status(response.status).send('Cover image not found');

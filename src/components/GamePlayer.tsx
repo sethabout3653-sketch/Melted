@@ -145,7 +145,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     setIsLoading(true);
     setHasError(false);
 
-    const directUrl = game.resolvedUrl || (game.url ? resolveGameUrl(game.url) : '');
+    const directUrl = game.resolvedUrl || (game.url ? resolveGameUrl(game.url, game.id) : '');
     if (directUrl) {
       setPlayableUrl(directUrl);
     } else {
@@ -181,7 +181,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const reloadGame = () => {
     setIsLoading(true);
     setHasError(false);
-    const directUrl = game.resolvedUrl || (game.url ? resolveGameUrl(game.url) : '');
+    const directUrl = game.resolvedUrl || (game.url ? resolveGameUrl(game.url, game.id) : '');
     if (directUrl) {
       setPlayableUrl(directUrl);
       if (iframeRef.current) {
@@ -220,6 +220,11 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   src={game.localCover || game.resolvedCover || game.cover || game.fallbackCover || ''} 
                   alt={game.name} 
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    if (game.fallbackCover && e.currentTarget.src !== game.fallbackCover) {
+                      e.currentTarget.src = game.fallbackCover;
+                    }
+                  }}
                   className="w-full h-full object-cover" 
                 />
               </div>
