@@ -1,5 +1,5 @@
 {
-  "name": "react-example",
+  "name": "frosted",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -13,7 +13,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "deploy": "npm run build && wrangler deploy",
+    "deploy": "vite build",
     "deploy:worker": "npm run build && wrangler deploy",
     "deploy:pages": "npm run build && wrangler pages deploy dist",
     "worker:dev": "wrangler dev",
