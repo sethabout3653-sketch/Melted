@@ -1,6 +1,6 @@
-name = "frosted-arcade"
+name = "melted"
 main = "worker.ts"
-compatibility_date = "2024-01-01"
+compatibility_date = "2024-09-23"
 
 [assets]
 directory = "./dist"

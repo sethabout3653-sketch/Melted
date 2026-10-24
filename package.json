@@ -13,9 +13,11 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "deploy": "wrangler pages deploy dist",
+    "deploy": "npm run build && wrangler deploy",
+    "deploy:worker": "npm run build && wrangler deploy",
+    "deploy:pages": "npm run build && wrangler pages deploy dist",
     "worker:dev": "wrangler dev",
-    "worker:deploy": "wrangler deploy"
+    "worker:deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {
     "@giphy/js-fetch-api": "^5.8.0",
