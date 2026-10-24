@@ -229,21 +229,21 @@ app.get('/api/music/status', async (c) => {
 // Game Proxy
 app.get('/api/raw/:filename', async (c) => {
   let filename = c.req.param('filename');
-  if (!filename.endsWith('.html')) filename = `${filename}.html`;
+  if (!filename.includes('.')) filename = `${filename}.html`;
 
-  const rawgithackUrl = `https://raw.githack.com/freebuisness/html/main/${filename}`;
-  const githubRawUrl = `https://raw.githubusercontent.com/freebuisness/html/main/${filename}`;
+  const rawgithackUrl = `https://raw.githack.com/gn-math/html/main/${filename}`;
+  const githubRawUrl = `https://raw.githubusercontent.com/gn-math/html/main/${filename}`;
 
   try {
     let response = await fetch(rawgithackUrl, {
       headers: { 'User-Agent': 'Mozilla/5.0' },
     });
     if (!response.ok) response = await fetch(githubRawUrl);
-    if (!response.ok) return c.text('Failed to fetch game package', response.status);
+    if (!response.ok) return c.text('Failed to fetch game package', response.status as any);
 
     let html = await response.text();
-    const desktopSpoof = `<script>(function(){/* Desktop Spoof Script */})()</script>`;
-    html = html.replace('<head>', `<head>${desktopSpoof}`);
+    const baseTag = `<base href="https://raw.githack.com/gn-math/html/main/">`;
+    html = html.includes('<head>') ? html.replace('<head>', `<head>${baseTag}`) : `${baseTag}${html}`;
 
     return new Response(html, {
       headers: {
