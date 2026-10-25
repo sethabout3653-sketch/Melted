@@ -8,7 +8,9 @@ import {
   loadFavoritesFromFirestore,
   testConnection,
   firebaseConfig,
-  firestoreDatabaseId
+  firestoreDatabaseId,
+  getCurrentHostname,
+  isVercelDomain
 } from '../services/firebase';
 
 export function useFirebaseAuth(
@@ -22,6 +24,12 @@ export function useFirebaseAuth(
   const [pingLatency, setPingLatency] = useState<number | null>(null);
   const [pingStatus, setPingStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
   const [authError, setAuthError] = useState<string | null>(null);
+  const [authErrorCode, setAuthErrorCode] = useState<string | null>(null);
+  const [isUnauthorizedDomain, setIsUnauthorizedDomain] = useState(false);
+
+  const currentHostname = getCurrentHostname();
+  const isVercel = isVercelDomain(currentHostname);
+  const firebaseConsoleUrl = `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`;
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -29,6 +37,8 @@ export function useFirebaseAuth(
       setAuthLoading(false);
 
       if (currentUser) {
+        setIsUnauthorizedDomain(false);
+        setAuthError(null);
         // Load cloud favorites upon login
         try {
           setIsSyncing(true);
@@ -51,7 +61,7 @@ export function useFirebaseAuth(
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [localFavorites, onMergeFavorites]);
 
   // When local favorites change, push to cloud if logged in
   const syncToCloud = useCallback(async (favs: number[]) => {
@@ -69,10 +79,21 @@ export function useFirebaseAuth(
 
   const handleLogin = async () => {
     setAuthError(null);
+    setAuthErrorCode(null);
+    setIsUnauthorizedDomain(false);
     try {
       await signInWithGoogle();
     } catch (err: any) {
-      setAuthError(err?.message || 'Failed to sign in with Google');
+      const code = err?.code || '';
+      setAuthErrorCode(code);
+      if (code === 'auth/unauthorized-domain' || err?.message?.includes('unauthorized-domain')) {
+        setIsUnauthorizedDomain(true);
+        setAuthError(
+          `Domain "${currentHostname}" is not authorized for Google Sign-In in Firebase. Add it under Firebase Console > Authentication > Settings > Authorized domains.`
+        );
+      } else {
+        setAuthError(err?.message || 'Failed to sign in with Google');
+      }
     }
   };
 
@@ -91,8 +112,12 @@ export function useFirebaseAuth(
       const res = await testConnection();
       setPingLatency(res.latencyMs);
       setPingStatus(res.success ? 'success' : 'error');
-    } catch {
+      if (!res.success && res.error) {
+        setAuthError(`Connection test: ${res.error}`);
+      }
+    } catch (err: any) {
       setPingStatus('error');
+      setAuthError(err?.message || 'Connection test failed');
     }
   };
 
@@ -104,6 +129,12 @@ export function useFirebaseAuth(
     pingLatency,
     pingStatus,
     authError,
+    authErrorCode,
+    isUnauthorizedDomain,
+    currentHostname,
+    isVercel,
+    firebaseConsoleUrl,
+    firebaseConfig,
     handleLogin,
     handleLogout,
     runDiagnostics,

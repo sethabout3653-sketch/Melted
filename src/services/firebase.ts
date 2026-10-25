@@ -2,6 +2,7 @@ import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, User } from 'firebase/auth';
 import { 
   getFirestore, 
+  initializeFirestore,
   doc, 
   getDoc, 
   setDoc, 
@@ -15,23 +16,62 @@ import {
 } from 'firebase/firestore';
 import localConfig from '../../firebase-applet-config.json';
 
-// Support both local config file and Vite environment variables
-export const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || localConfig.apiKey,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || localConfig.authDomain,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || localConfig.projectId,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || localConfig.storageBucket,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || localConfig.messagingSenderId,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || localConfig.appId,
-  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || localConfig.measurementId,
+// Embedded fallback credentials to guarantee zero-crash execution on Vercel or preview deploys
+export const DEFAULT_FIREBASE_CONFIG = {
+  projectId: 'analog-cathode-kfs6l',
+  appId: '1:630735569759:web:09b818a7611bf40c41acea',
+  apiKey: 'AIzaSyCkOwYbegyyClXTd2WTgv60sGPp8o6xj4E',
+  authDomain: 'analog-cathode-kfs6l.firebaseapp.com',
+  firestoreDatabaseId: 'ai-studio-melted-101d2f67-26ab-49fa-80db-faf0be512233',
+  storageBucket: 'analog-cathode-kfs6l.firebasestorage.app',
+  messagingSenderId: '630735569759',
+  measurementId: '',
 };
 
-export const firestoreDatabaseId = import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || localConfig.firestoreDatabaseId || '(default)';
+// Priority: Vite env vars -> firebase-applet-config.json -> embedded fallback
+export const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || localConfig?.apiKey || DEFAULT_FIREBASE_CONFIG.apiKey,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || localConfig?.authDomain || DEFAULT_FIREBASE_CONFIG.authDomain,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || localConfig?.projectId || DEFAULT_FIREBASE_CONFIG.projectId,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || localConfig?.storageBucket || DEFAULT_FIREBASE_CONFIG.storageBucket,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || localConfig?.messagingSenderId || DEFAULT_FIREBASE_CONFIG.messagingSenderId,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || localConfig?.appId || DEFAULT_FIREBASE_CONFIG.appId,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || localConfig?.measurementId || DEFAULT_FIREBASE_CONFIG.measurementId,
+};
+
+export const firestoreDatabaseId = 
+  import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || 
+  localConfig?.firestoreDatabaseId || 
+  DEFAULT_FIREBASE_CONFIG.firestoreDatabaseId;
 
 const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-export const db = getFirestore(app, firestoreDatabaseId);
+
+// Initialize Firestore with auto-detect long polling so that Firestore connects reliably
+// across Vercel serverless previews, corporate firewalls, and restricted web sockets
+let firestoreDb;
+try {
+  firestoreDb = initializeFirestore(app, {
+    experimentalAutoDetectLongPolling: true,
+  }, firestoreDatabaseId);
+} catch {
+  firestoreDb = getFirestore(app, firestoreDatabaseId);
+}
+
+export const db = firestoreDb;
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+
+export function getCurrentHostname(): string {
+  if (typeof window !== 'undefined' && window.location) {
+    return window.location.hostname;
+  }
+  return '';
+}
+
+export function isVercelDomain(hostname?: string): boolean {
+  const host = hostname || getCurrentHostname();
+  return host.includes('.vercel.app');
+}
 
 export enum OperationType {
   CREATE = 'create',
@@ -80,7 +120,16 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   throw new Error(JSON.stringify(errInfo));
 }
 
-export async function testConnection(): Promise<{ success: boolean; latencyMs: number; error?: string }> {
+/**
+ * Validates connection to Firestore. Required check when the application boots.
+ */
+export async function testConnection(): Promise<{ 
+  success: boolean; 
+  latencyMs: number; 
+  error?: string;
+  code?: string;
+  isOffline?: boolean;
+}> {
   const start = performance.now();
   try {
     await getDocFromServer(doc(db, 'test', 'connection'));
@@ -88,29 +137,75 @@ export async function testConnection(): Promise<{ success: boolean; latencyMs: n
     return { success: true, latencyMs: latency };
   } catch (error: any) {
     const latency = Math.round(performance.now() - start);
-    // Offline or normal document missing is still a successful server roundtrip
-    if (error?.code === 'not-found' || error?.message?.includes('not-found')) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const code = error?.code || '';
+
+    // If document is not found, or if rules permit/deny, that means server roundtrip succeeded!
+    if (code === 'not-found' || msg.includes('not-found')) {
       return { success: true, latencyMs: latency };
     }
-    if (error instanceof Error && error.message.includes('the client is offline')) {
-      console.error("Please check your Firebase configuration.");
-      return { success: false, latencyMs: latency, error: 'Client is offline. Check Firebase config.' };
+    if (code === 'permission-denied' || msg.includes('insufficient permissions')) {
+      return { success: true, latencyMs: latency };
     }
-    return { success: true, latencyMs: latency };
+
+    if (msg.includes('the client is offline')) {
+      console.error("Please check your Firebase configuration.");
+      return { 
+        success: false, 
+        latencyMs: latency, 
+        error: 'Client is offline. Check Firebase configuration and network connection.',
+        isOffline: true 
+      };
+    }
+
+    return { 
+      success: false, 
+      latencyMs: latency, 
+      error: msg,
+      code 
+    };
   }
 }
 
-// Initial boot connection check
+// Initial boot connection test
 testConnection().catch(() => {});
 
 /**
- * Sign in using Google OAuth popup
+ * Sign in using Google OAuth popup with actionable Vercel error detection
  */
 export async function signInWithGoogle(): Promise<User> {
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
   } catch (err: any) {
+    const errorCode = err?.code || '';
+    const currentHost = getCurrentHostname();
+
+    if (errorCode === 'auth/unauthorized-domain') {
+      const errorMsg = `Domain "${currentHost}" is not authorized in Firebase Console. Add "${currentHost}" to Authorized Domains in Firebase Console to allow Google Sign-in on Vercel.`;
+      console.error('Firebase Auth Unauthorized Domain:', errorMsg);
+      const customErr = new Error(errorMsg);
+      (customErr as any).code = 'auth/unauthorized-domain';
+      (customErr as any).domain = currentHost;
+      throw customErr;
+    }
+
+    if (errorCode === 'auth/popup-blocked') {
+      const errorMsg = 'Google Sign-in popup was blocked by your browser. Please allow popups for this site.';
+      console.error(errorMsg);
+      const customErr = new Error(errorMsg);
+      (customErr as any).code = 'auth/popup-blocked';
+      throw customErr;
+    }
+
+    if (errorCode === 'auth/network-request-failed') {
+      const errorMsg = 'Network connection failed while contacting Firebase Auth. Check your internet connection or ad blocker.';
+      console.error(errorMsg);
+      const customErr = new Error(errorMsg);
+      (customErr as any).code = 'auth/network-request-failed';
+      throw customErr;
+    }
+
     console.error('Firebase Google Sign-in error:', err);
     throw err;
   }

@@ -533,6 +533,11 @@ export default function App() {
         pingStatus={firebaseAuth.pingStatus}
         onRunDiagnostics={firebaseAuth.runDiagnostics}
         authError={firebaseAuth.authError}
+        isUnauthorizedDomain={firebaseAuth.isUnauthorizedDomain}
+        currentHostname={firebaseAuth.currentHostname}
+        isVercel={firebaseAuth.isVercel}
+        firebaseConsoleUrl={firebaseAuth.firebaseConsoleUrl}
+        firebaseConfig={firebaseAuth.firebaseConfig}
       />
 
       {/* Persistent Global Voice HUD when browsing games while connected to Voice */}

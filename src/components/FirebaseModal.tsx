@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useState, useEffect } from 'react';
+import { motion } from 'motion/react';
 import { 
   Flame, 
   X, 
@@ -11,10 +11,14 @@ import {
   RefreshCw, 
   LogIn, 
   LogOut, 
-  Key, 
   FileCode, 
   Activity,
-  Layers
+  Layers,
+  Globe,
+  ExternalLink,
+  Copy,
+  Check,
+  Server
 } from 'lucide-react';
 import { User } from 'firebase/auth';
 
@@ -34,6 +38,11 @@ interface FirebaseModalProps {
   pingStatus: 'idle' | 'testing' | 'success' | 'error';
   onRunDiagnostics: () => void;
   authError: string | null;
+  isUnauthorizedDomain?: boolean;
+  currentHostname?: string;
+  isVercel?: boolean;
+  firebaseConsoleUrl?: string;
+  firebaseConfig?: any;
 }
 
 export const FirebaseModal: React.FC<FirebaseModalProps> = ({
@@ -52,10 +61,46 @@ export const FirebaseModal: React.FC<FirebaseModalProps> = ({
   pingStatus,
   onRunDiagnostics,
   authError,
+  isUnauthorizedDomain = false,
+  currentHostname = '',
+  isVercel = false,
+  firebaseConsoleUrl = `https://console.firebase.google.com/project/${projectId}/authentication/settings`,
+  firebaseConfig,
 }) => {
-  const [activeTab, setActiveTab] = useState<'sync' | 'config'>('sync');
+  const [activeTab, setActiveTab] = useState<'sync' | 'vercel' | 'config'>('sync');
+  const [copiedDomain, setCopiedDomain] = useState(false);
+  const [copiedEnv, setCopiedEnv] = useState(false);
+
+  // If unauthorized domain is detected, automatically switch to Vercel tab to guide user
+  useEffect(() => {
+    if (isUnauthorizedDomain) {
+      setActiveTab('vercel');
+    }
+  }, [isUnauthorizedDomain]);
 
   if (!isOpen) return null;
+
+  const hostnameToAuthorize = currentHostname || (typeof window !== 'undefined' ? window.location.hostname : 'localhost');
+
+  const copyToClipboard = (text: string, type: 'domain' | 'env') => {
+    navigator.clipboard.writeText(text);
+    if (type === 'domain') {
+      setCopiedDomain(true);
+      setTimeout(() => setCopiedDomain(false), 2000);
+    } else {
+      setCopiedEnv(true);
+      setTimeout(() => setCopiedEnv(false), 2000);
+    }
+  };
+
+  const vercelEnvSnippet = `# Firebase Configuration for Vercel
+VITE_FIREBASE_API_KEY=${firebaseConfig?.apiKey || 'AIzaSyCkOwYbegyyClXTd2WTgv60sGPp8o6xj4E'}
+VITE_FIREBASE_AUTH_DOMAIN=${firebaseConfig?.authDomain || 'analog-cathode-kfs6l.firebaseapp.com'}
+VITE_FIREBASE_PROJECT_ID=${firebaseConfig?.projectId || 'analog-cathode-kfs6l'}
+VITE_FIREBASE_STORAGE_BUCKET=${firebaseConfig?.storageBucket || 'analog-cathode-kfs6l.firebasestorage.app'}
+VITE_FIREBASE_MESSAGING_SENDER_ID=${firebaseConfig?.messagingSenderId || '630735569759'}
+VITE_FIREBASE_APP_ID=${firebaseConfig?.appId || '1:630735569759:web:09b818a7611bf40c41acea'}
+VITE_FIREBASE_FIRESTORE_DATABASE_ID=${databaseId || 'ai-studio-melted-101d2f67-26ab-49fa-80db-faf0be512233'}`;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
@@ -78,11 +123,11 @@ export const FirebaseModal: React.FC<FirebaseModalProps> = ({
                 </h3>
                 <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  Active & Synced
+                  Online
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-0.5">
-                Multi-tenant Firestore persistence & Google OAuth
+                Vercel deployment resilient & multi-tenant Firestore
               </p>
             </div>
           </div>
@@ -96,10 +141,10 @@ export const FirebaseModal: React.FC<FirebaseModalProps> = ({
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex items-center gap-2 px-6 pt-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div className="flex items-center gap-2 px-6 pt-4 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-x-auto">
           <button
             onClick={() => setActiveTab('sync')}
-            className={`pb-3 px-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+            className={`pb-3 px-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'sync'
                 ? 'border-blue-600 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
@@ -107,9 +152,25 @@ export const FirebaseModal: React.FC<FirebaseModalProps> = ({
           >
             Cloud Account & Sync
           </button>
+
+          <button
+            onClick={() => setActiveTab('vercel')}
+            className={`pb-3 px-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === 'vercel'
+                ? 'border-blue-600 text-blue-600 dark:text-blue-400'
+                : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
+            }`}
+          >
+            <Globe className="w-3.5 h-3.5" />
+            <span>Vercel & Domain Setup</span>
+            {(isUnauthorizedDomain || isVercel) && (
+              <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
+            )}
+          </button>
+
           <button
             onClick={() => setActiveTab('config')}
-            className={`pb-3 px-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer ${
+            className={`pb-3 px-3 text-xs font-bold uppercase tracking-wider border-b-2 transition-all cursor-pointer whitespace-nowrap ${
               activeTab === 'config'
                 ? 'border-blue-600 text-blue-600 dark:text-blue-400'
                 : 'border-transparent text-slate-400 hover:text-slate-600 dark:hover:text-slate-200'
@@ -123,9 +184,31 @@ export const FirebaseModal: React.FC<FirebaseModalProps> = ({
         <div className="p-6 overflow-y-auto space-y-6 custom-scrollbar">
           
           {authError && (
-            <div className="p-4 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 text-xs flex items-center gap-3">
-              <AlertCircle className="w-5 h-5 shrink-0" />
-              <span>{authError}</span>
+            <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900 text-amber-700 dark:text-amber-300 text-xs flex flex-col gap-2">
+              <div className="flex items-center gap-2 font-bold">
+                <AlertCircle className="w-4 h-4 shrink-0 text-amber-500" />
+                <span>Authentication Notice</span>
+              </div>
+              <p className="pl-6 text-[11px] leading-relaxed">{authError}</p>
+              {isUnauthorizedDomain && (
+                <div className="pl-6 pt-1 flex items-center gap-2">
+                  <button
+                    onClick={() => setActiveTab('vercel')}
+                    className="px-3 py-1 rounded-lg bg-amber-600 hover:bg-amber-500 text-white font-bold text-[11px] transition-all cursor-pointer"
+                  >
+                    Open 30-Sec Vercel Fix
+                  </button>
+                  <a
+                    href={firebaseConsoleUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="px-3 py-1 rounded-lg bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-200 font-bold text-[11px] transition-all flex items-center gap-1"
+                  >
+                    <span>Open Firebase Console</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              )}
             </div>
           )}
 
@@ -185,7 +268,7 @@ export const FirebaseModal: React.FC<FirebaseModalProps> = ({
                   <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-1">
                     <div>
                       <p className="text-xs font-medium text-slate-600 dark:text-slate-300">
-                        Sign in with your Google account to sync your favorite games, custom high scores, and preferences across all devices.
+                        Sign in with Google to sync favorite games, preferences, and custom high scores across all devices and browsers.
                       </p>
                     </div>
 
@@ -263,14 +346,125 @@ export const FirebaseModal: React.FC<FirebaseModalProps> = ({
                     </span>
                   </div>
                   <div>
-                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Quota Tier</span>
-                    <span className="font-bold text-slate-800 dark:text-slate-200">
-                      Spark Enterprise (Free Forever)
+                    <span className="text-slate-400 block text-[10px] uppercase font-bold">Transport Layer</span>
+                    <span className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1">
+                      <Server className="w-3.5 h-3.5 text-blue-500" /> Auto-Detect Long Polling
                     </span>
                   </div>
                 </div>
               </div>
             </>
+          ) : activeTab === 'vercel' ? (
+            /* Vercel & Domain Authorization Tab */
+            <div className="space-y-6">
+              
+              {/* Detected Domain Card */}
+              <div className="p-5 rounded-2xl bg-blue-50/60 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-900/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                    <Globe className="w-4 h-4" /> Detected Active Domain
+                  </span>
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase bg-blue-100 dark:bg-blue-900/80 text-blue-700 dark:text-blue-300">
+                    {hostnameToAuthorize}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-xl border border-blue-100 dark:border-blue-950 font-mono text-xs text-slate-800 dark:text-slate-200">
+                  <span className="truncate font-bold">{hostnameToAuthorize}</span>
+                  <button
+                    onClick={() => copyToClipboard(hostnameToAuthorize, 'domain')}
+                    className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-sans text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shrink-0"
+                  >
+                    {copiedDomain ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                    <span>{copiedDomain ? 'Copied' : 'Copy Domain'}</span>
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Google OAuth blocks domains not added to Firebase's whitelist to prevent phishing. Once added, Google Sign-in and Firestore will connect instantly.
+                </p>
+              </div>
+
+              {/* 30-Second Fix Instructions */}
+              <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/80 space-y-4">
+                <div className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                  30-Second Fix to Connect on Vercel
+                </div>
+
+                <div className="space-y-3 text-xs">
+                  <div className="flex items-start gap-3">
+                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                      1
+                    </span>
+                    <div className="flex-1">
+                      <span className="font-bold text-slate-800 dark:text-slate-200">Copy your domain:</span>
+                      <p className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">
+                        Copy <code className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono text-[10px]">{hostnameToAuthorize}</code> or the wildcard domain <code className="px-1.5 py-0.5 rounded bg-slate-200 dark:bg-slate-700 font-mono text-[10px]">*.vercel.app</code>.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                      2
+                    </span>
+                    <div className="flex-1 space-y-1.5">
+                      <span className="font-bold text-slate-800 dark:text-slate-200">Open Firebase Console:</span>
+                      <div>
+                        <a
+                          href={firebaseConsoleUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all shadow-md shadow-blue-600/20"
+                        >
+                          <span>Open Firebase Auth Settings</span>
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <span className="w-5 h-5 rounded-full bg-blue-600 text-white font-bold text-[11px] flex items-center justify-center shrink-0 mt-0.5">
+                      3
+                    </span>
+                    <div className="flex-1">
+                      <span className="font-bold text-slate-800 dark:text-slate-200">Paste and Save:</span>
+                      <p className="text-slate-500 dark:text-slate-400 text-[11px] mt-0.5">
+                        Scroll down to <strong>Authorized domains</strong>, click <strong>Add domain</strong>, paste your domain, and click <strong>Add</strong>. That's it! No redeploy required.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Vercel Environment Variables Snippet */}
+              <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-700/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="text-xs font-black uppercase tracking-wider text-slate-900 dark:text-white flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-purple-500" />
+                    Vercel Environment Variables
+                  </div>
+                  <button
+                    onClick={() => copyToClipboard(vercelEnvSnippet, 'env')}
+                    className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 cursor-pointer"
+                  >
+                    {copiedEnv ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedEnv ? 'Copied All' : 'Copy All Vars'}</span>
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  Firebase config is already safely bundled into the build, but you can also configure these in Vercel Project Settings &gt; Environment Variables:
+                </p>
+
+                <pre className="p-3 bg-slate-900 text-slate-200 rounded-xl text-[10px] font-mono overflow-x-auto leading-relaxed border border-slate-800">
+                  {vercelEnvSnippet}
+                </pre>
+              </div>
+
+            </div>
           ) : (
             /* Installed Files Tab */
             <div className="space-y-4">
@@ -316,7 +510,7 @@ export const FirebaseModal: React.FC<FirebaseModalProps> = ({
                       /firestore.rules
                     </div>
                     <div className="text-[11px] text-slate-400">
-                      ABAC authorization rules with strict key allowlisting and payload size constraints.
+                      ABAC authorization rules with strict key allowlisting, test probe, and payload constraints.
                     </div>
                   </div>
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 shrink-0">
@@ -331,7 +525,7 @@ export const FirebaseModal: React.FC<FirebaseModalProps> = ({
                       /src/services/firebase.ts
                     </div>
                     <div className="text-[11px] text-slate-400">
-                      Client SDK initialization, Google Auth popup handler, and handleFirestoreError diagnoser.
+                      Auto-detect long polling, fallback embedded credentials, and Vercel error handling.
                     </div>
                   </div>
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800 shrink-0">
