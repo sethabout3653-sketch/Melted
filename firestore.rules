@@ -6,50 +6,65 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
     function isSignedIn() {
       return request.auth != null;
     }
 
+    // Health check and connection test probe
     match /test/{testId} {
       allow read: if true;
     }
 
+    // Real-time online presence and player list for Vercel & Web
+    match /presence/{userId} {
+      allow list, get: if true;
+      allow create, update: if isValidId(userId)
+        && request.resource.data.id == userId
+        && request.resource.data.username is string
+        && request.resource.data.username.size() > 0
+        && request.resource.data.username.size() <= 100;
+      allow delete: if isValidId(userId);
+    }
+
+    // Real-time WebRTC audio/video/screen share signaling messages
+    match /webrtcSignals/{signalId} {
+      allow list, get: if true;
+      allow create: if isValidId(signalId)
+        && request.resource.data.id == signalId
+        && request.resource.data.fromUserId is string
+        && request.resource.data.targetUserId is string
+        && request.resource.data.signal is string;
+      allow delete: if isValidId(signalId);
+    }
+
+    // Global and room chat messages
     match /messages/{messageId} {
-      allow list: if isSignedIn();
-      allow get: if isSignedIn();
-      allow create: if isSignedIn() 
-        && isValidId(messageId)
-        && request.resource.data.keys().hasAll(['id', 'text', 'userId', 'userName', 'createdAt'])
-        && request.resource.data.keys().hasOnly(['id', 'text', 'userId', 'userName', 'createdAt'])
+      allow list, get: if true;
+      allow create: if isValidId(messageId)
         && request.resource.data.id == messageId
-        && request.resource.data.userId == request.auth.uid
-        && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 1000
+        && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
         && request.resource.data.userName is string && request.resource.data.userName.size() <= 100;
       allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
+    // Game high scores
     match /highScores/{scoreId} {
       allow list: if true;
       allow get: if true;
-      allow create: if isSignedIn()
-        && isValidId(scoreId)
-        && request.resource.data.keys().hasAll(['id', 'gameId', 'userId', 'userName', 'score', 'createdAt'])
-        && request.resource.data.keys().hasOnly(['id', 'gameId', 'userId', 'userName', 'score', 'createdAt'])
+      allow create: if isValidId(scoreId)
         && request.resource.data.id == scoreId
-        && request.resource.data.userId == request.auth.uid
         && request.resource.data.score is number && request.resource.data.score >= 0;
       allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
+    // User cloud synced favorites
     match /userFavorites/{userId} {
       allow get: if isSignedIn() && userId == request.auth.uid;
       allow create, update: if isSignedIn()
         && userId == request.auth.uid
         && isValidId(userId)
-        && request.resource.data.keys().hasAll(['id', 'userId', 'favoriteGameIds', 'updatedAt'])
-        && request.resource.data.keys().hasOnly(['id', 'userId', 'favoriteGameIds', 'updatedAt'])
         && request.resource.data.id == userId
         && request.resource.data.userId == request.auth.uid
         && request.resource.data.favoriteGameIds is list

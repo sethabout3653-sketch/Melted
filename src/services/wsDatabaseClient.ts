@@ -1,5 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DbUser, DbMessage } from '../server/wsDatabase';
+import { 
+  publishPresence, 
+  removePresence, 
+  subscribePresence, 
+  sendCloudRtcSignal, 
+  subscribeCloudRtcSignals, 
+  sendCloudChatMessage, 
+  subscribeCloudMessages 
+} from './cloudSignaling';
 
 export interface RtcSignalPayload {
   fromUserId: string;
@@ -47,7 +56,7 @@ export function resolveWebSocketUrl(): string {
       return `${wsProto}//${cleanBackend}/ws-db`;
     }
 
-    // 4. If running on Cloudflare Pages static site without custom server, connect to Render backend
+    // 4. If running on Cloudflare Pages or Vercel static site without custom server, connect to Render backend if available
     if (typeof window !== 'undefined' && window.location?.hostname?.endsWith('.pages.dev')) {
       return 'wss://melted-arcade.onrender.com/ws-db';
     }
@@ -79,13 +88,16 @@ export function useWebSocketDatabase(currentUser: {
     } catch {}
     return [];
   });
-  const [isConnected, setIsConnected] = useState(false);
+  const [isWsConnected, setIsWsConnected] = useState(false);
+  const [isCloudConnected, setIsCloudConnected] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<any>(null);
   const pingIntervalRef = useRef<any>(null);
+  const presenceHeartbeatRef = useRef<any>(null);
   const outgoingQueueRef = useRef<string[]>([]);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
+  const processedRtcSignalsRef = useRef<Set<string>>(new Set());
 
   const currentUserRef = useRef(currentUser);
   currentUserRef.current = currentUser;
@@ -157,6 +169,7 @@ export function useWebSocketDatabase(currentUser: {
     } catch {}
   }, [messages]);
 
+  // WebSocket Heartbeat
   const startHeartbeat = useCallback(() => {
     if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
     pingIntervalRef.current = setInterval(() => {
@@ -175,6 +188,7 @@ export function useWebSocketDatabase(currentUser: {
     }
   }, []);
 
+  // Attempt local or configured WebSocket database connection
   const connect = useCallback(() => {
     if (wsRef.current && (wsRef.current.readyState === WebSocket.CONNECTING || wsRef.current.readyState === WebSocket.OPEN)) {
       return;
@@ -182,12 +196,11 @@ export function useWebSocketDatabase(currentUser: {
 
     try {
       const wsUrl = resolveWebSocketUrl();
-      console.log('[wsDatabaseClient] Connecting to WebSocket database at:', wsUrl);
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
       ws.onopen = () => {
-        setIsConnected(true);
+        setIsWsConnected(true);
         startHeartbeat();
 
         const u = currentUserRef.current;
@@ -229,21 +242,35 @@ export function useWebSocketDatabase(currentUser: {
           if (msg.type === 'PONG') return;
 
           if (msg.type === 'DB_INIT') {
-            if (Array.isArray(msg.tables?.users)) {
+            if (Array.isArray(msg.tables?.users) && msg.tables.users.length > 0) {
               setUsers(msg.tables.users);
             }
-            if (Array.isArray(msg.tables?.messages)) {
+            if (Array.isArray(msg.tables?.messages) && msg.tables.messages.length > 0) {
               setMessages(msg.tables.messages);
             }
           } else if (msg.type === 'DB_SYNC') {
             if (msg.table === 'users' && Array.isArray(msg.data)) {
               setUsers(msg.data);
             } else if (msg.table === 'messages' && Array.isArray(msg.data)) {
-              setMessages(msg.data);
+              setMessages((prev) => {
+                const map = new Map<string, DbMessage>();
+                prev.forEach((m) => map.set(m.id, m));
+                msg.data.forEach((m: DbMessage) => map.set(m.id, m));
+                const merged = Array.from(map.values()).sort((a, b) => a.created_at - b.created_at);
+                return merged;
+              });
             }
           } else if (msg.type === 'RTC_SIGNAL') {
-            if (onRtcSignalRef.current) {
-              onRtcSignalRef.current(msg.fromUserId, msg.signal);
+            const sigKey = `${msg.fromUserId}:${JSON.stringify(msg.signal).slice(0, 100)}`;
+            if (!processedRtcSignalsRef.current.has(sigKey)) {
+              processedRtcSignalsRef.current.add(sigKey);
+              if (processedRtcSignalsRef.current.size > 200) {
+                const [first] = processedRtcSignalsRef.current;
+                processedRtcSignalsRef.current.delete(first);
+              }
+              if (onRtcSignalRef.current) {
+                onRtcSignalRef.current(msg.fromUserId, msg.signal);
+              }
             }
           } else if (msg.type === 'USER_CALL') {
             if (onUserCallRef.current) {
@@ -266,14 +293,14 @@ export function useWebSocketDatabase(currentUser: {
       };
 
       ws.onclose = () => {
-        setIsConnected(false);
+        setIsWsConnected(false);
         stopHeartbeat();
         wsRef.current = null;
         if (!reconnectTimeoutRef.current) {
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectTimeoutRef.current = null;
             connect();
-          }, 1200);
+          }, 3500);
         }
       };
 
@@ -285,11 +312,12 @@ export function useWebSocketDatabase(currentUser: {
         reconnectTimeoutRef.current = setTimeout(() => {
           reconnectTimeoutRef.current = null;
           connect();
-        }, 1500);
+        }, 3500);
       }
     }
   }, [startHeartbeat, stopHeartbeat]);
 
+  // Connect WebSocket on boot
   useEffect(() => {
     connect();
 
@@ -310,6 +338,125 @@ export function useWebSocketDatabase(currentUser: {
     };
   }, [connect, stopHeartbeat]);
 
+  // Cloud Presence & Cloud WebRTC Signaling Engine (Powers Vercel & multi-peer connection)
+  useEffect(() => {
+    const u = currentUserRef.current;
+    setIsCloudConnected(true);
+
+    const makeCurrentDbUser = (): DbUser => ({
+      id: u.id,
+      username: u.username,
+      avatar_color: u.avatar_color || '#0066ff',
+      avatar_url: u.avatar_url || '',
+      current_channel: (u as any).current_channel || 'text-general',
+      activity: u.activity || '',
+      is_speaking: false,
+      is_muted: false,
+      is_deafened: false,
+      has_video: false,
+      is_screen_sharing: false,
+      updated_at: Date.now(),
+    });
+
+    // 1. Initial Presence Announcement
+    publishPresence(makeCurrentDbUser());
+
+    // 2. Periodic Heartbeat every 15 seconds to keep presence active
+    if (presenceHeartbeatRef.current) clearInterval(presenceHeartbeatRef.current);
+    presenceHeartbeatRef.current = setInterval(() => {
+      const cur = currentUserRef.current;
+      publishPresence({
+        id: cur.id,
+        username: cur.username,
+        avatar_color: cur.avatar_color || '#0066ff',
+        avatar_url: cur.avatar_url || '',
+        current_channel: (cur as any).current_channel || 'text-general',
+        activity: cur.activity || '',
+        is_speaking: false,
+        is_muted: false,
+        is_deafened: false,
+        has_video: false,
+        is_screen_sharing: false,
+        updated_at: Date.now(),
+      });
+    }, 15000);
+
+    // 3. Subscribe to Real-Time Presence (All online players on Vercel)
+    const unsubPresence = subscribePresence(u.id, (cloudUsers) => {
+      setUsers((prev) => {
+        const curId = currentUserRef.current.id;
+        const exists = cloudUsers.some((p) => p.id === curId);
+        let updatedList = cloudUsers;
+
+        if (!exists) {
+          const curUserDb = makeCurrentDbUser();
+          updatedList = [curUserDb, ...cloudUsers];
+        }
+
+        // Only update if changes occurred to avoid render churn
+        const prevKey = prev.map((p) => `${p.id}:${p.current_channel}:${p.is_speaking}:${p.has_video}:${p.is_screen_sharing}:${p.activity}`).join('|');
+        const nextKey = updatedList.map((p) => `${p.id}:${p.current_channel}:${p.is_speaking}:${p.has_video}:${p.is_screen_sharing}:${p.activity}`).join('|');
+
+        if (prevKey !== nextKey) {
+          broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: updatedList });
+          return updatedList;
+        }
+        return prev;
+      });
+    });
+
+    // 4. Subscribe to Real-Time WebRTC Signals on Vercel
+    const unsubSignals = subscribeCloudRtcSignals(u.id, (fromUserId, signal) => {
+      if (fromUserId === u.id) return;
+
+      // Deduplicate signals that might arrive through both channels
+      const sigKey = `${fromUserId}:${JSON.stringify(signal).slice(0, 100)}`;
+      if (processedRtcSignalsRef.current.has(sigKey)) return;
+      processedRtcSignalsRef.current.add(sigKey);
+
+      if (processedRtcSignalsRef.current.size > 200) {
+        const [first] = processedRtcSignalsRef.current;
+        processedRtcSignalsRef.current.delete(first);
+      }
+
+      if (signal?.type === 'user-call') {
+        if (onUserCallRef.current) {
+          onUserCallRef.current(fromUserId, signal.fromUserName || 'Player', signal.callType || 'audio');
+        }
+      } else if (onRtcSignalRef.current) {
+        onRtcSignalRef.current(fromUserId, signal);
+      }
+    });
+
+    // 5. Subscribe to Cloud Messages for full cross-device chat sync
+    const unsubMessages = subscribeCloudMessages((cloudMessages) => {
+      if (cloudMessages.length > 0) {
+        setMessages((prev) => {
+          const map = new Map<string, DbMessage>();
+          prev.forEach((m) => map.set(m.id, m));
+          cloudMessages.forEach((m) => map.set(m.id, m));
+          const merged = Array.from(map.values()).sort((a, b) => a.created_at - b.created_at);
+          return merged;
+        });
+      }
+    });
+
+    // Clean up presence on page close / unload
+    const handleBeforeUnload = () => {
+      removePresence(currentUserRef.current.id);
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (presenceHeartbeatRef.current) clearInterval(presenceHeartbeatRef.current);
+      unsubPresence();
+      unsubSignals();
+      unsubMessages();
+      removePresence(currentUserRef.current.id);
+    };
+  }, []);
+
   const updateUser = useCallback((set: Partial<DbUser>) => {
     const u = currentUserRef.current;
     Object.assign(currentUserRef.current, set);
@@ -326,6 +473,23 @@ export function useWebSocketDatabase(currentUser: {
       table: 'users',
       id: u.id,
       set,
+    });
+
+    // Mirror update to Firestore presence for instant peer reflection on Vercel
+    publishPresence({
+      id: u.id,
+      username: u.username,
+      avatar_color: u.avatar_color || '#0066ff',
+      avatar_url: u.avatar_url || '',
+      current_channel: (u as any).current_channel || 'text-general',
+      activity: u.activity || '',
+      is_speaking: false,
+      is_muted: false,
+      is_deafened: false,
+      has_video: false,
+      is_screen_sharing: false,
+      updated_at: Date.now(),
+      ...set,
     });
   }, [safeSend]);
 
@@ -356,11 +520,15 @@ export function useWebSocketDatabase(currentUser: {
       return next;
     });
 
+    // Send via WebSocket (if active)
     safeSend({
       type: 'SQL_INSERT',
       table: 'messages',
       row: newMsg,
     });
+
+    // Mirror to Firestore Cloud Messages for cross-network sync on Vercel
+    sendCloudChatMessage(newMsg);
   }, [safeSend]);
 
   const deleteMessage = useCallback((messageId: string) => {
@@ -407,6 +575,9 @@ export function useWebSocketDatabase(currentUser: {
       user: dbUser,
     });
 
+    // Publish to cloud presence
+    publishPresence(dbUser);
+
     setUsers((prev) => {
       const safePrev = Array.isArray(prev) ? prev : [];
       const filtered = safePrev.filter((x) => x && x.id !== user.id);
@@ -416,18 +587,26 @@ export function useWebSocketDatabase(currentUser: {
     });
   }, [safeSend]);
 
-  // WebRTC Signal Relay: Zero-latency queued WebSocket transmission
+  // WebRTC Signal Relay: Sends via WebSocket AND Firestore Cloud Signaling
   const sendRtcSignal = useCallback((targetUserId: string, signal: any) => {
+    const fromUserId = currentUserRef.current.id;
+
+    // 1. Send via WebSocket if socket is available
     safeSend({
       type: 'RTC_SIGNAL',
-      fromUserId: currentUserRef.current.id,
+      fromUserId,
       targetUserId,
       signal,
     });
+
+    // 2. Always send via Firestore Cloud Signaling for reliable Vercel P2P connection
+    sendCloudRtcSignal(fromUserId, targetUserId, signal);
   }, [safeSend]);
 
+  // Direct peer-to-peer user call
   const callUser = useCallback((targetUserId: string, callType: 'audio' | 'video') => {
     const u = currentUserRef.current;
+
     safeSend({
       type: 'USER_CALL',
       fromUserId: u.id,
@@ -435,7 +614,16 @@ export function useWebSocketDatabase(currentUser: {
       targetUserId,
       callType,
     });
+
+    // Cloud signal for direct calling across Vercel deployments
+    sendCloudRtcSignal(u.id, targetUserId, {
+      type: 'user-call',
+      fromUserName: u.username,
+      callType,
+    });
   }, [safeSend]);
+
+  const isConnected = isWsConnected || isCloudConnected;
 
   return {
     users,

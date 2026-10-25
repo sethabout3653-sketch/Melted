@@ -38,6 +38,40 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["id", "userId", "favoriteGameIds", "updatedAt"]
+    },
+    "Presence": {
+      "title": "Presence",
+      "description": "User online presence heartbeat entity",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "username": { "type": "string", "maxLength": 100 },
+        "avatar_color": { "type": "string" },
+        "avatar_url": { "type": "string" },
+        "current_channel": { "type": "string" },
+        "activity": { "type": "string" },
+        "is_speaking": { "type": "boolean" },
+        "is_muted": { "type": "boolean" },
+        "is_deafened": { "type": "boolean" },
+        "has_video": { "type": "boolean" },
+        "is_screen_sharing": { "type": "boolean" },
+        "lastSeen": { "type": "number" },
+        "updated_at": { "type": "number" }
+      },
+      "required": ["id", "username", "lastSeen"]
+    },
+    "WebRtcSignal": {
+      "title": "WebRtcSignal",
+      "description": "Peer to peer WebRTC cloud signaling message",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fromUserId": { "type": "string" },
+        "targetUserId": { "type": "string" },
+        "signal": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "fromUserId", "targetUserId", "signal", "createdAt"]
     }
   },
   "firestore": {
@@ -52,6 +86,14 @@
     "/userFavorites/{userId}": {
       "schema": { "$ref": "#/entities/UserFavorite" },
       "description": "User cloud synced favorites"
+    },
+    "/presence/{userId}": {
+      "schema": { "$ref": "#/entities/Presence" },
+      "description": "Real-time user presence and online counter records"
+    },
+    "/webrtcSignals/{signalId}": {
+      "schema": { "$ref": "#/entities/WebRtcSignal" },
+      "description": "Real-time WebRTC audio/video/screenshare cloud signaling messages"
     }
   }
 }
