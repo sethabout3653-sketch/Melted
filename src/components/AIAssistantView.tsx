@@ -38,6 +38,76 @@ export const AIAssistantView: React.FC = () => {
     scrollToBottom();
   }, [messages, isLoading]);
 
+  // Direct Groq API completion for static Vercel deployments
+  const callGroqDirect = async (promptText: string, msgHistory: any[]) => {
+    const systemInstruction = "You are Frosted AI, an intelligent, helpful, warm, concise, and clear study assistant and academic tutor. You assist students with study questions, homework, concept explanations, math problem steps, essay outlines, and practice quizzes. Give direct, insightful, concise, well-structured, and helpful answers using markdown formatting. Never use robotic disclaimers or canned phrases like 'As an AI language model...'. Answer in a friendly, conversational, human tone.";
+
+    const rawGroqKey = (
+      (import.meta.env.VITE_GROQ_API_KEY as string) ||
+      (import.meta.env.VITE_GEMINI_API_KEY as string) ||
+      ((window as any).GROQ_API_KEY as string) ||
+      ''
+    ).replace(/^["']|["']$/g, '').trim();
+
+    if (!rawGroqKey) {
+      throw new Error("Missing VITE_GROQ_API_KEY in Vercel environment variables. Please add VITE_GROQ_API_KEY to Vercel.");
+    }
+
+    const groqMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+      { role: 'system', content: systemInstruction },
+    ];
+
+    if (Array.isArray(msgHistory) && msgHistory.length > 0) {
+      for (const msg of msgHistory) {
+        if (msg.role && msg.text) {
+          groqMessages.push({
+            role: msg.role === 'user' ? 'user' : 'assistant',
+            content: msg.text,
+          });
+        }
+      }
+    }
+
+    groqMessages.push({ role: 'user', content: promptText });
+
+    const groqModels = [
+      'llama-3.3-70b-versatile',
+      'llama-3.1-8b-instant',
+      'llama3-70b-8192',
+      'llama3-8b-8192',
+      'mixtral-8x7b-32768',
+      'gemma2-9b-it'
+    ];
+
+    for (const model of groqModels) {
+      try {
+        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${rawGroqKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: groqMessages,
+            temperature: 0.7,
+            max_tokens: 1024,
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          const text = data.choices?.[0]?.message?.content;
+          if (text) return text;
+        }
+      } catch (err) {
+        console.warn(`Direct Groq call model ${model} failed:`, err);
+      }
+    }
+
+    throw new Error("Groq API rate limit or model error. Please check your Groq API key.");
+  };
+
   const handleSend = async (customPrompt?: string) => {
     const textToSend = customPrompt || input.trim();
     if (!textToSend || isLoading) return;
@@ -53,51 +123,62 @@ export const AIAssistantView: React.FC = () => {
     if (!customPrompt) setInput('');
     setIsLoading(true);
 
-    try {
-      const history = messages
-        .filter((m) => m.id !== 'welcome-1')
-        .map((m) => ({
-          role: m.sender === 'user' ? 'user' : 'model',
-          text: m.text,
-        }));
+    const history = messages
+      .filter((m) => m.id !== 'welcome-1')
+      .map((m) => ({
+        role: m.sender === 'user' ? 'user' : 'model',
+        text: m.text,
+      }));
 
+    let replyText = '';
+
+    try {
+      // 1. Try server endpoint /api/ai/assistant first
       const res = await fetch('/api/ai/assistant', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt: textToSend, history }),
       });
 
-      const data = await res.json();
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.reply) {
+          replyText = data.reply;
+        }
+      }
+    } catch (serverErr) {
+      console.warn('Server endpoint /api/ai/assistant unreachable, trying direct Groq client API...', serverErr);
+    }
 
-      if (data.success && data.reply) {
-        const aiMsg: Message = {
-          id: (Date.now() + 1).toString(),
-          sender: 'ai',
-          text: data.reply,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        };
-        setMessages((prev) => [...prev, aiMsg]);
-      } else {
+    // 2. Direct client fallback for Vercel static deployments
+    if (!replyText) {
+      try {
+        replyText = await callGroqDirect(textToSend, history);
+      } catch (clientErr: any) {
+        console.error('Direct Groq fallback error:', clientErr);
         const errorMsg: Message = {
           id: (Date.now() + 1).toString(),
           sender: 'ai',
-          text: data.message || "I ran into an issue generating a response. Please try again.",
+          text: clientErr?.message || "Could not connect right now. Please ensure VITE_GROQ_API_KEY is set in Vercel Environment Variables.",
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         };
         setMessages((prev) => [...prev, errorMsg]);
+        setIsLoading(false);
+        return;
       }
-    } catch (err: any) {
-      console.error('AI Assistant fetch error:', err);
-      const errorMsg: Message = {
+    }
+
+    if (replyText) {
+      const aiMsg: Message = {
         id: (Date.now() + 1).toString(),
         sender: 'ai',
-        text: "Could not connect right now. Please try again in a moment.",
+        text: replyText,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
-      setMessages((prev) => [...prev, errorMsg]);
-    } finally {
-      setIsLoading(false);
+      setMessages((prev) => [...prev, aiMsg]);
     }
+
+    setIsLoading(false);
   };
 
   const handleCopy = (id: string, text: string) => {
