@@ -7,7 +7,9 @@ import {
   query, 
   where, 
   orderBy, 
-  limit 
+  limit,
+  getDocs,
+  updateDoc
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { DbUser, DbMessage } from '../server/wsDatabase';
@@ -75,9 +77,9 @@ export function subscribePresence(
           const data = docSnap.data();
           if (!data || !data.id) return;
 
-          // Only consider users who have sent a heartbeat in the last 60 seconds
+          // Only consider users who have sent a heartbeat in the last 30 seconds
           const lastSeen = Number(data.lastSeen) || Number(data.updated_at) || 0;
-          const isFresh = now - lastSeen < 60000;
+          const isFresh = now - lastSeen < 30000;
 
           if (isFresh || data.id === currentUserId) {
             activeUsers.push({
@@ -222,6 +224,50 @@ export async function sendCloudChatMessage(msg: DbMessage): Promise<void> {
 }
 
 /**
+ * Update all messages for a user with their latest username and avatar
+ */
+export async function updateCloudUserMessages(
+  userId: string, 
+  profile: { username: string; avatar_color: string; avatar_url: string }
+): Promise<void> {
+  if (!userId) return;
+  try {
+    // Query last 100 messages from this user to update profile info
+    const q = query(
+      collection(db, MESSAGES_COLLECTION),
+      where('userId', '==', userId),
+      limit(100)
+    );
+    
+    const snapshot = await getDocs(q);
+    const updates = snapshot.docs.map((docSnap) => {
+      return updateDoc(docSnap.ref, {
+        userName: profile.username,
+        avatar_color: profile.avatar_color,
+        sender_avatar_url: profile.avatar_url
+      });
+    });
+    
+    await Promise.all(updates);
+  } catch (err) {
+    console.warn('[cloudSignaling] updateCloudUserMessages error:', err);
+  }
+}
+
+/**
+ * Delete chat message from Firestore messages collection
+ */
+export async function deleteCloudChatMessage(messageId: string): Promise<void> {
+  if (!messageId) return;
+  try {
+    const messageDoc = doc(db, MESSAGES_COLLECTION, messageId);
+    await deleteDoc(messageDoc);
+  } catch (err) {
+    console.warn('[cloudSignaling] deleteCloudChatMessage error:', err);
+  }
+}
+
+/**
  * Subscribe to cloud chat messages
  */
 export function subscribeCloudMessages(
@@ -231,7 +277,7 @@ export function subscribeCloudMessages(
     const messagesQuery = query(
       collection(db, MESSAGES_COLLECTION),
       orderBy('createdAt', 'desc'),
-      limit(100)
+      limit(200)
     );
 
     const unsubscribe = onSnapshot(

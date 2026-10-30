@@ -39,14 +39,14 @@ service cloud.firestore {
       allow delete: if isValidId(signalId);
     }
 
-    // Global and room chat messages
+    // Global and room chat messages (allows creation and deletion across guest and auth users)
     match /messages/{messageId} {
       allow list, get: if true;
       allow create: if isValidId(messageId)
         && request.resource.data.id == messageId
         && request.resource.data.text is string && request.resource.data.text.size() > 0 && request.resource.data.text.size() <= 2000
         && request.resource.data.userName is string && request.resource.data.userName.size() <= 100;
-      allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow update, delete: if isValidId(messageId);
     }
 
     // Game high scores

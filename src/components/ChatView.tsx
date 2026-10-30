@@ -1777,20 +1777,26 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
 
                 {/* Messages List */}
-                {messages.map((msg: any) => (
-                  <div key={msg.id} className="flex items-start gap-3.5 group hover:bg-slate-50 dark:hover:bg-slate-900/40 -mx-4 px-4 py-1.5 rounded-xl transition-colors">
-                    <div className="shrink-0">
-                      {renderAvatar({ username: msg.sender_name, avatar_color: msg.avatar_color, avatar_url: msg.sender_avatar_url }, 'w-10 h-10 text-xs')}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline gap-2">
-                        <span className="font-extrabold text-slate-900 dark:text-white text-sm hover:underline cursor-pointer">
-                          {msg.sender_name}
-                        </span>
-                        <span className="text-[10px] text-slate-400 dark:text-slate-500">
-                          {msg.timestamp}
-                        </span>
+                {messages.map((msg: any) => {
+                  const msgUser = users.find((u: any) => u.id === msg.sender_id);
+                  const displayUsername = msgUser?.username || msg.sender_name;
+                  const displayAvatarColor = msgUser?.avatar_color || msg.avatar_color;
+                  const displayAvatarUrl = msgUser?.avatar_url || msg.sender_avatar_url;
+
+                  return (
+                    <div key={msg.id} className="flex items-start gap-3.5 group hover:bg-slate-50 dark:hover:bg-slate-900/40 -mx-4 px-4 py-1.5 rounded-xl transition-colors">
+                      <div className="shrink-0">
+                        {renderAvatar({ username: displayUsername, avatar_color: displayAvatarColor, avatar_url: displayAvatarUrl }, 'w-10 h-10 text-xs')}
                       </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-baseline gap-2">
+                          <span className="font-extrabold text-slate-900 dark:text-white text-sm hover:underline cursor-pointer">
+                            {displayUsername}
+                          </span>
+                          <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                            {msg.timestamp}
+                          </span>
+                        </div>
                       
                       {msg.content && (
                         <p className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed break-words whitespace-pre-wrap mt-0.5">
@@ -1901,8 +1907,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         <X className="w-3.5 h-3.5" />
                       </button>
                     )}
-                  </div>
-                ))}
+                    </div>
+                  );
+                })}
                 <div ref={messagesEndRef} />
               </div>
 
@@ -2418,8 +2425,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       const camStream = remoteCameraStreams[u.id];
                       const scrStream = remoteScreenStreams[u.id];
 
-                      const hasCamera = Boolean(camStream && camStream.getVideoTracks().some((t) => t.readyState === 'live')) && u.has_video !== false;
-                      const hasScreen = Boolean(scrStream && scrStream.getVideoTracks().some((t) => t.readyState === 'live')) && u.is_screen_sharing !== false;
+                      const hasCamera = Boolean(camStream && camStream.getVideoTracks().some((t) => t.readyState === 'live' && t.enabled));
+                      const hasScreen = Boolean(scrStream && scrStream.getVideoTracks().some((t) => t.readyState === 'live' && t.enabled));
                       const isPeerCameraVertical = Boolean(peerOrientations[`${u.id}-camera`]);
 
                       return (

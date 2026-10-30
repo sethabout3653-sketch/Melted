@@ -299,7 +299,8 @@ export function useWebRTC({
     });
 
     setRemoteCameraStreams((prev) => {
-      if (foundCamStream && (!peerDb || peerDb.has_video !== false)) {
+      const hasLiveCamTrack = foundCamStream && foundCamStream.getVideoTracks().some((t) => t.readyState === 'live');
+      if (hasLiveCamTrack && foundCamStream) {
         if (prev[peerId] === foundCamStream) return prev;
         return { ...prev, [peerId]: foundCamStream };
       }
@@ -312,7 +313,8 @@ export function useWebRTC({
     });
 
     setRemoteScreenStreams((prev) => {
-      if (foundScreenStream && (!peerDb || peerDb.is_screen_sharing !== false)) {
+      const hasLiveScreenTrack = foundScreenStream && foundScreenStream.getVideoTracks().some((t) => t.readyState === 'live');
+      if (hasLiveScreenTrack && foundScreenStream) {
         if (prev[peerId] === foundScreenStream) return prev;
         return { ...prev, [peerId]: foundScreenStream };
       }
@@ -416,6 +418,12 @@ export function useWebRTC({
 
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'failed') {
+        try { pc.restartIce(); } catch {}
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
         try { pc.restartIce(); } catch {}
       }
     };

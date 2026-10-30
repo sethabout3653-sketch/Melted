@@ -55,7 +55,13 @@ export function playNotificationSound() {
   } catch {}
 }
 
-export function useGlobalChat({ isChatTabActive }: { isChatTabActive: boolean }) {
+export function useGlobalChat({ 
+  isChatTabActive, 
+  firebaseUserId 
+}: { 
+  isChatTabActive: boolean;
+  firebaseUserId?: string | null;
+}) {
   const [currentUser, setCurrentUser] = useState(() => {
     // Clean up old/stale/corrupted localStorage keys while keeping valid ones
     try {
@@ -68,14 +74,20 @@ export function useGlobalChat({ isChatTabActive }: { isChatTabActive: boolean })
       });
     } catch {}
 
-    const savedId = localStorage.getItem('frosted_chat_user_id') || ('u_' + Math.random().toString(36).substr(2, 6));
+    // Priority: Firebase Auth UID > Stored Guest ID > Random New ID
+    const storedId = localStorage.getItem('frosted_chat_user_id');
+    const savedId = firebaseUserId || storedId || ('u_' + Math.random().toString(36).substr(2, 6));
+    
     const savedName = localStorage.getItem('frosted_chat_username') || ('Player_' + Math.floor(100 + Math.random() * 900));
     const savedColor = localStorage.getItem('frosted_chat_usercolor') || '#0066ff';
     const savedAvatarUrl = localStorage.getItem('frosted_chat_avatar_url') || '';
+    
+    // Always persist to ensure stability across reloads
     localStorage.setItem('frosted_chat_user_id', savedId);
     localStorage.setItem('frosted_chat_username', savedName);
     localStorage.setItem('frosted_chat_usercolor', savedColor);
     localStorage.setItem('frosted_chat_avatar_url', savedAvatarUrl);
+    
     return {
       id: savedId,
       username: savedName,
@@ -84,6 +96,17 @@ export function useGlobalChat({ isChatTabActive }: { isChatTabActive: boolean })
       current_channel: 'text-general',
     };
   });
+
+  // Sync state if firebaseUserId becomes available (user logs in)
+  useEffect(() => {
+    if (firebaseUserId && currentUser.id !== firebaseUserId) {
+      setCurrentUser(prev => {
+        const next = { ...prev, id: firebaseUserId };
+        localStorage.setItem('frosted_chat_user_id', firebaseUserId);
+        return next;
+      });
+    }
+  }, [firebaseUserId, currentUser.id]);
 
   const chat = useWebSocketDatabase(currentUser);
   const { messages, setUserCallHandler, isConnected, registerUser, callUser: rawCallUser } = chat;

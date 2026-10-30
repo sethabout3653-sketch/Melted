@@ -7,13 +7,28 @@ import {
   sendCloudRtcSignal, 
   subscribeCloudRtcSignals, 
   sendCloudChatMessage, 
-  subscribeCloudMessages 
+  subscribeCloudMessages,
+  deleteCloudChatMessage,
+  updateCloudUserMessages
 } from './cloudSignaling';
 
 export interface RtcSignalPayload {
   fromUserId: string;
   targetUserId: string;
   signal: any;
+}
+
+function deduplicateUsers(users: DbUser[]): DbUser[] {
+  const map = new Map<string, DbUser>();
+  users.forEach((u) => {
+    if (!u || !u.id) return;
+    const existing = map.get(u.id);
+    // If user exists, keep the one with more information or newer update
+    if (!existing || (u.updated_at || 0) >= (existing.updated_at || 0)) {
+      map.set(u.id, u);
+    }
+  });
+  return Array.from(map.values());
 }
 
 export function resolveWebSocketUrl(): string {
@@ -101,6 +116,38 @@ export function useWebSocketDatabase(currentUser: {
 
   const currentUserRef = useRef(currentUser);
   currentUserRef.current = currentUser;
+
+  const activeUserStateRef = useRef<DbUser>({
+    id: currentUser.id,
+    username: currentUser.username,
+    avatar_color: currentUser.avatar_color || '#0066ff',
+    avatar_url: currentUser.avatar_url || '',
+    current_channel: (currentUser as any).current_channel || 'text-general',
+    activity: currentUser.activity || '',
+    is_speaking: false,
+    is_muted: false,
+    is_deafened: false,
+    has_video: false,
+    is_screen_sharing: false,
+    updated_at: Date.now(),
+  });
+
+  const lastUserIdRef = useRef<string>(currentUser.id);
+
+  useEffect(() => {
+    // If ID changed (e.g. guest -> logged in), cleanup old presence doc
+    if (lastUserIdRef.current && lastUserIdRef.current !== currentUser.id) {
+      removePresence(lastUserIdRef.current);
+    }
+    lastUserIdRef.current = currentUser.id;
+
+    Object.assign(activeUserStateRef.current, {
+      id: currentUser.id,
+      username: currentUser.username,
+      avatar_color: currentUser.avatar_color || '#0066ff',
+      avatar_url: currentUser.avatar_url || '',
+    });
+  }, [currentUser.id, currentUser.username, currentUser.avatar_color, currentUser.avatar_url]);
 
   const onRtcSignalRef = useRef<((fromUserId: string, signal: any) => void) | null>(null);
   const onUserCallRef = useRef<((fromUserId: string, fromUserName: string, callType: 'audio' | 'video') => void) | null>(null);
@@ -243,22 +290,16 @@ export function useWebSocketDatabase(currentUser: {
 
           if (msg.type === 'DB_INIT') {
             if (Array.isArray(msg.tables?.users) && msg.tables.users.length > 0) {
-              setUsers(msg.tables.users);
+              setUsers(deduplicateUsers(msg.tables.users));
             }
             if (Array.isArray(msg.tables?.messages) && msg.tables.messages.length > 0) {
               setMessages(msg.tables.messages);
             }
           } else if (msg.type === 'DB_SYNC') {
             if (msg.table === 'users' && Array.isArray(msg.data)) {
-              setUsers(msg.data);
+              setUsers(deduplicateUsers(msg.data));
             } else if (msg.table === 'messages' && Array.isArray(msg.data)) {
-              setMessages((prev) => {
-                const map = new Map<string, DbMessage>();
-                prev.forEach((m) => map.set(m.id, m));
-                msg.data.forEach((m: DbMessage) => map.set(m.id, m));
-                const merged = Array.from(map.values()).sort((a, b) => a.created_at - b.created_at);
-                return merged;
-              });
+              setMessages(msg.data);
             }
           } else if (msg.type === 'RTC_SIGNAL') {
             const sigKey = `${msg.fromUserId}:${JSON.stringify(msg.signal).slice(0, 100)}`;
@@ -344,40 +385,24 @@ export function useWebSocketDatabase(currentUser: {
     setIsCloudConnected(true);
 
     const makeCurrentDbUser = (): DbUser => ({
+      ...activeUserStateRef.current,
       id: u.id,
       username: u.username,
       avatar_color: u.avatar_color || '#0066ff',
       avatar_url: u.avatar_url || '',
-      current_channel: (u as any).current_channel || 'text-general',
-      activity: u.activity || '',
-      is_speaking: false,
-      is_muted: false,
-      is_deafened: false,
-      has_video: false,
-      is_screen_sharing: false,
       updated_at: Date.now(),
     });
 
     // 1. Initial Presence Announcement
     publishPresence(makeCurrentDbUser());
 
-    // 2. Periodic Heartbeat every 15 seconds to keep presence active
+    // 2. Periodic Heartbeat every 15 seconds to keep presence active WITHOUT overwriting video/audio/channel state!
     if (presenceHeartbeatRef.current) clearInterval(presenceHeartbeatRef.current);
     presenceHeartbeatRef.current = setInterval(() => {
-      const cur = currentUserRef.current;
+      const cur = activeUserStateRef.current;
+      cur.updated_at = Date.now();
       publishPresence({
-        id: cur.id,
-        username: cur.username,
-        avatar_color: cur.avatar_color || '#0066ff',
-        avatar_url: cur.avatar_url || '',
-        current_channel: (cur as any).current_channel || 'text-general',
-        activity: cur.activity || '',
-        is_speaking: false,
-        is_muted: false,
-        is_deafened: false,
-        has_video: false,
-        is_screen_sharing: false,
-        updated_at: Date.now(),
+        ...cur,
       });
     }, 15000);
 
@@ -393,13 +418,15 @@ export function useWebSocketDatabase(currentUser: {
           updatedList = [curUserDb, ...cloudUsers];
         }
 
+        const deduped = deduplicateUsers(updatedList);
+
         // Only update if changes occurred to avoid render churn
         const prevKey = prev.map((p) => `${p.id}:${p.current_channel}:${p.is_speaking}:${p.has_video}:${p.is_screen_sharing}:${p.activity}`).join('|');
-        const nextKey = updatedList.map((p) => `${p.id}:${p.current_channel}:${p.is_speaking}:${p.has_video}:${p.is_screen_sharing}:${p.activity}`).join('|');
+        const nextKey = deduped.map((p) => `${p.id}:${p.current_channel}:${p.is_speaking}:${p.has_video}:${p.is_screen_sharing}:${p.activity}`).join('|');
 
         if (prevKey !== nextKey) {
-          broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: updatedList });
-          return updatedList;
+          broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: deduped });
+          return deduped;
         }
         return prev;
       });
@@ -428,17 +455,13 @@ export function useWebSocketDatabase(currentUser: {
       }
     });
 
-    // 5. Subscribe to Cloud Messages for full cross-device chat sync
+    // 5. Subscribe to Cloud Messages for full cross-device chat sync and real-time deletion
     const unsubMessages = subscribeCloudMessages((cloudMessages) => {
-      if (cloudMessages.length > 0) {
-        setMessages((prev) => {
-          const map = new Map<string, DbMessage>();
-          prev.forEach((m) => map.set(m.id, m));
-          cloudMessages.forEach((m) => map.set(m.id, m));
-          const merged = Array.from(map.values()).sort((a, b) => a.created_at - b.created_at);
-          return merged;
-        });
-      }
+      setMessages(cloudMessages);
+      try {
+        localStorage.setItem('frosted_db_messages', JSON.stringify(cloudMessages.slice(-200)));
+      } catch {}
+      broadcastChannelRef.current?.postMessage({ type: 'SYNC_MESSAGES', messages: cloudMessages });
     });
 
     // Clean up presence on page close / unload
@@ -460,6 +483,8 @@ export function useWebSocketDatabase(currentUser: {
   const updateUser = useCallback((set: Partial<DbUser>) => {
     const u = currentUserRef.current;
     Object.assign(currentUserRef.current, set);
+    Object.assign(activeUserStateRef.current, set);
+    activeUserStateRef.current.updated_at = Date.now();
 
     setUsers((prev) => {
       const safePrev = Array.isArray(prev) ? prev : [];
@@ -475,22 +500,19 @@ export function useWebSocketDatabase(currentUser: {
       set,
     });
 
-    // Mirror update to Firestore presence for instant peer reflection on Vercel
+    // Mirror updated state to Firestore presence so has_video and media streams remain rock-solid
     publishPresence({
-      id: u.id,
-      username: u.username,
-      avatar_color: u.avatar_color || '#0066ff',
-      avatar_url: u.avatar_url || '',
-      current_channel: (u as any).current_channel || 'text-general',
-      activity: u.activity || '',
-      is_speaking: false,
-      is_muted: false,
-      is_deafened: false,
-      has_video: false,
-      is_screen_sharing: false,
-      updated_at: Date.now(),
-      ...set,
+      ...activeUserStateRef.current,
     });
+
+    // If profile info (username/avatar) changed, update cloud messages as well
+    if (set.username || set.avatar_color || set.avatar_url) {
+      updateCloudUserMessages(u.id, {
+        username: activeUserStateRef.current.username,
+        avatar_color: activeUserStateRef.current.avatar_color,
+        avatar_url: activeUserStateRef.current.avatar_url || ''
+      });
+    }
   }, [safeSend]);
 
   const insertMessage = useCallback((content: string, channelId: string = 'text-general', attachment?: { url: string; type: string; name?: string }) => {
@@ -516,6 +538,9 @@ export function useWebSocketDatabase(currentUser: {
       const safePrev = Array.isArray(prev) ? prev : [];
       if (safePrev.some((m) => m.id === newMsg.id)) return safePrev;
       const next = [...safePrev, newMsg];
+      try {
+        localStorage.setItem('frosted_db_messages', JSON.stringify(next.slice(-200)));
+      } catch {}
       broadcastChannelRef.current?.postMessage({ type: 'SYNC_MESSAGES', messages: next });
       return next;
     });
@@ -532,18 +557,26 @@ export function useWebSocketDatabase(currentUser: {
   }, [safeSend]);
 
   const deleteMessage = useCallback((messageId: string) => {
+    // 1. Optimistically delete from local state and localStorage
     setMessages((prev) => {
       const safePrev = Array.isArray(prev) ? prev : [];
       const next = safePrev.filter((m) => m && m.id !== messageId);
+      try {
+        localStorage.setItem('frosted_db_messages', JSON.stringify(next.slice(-200)));
+      } catch {}
       broadcastChannelRef.current?.postMessage({ type: 'SYNC_MESSAGES', messages: next });
       return next;
     });
 
+    // 2. Delete via WebSocket (if connected)
     safeSend({
       type: 'SQL_DELETE',
       table: 'messages',
       id: messageId,
     });
+
+    // 3. Delete from Firestore cloud messages so it is removed for everyone
+    deleteCloudChatMessage(messageId);
   }, [safeSend]);
 
   const registerUser = useCallback((user: { 
@@ -554,21 +587,19 @@ export function useWebSocketDatabase(currentUser: {
     current_channel?: string;
     activity?: string;
   }) => {
-    const activeChannel = (user as any).current_channel || currentUserRef.current.current_channel || 'text-general';
+    const activeChannel = (user as any).current_channel || activeUserStateRef.current.current_channel || 'text-general';
     const dbUser: DbUser = {
+      ...activeUserStateRef.current,
       id: user.id,
       username: user.username,
       avatar_color: user.avatar_color || '#0066ff',
       avatar_url: user.avatar_url || '',
       current_channel: activeChannel as any,
-      is_speaking: false,
-      is_muted: false,
-      is_deafened: false,
-      has_video: false,
-      is_screen_sharing: false,
-      activity: user.activity || '',
+      activity: user.activity || activeUserStateRef.current.activity || '',
       updated_at: Date.now(),
     };
+
+    Object.assign(activeUserStateRef.current, dbUser);
 
     safeSend({
       type: 'REGISTER_USER',
@@ -577,6 +608,13 @@ export function useWebSocketDatabase(currentUser: {
 
     // Publish to cloud presence
     publishPresence(dbUser);
+
+    // Ensure old messages reflect current profile info
+    updateCloudUserMessages(dbUser.id, {
+      username: dbUser.username,
+      avatar_color: dbUser.avatar_color,
+      avatar_url: dbUser.avatar_url || ''
+    });
 
     setUsers((prev) => {
       const safePrev = Array.isArray(prev) ? prev : [];

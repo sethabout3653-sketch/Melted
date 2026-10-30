@@ -8,7 +8,6 @@ import { GamePlayer } from './components/GamePlayer';
 import { ChatView } from './components/ChatView';
 import { FrostedLoadingScreen } from './components/FrostedLoadingScreen';
 import { InAppNotificationToast } from './components/InAppNotificationToast';
-import { FirebaseModal } from './components/FirebaseModal';
 import { getAllGames, resolveGameUrl } from './services/gameService';
 import { useCloak, launchAboutBlank } from './hooks/useCloak';
 import { useGlobalChat } from './hooks/useGlobalChat';
@@ -39,7 +38,6 @@ export default function App() {
   const [favorites, setFavorites] = useState<number[]>(() => getFavorites());
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-  const [isFirebaseModalOpen, setIsFirebaseModalOpen] = useState(false);
 
   // Reactive Firebase Authentication & Firestore Cloud Sync
   const firebaseAuth = useFirebaseAuth(favorites, (merged) => {
@@ -93,7 +91,10 @@ export default function App() {
   const [activeGame, setActiveGame] = useState<GameItem | null>(null);
 
   // Global Chat and Notifications
-  const globalChat = useGlobalChat({ isChatTabActive: currentTab === 'chat' });
+  const globalChat = useGlobalChat({ 
+    isChatTabActive: currentTab === 'chat',
+    firebaseUserId: firebaseAuth.user?.uid
+  });
 
   useEffect(() => {
     if (currentTab === 'chat' && globalChat.activeNotification) {
@@ -259,8 +260,6 @@ export default function App() {
         isConnected={globalChat.isConnected}
         theme={theme}
         onToggleTheme={toggleTheme}
-        onOpenFirebase={() => setIsFirebaseModalOpen(true)}
-        firebaseUser={firebaseAuth.user}
       />
 
       {/* Main Content Scrollable Area with Smooth Transitions */}
@@ -514,30 +513,6 @@ export default function App() {
         onOpenChat={() => {
           setCurrentTab('chat');
         }}
-      />
-
-      {/* Firebase Cloud Engine & Auth Modal */}
-      <FirebaseModal
-        isOpen={isFirebaseModalOpen}
-        onClose={() => setIsFirebaseModalOpen(false)}
-        user={firebaseAuth.user}
-        authLoading={firebaseAuth.authLoading}
-        onLogin={firebaseAuth.handleLogin}
-        onLogout={firebaseAuth.handleLogout}
-        projectId={firebaseAuth.projectId}
-        databaseId={firebaseAuth.databaseId}
-        isSyncing={firebaseAuth.isSyncing}
-        lastSyncedTime={firebaseAuth.lastSyncedTime}
-        favoritesCount={favorites.length}
-        pingLatency={firebaseAuth.pingLatency}
-        pingStatus={firebaseAuth.pingStatus}
-        onRunDiagnostics={firebaseAuth.runDiagnostics}
-        authError={firebaseAuth.authError}
-        isUnauthorizedDomain={firebaseAuth.isUnauthorizedDomain}
-        currentHostname={firebaseAuth.currentHostname}
-        isVercel={firebaseAuth.isVercel}
-        firebaseConsoleUrl={firebaseAuth.firebaseConsoleUrl}
-        firebaseConfig={firebaseAuth.firebaseConfig}
       />
 
       {/* Persistent Global Voice HUD when browsing games while connected to Voice */}
