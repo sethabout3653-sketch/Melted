@@ -37,6 +37,7 @@ export async function publishPresence(user: DbUser): Promise<void> {
       is_deafened: Boolean(user.is_deafened),
       has_video: Boolean(user.has_video),
       is_screen_sharing: Boolean(user.is_screen_sharing),
+      is_hand_raised: Boolean(user.is_hand_raised),
       lastSeen: Date.now(),
       updated_at: Date.now(),
     }, { merge: true });
@@ -93,6 +94,7 @@ export function subscribePresence(
               is_deafened: Boolean(data.is_deafened),
               has_video: Boolean(data.has_video),
               is_screen_sharing: Boolean(data.is_screen_sharing),
+              is_hand_raised: Boolean(data.is_hand_raised),
               activity: data.activity || '',
               updated_at: lastSeen || now,
             });

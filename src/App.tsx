@@ -14,6 +14,7 @@ import { useGlobalChat } from './hooks/useGlobalChat';
 import { useFirebaseAuth } from './hooks/useFirebaseAuth';
 import { useDeviceAdaptation } from './hooks/useDeviceAdaptation';
 import { DeviceAdaptationBar } from './components/DeviceAdaptationBar';
+import { PhoneCallOverlay } from './components/PhoneCallOverlay';
 import { GameItem, GameCategory } from './types/game';
 import { 
   Snowflake, 
@@ -260,6 +261,9 @@ export default function App() {
         isConnected={globalChat.isConnected}
         theme={theme}
         onToggleTheme={toggleTheme}
+        users={globalChat.users}
+        onInitiateCall={globalChat.initiateCall}
+        currentUser={globalChat.currentUser}
       />
 
       {/* Main Content Scrollable Area with Smooth Transitions */}
@@ -548,6 +552,21 @@ export default function App() {
           </aside>
         );
       })()}
+
+      {/* VERIZON-STYLE PHONE CALL SYSTEM */}
+      <PhoneCallOverlay
+        incomingCall={globalChat.incomingCall}
+        outgoingCall={globalChat.outgoingCall}
+        onAccept={(type) => {
+          setCurrentTab('chat');
+          globalChat.acceptCall();
+        }}
+        onDecline={() => globalChat.dismissIncomingCall()}
+        onCancel={() => globalChat.dismissOutgoingCall()}
+        currentUser={globalChat.currentUser}
+        isVoicemail={globalChat.isVoicemail}
+        isRecording={globalChat.isRecording}
+      />
 
       </div>
     </>

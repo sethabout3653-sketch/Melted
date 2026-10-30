@@ -129,6 +129,7 @@ export function useWebSocketDatabase(currentUser: {
     is_deafened: false,
     has_video: false,
     is_screen_sharing: false,
+    is_hand_raised: false,
     updated_at: Date.now(),
   });
 
@@ -265,6 +266,7 @@ export function useWebSocketDatabase(currentUser: {
             is_deafened: false,
             has_video: false,
             is_screen_sharing: false,
+            is_hand_raised: false,
           },
         }));
 

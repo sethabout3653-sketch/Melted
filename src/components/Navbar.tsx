@@ -9,7 +9,8 @@ import {
   Gamepad2, 
   MessageSquare,
   Sun,
-  Moon
+  Moon,
+  Phone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { CloakPreset } from '../hooks/useCloak';
@@ -37,6 +38,9 @@ interface NavbarProps {
   onToggleTheme?: () => void;
   onOpenFirebase?: () => void;
   firebaseUser?: any;
+  users?: any[];
+  onInitiateCall?: (id: string, name: string, type: 'audio' | 'video') => void;
+  currentUser?: any;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -58,10 +62,29 @@ export const Navbar: React.FC<NavbarProps> = ({
   onToggleTheme,
   onOpenFirebase,
   firebaseUser,
+  users = [],
+  onInitiateCall,
+  currentUser,
 }) => {
   const [isCloakOpen, setIsCloakOpen] = useState(false);
+  const [isPhoneOpen, setIsPhoneOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const cloakDropdownRef = useRef<HTMLDivElement>(null);
+  const phoneDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdowns on click outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (cloakDropdownRef.current && !cloakDropdownRef.current.contains(event.target as Node)) {
+        setIsCloakOpen(false);
+      }
+      if (phoneDropdownRef.current && !phoneDropdownRef.current.contains(event.target as Node)) {
+        setIsPhoneOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800 shrink-0 shadow-sm transition-colors">
@@ -170,6 +193,87 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
               </button>
             )}
+
+            {/* Visible by Verizon Phone Directory */}
+            <div className="relative" ref={phoneDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsPhoneOpen(!isPhoneOpen)}
+                className={`p-2.5 rounded-xl transition-all cursor-pointer border ${
+                  isPhoneOpen 
+                    ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 border-emerald-100 dark:border-emerald-800 shadow-md shadow-emerald-500/10' 
+                    : 'text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/20 border-transparent hover:border-emerald-100 dark:hover:border-emerald-800'
+                }`}
+                title="Phone Directory"
+              >
+                <Phone className="w-5 h-5" />
+              </button>
+
+              <AnimatePresence>
+                {isPhoneOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    className="absolute right-0 mt-3 w-72 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[28px] shadow-[0_25px_60px_rgba(0,0,0,0.15)] p-4 z-50 overflow-hidden"
+                  >
+                    <div className="flex flex-col gap-4">
+                      <div className="flex items-center justify-between pb-2 border-b border-slate-50 dark:border-slate-800">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 text-center w-full">Calling Directory</span>
+                        </div>
+                      </div>
+
+                      <div className="max-h-64 overflow-y-auto space-y-2 pr-1 scrollbar-none">
+                        {users.length <= 1 ? (
+                          <div className="py-8 text-center space-y-2">
+                            <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center mx-auto">
+                              <Phone className="w-5 h-5 text-slate-300" />
+                            </div>
+                            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">No other players online</p>
+                          </div>
+                        ) : (
+                          users.filter(u => u.id !== currentUser?.id).map((u) => (
+                            <div key={u.id} className="flex items-center justify-between p-2 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors group">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div 
+                                  className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-black text-black shrink-0 shadow-sm"
+                                  style={{ backgroundColor: u.avatar_color || '#0066ff' }}
+                                >
+                                  {u.username.slice(0, 1).toUpperCase()}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-xs font-extrabold text-slate-900 dark:text-white truncate">{u.username}</div>
+                                  <div className="text-[9px] text-slate-400 font-bold uppercase tracking-tight">Online</div>
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  onInitiateCall?.(u.id, u.username, 'audio');
+                                  setIsPhoneOpen(false);
+                                }}
+                                className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center shadow-lg shadow-emerald-500/20 hover:scale-110 transition-transform cursor-pointer"
+                              >
+                                <Phone className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <div className="pt-2 border-t border-slate-50 dark:border-slate-800">
+                        <button 
+                          onClick={() => setIsPhoneOpen(false)}
+                          className="w-full py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400 transition-all cursor-pointer"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
 
           <div className="relative" ref={cloakDropdownRef}>

@@ -18,6 +18,7 @@ export interface DbUser {
   is_deafened: boolean;
   has_video: boolean;
   is_screen_sharing: boolean;
+  is_hand_raised?: boolean;
   activity?: string;
   updated_at: number;
 }

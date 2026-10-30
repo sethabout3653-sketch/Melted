@@ -5,9 +5,20 @@ import fs from 'fs';
 import http from 'http';
 import { Readable } from 'stream';
 import { initWebSocketDatabase } from './src/server/wsDatabase';
+import { GoogleGenAI } from "@google/genai";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Initialize Gemini for TTS Voicemail
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: {
+    headers: {
+      'User-Agent': 'aistudio-build',
+    }
+  }
+});
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -128,6 +139,49 @@ app.get('/api/giphy/search', async (req, res) => {
     res.json(data);
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to fetch Giphy GIFs', message: err?.message });
+  }
+});
+
+// Gemini TTS Voicemail Prompt Endpoint
+app.get('/api/voicemail/prompt', async (req, res) => {
+  try {
+    const text = "The person you are calling is unavailable. Please leave a message after the tone.";
+    
+    const response = await ai.models.generateContent({
+      model: "gemini-3.8-flash-lite-tts",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            {
+              text: text,
+              speechMetadata: {
+                style: "Clear, professional voicemail greeting",
+              },
+            },
+          ],
+        },
+      ],
+      config: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            // 'Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr'
+            prebuiltVoiceConfig: { voiceName: "Kore" },
+          },
+        },
+      },
+    });
+
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    if (base64Audio) {
+      res.json({ success: true, audio: base64Audio });
+    } else {
+      res.status(500).json({ error: 'Failed to generate speech' });
+    }
+  } catch (err: any) {
+    console.error('TTS error:', err);
+    res.status(500).json({ error: 'TTS generation failed', message: err?.message });
   }
 });
 

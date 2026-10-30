@@ -8,6 +8,7 @@ import {
   MicOff, 
   Headphones, 
   PhoneOff, 
+  Phone,
   Send, 
   PlusCircle, 
   Search, 
@@ -29,7 +30,8 @@ import {
   ShieldAlert,
   ShieldCheck,
   Check,
-  Snowflake
+  Snowflake,
+  Hand
 } from 'lucide-react';
 import { GiphyFetch } from '@giphy/js-fetch-api';
 import { useWebRTC } from '../services/useWebRTC';
@@ -905,6 +907,64 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         u.id !== currentUser.id
     );
   }, [users, currentUser.id]);
+  
+  const lastHandRaisedStates = useRef<Map<string, boolean>>(new Map());
+
+  const playHandRaiseSound = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      
+      const playChime = (time: number, freq: number) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, time);
+        osc.frequency.exponentialRampToValueAtTime(freq * 1.5, time + 0.1);
+        osc.frequency.exponentialRampToValueAtTime(freq * 0.8, time + 0.3);
+
+        gain.gain.setValueAtTime(0.8, time);
+        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.4);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(time);
+        osc.stop(time + 0.4);
+      };
+
+      // Double chime for maximum attention
+      playChime(ctx.currentTime, 660);
+      playChime(ctx.currentTime + 0.15, 880);
+    } catch (e) {
+      console.warn('Failed to play hand raise sound:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    voiceUsers.forEach((u: any) => {
+      const wasRaised = lastHandRaisedStates.current.get(u.id) || false;
+      const isRaised = !!u.is_hand_raised;
+      
+      if (!wasRaised && isRaised) {
+        playHandRaiseSound();
+      }
+      
+      lastHandRaisedStates.current.set(u.id, isRaised);
+    });
+
+    // Cleanup stale users
+    const currentIds = new Set(voiceUsers.map((u: any) => u.id));
+    Array.from(lastHandRaisedStates.current.keys()).forEach(id => {
+      if (!currentIds.has(id)) lastHandRaisedStates.current.delete(id);
+    });
+  }, [voiceUsers, playHandRaiseSound]);
+
+  const toggleHandRaise = () => {
+    const nextState = !currentUser.is_hand_raised;
+    setCurrentUser((prev: any) => ({ ...prev, is_hand_raised: nextState }));
+    updateUser({ is_hand_raised: nextState });
+  };
 
   const isMediaActive = activeChannel === 'video-general' || isInVideo;
 
@@ -1184,6 +1244,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     });
   };
 
+  // Sync call acceptance from global overlay
+  useEffect(() => {
+    if (globalChat.callAccepted && incomingCall) {
+      joinVoiceChannel(incomingCall.callType === 'video');
+      if (dismissIncomingCall) dismissIncomingCall();
+    }
+  }, [globalChat.callAccepted, incomingCall, dismissIncomingCall]);
+
   // Toggle Camera
   const toggleCamera = async () => {
     if (isVideoEnabled) {
@@ -1347,6 +1415,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       ...prev,
       current_channel: 'text-general',
       activity: 'In #general',
+      is_hand_raised: false,
     }));
 
     updateUser({
@@ -1355,6 +1424,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       has_video: false,
       is_speaking: false,
       is_screen_sharing: false,
+      is_hand_raised: false,
     });
     setActiveChannel('text-general');
   };
@@ -2163,7 +2233,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               {/* ONLY ONLINE LIST IS SCROLLABLE */}
               <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pt-3 pr-1">
                 {users.map((u: any) => (
-                  <div key={u.id} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors">
+                  <div key={u.id} className="group flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors">
                     <div className="relative shrink-0">
                       {renderAvatar(u, 'w-9 h-9 text-xs')}
                       <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
@@ -2174,6 +2244,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         <span className="font-extrabold text-slate-900 dark:text-white text-xs truncate">
                           {u.username}
                         </span>
+                        {u.is_hand_raised && <Hand className="w-3 h-3 text-amber-500 shrink-0" />}
                         {u.id === currentUser.id && (
                           <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium shrink-0">
                             (you)
@@ -2183,6 +2254,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       {/* Live User Presence Activity */}
                       {renderUserActivity(u.activity || (u.current_channel === 'video-general' ? 'In General Voice' : 'In #general'))}
                     </div>
+
+                    {/* Desktop Direct Call Button */}
+                    {u.id !== currentUser.id && (
+                      <button
+                        onClick={() => globalChat.initiateCall(u.id, u.username, 'audio')}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-all cursor-pointer opacity-0 group-hover:opacity-100"
+                        title={`Call ${u.username}`}
+                      >
+                        <Phone className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -2230,6 +2312,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                             <span className="font-extrabold text-white text-xs truncate">
                               {u.username}
                             </span>
+                            {u.is_hand_raised && <Hand className="w-3 h-3 text-amber-500 shrink-0" />}
                             {u.id === currentUser.id && (
                               <span className="text-[10px] text-zinc-500 font-medium shrink-0">
                                 (you)
@@ -2238,6 +2321,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                           </div>
                           {renderUserActivity(u.activity || (u.current_channel === 'video-general' ? 'In General Voice' : 'In #general'))}
                         </div>
+
+                        {/* Mobile Direct Call Button */}
+                        {u.id !== currentUser.id && (
+                          <button
+                            onClick={() => globalChat.initiateCall(u.id, u.username, 'audio')}
+                            className="p-2 rounded-xl text-zinc-400 hover:text-emerald-500 hover:bg-white/5 transition-all cursor-pointer"
+                            title={`Call ${u.username}`}
+                          >
+                            <Phone className="w-5 h-5" />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -2253,29 +2347,29 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
           <div className="flex-1 min-h-0 flex overflow-hidden">
             
             {/* Main Stage Area */}
-            <div className="flex-1 min-h-0 flex flex-col bg-[#050507] relative overflow-hidden">
+            <div className="flex-1 min-h-0 flex flex-col bg-slate-50 dark:bg-slate-950 relative overflow-hidden transition-colors">
               
               {/* Top Header */}
-              <div className="px-4 sm:px-6 py-3.5 border-b border-[#1a1a20] bg-[#08080a] flex items-center justify-between shrink-0 gap-2">
+              <div className="px-4 sm:px-6 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between shrink-0 gap-2 transition-colors">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   {/* Mobile Channels button */}
                   <button
                     type="button"
                     onClick={() => setIsMobileChannelsOpen(true)}
-                    className="md:hidden p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                    className="md:hidden p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                     title="Open Channels"
                   >
                     <Menu className="w-5 h-5" />
                   </button>
 
-                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
                     <Mic className="w-4 h-4 sm:w-5 sm:h-5" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="font-extrabold text-white text-sm sm:text-base truncate">General Voice</span>
+                      <span className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base truncate font-heading">General Voice</span>
                     </div>
-                    <span className="text-[11px] sm:text-xs text-zinc-400 font-medium truncate block">
+                    <span className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium truncate block">
                       {voiceUsers.length + (isInVideo ? 1 : 0)} connected
                     </span>
                   </div>
@@ -2285,7 +2379,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   <button
                     onClick={toggleScreenShare}
                     className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 sm:gap-2 border transition-all cursor-pointer ${
-                      isScreenSharing ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-600/30' : 'bg-white/5 border-white/10 hover:bg-white/10 text-zinc-200'
+                      isScreenSharing ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-600/30' : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'
                     }`}
                   >
                     <Monitor className="w-4 h-4" />
@@ -2296,11 +2390,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   <button
                     type="button"
                     onClick={() => setIsMobileMembersOpen(true)}
-                    className="lg:hidden p-2 rounded-xl text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+                    className="lg:hidden p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold"
                     title="View Members"
                   >
                     <Users className="w-4 h-4" />
-                    <span className="hidden xs:inline text-[11px] text-zinc-400">{voiceUsers.length + (isInVideo ? 1 : 0)}</span>
+                    <span className="hidden xs:inline text-[11px] text-slate-500 dark:text-slate-400">{voiceUsers.length + (isInVideo ? 1 : 0)}</span>
                   </button>
                 </div>
               </div>
@@ -2329,12 +2423,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     
                     {/* Camera Tile */}
                     {isVideoEnabled && cameraStream && (
-                      <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                      <div className={`relative rounded-3xl overflow-hidden bg-slate-900 dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
                         localIsVertical 
                           ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
                           : 'aspect-video w-full max-w-[500px]'
                       } ${
-                        isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
+                        isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-slate-200 dark:border-slate-800'
                       }`}>
                         <LocalVideoPlayer 
                           stream={cameraStream} 
@@ -2345,7 +2439,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         />
 
                         {/* Orientation Badge */}
-                        <div className="absolute top-3 right-3 px-2.5 py-1 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none">
+                        <div className="absolute top-3 right-3 px-2.5 py-1 rounded-xl bg-slate-950/70 backdrop-blur-md border border-white/10 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none">
                           {localIsVertical ? (
                             <>
                               <Smartphone className="w-3.5 h-3.5 text-amber-400" />
@@ -2359,8 +2453,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                           )}
                         </div>
 
+                        {/* Hand Raised Indicator */}
+                        {currentUser.is_hand_raised && (
+                          <div className="absolute top-3 left-3 px-2.5 py-1 rounded-xl bg-amber-500/90 backdrop-blur-md border border-amber-400 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none animate-bounce">
+                            <Hand className="w-3.5 h-3.5" />
+                            <span>Hand Raised</span>
+                          </div>
+                        )}
+
                         {/* Bottom-Left Overlay */}
-                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
                           <div className="text-sm font-extrabold text-white">
                             {currentUser.username} (You - Camera)
                           </div>
@@ -2371,19 +2473,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                     {/* Local Screen Share Tile - Shows you are sharing (no video preview for self) */}
                     {isScreenSharing && (
-                      <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/40 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
-                        <div className="flex flex-col items-center justify-center gap-4 text-blue-400">
-                          <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shadow-lg shadow-blue-500/10">
-                            <Monitor className="w-8 h-8 text-blue-400 animate-pulse" />
+                      <div className="relative rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border border-blue-500/40 transition-all duration-300 flex flex-col items-center justify-center shadow-xl aspect-video w-full max-w-[500px]">
+                        <div className="flex flex-col items-center justify-center gap-4 text-blue-600 dark:text-blue-400">
+                          <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 flex items-center justify-center shadow-lg shadow-blue-500/10">
+                            <Monitor className="w-8 h-8 text-blue-600 dark:text-blue-400 animate-pulse" />
                           </div>
                           <div className="text-center px-4">
-                            <span className="text-base font-bold text-white block">You are sharing your screen</span>
-                            <span className="text-xs text-zinc-400 mt-1 block">Live stream is visible to other participants</span>
+                            <span className="text-base font-bold text-slate-900 dark:text-white block font-heading">You are sharing your screen</span>
+                            <span className="text-xs text-slate-500 dark:text-slate-400 mt-1 block font-medium">Live stream is visible to other participants</span>
                           </div>
                         </div>
 
                         {/* Bottom-Left Overlay */}
-                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-auto">
+                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent flex items-end justify-between z-20 pointer-events-auto">
                           <div className="text-sm font-extrabold text-white flex items-center gap-2">
                             <Monitor className="w-4 h-4 text-blue-400" />
                             <span>Your Screen (Sharing)</span>
@@ -2401,16 +2503,24 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                     {/* Avatar Tile (ALWAYS shown when camera is off, even if screen sharing!) */}
                     {(!isVideoEnabled || !cameraStream) && (
-                      <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px] ${
-                        isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
+                      <div className={`relative rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-xl aspect-video w-full max-w-[500px] ${
+                        isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-slate-200 dark:border-slate-800'
                       }`}>
                         <div className="relative flex items-center justify-center">
                           <div className={`transition-all ${isUserSpeaking ? 'ring-4 ring-amber-500 rounded-full shadow-[0_0_30px_#f59e0b]' : ''}`}>
                             {renderAvatar(currentUser, 'w-28 h-28 text-3xl')}
                           </div>
                         </div>
+
+                        {/* Hand Raised Indicator */}
+                        {currentUser.is_hand_raised && (
+                          <div className="absolute top-3 left-3 px-2.5 py-1 rounded-xl bg-amber-500/90 backdrop-blur-md border border-amber-400 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none animate-bounce">
+                            <Hand className="w-3.5 h-3.5" />
+                            <span>Hand Raised</span>
+                          </div>
+                        )}
                         {/* Bottom-Left Overlay */}
-                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-slate-950/80 via-slate-950/30 to-transparent flex items-end justify-between z-20 pointer-events-none">
                           <div className="text-sm font-extrabold text-white">
                             {currentUser.username} (You)
                           </div>
@@ -2433,12 +2543,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         <React.Fragment key={u.id}>
                           {/* Dedicated Remote Camera Tile (when camera is on) */}
                           {hasCamera && (
-                            <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                            <div className={`relative rounded-3xl overflow-hidden bg-slate-900 dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
                               isPeerCameraVertical 
                                 ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
                                 : 'aspect-video w-full max-w-[500px]'
                             } ${
-                              isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
+                              isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-slate-200 dark:border-slate-800'
                             }`}>
                               <RemoteVideoPlayer 
                                 stream={camStream} 
@@ -2449,7 +2559,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                               />
 
                               {/* Orientation Badge */}
-                              <div className="absolute top-3 right-3 px-2.5 py-1 rounded-xl bg-black/60 backdrop-blur-md border border-white/10 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none">
+                              <div className="absolute top-3 right-3 px-2.5 py-1 rounded-xl bg-slate-950/70 backdrop-blur-md border border-white/10 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none">
                                 {isPeerCameraVertical ? (
                                   <>
                                     <Smartphone className="w-3.5 h-3.5 text-amber-400" />
@@ -2463,7 +2573,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                                 )}
                               </div>
 
-                              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                              {/* Hand Raised Indicator */}
+                              {u.is_hand_raised && (
+                                <div className="absolute top-3 left-3 px-2.5 py-1 rounded-xl bg-amber-500/90 backdrop-blur-md border border-amber-400 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none animate-bounce">
+                                  <Hand className="w-3.5 h-3.5" />
+                                  <span>Hand Raised</span>
+                                </div>
+                              )}
+
+                              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
                                 <div className="text-sm font-extrabold text-white">
                                   {u.username} (Camera)
                                 </div>
@@ -2474,7 +2592,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                           {/* Dedicated Remote Screen Share Tile (when screen share is on) */}
                           {hasScreen && (
-                            <div className="relative rounded-3xl overflow-hidden bg-[#121215] border border-blue-500/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
+                            <div className="relative rounded-3xl overflow-hidden bg-slate-900 dark:bg-slate-900 border border-blue-500/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
                               <RemoteVideoPlayer 
                                 stream={scrStream} 
                                 username={`${u.username}'s Screen`}
@@ -2482,7 +2600,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                                 onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [`${u.id}-screen`]: vert }))}
                                 isScreen={true}
                               />
-                              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
                                 <div className="text-sm font-extrabold text-white flex items-center gap-2">
                                   <Monitor className="w-4 h-4 text-blue-400" />
                                   <span>{u.username}&apos;s Screen</span>
@@ -2493,19 +2611,27 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                           {/* Dedicated Remote Avatar Tile (shown when camera is off so peer is ALWAYS visible, even during screen share) */}
                           {!hasCamera && (
-                            <div className={`relative rounded-3xl overflow-hidden bg-[#121215] border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px] ${
-                              isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-white/10'
+                            <div className={`relative rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-xl aspect-video w-full max-w-[500px] ${
+                              isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-slate-200 dark:border-slate-800'
                             }`}>
                               <div className="relative flex items-center justify-center">
                                 <div className={`transition-all ${isPeerSpeaking ? 'ring-4 ring-amber-500 rounded-full shadow-[0_0_30px_#f59e0b]' : ''}`}>
                                   {renderAvatar(u, 'w-28 h-28 text-3xl')}
                                 </div>
                               </div>
-                              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-black/90 via-black/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
+
+                              {/* Hand Raised Indicator */}
+                              {u.is_hand_raised && (
+                                <div className="absolute top-3 left-3 px-2.5 py-1 rounded-xl bg-amber-500/90 backdrop-blur-md border border-amber-400 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none animate-bounce">
+                                  <Hand className="w-3.5 h-3.5" />
+                                  <span>Hand Raised</span>
+                                </div>
+                              )}
+                              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-slate-950/80 via-slate-950/30 to-transparent flex items-end justify-between z-20 pointer-events-none">
                                 <div className="text-sm font-extrabold text-white">
                                   {u.username}
                                 </div>
-                                {u.is_muted && <MicOff className="w-4 h-4 text-zinc-400" />}
+                                {u.is_muted && <MicOff className="w-4 h-4 text-slate-300" />}
                               </div>
                             </div>
                           )}
@@ -2516,30 +2642,30 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   </div>
                 ) : (
                   /* Join Prompt Card when not connected */
-                  <div className="text-center space-y-5 max-w-md bg-[#0d0d12] border border-[#20202c] p-8 rounded-3xl shadow-2xl">
-                    <div className="w-20 h-20 rounded-3xl bg-blue-600/15 border border-blue-500/30 text-blue-400 flex items-center justify-center mx-auto shadow-xl shadow-blue-600/20">
+                  <div className="text-center space-y-5 max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-3xl shadow-xl">
+                    <div className="w-20 h-20 rounded-3xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto shadow-sm">
                       <Mic className="w-10 h-10" />
                     </div>
                     <div className="space-y-1.5">
-                      <h2 className="text-2xl font-black text-white">General Voice</h2>
-                      <p className="text-xs text-zinc-400 max-w-sm mx-auto leading-relaxed">
+                      <h2 className="text-2xl font-black text-slate-900 dark:text-white font-heading">General Voice</h2>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed font-medium">
                         Talk with players with crystal-clear voice, share your camera, or stream gameplay with low latency.
                       </p>
                     </div>
 
                     {micError ? (
-                      <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-start gap-2.5 text-left text-xs text-red-300">
-                        <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                      <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-800 rounded-2xl flex items-start gap-2.5 text-left text-xs text-red-600 dark:text-red-300">
+                        <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
                         <div>
                           <p className="font-bold">Microphone access required</p>
-                          <p className="text-[11px] text-red-300/80 mt-0.5">
+                          <p className="text-[11px] text-red-500/80 dark:text-red-300/80 mt-0.5">
                             Please click the permissions/lock icon in your browser URL bar and allow microphone.
                           </p>
                         </div>
                       </div>
                     ) : (
-                      <div className="p-3 bg-blue-600/10 border border-blue-500/20 rounded-2xl flex items-center justify-center gap-2 text-xs text-blue-300 font-semibold">
-                        <ShieldCheck className="w-4 h-4 text-blue-400" />
+                      <div className="p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 rounded-2xl flex items-center justify-center gap-2 text-xs text-blue-600 dark:text-blue-400 font-semibold">
+                        <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                         <span>Requires microphone permission</span>
                       </div>
                     )}
@@ -2561,7 +2687,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               {/* Floating Bottom In-Call Control Bar - Adapts to Mobile, Console, and Desktop */}
               {isInVideo && (
                 <div className="absolute bottom-4 sm:bottom-6 inset-x-0 flex items-center justify-center gap-2 sm:gap-4 z-30 px-3 pointer-events-auto">
-                  <div className="flex items-center gap-2.5 sm:gap-4 bg-black/85 backdrop-blur-md p-2 rounded-2xl sm:rounded-3xl border border-white/10 shadow-2xl">
+                  <div className="flex items-center gap-2.5 sm:gap-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-2.5 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl transition-colors">
                     {/* Mic Button */}
                     <button 
                       onClick={toggleMute}
@@ -2579,7 +2705,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
                         isVideoEnabled 
                           ? 'bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500' 
-                          : 'bg-[#181820] text-zinc-400 hover:text-white hover:bg-[#252530] border border-white/10'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
                       }`}
                       title={isVideoEnabled ? 'Turn Off Camera' : 'Turn On Camera'}
                     >
@@ -2592,11 +2718,24 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
                         isScreenSharing 
                           ? 'bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500' 
-                          : 'bg-[#181820] text-zinc-400 hover:text-white hover:bg-[#252530] border border-white/10'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
                       }`}
                       title={isScreenSharing ? 'Stop Screen Share' : 'Share Screen'}
                     >
                       <Monitor className="w-5 h-5 sm:w-6 sm:h-6" />
+                    </button>
+
+                    {/* Raise Hand Button */}
+                    <button 
+                      onClick={toggleHandRaise}
+                      className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
+                        currentUser.is_hand_raised 
+                          ? 'bg-amber-500 text-white shadow-amber-600/30 hover:bg-amber-400' 
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                      }`}
+                      title={currentUser.is_hand_raised ? 'Lower Hand' : 'Raise Hand'}
+                    >
+                      <Hand className={`w-5 h-5 sm:w-6 sm:h-6 ${currentUser.is_hand_raised ? 'animate-bounce' : ''}`} />
                     </button>
 
                     {/* Disconnect Button */}
@@ -2614,11 +2753,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             </div>
 
             {/* Right Sidebar in Voice Channel - Desktop */}
-            <aside className="hidden lg:flex w-64 bg-[#08080a] border-l border-[#1a1a20] p-4 flex-col shrink-0 overflow-hidden">
+            <aside className="hidden lg:flex w-64 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 p-4 flex-col shrink-0 overflow-hidden">
               
               {/* VOICE USERS LIST */}
-              <div className="shrink-0 pb-3 border-b border-[#14141a]">
-                <div className="flex items-center gap-2 text-xs font-bold text-blue-400 tracking-wider uppercase">
+              <div className="shrink-0 pb-3 border-b border-slate-100 dark:border-slate-800">
+                <div className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400 tracking-wider uppercase">
                   <Mic className="w-4 h-4" />
                   <span>VOICE — {voiceUsers.length + (isInVideo ? 1 : 0)}</span>
                 </div>
@@ -2628,7 +2767,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pt-3 pr-1">
                 <div className="space-y-2">
                   {isInVideo && (
-                    <div className="p-2.5 rounded-2xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-between">
+                    <div className="p-2.5 rounded-2xl bg-blue-50 dark:bg-blue-600/10 border border-blue-200 dark:border-blue-500/30 flex items-center justify-between">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="relative shrink-0">
                           <div 
@@ -2637,22 +2776,22 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                           >
                             {currentUser.username.slice(0, 2).toUpperCase()}
                           </div>
-                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
+                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
                         </div>
                         <div className="min-w-0 leading-tight">
                           <div className="flex items-center gap-1">
-                            <span className="font-extrabold text-white text-xs truncate">{currentUser.username}</span>
-                            <span className="text-[10px] text-zinc-500">(you)</span>
+                            <span className="font-extrabold text-slate-900 dark:text-white text-xs truncate">{currentUser.username}</span>
+                            <span className="text-[10px] text-slate-500 dark:text-slate-400">(you)</span>
                           </div>
                           {renderUserActivity('In General Voice')}
                         </div>
                       </div>
-                      <Mic className="w-4 h-4 text-blue-400 shrink-0" />
+                      <Mic className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
                     </div>
                   )}
 
                   {voiceUsers.map((u: any) => (
-                    <div key={u.id} className="p-2.5 rounded-2xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-between">
+                    <div key={u.id} className="p-2.5 rounded-2xl bg-blue-50 dark:bg-blue-600/10 border border-blue-200 dark:border-blue-500/30 flex items-center justify-between">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="relative shrink-0">
                           <div 
@@ -2661,25 +2800,25 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                           >
                             {u.username.slice(0, 2).toUpperCase()}
                           </div>
-                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
+                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
                         </div>
                         <div className="min-w-0 leading-tight">
-                          <span className="font-extrabold text-white text-xs truncate block">{u.username}</span>
+                          <span className="font-extrabold text-slate-900 dark:text-white text-xs truncate block">{u.username}</span>
                           {renderUserActivity(u.activity || 'In General Voice')}
                         </div>
                       </div>
-                      <Mic className="w-4 h-4 text-blue-400 shrink-0" />
+                      <Mic className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
                     </div>
                   ))}
                 </div>
 
                 {/* ONLINE MEMBERS IN VOICE */}
-                <div className="space-y-2 pt-2 border-t border-[#14141a]">
-                  <div className="text-xs font-bold text-zinc-500 tracking-wider">
+                <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <div className="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">
                     <span>ONLINE — {Math.max(0, users.length - (voiceUsers.length + (isInVideo ? 1 : 0)))}</span>
                   </div>
                   {users.filter((u: any) => u.id !== currentUser.id && !voiceUsers.some((vu: any) => vu.id === u.id)).map((u: any) => (
-                    <div key={u.id} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-white/[0.03] transition-colors">
+                    <div key={u.id} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors">
                       <div className="relative shrink-0">
                         <div 
                           className="w-7 h-7 rounded-full text-black font-extrabold flex items-center justify-center text-[10px]"
@@ -2687,10 +2826,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         >
                           {u.username.slice(0, 2).toUpperCase()}
                         </div>
-                        <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-blue-500 border-2 border-[#08080a]" />
+                        <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
                       </div>
                       <div className="min-w-0 flex-1 leading-tight">
-                        <span className="font-bold text-zinc-300 text-xs truncate block">{u.username}</span>
+                        <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">{u.username}</span>
                         {renderUserActivity(u.activity || 'In #general')}
                       </div>
                     </div>
@@ -2704,19 +2843,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             {isMobileMembersOpen && (
               <div className="fixed inset-0 z-50 lg:hidden flex justify-end animate-in fade-in duration-200">
                 <div 
-                  className="fixed inset-0 bg-black/75 backdrop-blur-sm"
+                  className="fixed inset-0 bg-black/60 backdrop-blur-sm"
                   onClick={() => setIsMobileMembersOpen(false)}
                 />
-                <aside className="relative w-72 max-w-[85vw] h-full bg-[#08080a] border-l border-[#1a1a20] p-4 flex flex-col z-10 shadow-2xl animate-in slide-in-from-right duration-200">
-                  <div className="shrink-0 pb-3 flex items-center justify-between border-b border-[#14141a]">
-                    <div className="flex items-center gap-2 text-xs font-bold text-blue-400 tracking-wider uppercase">
+                <aside className="relative w-72 max-w-[85vw] h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 p-4 flex flex-col z-10 shadow-2xl animate-in slide-in-from-right duration-200">
+                  <div className="shrink-0 pb-3 flex items-center justify-between border-b border-slate-100 dark:border-slate-800">
+                    <div className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400 tracking-wider uppercase">
                       <Mic className="w-4 h-4" />
                       <span>VOICE — {voiceUsers.length + (isInVideo ? 1 : 0)}</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => setIsMobileMembersOpen(false)}
-                      className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                      className="p-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -2725,7 +2864,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pt-3 pr-1">
                     <div className="space-y-2">
                       {isInVideo && (
-                        <div className="p-2.5 rounded-2xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-between">
+                        <div className="p-2.5 rounded-2xl bg-blue-50 dark:bg-blue-600/10 border border-blue-200 dark:border-blue-500/30 flex items-center justify-between">
                           <div className="flex items-center gap-2.5 min-w-0">
                             <div className="relative shrink-0">
                               <div 
@@ -2734,22 +2873,22 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                               >
                                 {currentUser.username.slice(0, 2).toUpperCase()}
                               </div>
-                              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
+                              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
                             </div>
                             <div className="min-w-0 leading-tight">
                               <div className="flex items-center gap-1">
-                                <span className="font-extrabold text-white text-xs truncate">{currentUser.username}</span>
-                                <span className="text-[10px] text-zinc-500">(you)</span>
+                                <span className="font-extrabold text-slate-900 dark:text-white text-xs truncate">{currentUser.username}</span>
+                                <span className="text-[10px] text-slate-500 dark:text-slate-400">(you)</span>
                               </div>
                               {renderUserActivity('In General Voice')}
                             </div>
                           </div>
-                          <Mic className="w-4 h-4 text-blue-400 shrink-0" />
+                          <Mic className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
                         </div>
                       )}
 
                       {voiceUsers.map((u: any) => (
-                        <div key={u.id} className="p-2.5 rounded-2xl bg-blue-600/10 border border-blue-500/30 flex items-center justify-between">
+                        <div key={u.id} className="p-2.5 rounded-2xl bg-blue-50 dark:bg-blue-600/10 border border-blue-200 dark:border-blue-500/30 flex items-center justify-between">
                           <div className="flex items-center gap-2.5 min-w-0">
                             <div className="relative shrink-0">
                               <div 
@@ -2758,24 +2897,24 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                               >
                                 {u.username.slice(0, 2).toUpperCase()}
                               </div>
-                              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
+                              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
                             </div>
                             <div className="min-w-0 leading-tight">
-                              <span className="font-extrabold text-white text-xs truncate block">{u.username}</span>
+                              <span className="font-extrabold text-slate-900 dark:text-white text-xs truncate block">{u.username}</span>
                               {renderUserActivity(u.activity || 'In General Voice')}
                             </div>
                           </div>
-                          <Mic className="w-4 h-4 text-blue-400 shrink-0" />
+                          <Mic className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
                         </div>
                       ))}
                     </div>
 
-                    <div className="space-y-2 pt-2 border-t border-[#14141a]">
-                      <div className="text-xs font-bold text-zinc-500 tracking-wider">
+                    <div className="space-y-2 pt-2 border-t border-slate-100 dark:border-slate-800">
+                      <div className="text-xs font-bold text-slate-500 dark:text-slate-400 tracking-wider">
                         <span>ONLINE — {Math.max(0, users.length - (voiceUsers.length + (isInVideo ? 1 : 0)))}</span>
                       </div>
                       {users.filter((u: any) => u.id !== currentUser.id && !voiceUsers.some((vu: any) => vu.id === u.id)).map((u: any) => (
-                        <div key={u.id} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-white/[0.03] transition-colors">
+                        <div key={u.id} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors">
                           <div className="relative shrink-0">
                             <div 
                               className="w-7 h-7 rounded-full text-black font-extrabold flex items-center justify-center text-[10px]"
@@ -2783,10 +2922,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                             >
                               {u.username.slice(0, 2).toUpperCase()}
                             </div>
-                            <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-blue-500 border-2 border-[#08080a]" />
+                            <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
                           </div>
                           <div className="min-w-0 flex-1 leading-tight">
-                            <span className="font-bold text-zinc-300 text-xs truncate block">{u.username}</span>
+                            <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">{u.username}</span>
                             {renderUserActivity(u.activity || 'In #general')}
                           </div>
                         </div>
@@ -2804,10 +2943,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
       {/* INCOMING CALL MODAL */}
       {incomingCall && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-          <div className="bg-[#0e0e13] p-7 rounded-3xl border border-[#262630] w-full max-w-sm flex flex-col items-center text-center space-y-5 shadow-2xl">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+          <div className="bg-white dark:bg-slate-900 p-7 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-sm flex flex-col items-center text-center space-y-5 shadow-2xl">
             <div className="relative">
-              <div className="w-20 h-20 rounded-full bg-blue-600 text-black font-black text-2xl flex items-center justify-center ring-4 ring-blue-500/40 animate-pulse shadow-lg shadow-blue-600/30">
+              <div className="w-20 h-20 rounded-full bg-blue-600 text-white font-black text-2xl flex items-center justify-center ring-4 ring-blue-500/40 animate-pulse shadow-lg shadow-blue-600/30">
                 {(incomingCall.fromUserName || 'P').slice(0, 2).toUpperCase()}
               </div>
               <div className="absolute -bottom-1 -right-1 p-2 rounded-full bg-blue-500 text-white shadow-md">
@@ -2816,10 +2955,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             </div>
 
             <div className="space-y-1">
-              <h3 className="text-xl font-extrabold text-white">
+              <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">
                 {incomingCall.fromUserName || 'Friend'}
               </h3>
-              <p className="text-xs text-zinc-400 font-medium">
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                 Incoming {incomingCall.callType === 'video' ? 'Video' : 'Voice'} Call...
               </p>
             </div>
@@ -2827,7 +2966,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
             <div className="flex gap-4 w-full pt-2">
               <button
                 onClick={() => dismissIncomingCall && dismissIncomingCall()}
-                className="flex-1 py-3 rounded-2xl bg-red-600/20 text-red-400 border border-red-600/30 hover:bg-red-600/30 font-extrabold text-xs transition-colors cursor-pointer"
+                className="flex-1 py-3 rounded-2xl bg-red-50 dark:bg-red-600/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-600/30 hover:bg-red-100 dark:hover:bg-red-600/30 font-extrabold text-xs transition-colors cursor-pointer"
               >
                 Decline
               </button>
@@ -2844,19 +2983,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
       {/* OUTGOING CALL MODAL */}
       {outgoingCall && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
-          <div className="bg-[#0e0e13] p-7 rounded-3xl border border-[#262630] w-full max-w-sm flex flex-col items-center text-center space-y-5 shadow-2xl">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+          <div className="bg-white dark:bg-slate-900 p-7 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-sm flex flex-col items-center text-center space-y-5 shadow-2xl">
             <div className="relative">
-              <div className="w-20 h-20 rounded-full bg-blue-600 text-black font-black text-2xl flex items-center justify-center ring-4 ring-blue-500/40 animate-pulse shadow-lg shadow-blue-600/30">
+              <div className="w-20 h-20 rounded-full bg-blue-600 text-white font-black text-2xl flex items-center justify-center ring-4 ring-blue-500/40 animate-pulse shadow-lg shadow-blue-600/30">
                 {(outgoingCall.targetUserName || 'P').slice(0, 2).toUpperCase()}
               </div>
             </div>
 
             <div className="space-y-1">
-              <h3 className="text-xl font-extrabold text-white">
+              <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">
                 Calling {outgoingCall.targetUserName}...
               </h3>
-              <p className="text-xs text-zinc-400 font-medium">
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                 Waiting for answer...
               </p>
             </div>
