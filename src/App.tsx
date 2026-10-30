@@ -6,6 +6,7 @@ import { CategoryFilter } from './components/CategoryFilter';
 import { GameCard } from './components/GameCard';
 import { GamePlayer } from './components/GamePlayer';
 import { ChatView } from './components/ChatView';
+import { AIAssistantView } from './components/AIAssistantView';
 import { FrostedLoadingScreen } from './components/FrostedLoadingScreen';
 import { InAppNotificationToast } from './components/InAppNotificationToast';
 import { getAllGames, resolveGameUrl } from './services/gameService';
@@ -30,7 +31,7 @@ import {
 const PAGE_SIZE = 36;
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'games' | 'chat'>('games');
+  const [currentTab, setCurrentTab] = useState<'games' | 'chat' | 'ai'>('games');
   const [searchQuery, setSearchQuery] = useState('');
   const deferredQuery = useDeferredValue(searchQuery);
 
@@ -239,7 +240,7 @@ export default function App() {
     <>
       <FrostedLoadingScreen isLoading={isCatalogLoading} />
       <div className={`bg-[#f8fafc] dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white border-8 border-white dark:border-slate-900 shadow-[inset_0_0_100px_rgba(0,0,0,0.02)] transition-colors ${
-        currentTab === 'chat' ? 'h-screen h-[100dvh] max-h-screen overflow-hidden' : 'min-h-screen'
+        currentTab === 'chat' || currentTab === 'ai' ? 'h-screen h-[100dvh] max-h-screen overflow-hidden' : 'min-h-screen'
       }`}>
         
         {/* Top Navigation Bar */}
@@ -278,6 +279,17 @@ export default function App() {
             className="flex-1 flex flex-col min-h-0 h-full w-full"
           >
             <ChatView globalChat={globalChat} />
+          </motion.div>
+        ) : currentTab === 'ai' ? (
+          <motion.div
+            key="ai-tab-view"
+            initial={{ opacity: 0, y: 8, filter: 'blur(2px)' }}
+            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, y: -8, filter: 'blur(2px)' }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-hidden"
+          >
+            <AIAssistantView />
           </motion.div>
         ) : (
           <motion.main
@@ -488,11 +500,10 @@ export default function App() {
 
             <div className="pt-10 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between text-[12px] text-slate-400 font-medium gap-4">
               <div>
-                &copy; {new Date().getFullYear()} Frosted Arcade. All rights reserved.
+                &copy; {new Date().getFullYear()} Frosted. All rights reserved.
               </div>
               <div className="flex items-center gap-6">
-                <span>V3.8.2-PREMIUM</span>
-                <span className="text-blue-500">60 FPS CERTIFIED</span>
+                <span>V3.8.2</span>
               </div>
             </div>
           </div>

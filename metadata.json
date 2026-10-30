@@ -1,6 +1,6 @@
 {
   "name": "Frosted",
-  "description": "Fast, modern unblocked gaming portal featuring instant titles with 60 FPS in-browser play.",
+  "description": "Modern educational platform and study hub featuring interactive learning modules, community chat, and AI study assistant powered by Gemini 3.8 Flash.",
   "requestFramePermissions": ["microphone", "camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

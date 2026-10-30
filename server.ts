@@ -6,6 +6,7 @@ import http from 'http';
 import { Readable } from 'stream';
 import { initWebSocketDatabase } from './src/server/wsDatabase';
 import { GoogleGenAI } from "@google/genai";
+import Groq from 'groq-sdk';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -182,6 +183,117 @@ app.get('/api/voicemail/prompt', async (req, res) => {
   } catch (err: any) {
     console.error('TTS error:', err);
     res.status(500).json({ error: 'TTS generation failed', message: err?.message });
+  }
+});
+
+// AI Study Assistant Endpoint (supports Groq free models: llama-3.3-70b-versatile, llama3-8b-8192 & Gemini fallback)
+app.post('/api/ai/assistant', async (req, res) => {
+  try {
+    const { prompt, history } = req.body;
+    if (!prompt) {
+      return res.status(400).json({ error: 'Missing prompt' });
+    }
+
+    const systemInstruction = "You are Frosted AI, an intelligent, helpful, warm, concise, and clear study assistant and academic tutor. You assist students with study questions, homework, concept explanations, math problem steps, essay outlines, and practice quizzes. Give direct, insightful, concise, well-structured, and helpful answers using markdown formatting. Never use robotic disclaimers or canned phrases like 'As an AI language model...'. Answer in a friendly, conversational, human tone.";
+
+    let replyText = '';
+
+    // 1. TRY GROQ API FIRST if GROQ_API_KEY is configured in environment or Vercel
+    const groqKey = process.env.GROQ_API_KEY;
+    if (groqKey) {
+      try {
+        const groqClient = new Groq({ apiKey: groqKey });
+        
+        const groqMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+          { role: 'system', content: systemInstruction },
+        ];
+
+        if (Array.isArray(history) && history.length > 0) {
+          for (const msg of history) {
+            if (msg.role && msg.text) {
+              groqMessages.push({
+                role: msg.role === 'user' ? 'user' : 'assistant',
+                content: msg.text,
+              });
+            }
+          }
+        }
+
+        groqMessages.push({ role: 'user', content: prompt });
+
+        const groqModels = ['llama-3.3-70b-versatile', 'llama3-8b-8192', 'llama3-70b-8192', 'mixtral-8x7b-32768'];
+
+        for (const model of groqModels) {
+          try {
+            const completion = await groqClient.chat.completions.create({
+              messages: groqMessages,
+              model: model,
+              temperature: 0.7,
+            });
+
+            const text = completion.choices[0]?.message?.content;
+            if (text) {
+              replyText = text;
+              break;
+            }
+          } catch (mErr: any) {
+            console.warn(`Groq model ${model} failed:`, mErr?.message || mErr);
+          }
+        }
+      } catch (gErr: any) {
+        console.warn('Groq SDK call failed, falling back to Gemini API:', gErr?.message || gErr);
+      }
+    }
+
+    // 2. FALLBACK TO GEMINI API if Groq key is not configured or failed
+    if (!replyText) {
+      const formattedContents = [];
+      if (Array.isArray(history) && history.length > 0) {
+        for (const msg of history) {
+          if (msg.role && msg.text) {
+            formattedContents.push({
+              role: msg.role === 'user' ? 'user' : 'model',
+              parts: [{ text: msg.text }],
+            });
+          }
+        }
+      }
+      formattedContents.push({
+        role: 'user',
+        parts: [{ text: prompt }],
+      });
+
+      const apiKey = process.env.GEMINI_API_KEY;
+      const client = apiKey ? new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } }) : ai;
+
+      const geminiModels = ['gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
+
+      for (const modelName of geminiModels) {
+        try {
+          const response = await client.models.generateContent({
+            model: modelName,
+            contents: formattedContents,
+            config: { systemInstruction },
+          });
+
+          if (response && response.text) {
+            replyText = response.text;
+            break;
+          }
+        } catch (err: any) {
+          console.warn(`Gemini model ${modelName} failed:`, err?.message || err);
+        }
+      }
+    }
+
+    if (!replyText) {
+      throw new Error('All AI service providers (Groq & Gemini) are temporarily unavailable.');
+    }
+
+    res.json({ success: true, reply: replyText });
+  } catch (err: any) {
+    console.error('AI Assistant API Error:', err);
+    res.status(500).json({ error: 'AI Assistant error', message: err?.message || 'Failed to generate response' });
   }
 });
 

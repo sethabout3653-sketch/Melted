@@ -47,7 +47,7 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
             </h2>
             
             <p className="text-xl text-slate-500 dark:text-slate-400 max-w-xl font-medium leading-relaxed">
-              Experience the web's most refined unblocked performance. Precision controls, zero latency, and seamless integration.
+              Interactive educational modules, logic challenges, and study resources designed for student engagement.
             </p>
           </motion.div>
 
@@ -70,20 +70,8 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
               onClick={() => onAboutBlank(activeGame)}
               className="px-8 py-5 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 text-base font-bold rounded-2xl border border-slate-200 dark:border-slate-800 transition-all cursor-pointer shadow-sm"
             >
-              Stealth Tab
+              Quiet Window
             </motion.button>
-          </div>
-
-          {/* Trust markers */}
-          <div className="flex items-center gap-8 pt-4 border-t border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-2 text-slate-400 font-bold text-[10px] uppercase tracking-widest">
-              <ShieldCheck className="w-4 h-4 text-emerald-500" />
-              Verified Unblocked
-            </div>
-            <div className="flex items-center gap-2 text-slate-400 font-bold text-[10px] uppercase tracking-widest">
-              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-              60 FPS Optimized
-            </div>
           </div>
         </div>
 

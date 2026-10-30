@@ -17,8 +17,8 @@ import { CloakPreset } from '../hooks/useCloak';
 import { GameCategory } from '../types/game';
 
 interface NavbarProps {
-  currentTab: 'games' | 'chat';
-  onTabChange: (tab: 'games' | 'chat') => void;
+  currentTab: 'games' | 'chat' | 'ai';
+  onTabChange: (tab: 'games' | 'chat' | 'ai') => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onRandomGame: () => void;
@@ -109,13 +109,20 @@ export const Navbar: React.FC<NavbarProps> = ({
           </button>
 
           {/* Navigation Links */}
-          <nav className="hidden md:flex items-center gap-6">
+          <nav className="hidden md:flex items-center gap-4">
             <button 
               type="button"
               onClick={() => onTabChange('games')}
               className={`text-sm font-bold transition-all px-4 py-2 rounded-xl border ${currentTab === 'games' ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/30 border-blue-100 dark:border-blue-800' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border-transparent hover:border-slate-100 dark:hover:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'}`}
             >
               Games
+            </button>
+            <button 
+              type="button"
+              onClick={() => onTabChange('ai')}
+              className={`text-sm font-bold transition-all flex items-center gap-2 px-4 py-2 rounded-xl border ${currentTab === 'ai' ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/30 border-blue-100 dark:border-blue-800' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border-transparent hover:border-slate-100 dark:hover:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'}`}
+            >
+              AI Assistant
             </button>
             <button 
               type="button"
