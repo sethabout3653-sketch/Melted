@@ -43,14 +43,17 @@ export const AIAssistantView: React.FC = () => {
     const systemInstruction = "You are Frosted AI, an intelligent, helpful, warm, concise, and clear study assistant and academic tutor. You assist students with study questions, homework, concept explanations, math problem steps, essay outlines, and practice quizzes. Give direct, insightful, concise, well-structured, and helpful answers using markdown formatting. Never use robotic disclaimers or canned phrases like 'As an AI language model...'. Answer in a friendly, conversational, human tone.";
 
     const rawGroqKey = (
+      (import.meta.env.GROQ_API_KEY as string) ||
       (import.meta.env.VITE_GROQ_API_KEY as string) ||
+      (import.meta.env.GEMINI_API_KEY as string) ||
       (import.meta.env.VITE_GEMINI_API_KEY as string) ||
+      (typeof process !== 'undefined' && process.env?.GROQ_API_KEY ? process.env.GROQ_API_KEY : '') ||
       ((window as any).GROQ_API_KEY as string) ||
       ''
     ).replace(/^["']|["']$/g, '').trim();
 
     if (!rawGroqKey) {
-      throw new Error("Missing VITE_GROQ_API_KEY in Vercel environment variables. Please add VITE_GROQ_API_KEY to Vercel.");
+      throw new Error("Missing GROQ_API_KEY in Vercel Environment Variables. Please add GROQ_API_KEY in Vercel.");
     }
 
     const groqMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
