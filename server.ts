@@ -186,7 +186,7 @@ app.get('/api/voicemail/prompt', async (req, res) => {
   }
 });
 
-// AI Study Assistant Endpoint (supports Groq free models: llama-3.3-70b-versatile, llama3-8b-8192 & Gemini fallback)
+// AI Study Assistant Endpoint (smart Groq API & Gemini auto-detection)
 app.post('/api/ai/assistant', async (req, res) => {
   try {
     const { prompt, history } = req.body;
@@ -198,11 +198,16 @@ app.post('/api/ai/assistant', async (req, res) => {
 
     let replyText = '';
 
-    // 1. TRY GROQ API FIRST if GROQ_API_KEY is configured in environment or Vercel
-    const groqKey = process.env.GROQ_API_KEY;
+    // Auto-detect Groq API Key (Groq keys start with 'gsk_') from GROQ_API_KEY, VITE_GROQ_API_KEY, or GEMINI_API_KEY
+    const envGroq = (process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY || '').replace(/^["']|["']$/g, '').trim();
+    const envGemini = (process.env.GEMINI_API_KEY || '').replace(/^["']|["']$/g, '').trim();
+    const groqKey = envGroq || (envGemini.startsWith('gsk_') ? envGemini : '');
+    const geminiKey = envGemini.startsWith('gsk_') ? '' : envGemini;
+
+    // 1. TRY GROQ API FIRST if a valid gsk_ Groq key is present
     if (groqKey) {
       try {
-        const groqClient = new Groq({ apiKey: groqKey });
+        console.log(`[Groq AI] Attempting Groq completion with key starting ${groqKey.slice(0, 6)}...`);
         
         const groqMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
           { role: 'system', content: systemInstruction },
@@ -221,31 +226,53 @@ app.post('/api/ai/assistant', async (req, res) => {
 
         groqMessages.push({ role: 'user', content: prompt });
 
-        const groqModels = ['llama-3.3-70b-versatile', 'llama3-8b-8192', 'llama3-70b-8192', 'mixtral-8x7b-32768'];
+        const groqModels = [
+          'llama-3.3-70b-versatile',
+          'llama-3.1-8b-instant',
+          'llama3-70b-8192',
+          'llama3-8b-8192',
+          'mixtral-8x7b-32768',
+          'gemma2-9b-it'
+        ];
 
         for (const model of groqModels) {
           try {
-            const completion = await groqClient.chat.completions.create({
-              messages: groqMessages,
-              model: model,
-              temperature: 0.7,
+            const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${groqKey}`,
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                model: model,
+                messages: groqMessages,
+                temperature: 0.7,
+                max_tokens: 1024,
+              }),
             });
 
-            const text = completion.choices[0]?.message?.content;
-            if (text) {
-              replyText = text;
-              break;
+            if (groqRes.ok) {
+              const data = await groqRes.json();
+              const text = data.choices?.[0]?.message?.content;
+              if (text) {
+                replyText = text;
+                console.log(`[Groq AI] Success using model ${model}`);
+                break;
+              }
+            } else {
+              const errBody = await groqRes.text();
+              console.warn(`[Groq AI] Model ${model} HTTP ${groqRes.status}:`, errBody);
             }
           } catch (mErr: any) {
-            console.warn(`Groq model ${model} failed:`, mErr?.message || mErr);
+            console.warn(`[Groq AI] Model ${model} fetch error:`, mErr?.message || mErr);
           }
         }
       } catch (gErr: any) {
-        console.warn('Groq SDK call failed, falling back to Gemini API:', gErr?.message || gErr);
+        console.warn('[Groq AI] Groq API call failed, attempting Gemini fallback:', gErr?.message || gErr);
       }
     }
 
-    // 2. FALLBACK TO GEMINI API if Groq key is not configured or failed
+    // 2. FALLBACK TO GEMINI API if Groq key was not set or Groq call failed
     if (!replyText) {
       const formattedContents = [];
       if (Array.isArray(history) && history.length > 0) {
@@ -263,8 +290,7 @@ app.post('/api/ai/assistant', async (req, res) => {
         parts: [{ text: prompt }],
       });
 
-      const apiKey = process.env.GEMINI_API_KEY;
-      const client = apiKey ? new GoogleGenAI({ apiKey, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } }) : ai;
+      const client = geminiKey ? new GoogleGenAI({ apiKey: geminiKey, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } }) : ai;
 
       const geminiModels = ['gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
 
@@ -278,16 +304,17 @@ app.post('/api/ai/assistant', async (req, res) => {
 
           if (response && response.text) {
             replyText = response.text;
+            console.log(`[Gemini AI] Success using model ${modelName}`);
             break;
           }
         } catch (err: any) {
-          console.warn(`Gemini model ${modelName} failed:`, err?.message || err);
+          console.warn(`[Gemini AI] Model ${modelName} failed:`, err?.message || err);
         }
       }
     }
 
     if (!replyText) {
-      throw new Error('All AI service providers (Groq & Gemini) are temporarily unavailable.');
+      throw new Error('All AI service providers (Groq & Gemini) were temporarily unavailable. Please check your API key in Vercel environment variables.');
     }
 
     res.json({ success: true, reply: replyText });
