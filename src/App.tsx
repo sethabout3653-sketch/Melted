@@ -12,7 +12,6 @@ import { InAppNotificationToast } from './components/InAppNotificationToast';
 import { getAllGames, resolveGameUrl } from './services/gameService';
 import { useCloak, launchAboutBlank } from './hooks/useCloak';
 import { useGlobalChat } from './hooks/useGlobalChat';
-import { useFirebaseAuth } from './hooks/useFirebaseAuth';
 import { useDeviceAdaptation } from './hooks/useDeviceAdaptation';
 import { DeviceAdaptationBar } from './components/DeviceAdaptationBar';
 import { PhoneCallOverlay } from './components/PhoneCallOverlay';
@@ -40,14 +39,6 @@ export default function App() {
   const [favorites, setFavorites] = useState<number[]>(() => getFavorites());
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
-
-  // Reactive Firebase Authentication & Firestore Cloud Sync
-  const firebaseAuth = useFirebaseAuth(favorites, (merged) => {
-    setFavorites(merged);
-    try {
-      localStorage.setItem('frosted_favorites', JSON.stringify(merged));
-    } catch {}
-  });
 
   // Theme state: light by default
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -94,8 +85,7 @@ export default function App() {
 
   // Global Chat and Notifications
   const globalChat = useGlobalChat({ 
-    isChatTabActive: currentTab === 'chat',
-    firebaseUserId: firebaseAuth.user?.uid
+    isChatTabActive: currentTab === 'chat'
   });
 
   useEffect(() => {
@@ -144,7 +134,6 @@ export default function App() {
   const handleToggleFavorite = (id: number) => {
     const updated = toggleFavoriteStorage(id);
     setFavorites(updated);
-    firebaseAuth.syncToCloud(updated);
   };
 
   const handlePlayGame = (game: GameItem) => {

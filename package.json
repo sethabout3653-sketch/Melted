@@ -30,8 +30,6 @@
     "drizzle-kit": "^0.31.11",
     "drizzle-orm": "^0.45.4",
     "express": "^4.21.2",
-    "firebase": "^13.0.0",
-    "firebase-admin": "^14.5.0",
     "groq-sdk": "^1.6.0",
     "hono": "^4.13.13",
     "lucide-react": "^0.546.0",
