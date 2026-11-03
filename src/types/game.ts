@@ -9,7 +9,7 @@ export interface RawGame {
   localCover?: string;
   special?: string[];
   featured?: boolean;
-  source?: 'native';
+  source?: 'native' | 'ugs' | 'CKV';
 }
 
 export type GameCategory = 

@@ -1,25 +1,16 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import http from 'http';
 import { Readable } from 'stream';
-import { initWebSocketDatabase } from './src/server/wsDatabase';
-import { GoogleGenAI } from "@google/genai";
+import { initWebSocketDatabase, globalWsDb, broadcastTable, broadcastWss, sendToUserSockets } from './src/server/wsDatabase';
 import Groq from 'groq-sdk';
+import { processGameHtml, getScaffoldingBuffer } from './src/server/scaffoldingLoader';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Initialize Gemini for TTS Voicemail
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-  httpOptions: {
-    headers: {
-      'User-Agent': 'aistudio-build',
-    }
-  }
-});
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -123,6 +114,173 @@ app.get('/ping', (req, res) => {
   res.status(200).send('pong');
 });
 
+// --- WebSocket Database REST API Fallback Endpoints ---
+app.get('/api/ws-db/snapshot', (req, res) => {
+  res.json({
+    success: true,
+    users: globalWsDb.getUsers(),
+    messages: globalWsDb.messages,
+    channels: globalWsDb.channels,
+    timestamp: Date.now(),
+  });
+});
+
+app.post('/api/ws-db/register', (req, res) => {
+  try {
+    const { user } = req.body;
+    if (!user || !user.id) {
+      return res.status(400).json({ error: 'Missing user object or user.id' });
+    }
+    const existingUser = globalWsDb.getUser(user.id);
+    const userObj = {
+      id: user.id,
+      username: user.username || existingUser?.username || 'Player',
+      avatar_color: user.avatar_color || existingUser?.avatar_color || '#0066ff',
+      avatar_url: user.avatar_url ?? existingUser?.avatar_url ?? '',
+      current_channel: user.current_channel || existingUser?.current_channel || 'text-general',
+      is_speaking: user.is_speaking !== undefined ? Boolean(user.is_speaking) : Boolean(existingUser?.is_speaking),
+      is_muted: user.is_muted !== undefined ? Boolean(user.is_muted) : Boolean(existingUser?.is_muted),
+      is_deafened: user.is_deafened !== undefined ? Boolean(user.is_deafened) : Boolean(existingUser?.is_deafened),
+      has_video: user.has_video !== undefined ? Boolean(user.has_video) : Boolean(existingUser?.has_video),
+      is_screen_sharing: user.is_screen_sharing !== undefined ? Boolean(user.is_screen_sharing) : Boolean(existingUser?.is_screen_sharing),
+      activity: user.activity ?? existingUser?.activity ?? '',
+      updated_at: Date.now(),
+    };
+    globalWsDb.upsertUser(userObj as any);
+    broadcastTable('users', globalWsDb.getUsers());
+    res.json({ success: true, user: userObj, users: globalWsDb.getUsers() });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Register failed', message: err?.message });
+  }
+});
+
+app.post('/api/ws-db/update-user', (req, res) => {
+  try {
+    const { id, set } = req.body;
+    if (!id || !set) {
+      return res.status(400).json({ error: 'Missing id or set parameters' });
+    }
+    const existing = globalWsDb.getUser(id);
+    const updated = {
+      id,
+      username: existing?.username || 'Player',
+      avatar_color: existing?.avatar_color || '#0066ff',
+      avatar_url: existing?.avatar_url || '',
+      current_channel: existing?.current_channel || 'text-general',
+      is_speaking: existing?.is_speaking || false,
+      is_muted: existing?.is_muted || false,
+      is_deafened: existing?.is_deafened || false,
+      has_video: existing?.has_video || false,
+      is_screen_sharing: existing?.is_screen_sharing || false,
+      activity: existing?.activity || '',
+      ...existing,
+      ...set,
+      updated_at: Date.now(),
+    };
+    globalWsDb.upsertUser(updated as any);
+    broadcastTable('users', globalWsDb.getUsers());
+    res.json({ success: true, user: updated, users: globalWsDb.getUsers() });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Update user failed', message: err?.message });
+  }
+});
+
+app.post('/api/ws-db/message', (req, res) => {
+  try {
+    const { row } = req.body;
+    if (!row || !row.id) {
+      return res.status(400).json({ error: 'Missing message row' });
+    }
+    const newMsg = {
+      id: row.id,
+      channel_id: row.channel_id || 'text-general',
+      sender_id: row.sender_id || 'anon',
+      sender_name: row.sender_name || 'Player',
+      avatar_color: row.avatar_color || '#0066ff',
+      sender_avatar_url: row.sender_avatar_url || '',
+      content: row.content || '',
+      attachment_url: row.attachment_url,
+      attachment_type: row.attachment_type,
+      attachment_name: row.attachment_name,
+      timestamp: row.timestamp || ('Today at ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
+      created_at: Number(row.created_at) || Date.now(),
+    };
+    globalWsDb.insertMessage(newMsg as any);
+    broadcastTable('messages', globalWsDb.messages);
+    res.json({ success: true, message: newMsg, messages: globalWsDb.messages });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Insert message failed', message: err?.message });
+  }
+});
+
+app.delete('/api/ws-db/message/:id', (req, res) => {
+  try {
+    const messageId = req.params.id;
+    if (messageId) {
+      globalWsDb.deleteMessage(messageId);
+      broadcastTable('messages', globalWsDb.messages);
+    }
+    res.json({ success: true, messages: globalWsDb.messages });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Delete message failed', message: err?.message });
+  }
+});
+
+app.delete('/api/ws-db/channel-messages/:channelId', (req, res) => {
+  try {
+    const channelId = req.params.channelId;
+    if (channelId) {
+      globalWsDb.deleteChannelMessages(channelId);
+      broadcastTable('messages', globalWsDb.messages);
+    }
+    res.json({ success: true, messages: globalWsDb.messages });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Delete channel messages failed', message: err?.message });
+  }
+});
+
+app.post('/api/ws-db/signal', (req, res) => {
+  try {
+    const { fromUserId, fromUserName, targetUserId, type, callType, signal } = req.body;
+    if (!targetUserId || targetUserId === fromUserId) {
+      return res.status(400).json({ error: 'Invalid targetUserId' });
+    }
+
+    const payload = {
+      type,
+      fromUserId,
+      fromUserName: fromUserName || 'Player',
+      targetUserId,
+      callType: callType || 'audio',
+      signal,
+      ...(req.body.voicemail ? { voicemail: req.body.voicemail } : {}),
+      timestamp: Date.now(),
+    };
+
+    const delivered = sendToUserSockets(targetUserId, payload);
+    if (!delivered) {
+      globalWsDb.addPendingSignal({
+        id: (type || 'sig') + '-' + Date.now(),
+        ...payload,
+      });
+    }
+
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Signal failed', message: err?.message });
+  }
+});
+
+app.get('/api/ws-db/signals/:userId', (req, res) => {
+  try {
+    const userId = req.params.userId;
+    const signals = userId ? globalWsDb.popPendingSignals(userId) : [];
+    res.json({ success: true, signals });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Get signals failed', message: err?.message });
+  }
+});
+
 // Giphy Search & Trending API Proxy
 app.get('/api/giphy/search', async (req, res) => {
   const query = (req.query.q as string) || '';
@@ -143,201 +301,594 @@ app.get('/api/giphy/search', async (req, res) => {
   }
 });
 
-// Gemini TTS Voicemail Prompt Endpoint
-app.get('/api/voicemail/prompt', async (req, res) => {
+// AI Groq Models Endpoint - Option 1: groq-sdk models.list() / Option 2: Native fetch
+app.get('/api/ai/models', async (req, res) => {
+  const fallbackModels = [
+    { id: 'llama-3.1-8b-instant', owned_by: 'Meta', context_window: 131072, description: 'Super fast & lightweight (recommended)' },
+    { id: 'llama-3.3-70b-versatile', owned_by: 'Meta', context_window: 131072, description: 'High reasoning & versatile' },
+    { id: 'llama-3.2-1b-preview', owned_by: 'Meta', context_window: 131072, description: 'Ultra-lightweight instant response' },
+    { id: 'llama-3.2-3b-preview', owned_by: 'Meta', context_window: 131072, description: 'Fast compact model' },
+    { id: 'mixtral-8x7b-32768', owned_by: 'Mistral AI', context_window: 32768, description: 'Balanced MoE architecture' },
+    { id: 'gemma2-9b-it', owned_by: 'Google', context_window: 8192, description: 'Google Gemma 2 instruct model' },
+    { id: 'deepseek-r1-distill-llama-70b', owned_by: 'DeepSeek', context_window: 131072, description: 'Deep reasoning & problem solving' },
+  ];
+
+  const groqKey = (
+    process.env.GROQ_API_KEY ||
+    process.env.VITE_GROQ_API_KEY ||
+    (req.query.apiKey as string) ||
+    (process.env.GEMINI_API_KEY?.startsWith('gsk_') ? process.env.GEMINI_API_KEY : '') ||
+    ''
+  ).replace(/^["']|["']$/g, '').trim();
+
+  if (!groqKey) {
+    return res.json({
+      success: true,
+      hasKey: false,
+      models: fallbackModels,
+      source: 'curated-free',
+    });
+  }
+
+  // Option 1: Official groq-sdk
   try {
-    const text = "The person you are calling is unavailable. Please leave a message after the tone.";
-    
-    const response = await ai.models.generateContent({
-      model: "gemini-3.8-flash-lite-tts",
-      contents: [
-        {
-          role: "user",
-          parts: [
-            {
-              text: text,
-              speechMetadata: {
-                style: "Clear, professional voicemail greeting",
-              },
-            },
-          ],
-        },
-      ],
-      config: {
-        responseModalities: ["AUDIO"],
-        speechConfig: {
-          voiceConfig: {
-            // 'Puck', 'Charon', 'Kore', 'Fenrir', 'Zephyr'
-            prebuiltVoiceConfig: { voiceName: "Kore" },
-          },
-        },
+    const groq = new Groq({ apiKey: groqKey });
+    const response = await groq.models.list();
+    if (response && Array.isArray(response.data) && response.data.length > 0) {
+      const chatModels = response.data
+        .filter((m: any) => {
+          if (m.active === false) return false;
+          const id = (m.id || '').toLowerCase();
+          return !id.includes('whisper') && !id.includes('guard') && !id.includes('orpheus') && !id.includes('tts') && !id.includes('embed');
+        })
+        .map((m: any) => ({
+          id: m.id,
+          owned_by: m.owned_by || 'Groq',
+          context_window: m.context_window || 131072,
+          description: m.id.includes('oss-20b')
+            ? 'Super fast & lightweight (recommended)'
+            : m.id.includes('8b') || m.id.includes('7b')
+            ? 'Ultra-fast & lightweight'
+            : m.id.includes('70b') || m.id.includes('120b')
+            ? 'High reasoning & versatile'
+            : 'Active Groq chat model',
+        }));
+
+      if (chatModels.length > 0) {
+        return res.json({
+          success: true,
+          hasKey: true,
+          models: chatModels,
+          source: 'groq-sdk',
+        });
+      }
+    }
+  } catch (sdkErr: any) {
+    console.warn('[Groq Models] Official SDK models.list() notice:', sdkErr?.message);
+  }
+
+  // Option 2: Native fetch fallback
+  try {
+    const fetchRes = await fetch('https://api.groq.com/openai/v1/models', {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${groqKey}`,
+        'Content-Type': 'application/json',
       },
     });
 
-    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
-    if (base64Audio) {
-      res.json({ success: true, audio: base64Audio });
-    } else {
-      res.status(500).json({ error: 'Failed to generate speech' });
+    if (fetchRes.ok) {
+      const data = await fetchRes.json();
+      if (Array.isArray(data.data) && data.data.length > 0) {
+        const chatModels = data.data
+          .filter((m: any) => {
+            if (m.active === false) return false;
+            const id = (m.id || '').toLowerCase();
+            return !id.includes('whisper') && !id.includes('guard') && !id.includes('orpheus') && !id.includes('tts') && !id.includes('embed');
+          })
+          .map((m: any) => ({
+            id: m.id,
+            owned_by: m.owned_by || 'Groq',
+            context_window: m.context_window || 131072,
+            description: m.id.includes('oss-20b')
+              ? 'Super fast & lightweight (recommended)'
+              : m.id.includes('8b') || m.id.includes('7b')
+              ? 'Ultra-fast & lightweight'
+              : m.id.includes('70b') || m.id.includes('120b')
+              ? 'High reasoning & versatile'
+              : 'Active Groq chat model',
+          }));
+
+        if (chatModels.length > 0) {
+          return res.json({
+            success: true,
+            hasKey: true,
+            models: chatModels,
+            source: 'native-fetch',
+          });
+        }
+      }
+    }
+  } catch (fetchErr: any) {
+    console.warn('[Groq Models] Native fetch notice:', fetchErr?.message);
+  }
+
+  return res.json({
+    success: true,
+    hasKey: true,
+    models: fallbackModels,
+    source: 'curated-free',
+  });
+});
+
+// Web Search helper: DuckDuckGo HTML with Wikipedia Fallback
+interface WebSearchResult {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
+async function searchWeb(query: string): Promise<WebSearchResult[]> {
+  const results: WebSearchResult[] = [];
+  const cleanQ = query.replace(/[?.,!]+$/, '').trim();
+  if (!cleanQ) return results;
+
+  // 1. Try DuckDuckGo HTML
+  try {
+    const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(cleanQ)}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+      },
+      signal: AbortSignal.timeout(4500),
+    });
+
+    if (res.ok) {
+      const html = await res.text();
+      const regex = /<a[^>]+class="result__snippet"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
+      let m;
+      while ((m = regex.exec(html)) !== null && results.length < 5) {
+        let rawUrl = m[1];
+        let url = rawUrl;
+        if (rawUrl.includes('uddg=')) {
+          const match = rawUrl.match(/uddg=([^&]+)/);
+          if (match) url = decodeURIComponent(match[1]);
+        }
+        const snippet = m[2]
+          .replace(/<[^>]+>/g, '')
+          .replace(/&#x27;/g, "'")
+          .replace(/&quot;/g, '"')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/\s+/g, ' ')
+          .trim();
+
+        let domain = 'Web';
+        try {
+          domain = new URL(url).hostname.replace(/^www\./, '');
+        } catch {}
+
+        if (snippet && !results.some((r) => r.url === url)) {
+          results.push({ url, title: domain, snippet });
+        }
+      }
     }
   } catch (err: any) {
-    console.error('TTS error:', err);
-    res.status(500).json({ error: 'TTS generation failed', message: err?.message });
+    console.warn('[Web Search] DuckDuckGo search warning:', err?.message || err);
+  }
+
+  // 2. Fallback to Wikipedia Query Search if DDG returned no snippets
+  if (results.length === 0) {
+    try {
+      const wikiRes = await fetch(
+        `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(cleanQ)}&utf8=&format=json`,
+        {
+          headers: { 'User-Agent': 'FrostedAI/1.0' },
+          signal: AbortSignal.timeout(3500),
+        }
+      );
+      if (wikiRes.ok) {
+        const data = await wikiRes.json();
+        const hits = data?.query?.search || [];
+        for (const hit of hits.slice(0, 4)) {
+          const snippet = (hit.snippet || '')
+            .replace(/<[^>]+>/g, '')
+            .replace(/&#x27;/g, "'")
+            .replace(/&quot;/g, '"')
+            .replace(/&amp;/g, '&')
+            .replace(/\s+/g, ' ')
+            .trim();
+          results.push({
+            url: `https://en.wikipedia.org/wiki/${encodeURIComponent(hit.title.replace(/\s+/g, '_'))}`,
+            title: hit.title,
+            snippet,
+          });
+        }
+      }
+    } catch (wikiErr: any) {
+      console.warn('[Web Search] Wikipedia fallback warning:', wikiErr?.message || wikiErr);
+    }
+  }
+
+  return results;
+}
+
+function cleanShortAnswer(text: string): string {
+  if (!text) return '';
+  // Strip any trailing pleasantries, disclaimers, or "Would you like..." / "Do you want..." follow-ups
+  let cleaned = text
+    .replace(/(?:\r?\n)+(?:Would you like|Do you want|Let me know|Hope this helps|Feel free to|Should I|If you want|If you'd like|Can I help|Do you need)[\s\S]*$/i, '')
+    .trim();
+  return cleaned || text.trim();
+}
+
+function shouldSearchWeb(prompt: string, searchMode?: 'auto' | 'always' | 'off'): boolean {
+  if (searchMode === 'off') return false;
+  if (searchMode === 'always') return true;
+
+  const p = prompt.toLowerCase();
+  // Check for search trigger words or factual inquiries
+  const searchTriggers = [
+    'who is', 'who was', 'who won', 'who created', 'who played', 'when was', 'when did', 'when will',
+    'where is', 'where was', 'latest', 'current', 'news', 'score', 'winner', 'weather', 'price',
+    'release date', 'super bowl', 'champion', 'championship', 'today', 'yesterday', 'update',
+    'president', 'ceo', 'stats', 'movie', 'film', 'born', 'died', 'how many', 'population',
+    'search', 'google', 'look up', 'find out', 'history of', 'what is happening', 'record'
+  ];
+
+  return searchTriggers.some((t) => p.includes(t)) || p.length > 35;
+}
+
+// AI Assistant SSE Streaming Endpoint - Live step-by-step thinking & web search
+app.post('/api/ai/assistant/stream', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.flushHeaders?.();
+
+  let isAborted = false;
+  res.on('close', () => {
+    if (!res.writableEnded) {
+      isAborted = true;
+    }
+  });
+
+  const sendEvent = (event: any) => {
+    if (isAborted) return;
+    try {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
+      (res as any).flush?.();
+    } catch {}
+  };
+
+  try {
+    const { prompt, history, groqApiKey, model: customModel, searchMode } = req.body;
+    if (!prompt) {
+      sendEvent({ type: 'error', error: 'Missing prompt' });
+      return res.end();
+    }
+
+    const completedSteps: Array<{ id: string; title: string; detail: string; icon: string; timestamp: number }> = [];
+
+    const recordStep = (id: string, title: string, detail: string, icon: string, extra: any = {}) => {
+      const stepObj = { id, title, detail, icon, timestamp: Date.now(), ...extra };
+      completedSteps.push(stepObj);
+      sendEvent({ type: 'step', ...stepObj });
+    };
+
+    // Step 1: Logic starting...
+
+    // Auto-detect Groq API Key
+    const groqKey = (
+      process.env.GROQ_API_KEY ||
+      process.env.VITE_GROQ_API_KEY ||
+      (groqApiKey as string) ||
+      (process.env.GEMINI_API_KEY?.startsWith('gsk_') ? process.env.GEMINI_API_KEY : '') ||
+      ''
+    ).replace(/^["']|["']$/g, '').trim();
+
+    if (!groqKey) {
+      sendEvent({
+        type: 'error',
+        error: 'Groq API Key is not configured on the server. Please add GROQ_API_KEY to your server environment secrets.',
+      });
+      return res.end();
+    }
+
+    // Step 2: Determine Web Search requirement
+    let searchResults: WebSearchResult[] = [];
+    const needsSearch = shouldSearchWeb(prompt, searchMode);
+
+    if (needsSearch && !isAborted) {
+      recordStep('searching', 'Searching the Web', `Querying live web sources for "${prompt}"...`, 'search', { query: prompt });
+      searchResults = await searchWeb(prompt);
+
+      if (searchResults.length > 0) {
+        const sourceNames = searchResults.map((s) => s.title).join(', ');
+        recordStep(
+          'reading',
+          'Reading Sources',
+          `Scanned ${searchResults.length} live sources (${sourceNames}). Extracting relevant facts...`,
+          'globe',
+          { sources: searchResults.map((s) => ({ title: s.title, url: s.url })) }
+        );
+      } else {
+        recordStep('reading', 'Direct Knowledge', 'Consulting fast Groq inference engine...', 'cpu');
+      }
+    }
+
+    if (isAborted) return res.end();
+
+    // Step 3: Synthesis with Groq
+    const targetModel = typeof customModel === 'string' && customModel.trim() ? customModel.trim() : 'openai/gpt-oss-20b';
+    recordStep('synthesizing', 'Synthesizing Answer', `Formulating direct response with ${targetModel}...`, 'sparkles');
+
+    const systemInstruction =
+      "You are Frosted AI. Keep all answers short, direct, and concise (1 to 3 sentences maximum). For overview questions like 'what is ___ about' or 'what is the ___ all about', give a clear high-level answer with just a little tiny bit of explanation. Never give unsolicited multi-step lecture breakdowns, long essays, or repetitive summary lists. State formulas or facts directly. USE PROFESSIONAL LATEX FOR ALL MATH FORMULAS. CRITICAL: Use $...$ for inline math and $$...$$ for block math. ALWAYS use \\dfrac for fractions to make them clear and vertically stacked. NEVER include any follow-up questions or offers such as 'Would you like...', 'Do you want...', 'Let me know', 'Can I help with...', etc. NONE of that. Answer and stop.";
+
+    let searchContext = '';
+    if (searchResults.length > 0) {
+      searchContext = `\n\n[Live Web Search Context for "${prompt}"]:\n` +
+        searchResults.map((r, i) => `[Source ${i + 1}] (${r.title} - ${r.url}): ${r.snippet}`).join('\n') +
+        `\nUse the above live web facts to answer accurately and concisely.`;
+    }
+
+    const groqMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+      { role: 'system', content: systemInstruction + searchContext },
+    ];
+
+    if (Array.isArray(history) && history.length > 0) {
+      for (const msg of history) {
+        if (msg.role && msg.text) {
+          groqMessages.push({
+            role: msg.role === 'user' ? 'user' : 'assistant',
+            content: msg.text,
+          });
+        }
+      }
+    }
+
+    groqMessages.push({ role: 'user', content: prompt });
+
+    const groqModels = [
+      targetModel,
+      'openai/gpt-oss-20b',
+      'llama-3.1-8b-instant',
+      'qwen/qwen3.8-27b',
+      'openai/gpt-oss-120b',
+      'allam-2-7b',
+      'llama-3.3-70b-versatile',
+    ].filter((m, idx, arr) => arr.indexOf(m) === idx);
+
+    let replyText = '';
+
+    for (const model of groqModels) {
+      if (isAborted) break;
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 9000);
+
+        const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${groqKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: groqMessages,
+            temperature: 0.3,
+            max_tokens: 240,
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        if (groqRes.ok) {
+          const data = await groqRes.json();
+          const text = data.choices?.[0]?.message?.content;
+          if (text) {
+            replyText = cleanShortAnswer(text);
+            console.log(`[Groq AI Stream] Success with model ${model}`);
+            break;
+          }
+        }
+      } catch (mErr: any) {
+        console.warn(`[Groq AI Stream] Model ${model} fetch failed:`, mErr?.message || mErr);
+      }
+    }
+
+    if (isAborted) return res.end();
+
+    if (!replyText) {
+      sendEvent({
+        type: 'error',
+        error: 'Groq API request failed or timed out. Please check your Groq API key.',
+      });
+      return res.end();
+    }
+
+    // Step 4: Done event
+    sendEvent({
+      type: 'done',
+      reply: replyText,
+      sources: searchResults.map((s) => ({ title: s.title, url: s.url })),
+      steps: completedSteps,
+    });
+    res.end();
+  } catch (err: any) {
+    console.error('AI Stream Error:', err);
+    sendEvent({ type: 'error', error: err?.message || 'Failed to stream response' });
+    res.end();
   }
 });
 
-// AI Study Assistant Endpoint (smart Groq API & Gemini auto-detection)
+// AI Study Assistant Endpoint (Standard JSON) - Powered exclusively by Groq with Web Search
 app.post('/api/ai/assistant', async (req, res) => {
   try {
-    const { prompt, history } = req.body;
+    const { prompt, history, groqApiKey, model: customModel, searchMode } = req.body;
     if (!prompt) {
       return res.status(400).json({ error: 'Missing prompt' });
     }
 
-    const systemInstruction = "You are Frosted AI, an intelligent, helpful, warm, concise, and clear study assistant and academic tutor. You assist students with study questions, homework, concept explanations, math problem steps, essay outlines, and practice quizzes. Give direct, insightful, concise, well-structured, and helpful answers using markdown formatting. Never use robotic disclaimers or canned phrases like 'As an AI language model...'. Answer in a friendly, conversational, human tone.";
+    const systemInstruction =
+      "You are Frosted AI. Keep all answers short, direct, and concise (1 to 3 sentences maximum). For overview questions like 'what is ___ about' or 'what is the ___ all about', give a clear high-level answer with just a little tiny bit of explanation. Never give unsolicited multi-step lecture breakdowns, long essays, or repetitive summary lists. State formulas or facts directly. USE PROFESSIONAL LATEX FOR ALL MATH FORMULAS. CRITICAL: Use $...$ for inline math and $$...$$ for block math. ALWAYS use \\dfrac for fractions to make them clear and vertically stacked. NEVER include any follow-up questions or offers such as 'Would you like...', 'Do you want...', 'Let me know', 'Can I help with...', etc. NONE of that. Answer and stop.";
+
+    // Auto-detect Groq API Key from server environment secrets (GROQ_API_KEY) or request body
+    const groqKey = (
+      process.env.GROQ_API_KEY ||
+      process.env.VITE_GROQ_API_KEY ||
+      (groqApiKey as string) ||
+      (process.env.GEMINI_API_KEY?.startsWith('gsk_') ? process.env.GEMINI_API_KEY : '') ||
+      ''
+    ).replace(/^["']|["']$/g, '').trim();
+
+    if (!groqKey) {
+      return res.status(503).json({
+        error: 'Groq API Key is not configured on the server. Please add GROQ_API_KEY to your server environment secrets.',
+      });
+    }
+
+    let searchResults: WebSearchResult[] = [];
+    const steps: Array<{ id: string; title: string; detail: string; icon: string; timestamp: number }> = [];
+
+    if (shouldSearchWeb(prompt, searchMode)) {
+      steps.push({ id: 'searching', title: 'Searching the Web', detail: `Querying for "${prompt}"`, icon: 'search', timestamp: Date.now() });
+      searchResults = await searchWeb(prompt);
+      if (searchResults.length > 0) {
+        steps.push({
+          id: 'reading',
+          title: 'Reading Sources',
+          detail: `Analyzed ${searchResults.length} live sources`,
+          icon: 'globe',
+          timestamp: Date.now(),
+        });
+      }
+    }
+
+    let searchContext = '';
+    if (searchResults.length > 0) {
+      searchContext = `\n\n[Live Web Search Context for "${prompt}"]:\n` +
+        searchResults.map((r, i) => `[Source ${i + 1}] (${r.title} - ${r.url}): ${r.snippet}`).join('\n') +
+        `\nUse the above live web facts to answer accurately and concisely.`;
+    }
+
+    const groqMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+      { role: 'system', content: systemInstruction + searchContext },
+    ];
+
+    if (Array.isArray(history) && history.length > 0) {
+      for (const msg of history) {
+        if (msg.role && msg.text) {
+          groqMessages.push({
+            role: msg.role === 'user' ? 'user' : 'assistant',
+            content: msg.text,
+          });
+        }
+      }
+    }
+
+    groqMessages.push({ role: 'user', content: prompt });
+
+    const targetModel = typeof customModel === 'string' && customModel.trim() ? customModel.trim() : 'openai/gpt-oss-20b';
+    const groqModels = [
+      targetModel,
+      'openai/gpt-oss-20b',
+      'llama-3.1-8b-instant',
+      'qwen/qwen3.8-27b',
+      'openai/gpt-oss-120b',
+      'allam-2-7b',
+      'llama-3.3-70b-versatile',
+    ].filter((m, idx, arr) => arr.indexOf(m) === idx);
 
     let replyText = '';
 
-    // Auto-detect Groq API Key (Groq keys start with 'gsk_') from GROQ_API_KEY, VITE_GROQ_API_KEY, or GEMINI_API_KEY
-    const envGroq = (process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY || '').replace(/^["']|["']$/g, '').trim();
-    const envGemini = (process.env.GEMINI_API_KEY || '').replace(/^["']|["']$/g, '').trim();
-    const groqKey = envGroq || (envGemini.startsWith('gsk_') ? envGemini : '');
-    const geminiKey = envGemini.startsWith('gsk_') ? '' : envGemini;
-
-    // 1. TRY GROQ API FIRST if a valid gsk_ Groq key is present
-    if (groqKey) {
+    for (const model of groqModels) {
       try {
-        console.log(`[Groq AI] Attempting Groq completion with key starting ${groqKey.slice(0, 6)}...`);
-        
-        const groqMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
-          { role: 'system', content: systemInstruction },
-        ];
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 9000);
 
-        if (Array.isArray(history) && history.length > 0) {
-          for (const msg of history) {
-            if (msg.role && msg.text) {
-              groqMessages.push({
-                role: msg.role === 'user' ? 'user' : 'assistant',
-                content: msg.text,
-              });
-            }
-          }
-        }
+        const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${groqKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: groqMessages,
+            temperature: 0.3,
+            max_tokens: 240,
+          }),
+          signal: controller.signal,
+        });
 
-        groqMessages.push({ role: 'user', content: prompt });
+        clearTimeout(timeoutId);
 
-        const groqModels = [
-          'llama-3.3-70b-versatile',
-          'llama-3.1-8b-instant',
-          'llama3-70b-8192',
-          'llama3-8b-8192',
-          'mixtral-8x7b-32768',
-          'gemma2-9b-it'
-        ];
-
-        for (const model of groqModels) {
-          try {
-            const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${groqKey}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                model: model,
-                messages: groqMessages,
-                temperature: 0.7,
-                max_tokens: 1024,
-              }),
-            });
-
-            if (groqRes.ok) {
-              const data = await groqRes.json();
-              const text = data.choices?.[0]?.message?.content;
-              if (text) {
-                replyText = text;
-                console.log(`[Groq AI] Success using model ${model}`);
-                break;
-              }
-            } else {
-              const errBody = await groqRes.text();
-              console.warn(`[Groq AI] Model ${model} HTTP ${groqRes.status}:`, errBody);
-            }
-          } catch (mErr: any) {
-            console.warn(`[Groq AI] Model ${model} fetch error:`, mErr?.message || mErr);
-          }
-        }
-      } catch (gErr: any) {
-        console.warn('[Groq AI] Groq API call failed, attempting Gemini fallback:', gErr?.message || gErr);
-      }
-    }
-
-    // 2. FALLBACK TO GEMINI API if Groq key was not set or Groq call failed
-    if (!replyText) {
-      const formattedContents = [];
-      if (Array.isArray(history) && history.length > 0) {
-        for (const msg of history) {
-          if (msg.role && msg.text) {
-            formattedContents.push({
-              role: msg.role === 'user' ? 'user' : 'model',
-              parts: [{ text: msg.text }],
-            });
-          }
-        }
-      }
-      formattedContents.push({
-        role: 'user',
-        parts: [{ text: prompt }],
-      });
-
-      const client = geminiKey ? new GoogleGenAI({ apiKey: geminiKey, httpOptions: { headers: { 'User-Agent': 'aistudio-build' } } }) : ai;
-
-      const geminiModels = ['gemini-3.1-flash-lite', 'gemini-3.8-flash', 'gemini-flash-latest'];
-
-      for (const modelName of geminiModels) {
-        try {
-          const response = await client.models.generateContent({
-            model: modelName,
-            contents: formattedContents,
-            config: { systemInstruction },
-          });
-
-          if (response && response.text) {
-            replyText = response.text;
-            console.log(`[Gemini AI] Success using model ${modelName}`);
+        if (groqRes.ok) {
+          const data = await groqRes.json();
+          const text = data.choices?.[0]?.message?.content;
+          if (text) {
+            replyText = cleanShortAnswer(text);
+            console.log(`[Groq AI] Fast success with model ${model}`);
             break;
           }
-        } catch (err: any) {
-          console.warn(`[Gemini AI] Model ${modelName} failed:`, err?.message || err);
+        } else {
+          const errBody = await groqRes.text().catch(() => '');
+          console.warn(`[Groq AI] Model ${model} returned ${groqRes.status}:`, errBody.slice(0, 150));
         }
+      } catch (mErr: any) {
+        console.warn(`[Groq AI] Model ${model} fetch failed:`, mErr?.message || mErr);
       }
     }
 
     if (!replyText) {
-      throw new Error('All AI service providers (Groq & Gemini) were temporarily unavailable. Please check your API key in Vercel environment variables.');
+      return res.status(502).json({
+        error: 'Groq API request failed or timed out. Please check your Groq API key.',
+      });
     }
 
-    res.json({ success: true, reply: replyText });
+    res.json({
+      success: true,
+      reply: replyText,
+      sources: searchResults.map((s) => ({ title: s.title, url: s.url })),
+      steps,
+    });
   } catch (err: any) {
     console.error('AI Assistant API Error:', err);
     res.status(500).json({ error: 'AI Assistant error', message: err?.message || 'Failed to generate response' });
   }
 });
 
-// Cover Image Proxy
+// Cover Image Proxy with Memory Cache
+const coverCache = new Map<string, { data: Buffer; contentType: string; timestamp: number }>();
+const MAX_COVER_CACHE_SIZE = 1000;
+
 app.get('/api/cover/:path(*)', async (req, res) => {
   const coverPath = req.params.path;
   if (!coverPath) {
     return res.status(400).send('Invalid cover path');
   }
 
+  // Serve from memory cache if available
+  const cached = coverCache.get(coverPath);
+  if (cached && (Date.now() - cached.timestamp < 86400000 * 7)) {
+    res.setHeader('Content-Type', cached.contentType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+    return res.send(cached.data);
+  }
+
   const primaryUrl = `https://raw.githubusercontent.com/gn-math/covers/main/${coverPath}`;
-  const fallbackUrl = `https://cdn.statically.io/gh/gn-math/covers/main/${coverPath}`;
+  const fallbackUrl = `https://raw.githack.com/gn-math/covers/main/${coverPath}`;
 
   try {
     let response = await fetch(primaryUrl, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       },
       signal: AbortSignal.timeout(6000),
     });
@@ -345,7 +896,7 @@ app.get('/api/cover/:path(*)', async (req, res) => {
     if (!response.ok) {
       response = await fetch(fallbackUrl, {
         headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         },
         signal: AbortSignal.timeout(6000),
       });
@@ -359,9 +910,16 @@ app.get('/api/cover/:path(*)', async (req, res) => {
     const arrayBuffer = await response.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    // Save to memory cache (purge oldest if cache is full)
+    if (coverCache.size >= MAX_COVER_CACHE_SIZE) {
+      const firstKey = coverCache.keys().next().value;
+      if (firstKey) coverCache.delete(firstKey);
+    }
+    coverCache.set(coverPath, { data: buffer, contentType, timestamp: Date.now() });
+
     res.setHeader('Content-Type', contentType);
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
     res.send(buffer);
   } catch (err: any) {
     res.status(500).send('Error fetching cover');
@@ -376,6 +934,141 @@ if (fs.existsSync(fileMapPath)) {
     fileMap = JSON.parse(fs.readFileSync(fileMapPath, 'utf8'));
   } catch {}
 }
+
+// Proxy UGS game files to force text/html MIME type and guarantee 100% playable iframe rendering
+app.get('/api/ugs/:path(*)', async (req, res) => {
+  const ugsPath = req.params.path;
+  if (!ugsPath) {
+    return res.status(400).send('Invalid UGS game path');
+  }
+
+  const cleanPath = ugsPath.startsWith('/') ? ugsPath : `/${ugsPath}`;
+  const fullPath = cleanPath.startsWith('/ugs/') ? cleanPath : `/ugs${cleanPath}`;
+
+  const primaryUrl = `https://raw.githack.com/gmshelf/ugs/main${fullPath}`;
+  const fallbackUrl = `https://raw.githubusercontent.com/gmshelf/ugs/main${fullPath}`;
+
+  try {
+    let response = await fetch(primaryUrl, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      },
+      signal: AbortSignal.timeout(6000),
+    });
+
+    if (!response.ok) {
+      response = await fetch(fallbackUrl, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        },
+        signal: AbortSignal.timeout(6000),
+      });
+    }
+
+    // Fallback for missing TurboWarp scaffolding script files (e.g., script.js, scaffolding.js)
+    if (!response.ok) {
+      const lower = fullPath.toLowerCase();
+      if (
+        lower.endsWith('script.js') ||
+        lower.endsWith('scaffolding.js') ||
+        lower.endsWith('scaffolding-full.js') ||
+        lower.endsWith('scaffolding-min.js')
+      ) {
+        const scaffoldingBuffer = await getScaffoldingBuffer();
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+        return res.send(scaffoldingBuffer);
+      }
+
+      return res.status(response.status).send('UGS game file not found');
+    }
+
+    const isHtml = fullPath.endsWith('.html') || fullPath.endsWith('.htm') || !fullPath.includes('.');
+
+    if (isHtml) {
+      const rawText = await response.text();
+      const processedHtml = processGameHtml(rawText, '/api/ugs/script.js');
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(processedHtml);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(buffer);
+  } catch (err: any) {
+    res.status(500).send('Error proxying UGS game file');
+  }
+});
+
+// Proxy CKV game files to force text/html MIME type and guarantee 100% playable iframe rendering
+app.get('/api/ckv/:path(*)', async (req, res) => {
+  const ckvPath = req.params.path;
+  if (!ckvPath) {
+    return res.status(400).send('Invalid CKV game path');
+  }
+
+  const cleanPath = ckvPath.startsWith('/') ? ckvPath : `/${ckvPath}`;
+  const fullPath = cleanPath.startsWith('/ckv/') ? cleanPath.replace(/^\/ckv\//, '/') : cleanPath;
+
+  const primaryUrl = `https://wanocapy.github.io/ChickenKingsVault${fullPath}`;
+  const fallbackUrl = `https://raw.githubusercontent.com/WanoCapy/ChickenKingsVault/main${fullPath}`;
+
+  try {
+    let response = await fetch(primaryUrl, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      },
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!response.ok) {
+      response = await fetch(fallbackUrl, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        },
+        signal: AbortSignal.timeout(8000),
+      });
+    }
+
+    if (!response.ok) {
+      return res.status(response.status).send('CKV game file not found');
+    }
+
+    const isHtml = fullPath.endsWith('.html') || fullPath.endsWith('.htm') || !fullPath.includes('.');
+
+    if (isHtml) {
+      const rawText = await response.text();
+      const processedHtml = processGameHtml(rawText, '/api/ugs/script.js');
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.send(processedHtml);
+    }
+
+    const arrayBuffer = await response.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+    const contentType = response.headers.get('content-type') || 'application/octet-stream';
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(buffer);
+  } catch (err: any) {
+    res.status(500).send('Error proxying CKV game file');
+  }
+});
 
 // Proxy game files to guarantee 100% reliable iframe loading
 app.get('/api/raw/:filename(*)', async (req, res) => {
@@ -441,6 +1134,20 @@ app.get('/api/raw/:filename(*)', async (req, res) => {
     }
 
     if (!response || !response.ok) {
+      const lower = rawPath.toLowerCase();
+      if (
+        lower.endsWith('script.js') ||
+        lower.endsWith('scaffolding.js') ||
+        lower.endsWith('scaffolding-full.js') ||
+        lower.endsWith('scaffolding-min.js')
+      ) {
+        const scaffoldingBuffer = await getScaffoldingBuffer();
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+        return res.send(scaffoldingBuffer);
+      }
+
       return res.status(response?.status || 404).send(`Failed to fetch game package: ${response?.statusText || 'Not found'}`);
     }
 
@@ -464,6 +1171,7 @@ app.get('/api/raw/:filename(*)', async (req, res) => {
     }
 
     let html = await response.text();
+    html = processGameHtml(html, '/api/raw/script.js');
 
     // Determine directory base for relative asset resolution through raw.githack.com
     const dirBase = rawPath.includes('/') ? rawPath.substring(0, rawPath.lastIndexOf('/') + 1) : '';
@@ -566,6 +1274,11 @@ setInterval(function(){
     console.error(`Error loading game ${rawPath}:`, error);
     res.status(500).send(`Error streaming game: ${error?.message || error}`);
   }
+});
+
+// Catch-all for API routes to never return HTML
+app.all('/api/*', (req, res) => {
+  res.status(404).json({ error: `API route ${req.method} ${req.originalUrl || req.path} not found` });
 });
 
 // Serve frontend: Vite dev middlewares in development, static files in production

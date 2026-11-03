@@ -73,6 +73,7 @@ interface PeerTrackMeta {
   hasCamera?: boolean;
   isScreenSharing?: boolean;
   hasScreenAudio?: boolean;
+  isMuted?: boolean;
 }
 
 interface PeerConnectionBundle {
@@ -90,6 +91,7 @@ interface UseWebRTCProps {
   localVideoStream?: MediaStream | null;
   cameraStream?: MediaStream | null;
   screenStream?: MediaStream | null;
+  isMuted?: boolean;
   isVertical?: boolean;
   peers: DbUser[];
   sendRtcSignal: (targetUserId: string, signal: any) => void;
@@ -106,6 +108,7 @@ export function useWebRTC({
   localAudioStream,
   cameraStream,
   screenStream,
+  isMuted = false,
   peers,
   sendRtcSignal,
   setRtcSignalHandler,
@@ -157,30 +160,35 @@ export function useWebRTC({
   // Route audio tracks for a given peer (distinguishing mic vs screen share audio)
   const routeAudioTracksForPeer = useCallback((peerId: string) => {
     const peerAudioMap = remoteAudioTracks.current.get(peerId);
-    if (!peerAudioMap || peerAudioMap.size === 0) {
+    const meta = peerTrackMetas.current.get(peerId);
+    
+    if (!peerAudioMap || peerAudioMap.size === 0 || meta?.isMuted === true) {
       setRemoteStreams((prev) => {
         if (!prev[peerId]) return prev;
         const copy = { ...prev };
         delete copy[peerId];
         return copy;
       });
-      setRemoteScreenAudioStreams((prev) => {
-        if (!prev[peerId]) return prev;
-        const copy = { ...prev };
-        delete copy[peerId];
-        return copy;
-      });
+      // Also clear screen audio if no tracks or explicitly muted (though screen audio usually isn't "muted" the same way)
+      if (!peerAudioMap || peerAudioMap.size === 0) {
+        setRemoteScreenAudioStreams((prev) => {
+          if (!prev[peerId]) return prev;
+          const copy = { ...prev };
+          delete copy[peerId];
+          return copy;
+        });
+      }
       return;
     }
 
-    const meta = peerTrackMetas.current.get(peerId);
     const peerDb = peersRef.current.find((p) => p.id === peerId);
 
     let foundMicStream: MediaStream | null = null;
     let foundScreenAudioStream: MediaStream | null = null;
 
     peerAudioMap.forEach(({ track, stream }) => {
-      if (track.readyState !== 'live') return;
+      // Check for live and enabled state
+      if (track.readyState !== 'live' || !track.enabled || track.muted) return;
 
       const isExplicitScreenAudio = meta?.screenAudioTrackId && track.id === meta.screenAudioTrackId;
       const isExplicitMic = meta?.micAudioTrackId && track.id === meta.micAudioTrackId;
@@ -212,7 +220,7 @@ export function useWebRTC({
 
     // Update remote microphone audio
     setRemoteStreams((prev) => {
-      if (foundMicStream) {
+      if (foundMicStream && meta?.isMuted !== true) {
         if (prev[peerId] === foundMicStream) return prev;
         return { ...prev, [peerId]: foundMicStream };
       }
@@ -242,7 +250,18 @@ export function useWebRTC({
   // Route video tracks for a given peer based on metadata & peer state
   const routeVideoTracksForPeer = useCallback((peerId: string) => {
     const peerMap = remoteVideoTracks.current.get(peerId);
-    if (!peerMap || peerMap.size === 0) {
+    const meta = peerTrackMetas.current.get(peerId);
+    const peerDb = peersRef.current.find((p) => p.id === peerId);
+
+    const isCameraAllowed = (meta ? meta.hasCamera === true : Boolean(peerDb?.has_video)) &&
+                           (peerDb ? peerDb.has_video === true : Boolean(meta?.hasCamera));
+    const isCameraDisallowed = !isCameraAllowed;
+
+    const isScreenAllowed = (meta ? meta.isScreenSharing === true : Boolean(peerDb?.is_screen_sharing)) &&
+                            (peerDb ? peerDb.is_screen_sharing === true : Boolean(meta?.isScreenSharing));
+    const isScreenDisallowed = !isScreenAllowed;
+
+    if (!peerMap || peerMap.size === 0 || (isCameraDisallowed && isScreenDisallowed)) {
       setRemoteCameraStreams((prev) => {
         if (!prev[peerId]) return prev;
         const copy = { ...prev };
@@ -258,14 +277,11 @@ export function useWebRTC({
       return;
     }
 
-    const meta = peerTrackMetas.current.get(peerId);
-    const peerDb = peersRef.current.find((p) => p.id === peerId);
-
     let foundCamStream: MediaStream | null = null;
     let foundScreenStream: MediaStream | null = null;
 
     peerMap.forEach(({ track, stream }) => {
-      if (track.readyState !== 'live') return;
+      if (track.readyState !== 'live' || !track.enabled || track.muted) return;
 
       const isExplicitScreen = meta?.screenTrackId && track.id === meta.screenTrackId;
       const isExplicitCam = meta?.camTrackId && track.id === meta.camTrackId;
@@ -299,7 +315,14 @@ export function useWebRTC({
     });
 
     setRemoteCameraStreams((prev) => {
-      const hasLiveCamTrack = foundCamStream && foundCamStream.getVideoTracks().some((t) => t.readyState === 'live');
+      if (isCameraDisallowed) {
+        if (!prev[peerId]) return prev;
+        const copy = { ...prev };
+        delete copy[peerId];
+        return copy;
+      }
+      
+      const hasLiveCamTrack = Boolean(foundCamStream && foundCamStream.getVideoTracks().some((t) => t.readyState === 'live' && t.enabled && !t.muted));
       if (hasLiveCamTrack && foundCamStream) {
         if (prev[peerId] === foundCamStream) return prev;
         return { ...prev, [peerId]: foundCamStream };
@@ -313,7 +336,14 @@ export function useWebRTC({
     });
 
     setRemoteScreenStreams((prev) => {
-      const hasLiveScreenTrack = foundScreenStream && foundScreenStream.getVideoTracks().some((t) => t.readyState === 'live');
+      if (isScreenDisallowed) {
+        if (!prev[peerId]) return prev;
+        const copy = { ...prev };
+        delete copy[peerId];
+        return copy;
+      }
+
+      const hasLiveScreenTrack = Boolean(foundScreenStream && foundScreenStream.getVideoTracks().some((t) => t.readyState === 'live' && t.enabled && !t.muted));
       if (hasLiveScreenTrack && foundScreenStream) {
         if (prev[peerId] === foundScreenStream) return prev;
         return { ...prev, [peerId]: foundScreenStream };
@@ -406,7 +436,18 @@ export function useWebRTC({
     const screenTrack = screenStreamRef.current?.getVideoTracks()[0];
     if (screenTrack && screenStreamRef.current) {
       try {
-        newBundle.screenSender = pc.addTrack(screenTrack, screenStreamRef.current);
+        const sender = pc.addTrack(screenTrack, screenStreamRef.current);
+        newBundle.screenSender = sender;
+        const params = sender.getParameters();
+        if (!params.encodings) params.encodings = [{}];
+        params.encodings.forEach((enc) => {
+          enc.maxFramerate = 30;
+          enc.maxBitrate = 2500000;
+        });
+        if ('degradationPreference' in params) {
+          (params as any).degradationPreference = 'maintain-framerate';
+        }
+        sender.setParameters(params).catch(() => {});
       } catch {}
     }
 
@@ -446,6 +487,7 @@ export function useWebRTC({
         };
 
         track.addEventListener('unmute', onAudioChange);
+        track.addEventListener('mute', onAudioChange);
         track.addEventListener('ended', () => {
           const map = remoteAudioTracks.current.get(peerId);
           if (map) {
@@ -468,6 +510,7 @@ export function useWebRTC({
         };
 
         track.addEventListener('unmute', onLive);
+        track.addEventListener('mute', onLive);
         track.addEventListener('ended', () => {
           const map = remoteVideoTracks.current.get(peerId);
           if (map) {
@@ -534,6 +577,7 @@ export function useWebRTC({
         hasCamera: Boolean(camTrack),
         isScreenSharing: Boolean(screenTrack),
         hasScreenAudio: Boolean(screenAudioTrack),
+        isMuted: isMuted,
       });
     } catch (err) {
       console.warn('[useWebRTC] Offer creation error:', err);
@@ -541,7 +585,7 @@ export function useWebRTC({
       makingOfferRef.current.set(peerId, false);
       isNegotiatingRef.current.set(peerId, false);
     }
-  }, [getOrCreatePeerBundle, sendRtcSignal]);
+  }, [getOrCreatePeerBundle, sendRtcSignal, isMuted]);
 
   // Sync local tracks across all active peer connections
   const syncLocalTracks = useCallback(() => {
@@ -602,9 +646,32 @@ export function useWebRTC({
       if (screenTrack && screenStream) {
         if (bundle.screenSender) {
           bundle.screenSender.replaceTrack(screenTrack).catch(() => {});
+          try {
+            const params = bundle.screenSender.getParameters();
+            if (!params.encodings) params.encodings = [{}];
+            params.encodings.forEach((enc) => {
+              enc.maxFramerate = 30;
+              enc.maxBitrate = 2500000;
+            });
+            if ('degradationPreference' in params) {
+              (params as any).degradationPreference = 'maintain-framerate';
+            }
+            bundle.screenSender.setParameters(params).catch(() => {});
+          } catch {}
         } else {
           try {
-            bundle.screenSender = pc.addTrack(screenTrack, screenStream);
+            const sender = pc.addTrack(screenTrack, screenStream);
+            bundle.screenSender = sender;
+            const params = sender.getParameters();
+            if (!params.encodings) params.encodings = [{}];
+            params.encodings.forEach((enc) => {
+              enc.maxFramerate = 30;
+              enc.maxBitrate = 2500000;
+            });
+            if ('degradationPreference' in params) {
+              (params as any).degradationPreference = 'maintain-framerate';
+            }
+            sender.setParameters(params).catch(() => {});
             needsRenegotiation = true;
           } catch {}
         }
@@ -619,16 +686,26 @@ export function useWebRTC({
         screenAudioTrackId: screenAudioTrack?.id || null,
         camTrackId: camTrack?.id || null,
         screenTrackId: screenTrack?.id || null,
-        hasCamera: Boolean(camTrack),
-        isScreenSharing: Boolean(screenTrack),
-        hasScreenAudio: Boolean(screenAudioTrack),
+        hasCamera: Boolean(camTrack && camTrack.enabled && camTrack.readyState === 'live'),
+        isScreenSharing: Boolean(screenTrack && screenTrack.enabled && screenTrack.readyState === 'live'),
+        hasScreenAudio: Boolean(screenAudioTrack && screenAudioTrack.enabled && screenAudioTrack.readyState === 'live'),
+        isMuted: isMuted,
       });
 
       if (needsRenegotiation && pc.signalingState === 'stable') {
         renegotiateWithPeer(peerId);
       }
     });
-  }, [isMediaActive, localAudioStream, cameraStream, screenStream, renegotiateWithPeer, sendRtcSignal]);
+  }, [isMediaActive, localAudioStream, cameraStream, screenStream, renegotiateWithPeer, sendRtcSignal, isMuted]);
+
+  // Periodic health check for track sync
+  useEffect(() => {
+    if (!isMediaActive) return;
+    const interval = setInterval(() => {
+      syncLocalTracks();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [isMediaActive, syncLocalTracks]);
 
   useEffect(() => {
     syncLocalTracks();
@@ -651,10 +728,27 @@ export function useWebRTC({
             screenAudioTrackId: signal.screenAudioTrackId,
             camTrackId: signal.camTrackId,
             screenTrackId: signal.screenTrackId,
-            hasCamera: signal.hasCamera,
-            isScreenSharing: signal.isScreenSharing,
-            hasScreenAudio: signal.hasScreenAudio,
+            hasCamera: Boolean(signal.hasCamera),
+            isScreenSharing: Boolean(signal.isScreenSharing),
+            hasScreenAudio: Boolean(signal.hasScreenAudio),
+            isMuted: signal.isMuted,
           });
+          if (!signal.hasCamera) {
+            setRemoteCameraStreams((prev) => {
+              if (!prev[fromUserId]) return prev;
+              const copy = { ...prev };
+              delete copy[fromUserId];
+              return copy;
+            });
+          }
+          if (!signal.isScreenSharing) {
+            setRemoteScreenStreams((prev) => {
+              if (!prev[fromUserId]) return prev;
+              const copy = { ...prev };
+              delete copy[fromUserId];
+              return copy;
+            });
+          }
           routeAudioTracksForPeer(fromUserId);
           routeVideoTracksForPeer(fromUserId);
           return;
@@ -670,6 +764,7 @@ export function useWebRTC({
               hasCamera: signal.hasCamera,
               isScreenSharing: signal.isScreenSharing,
               hasScreenAudio: signal.hasScreenAudio,
+              isMuted: signal.isMuted,
             });
           }
 
@@ -705,6 +800,7 @@ export function useWebRTC({
             hasCamera: Boolean(myCamTrack),
             isScreenSharing: Boolean(myScreenTrack),
             hasScreenAudio: Boolean(myScreenAudioTrack),
+            isMuted: isMuted,
           });
 
           // Flush queued candidates
@@ -726,6 +822,7 @@ export function useWebRTC({
               hasCamera: signal.hasCamera,
               isScreenSharing: signal.isScreenSharing,
               hasScreenAudio: signal.hasScreenAudio,
+              isMuted: signal.isMuted,
             });
           }
 
@@ -762,7 +859,7 @@ export function useWebRTC({
         console.warn('[useWebRTC] Signal handling error:', err);
       }
     });
-  }, [isMediaActive, currentUserId, getOrCreatePeerBundle, sendRtcSignal, setRtcSignalHandler, routeAudioTracksForPeer, routeVideoTracksForPeer]);
+  }, [isMediaActive, currentUserId, getOrCreatePeerBundle, sendRtcSignal, setRtcSignalHandler, routeAudioTracksForPeer, routeVideoTracksForPeer, isMuted]);
 
   // Maintain active connections to all peers in the channel
   useEffect(() => {

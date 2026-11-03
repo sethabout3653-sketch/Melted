@@ -1,6 +1,6 @@
 {
-  "name": "Frosted",
-  "description": "Modern educational platform and study hub featuring interactive learning modules, community chat, and AI study assistant powered by Gemini 3.8 Flash.",
+  "name": "Frosted Arcade",
+  "description": "Premium editorial unblocked gaming portal with community chat and AI study assistant.",
   "requestFramePermissions": ["microphone", "camera"],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": []
 }

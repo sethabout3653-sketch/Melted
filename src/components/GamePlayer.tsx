@@ -145,9 +145,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     setIsLoading(true);
     setHasError(false);
 
-    const directUrl = game.resolvedUrl || (game.url ? resolveGameUrl(game.url, game.id) : '');
-    if (directUrl) {
-      setPlayableUrl(directUrl);
+    const targetUrl = game.proxyUrl || game.resolvedUrl || (game.url ? resolveGameUrl(game.url, game.id) : '');
+    if (targetUrl) {
+      setPlayableUrl(targetUrl);
     } else {
       setHasError(true);
     }
@@ -181,17 +181,18 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const reloadGame = () => {
     setIsLoading(true);
     setHasError(false);
-    const directUrl = game.resolvedUrl || (game.url ? resolveGameUrl(game.url, game.id) : '');
-    if (directUrl) {
-      setPlayableUrl(directUrl);
+    const targetUrl = game.proxyUrl || game.resolvedUrl || (game.url ? resolveGameUrl(game.url, game.id) : '');
+    if (targetUrl) {
+      setPlayableUrl(targetUrl);
       if (iframeRef.current) {
-        iframeRef.current.src = directUrl + (directUrl.includes('?') ? '&' : '?') + 't=' + Date.now();
+        // Use a timestamp to force fresh load through proxy
+        const separator = targetUrl.includes('?') ? '&' : '?';
+        iframeRef.current.src = `${targetUrl}${separator}reload=${Date.now()}`;
       }
-      setIsLoading(false);
     } else {
       setHasError(true);
-      setIsLoading(false);
     }
+    setIsLoading(false);
   };
 
   return (
@@ -388,7 +389,21 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 setIsLoading(false);
                 // Silently restore saved game data into iframe scope on load
                 if (iframeRef.current?.contentWindow) {
-                  restoreAutoSaveToIframe(game.id, iframeRef.current.contentWindow);
+                  const win = iframeRef.current.contentWindow;
+                  restoreAutoSaveToIframe(game.id, win);
+                  
+                  // Inject Scaffolding compatibility layer
+                  try {
+                    const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
+                    if (doc) {
+                      import('../utils/scaffolding-loader').then(({ injectScaffolding }) => {
+                        injectScaffolding(doc);
+                      });
+                    }
+                  } catch (e) {
+                    console.warn('Could not inject scaffolding:', e);
+                  }
+
                   try {
                     iframeRef.current.focus();
                   } catch {}

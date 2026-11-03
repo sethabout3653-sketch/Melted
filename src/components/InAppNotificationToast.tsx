@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { MessageSquare, X, ArrowRight, FileText, Image as ImageIcon, Music, Video as VideoIcon } from 'lucide-react';
 import { InAppNotification } from '../hooks/useGlobalChat';
+import { UserAvatar } from './UserAvatar';
 
 interface InAppNotificationToastProps {
   notification: InAppNotification | null;
@@ -74,82 +75,30 @@ export const InAppNotificationToast: React.FC<InAppNotificationToastProps> = ({
   return (
     <div 
       role="alert"
-      className="fixed top-5 right-4 sm:right-6 z-[250] max-w-sm w-full bg-[var(--bg-navy)]/95 border border-[var(--bg-navy)] rounded-2xl shadow-2xl shadow-black/80 backdrop-blur-xl overflow-hidden animate-in fade-in slide-in-from-top-4 duration-200 transition-all select-none"
+      className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[300] w-[90%] max-w-sm bg-white rounded-xl shadow-lg p-4 flex items-center justify-between animate-in slide-in-from-bottom-4 duration-300"
     >
-      {/* Header Bar */}
-      <div className="px-3.5 pt-3 pb-2 flex items-center justify-between border-b border-[var(--bg-navy)] bg-[var(--bg-navy)]">
-        <div className="flex items-center gap-1.5 text-[11px] font-bold text-blue-400">
-          <MessageSquare className="w-3.5 h-3.5" />
-          <span>New message in #general</span>
-        </div>
-        <button
-          onClick={onDismiss}
-          className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-          title="Dismiss notification"
-          aria-label="Dismiss notification"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
+      <div className="flex items-center gap-3">
+        <div className="w-2 h-2 rounded-full bg-blue-500" />
+        <span className="text-sm font-medium text-slate-900">
+          New message from {notification.sender_name}
+        </span>
       </div>
+      
+      <button
+        onClick={onDismiss}
+        className="p-1 rounded-full hover:bg-slate-100 text-slate-400 transition-colors cursor-pointer"
+      >
+        <X className="w-4 h-4" />
+      </button>
 
-      {/* Message Body */}
-      <div className="p-3.5 flex items-start gap-3">
-        {/* Avatar */}
-        {notification.avatar_url ? (
-          <div className="w-10 h-10 rounded-full overflow-hidden shrink-0 shadow-md ring-2 ring-white/10 bg-zinc-800">
-            <img src={notification.avatar_url} alt={notification.sender_name} className="w-full h-full object-cover" />
-          </div>
-        ) : (
-          <div
-            className="w-10 h-10 rounded-full flex items-center justify-center text-xs font-black text-black shrink-0 shadow-md ring-2 ring-white/10"
-            style={{ backgroundColor: notification.avatar_color || 'var(--vibrant-cyan)' }}
-          >
-            {notification.sender_name.slice(0, 2).toUpperCase()}
-          </div>
-        )}
-
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-xs font-black text-white truncate">
-              {notification.sender_name}
-            </span>
-            <span className="text-[10px] text-zinc-500 shrink-0">
-              {notification.timestamp || 'Just now'}
-            </span>
-          </div>
-
-          {notification.content ? (
-            <p className="text-xs text-zinc-300 line-clamp-2 mt-1 leading-snug break-words">
-              {notification.content}
-            </p>
-          ) : (
-            <div className="mt-1">{renderAttachmentBadge()}</div>
-          )}
-
-          {/* Quick action button */}
-          <div className="mt-3 flex items-center justify-end gap-2">
-            <button
-              onClick={() => {
-                onOpenChat();
-                onDismiss();
-              }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-[11px] shadow-md shadow-blue-600/30 transition-all cursor-pointer"
-            >
-              <span>View in Chat</span>
-              <ArrowRight className="w-3 h-3" />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Countdown progress bar */}
-      <div className="h-1 w-full bg-[var(--bg-navy)]">
-        <div
-          className="h-full bg-blue-500 transition-all duration-75"
-          style={{ width: `${progress}%` }}
-        />
-      </div>
+      {/* View trigger (invisible but functional for the whole toast) */}
+      <div 
+        className="absolute inset-0 right-10 cursor-pointer" 
+        onClick={() => {
+          onOpenChat();
+          onDismiss();
+        }}
+      />
     </div>
   );
 };

@@ -33,9 +33,9 @@ export const FrostedLoadingScreen: React.FC<FrostedLoadingScreenProps> = () => {
 
   return (
     <div className="fixed inset-0 z-[9999] overflow-hidden select-none pointer-events-none font-sans text-slate-800">
-      {/* 1. SOLID GRADEWELL GRADEBOOK SCREEN (Instantly disappears after 1.5s, no fade out) */}
+      {/* 1. SOLID GRADEWELL GRADEBOOK SCREEN (Respects dark mode; black/dark background in dark mode) */}
       {showGradewell && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-between bg-[#f8fafc] p-6 sm:p-12 pointer-events-auto">
+        <div className="fixed inset-0 z-50 flex flex-col justify-between bg-[#f8fafc] dark:bg-[#090d16] text-slate-900 dark:text-slate-100 p-6 sm:p-12 pointer-events-auto transition-colors">
           {/* Top Navigation */}
           <header className="w-full max-w-7xl mx-auto flex items-center justify-between">
             <div className="flex items-center gap-10">
@@ -43,9 +43,9 @@ export const FrostedLoadingScreen: React.FC<FrostedLoadingScreenProps> = () => {
                 <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center font-black text-white text-xl shadow-md shadow-blue-600/20">
                   G
                 </div>
-                <span className="text-xl font-bold text-slate-900 tracking-tight font-heading">Gradewell</span>
+                <span className="text-xl font-bold text-slate-900 dark:text-white tracking-tight font-heading">Gradewell</span>
               </div>
-              <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600">
+              <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-slate-600 dark:text-slate-400">
                 <span>Gradebook</span>
                 <span>Attendance</span>
                 <span>Reports</span>
@@ -53,7 +53,7 @@ export const FrostedLoadingScreen: React.FC<FrostedLoadingScreenProps> = () => {
               </nav>
             </div>
             <div>
-              <span className="text-sm font-semibold text-blue-600">Sign in</span>
+              <span className="text-sm font-semibold text-blue-600 dark:text-blue-400">Sign in</span>
             </div>
           </header>
 
@@ -61,19 +61,19 @@ export const FrostedLoadingScreen: React.FC<FrostedLoadingScreenProps> = () => {
           <main className="w-full max-w-7xl mx-auto my-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center py-8">
             {/* Left Column Text */}
             <div className="lg:col-span-6 space-y-6">
-              <div className="text-xs font-bold uppercase tracking-wider text-blue-600">
+              <div className="text-xs font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
                 GRADEBOOK FOR TEACHERS
               </div>
-              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 tracking-tight leading-[1.1] font-heading">
+              <h1 className="text-4xl sm:text-5xl lg:text-6xl font-black text-slate-900 dark:text-white tracking-tight leading-[1.1] font-heading">
                 Grading that keeps up with your classroom.
               </h1>
-              <p className="text-base sm:text-lg text-slate-500 max-w-lg font-normal leading-relaxed">
+              <p className="text-base sm:text-lg text-slate-500 dark:text-slate-400 max-w-lg font-normal leading-relaxed">
                 Track assignments, attendance and progress in one place, and share reports with students and families.
               </p>
               <div>
                 <button
                   type="button"
-                  className="px-6 py-3.5 bg-blue-600 text-white font-bold text-sm rounded-xl shadow-lg shadow-blue-600/20"
+                  className="px-6 py-3.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-blue-600/20 transition-colors"
                 >
                   Start free trial
                 </button>
@@ -82,15 +82,15 @@ export const FrostedLoadingScreen: React.FC<FrostedLoadingScreenProps> = () => {
 
             {/* Right Column Floating Card */}
             <div className="lg:col-span-6 flex justify-center lg:justify-end">
-              <div className="w-full max-w-md bg-white rounded-3xl p-6 sm:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.06)] border border-slate-100/80">
-                <div className="flex items-center justify-between pb-6 border-b border-slate-100">
-                  <span className="font-bold text-slate-900 text-base">Period 3 · Biology</span>
-                  <span className="text-xs font-medium text-slate-400">Fall term</span>
+              <div className="w-full max-w-md bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 shadow-[0_20px_50px_rgba(0,0,0,0.06)] dark:shadow-2xl border border-slate-100/80 dark:border-slate-800">
+                <div className="flex items-center justify-between pb-6 border-b border-slate-100 dark:border-slate-800">
+                  <span className="font-bold text-slate-900 dark:text-white text-base">Period 3 · Biology</span>
+                  <span className="text-xs font-medium text-slate-400 dark:text-slate-500">Fall term</span>
                 </div>
 
                 <div className="pt-4 space-y-4">
                   {/* Table Header */}
-                  <div className="grid grid-cols-12 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  <div className="grid grid-cols-12 text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                     <span className="col-span-6">STUDENT</span>
                     <span className="col-span-2 text-center">QUIZ</span>
                     <span className="col-span-2 text-center">LAB</span>
@@ -98,30 +98,30 @@ export const FrostedLoadingScreen: React.FC<FrostedLoadingScreenProps> = () => {
                   </div>
 
                   {/* Student Rows */}
-                  <div className="space-y-3.5 text-xs font-semibold text-slate-700">
+                  <div className="space-y-3.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
                     <div className="grid grid-cols-12 items-center">
-                      <span className="col-span-6 text-slate-900 font-bold">Amara Okafor</span>
-                      <span className="col-span-2 text-center text-slate-500">92</span>
-                      <span className="col-span-2 text-center text-slate-500">88</span>
-                      <span className="col-span-2 text-right font-black text-blue-600">A-</span>
+                      <span className="col-span-6 text-slate-900 dark:text-white font-bold">Amara Okafor</span>
+                      <span className="col-span-2 text-center text-slate-500 dark:text-slate-400">92</span>
+                      <span className="col-span-2 text-center text-slate-500 dark:text-slate-400">88</span>
+                      <span className="col-span-2 text-right font-black text-blue-600 dark:text-blue-400">A-</span>
                     </div>
                     <div className="grid grid-cols-12 items-center">
-                      <span className="col-span-6 text-slate-900 font-bold">Ben Hartley</span>
-                      <span className="col-span-2 text-center text-slate-500">81</span>
-                      <span className="col-span-2 text-center text-slate-500">85</span>
-                      <span className="col-span-2 text-right font-black text-blue-600">B</span>
+                      <span className="col-span-6 text-slate-900 dark:text-white font-bold">Ben Hartley</span>
+                      <span className="col-span-2 text-center text-slate-500 dark:text-slate-400">81</span>
+                      <span className="col-span-2 text-center text-slate-500 dark:text-slate-400">85</span>
+                      <span className="col-span-2 text-right font-black text-blue-600 dark:text-blue-400">B</span>
                     </div>
                     <div className="grid grid-cols-12 items-center">
-                      <span className="col-span-6 text-slate-900 font-bold">Chloe Martin</span>
-                      <span className="col-span-2 text-center text-slate-500">96</span>
-                      <span className="col-span-2 text-center text-slate-500">99</span>
-                      <span className="col-span-2 text-right font-black text-blue-600">A</span>
+                      <span className="col-span-6 text-slate-900 dark:text-white font-bold">Chloe Martin</span>
+                      <span className="col-span-2 text-center text-slate-500 dark:text-slate-400">96</span>
+                      <span className="col-span-2 text-center text-slate-500 dark:text-slate-400">99</span>
+                      <span className="col-span-2 text-right font-black text-blue-600 dark:text-blue-400">A</span>
                     </div>
                     <div className="grid grid-cols-12 items-center">
-                      <span className="col-span-6 text-slate-900 font-bold">Diego Reyes</span>
-                      <span className="col-span-2 text-center text-slate-500">74</span>
-                      <span className="col-span-2 text-center text-slate-500">79</span>
-                      <span className="col-span-2 text-right font-black text-blue-600">C+</span>
+                      <span className="col-span-6 text-slate-900 dark:text-white font-bold">Diego Reyes</span>
+                      <span className="col-span-2 text-center text-slate-500 dark:text-slate-400">74</span>
+                      <span className="col-span-2 text-center text-slate-500 dark:text-slate-400">79</span>
+                      <span className="col-span-2 text-right font-black text-blue-600 dark:text-blue-400">C+</span>
                     </div>
                   </div>
                 </div>
@@ -129,7 +129,7 @@ export const FrostedLoadingScreen: React.FC<FrostedLoadingScreenProps> = () => {
             </div>
           </main>
 
-          <footer className="w-full max-w-7xl mx-auto text-center text-xs text-slate-400">
+          <footer className="w-full max-w-7xl mx-auto text-center text-xs text-slate-400 dark:text-slate-600">
             © {new Date().getFullYear()} Gradewell Education Platform
           </footer>
         </div>

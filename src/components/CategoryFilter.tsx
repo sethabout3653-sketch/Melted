@@ -45,8 +45,8 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
 }) => {
   return (
     <div className="space-y-6">
-      {/* Category Navigation - Unboxed & Institutional */}
-      <div className="flex flex-wrap items-center gap-x-8 gap-y-4">
+      {/* Category Navigation - Responsive Touch Scrollable on Mobile */}
+      <div className="flex overflow-x-auto pb-2 scrollbar-none touch-pan-x sm:flex-wrap items-center gap-x-4 sm:gap-x-8 gap-y-4 shrink-0">
         {CATEGORIES.map((cat) => {
           const isSelected = selectedCategory === cat.id;
           const count = categoryCounts[cat.id] || 0;

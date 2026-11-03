@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Play, Heart, ExternalLink, Gamepad2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { GameItem } from '../types/game';
+import { generateGameSvgCover } from '../services/gameService';
 
 interface GameCardProps {
   game: GameItem;
@@ -21,7 +22,6 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
 }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
-  const [triedFallback, setTriedFallback] = useState(false);
 
   const primaryCover = game.resolvedCover || game.cover || '';
   const [currentCover, setCurrentCover] = useState<string>(primaryCover);
@@ -41,6 +41,9 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
     } else if (fallbackAttempt <= 1 && game.localCover && game.localCover !== currentCover) {
       setFallbackAttempt(2);
       setCurrentCover(game.localCover);
+    } else if (fallbackAttempt <= 2) {
+      setFallbackAttempt(3);
+      setCurrentCover(generateGameSvgCover(game.name, game.category));
     } else {
       setImageError(true);
     }

@@ -9,12 +9,18 @@ import { ChatView } from './components/ChatView';
 import { AIAssistantView } from './components/AIAssistantView';
 import { FrostedLoadingScreen } from './components/FrostedLoadingScreen';
 import { InAppNotificationToast } from './components/InAppNotificationToast';
-import { getAllGames, resolveGameUrl } from './services/gameService';
+import { VoiceAudioEngine } from './components/VoiceAudioEngine';
+import { PhoneCallOverlay } from './components/PhoneCallOverlay';
+import { getAllGames, resolveGameUrl, getUGSGames, getCKVGames, mergeUgsGames } from './services/gameService';
 import { useCloak, launchAboutBlank } from './hooks/useCloak';
 import { useGlobalChat } from './hooks/useGlobalChat';
 import { useDeviceAdaptation } from './hooks/useDeviceAdaptation';
 import { DeviceAdaptationBar } from './components/DeviceAdaptationBar';
-import { PhoneCallOverlay } from './components/PhoneCallOverlay';
+import { useThemeConfig } from './hooks/useThemeConfig';
+import { useFontConfig } from './hooks/useFontConfig';
+import { ThemeSelectorModal } from './components/ThemeSelectorModal';
+import { AppCanvasBackground } from './components/AppCanvasBackground';
+import { MovieView } from './components/MovieView';
 import { GameItem, GameCategory } from './types/game';
 import { 
   Snowflake, 
@@ -24,13 +30,24 @@ import {
   ArrowRight,
   Gamepad2,
   MessageSquare,
-  Video
+  Sparkles,
+  Heart,
+  Palette,
+  Sun,
+  Moon,
+  Shuffle,
+  Mic,
+  MicOff,
+  PhoneOff,
+  Volume2,
+  VolumeX,
+  Maximize2
 } from 'lucide-react';
 
 const PAGE_SIZE = 36;
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'games' | 'chat' | 'ai'>('games');
+  const [currentTab, setCurrentTab] = useState<'games' | 'chat' | 'ai' | 'movies'>('games');
   const [searchQuery, setSearchQuery] = useState('');
   const deferredQuery = useDeferredValue(searchQuery);
 
@@ -39,6 +56,7 @@ export default function App() {
   const [favorites, setFavorites] = useState<number[]>(() => getFavorites());
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [targetChatChannel, setTargetChatChannel] = useState<string | null>(null);
 
   // Theme state: light by default
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -50,6 +68,9 @@ export default function App() {
     }
   });
 
+  const { config: themeConfig, updateConfig: updateThemeConfig, resetTheme } = useThemeConfig();
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
+
   useEffect(() => {
     try {
       localStorage.setItem('frosted_theme', theme);
@@ -60,6 +81,9 @@ export default function App() {
       document.documentElement.classList.remove('dark');
     }
   }, [theme]);
+
+  // Activate custom font & typography engine across app
+  useFontConfig();
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
@@ -73,15 +97,42 @@ export default function App() {
   } = useCloak();
 
   // Master Games State - Pre-populated with initial catalogue so UI renders instantly
-  const [allGames] = useState<GameItem[]>(() => {
+  const [allGames, setAllGames] = useState<GameItem[]>(() => {
     try {
       return getAllGames();
     } catch {
       return [];
     }
   });
+
+  // Dynamic CDN UGS & CKV refresh in background to load latest games
+  useEffect(() => {
+    let isMounted = true;
+    Promise.allSettled([getUGSGames(), getCKVGames()])
+      .then(([ugsResult, ckvResult]) => {
+        if (!isMounted) return;
+        setAllGames((prev) => {
+          let current = prev;
+          if (ugsResult.status === 'fulfilled' && Array.isArray(ugsResult.value)) {
+            current = mergeUgsGames(current, ugsResult.value);
+          }
+          if (ckvResult.status === 'fulfilled' && Array.isArray(ckvResult.value)) {
+            current = mergeUgsGames(current, ckvResult.value);
+          }
+          return current;
+        });
+      })
+      .catch((err) => {
+        console.warn('Game dynamic update warning:', err);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
   const [activeGame, setActiveGame] = useState<GameItem | null>(null);
+  const [activeMedia, setActiveMedia] = useState<{ title: string; mediaType: 'movie' | 'tv'; season?: number; episode?: number } | null>(null);
 
   // Global Chat and Notifications
   const globalChat = useGlobalChat({ 
@@ -138,14 +189,34 @@ export default function App() {
 
   const handlePlayGame = (game: GameItem) => {
     setActiveGame(game);
-    // Track activity in presence
-    globalChat.updateUser({ activity: `Playing ${game.name}` });
   };
 
   const handleCloseGame = () => {
     setActiveGame(null);
-    globalChat.updateUser({ activity: currentTab === 'chat' ? 'In Community Chat' : 'Browsing Games' });
   };
+
+  // Keep user activity tracker perfectly synchronized with current tab, active game, active movie/show, and voice state
+  useEffect(() => {
+    if (activeMedia) {
+      const isTV = activeMedia.mediaType === 'tv';
+      const mediaLabel = isTV && activeMedia.season && activeMedia.episode
+        ? `Watching ${activeMedia.title} (S${activeMedia.season} E${activeMedia.episode})`
+        : `Watching ${activeMedia.title}`;
+      globalChat.updateUser({ activity: mediaLabel, current_channel: 'text-general' });
+    } else if (activeGame) {
+      globalChat.updateUser({ activity: `Playing ${activeGame.name}` });
+    } else if (globalChat.isInVideo) {
+      globalChat.updateUser({ activity: 'In General Voice', current_channel: 'video-general' });
+    } else if (currentTab === 'chat') {
+      globalChat.updateUser({ activity: 'In Community Chat', current_channel: 'text-general' });
+    } else if (currentTab === 'ai') {
+      globalChat.updateUser({ activity: 'Using AI Assistant', current_channel: 'text-general' });
+    } else if (currentTab === 'movies') {
+      globalChat.updateUser({ activity: 'Browsing Movies & Shows', current_channel: 'text-general' });
+    } else {
+      globalChat.updateUser({ activity: 'Browsing Games', current_channel: 'text-general' });
+    }
+  }, [currentTab, activeGame, activeMedia, globalChat.isInVideo]);
 
   const handleGoHome = () => {
     setSelectedCategory('All');
@@ -228,9 +299,21 @@ export default function App() {
   return (
     <>
       <FrostedLoadingScreen isLoading={isCatalogLoading} />
-      <div className={`bg-[#f8fafc] dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white border-8 border-white dark:border-slate-900 shadow-[inset_0_0_100px_rgba(0,0,0,0.02)] transition-colors ${
-        currentTab === 'chat' || currentTab === 'ai' ? 'h-screen h-[100dvh] max-h-screen overflow-hidden' : 'min-h-screen'
-      }`}>
+      <AppCanvasBackground themeConfig={themeConfig} isDark={theme === 'dark'} />
+      <div 
+        className={`relative z-10 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white border-white dark:border-slate-900 transition-colors ${
+          themeConfig.bgMode !== 'solid' || themeConfig.bgSolidColor !== '#090d16'
+            ? 'bg-white/90 dark:bg-transparent'
+            : 'bg-[#f8fafc] dark:bg-slate-950'
+        } ${
+          currentTab === 'chat' || currentTab === 'ai' ? 'h-[100dvh] max-h-[100dvh] overflow-hidden' : 'min-h-screen'
+        }`}
+        style={
+          theme === 'dark' && themeConfig.bgMode === 'solid'
+            ? { backgroundColor: themeConfig.bgSolidColor }
+            : undefined
+        }
+      >
         
         {/* Top Navigation Bar */}
       <Navbar
@@ -252,8 +335,8 @@ export default function App() {
         theme={theme}
         onToggleTheme={toggleTheme}
         users={globalChat.users}
-        onInitiateCall={globalChat.initiateCall}
         currentUser={globalChat.currentUser}
+        onOpenThemeSelector={() => setIsThemeModalOpen(true)}
       />
 
       {/* Main Content Scrollable Area with Smooth Transitions */}
@@ -265,9 +348,9 @@ export default function App() {
             animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
             exit={{ opacity: 0, y: -8, filter: 'blur(2px)' }}
             transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-            className="flex-1 flex flex-col min-h-0 h-full w-full"
+            className="flex-1 flex flex-col min-h-0 h-full w-full pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0"
           >
-            <ChatView globalChat={globalChat} />
+            <ChatView globalChat={globalChat} initialChannel={targetChatChannel} />
           </motion.div>
         ) : currentTab === 'ai' ? (
           <motion.div
@@ -276,9 +359,20 @@ export default function App() {
             animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
             exit={{ opacity: 0, y: -8, filter: 'blur(2px)' }}
             transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-hidden"
+            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0"
           >
             <AIAssistantView />
+          </motion.div>
+        ) : currentTab === 'movies' ? (
+          <motion.div
+            key="movies-tab-view"
+            initial={{ opacity: 0, y: 8, filter: 'blur(2px)' }}
+            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+            exit={{ opacity: 0, y: -8, filter: 'blur(2px)' }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            className="flex-1 flex flex-col min-h-0 h-full w-full"
+          >
+            <MovieView onActiveMediaChange={setActiveMedia} />
           </motion.div>
         ) : (
           <motion.main
@@ -287,7 +381,7 @@ export default function App() {
             animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
             exit={{ opacity: 0, y: -8, filter: 'blur(2px)' }}
             transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-            className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-10 sm:py-16"
+            className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-10 sm:py-16 pb-24 md:pb-16"
           >
             {/* Hero Section */}
             {!searchQuery && !showFavoritesOnly && selectedCategory === 'All' && (
@@ -515,57 +609,133 @@ export default function App() {
         notification={globalChat.activeNotification}
         onDismiss={globalChat.dismissNotification}
         onOpenChat={() => {
+          if (globalChat.activeNotification?.channel_id) {
+            setTargetChatChannel(globalChat.activeNotification.channel_id);
+          }
           setCurrentTab('chat');
         }}
       />
 
-      {/* Persistent Global Voice HUD when browsing games while connected to Voice */}
-      {currentTab === 'games' && (() => {
-        const currentDbUser = globalChat.users.find((u: any) => u.id === globalChat.currentUser?.id);
-        const isConnectedToVoice = currentDbUser?.current_channel === 'video-general' || currentDbUser?.current_channel === 'voice-general';
-        if (!isConnectedToVoice) return null;
-        return (
-          <aside aria-label="Active voice call" className="fixed bottom-20 sm:bottom-6 right-4 sm:right-6 z-40 bg-[var(--bg-navy)]/95 backdrop-blur-xl border border-blue-500/50 rounded-2xl p-3 shadow-2xl flex items-center gap-3">
-            <div className="flex items-center gap-2.5">
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+      {/* Sleek Responsive Mobile Navigation Bar */}
+      <nav aria-label="Mobile Navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/98 dark:bg-slate-950/98 backdrop-blur-2xl border-t border-slate-200 dark:border-slate-800 px-1 py-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] flex items-center justify-around shadow-[0_-10px_40px_rgba(0,0,0,0.12)] transition-colors">
+        <button
+          type="button"
+          onClick={() => {
+            setCurrentTab('games');
+            handleGoHome();
+          }}
+          className={`flex flex-col items-center gap-2 transition-all cursor-pointer flex-1 py-1 ${
+            currentTab === 'games' ? 'text-blue-600 dark:text-blue-400 scale-110' : 'text-slate-400 dark:text-slate-500'
+          }`}
+        >
+          <Gamepad2 className={`${currentTab === 'games' ? 'w-6 h-6' : 'w-5.5 h-5.5'}`} />
+          <span className="text-[10px] font-black uppercase tracking-tighter">Games</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setCurrentTab('ai')}
+          className={`flex flex-col items-center gap-2 transition-all cursor-pointer flex-1 py-1 ${
+            currentTab === 'ai' ? 'text-blue-600 dark:text-blue-400 scale-110' : 'text-slate-400 dark:text-slate-500'
+          }`}
+        >
+          <Sparkles className={`${currentTab === 'ai' ? 'w-6 h-6' : 'w-5.5 h-5.5'}`} />
+          <span className="text-[10px] font-black uppercase tracking-tighter">AI</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setCurrentTab('chat')}
+          className={`flex flex-col items-center gap-2 transition-all relative cursor-pointer flex-1 py-1 ${
+            currentTab === 'chat' ? 'text-blue-600 dark:text-blue-400 scale-110' : 'text-slate-400 dark:text-slate-500'
+          }`}
+        >
+          <div className="relative">
+            <MessageSquare className={`${currentTab === 'chat' ? 'w-6 h-6' : 'w-5.5 h-5.5'}`} />
+            {globalChat.users.length > 0 && (
+              <span className="absolute -top-2 -right-2.5 bg-blue-600 text-white text-[9px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900">
+                {globalChat.users.length}
               </span>
-              <div className="flex flex-col">
-                <span className="text-xs font-black text-white">General Voice</span>
-                <span className="text-[10px] text-zinc-400 font-medium">
-                  {globalChat.users.filter((u: any) => u.current_channel === 'video-general' || u.current_channel === 'voice-general').length} connected
-                </span>
-              </div>
+            )}
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-tighter">Social</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setIsThemeModalOpen(true)}
+          className="flex flex-col items-center gap-2 text-slate-400 dark:text-slate-500 transition-all cursor-pointer flex-1 py-1"
+        >
+          <Palette className="w-5.5 h-5.5" />
+          <span className="text-[10px] font-black uppercase tracking-tighter">Style</span>
+        </button>
+      </nav>
+
+      {/* Global Voice Audio Engine - Stays mounted across all tabs */}
+      <VoiceAudioEngine 
+        remoteStreams={globalChat.remoteStreams}
+        remoteScreenAudioStreams={globalChat.remoteScreenAudioStreams}
+        isDeafened={globalChat.isDeafened}
+      />
+
+      {/* Persistent Voice Session Overlay - visible if in voice but NOT on chat tab */}
+      {globalChat.isInVideo && currentTab !== 'chat' && (
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-2xl px-4 py-3 flex items-center gap-4 shadow-2xl"
+        >
+          <div className="flex items-center gap-2 pr-4 border-r border-white/10">
+            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center animate-pulse">
+              <Mic className="w-4 h-4 text-white" />
             </div>
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black text-white uppercase tracking-tighter">In Voice</span>
+              <span className="text-[9px] text-slate-400 font-bold truncate max-w-[80px]">General Voice</span>
+            </div>
+          </div>
 
-            <div className="h-6 w-px bg-white/10" />
-
-            <button
-              onClick={() => setCurrentTab('chat')}
-              className="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold rounded-xl transition-all shadow-md cursor-pointer flex items-center gap-1.5 border border-blue-400/30"
-              title="Return to Video & Screen Share"
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => globalChat.setIsMuted(!globalChat.isMuted)}
+              className={`p-2 rounded-xl transition-all ${globalChat.isMuted ? 'bg-red-500/20 text-red-500' : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'}`}
             >
-              <Video className="w-3.5 h-3.5" />
-              <span>Open Call</span>
+              {globalChat.isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
             </button>
-          </aside>
-        );
-      })()}
+            <button 
+              onClick={() => globalChat.setIsDeafened(!globalChat.isDeafened)}
+              className={`p-2 rounded-xl transition-all ${globalChat.isDeafened ? 'bg-red-500/20 text-red-500' : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'}`}
+            >
+              {globalChat.isDeafened ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+            </button>
+            <button 
+              onClick={() => globalChat.stopVoiceChannel()}
+              className="p-2 bg-red-600 hover:bg-red-500 text-white rounded-xl transition-all shadow-lg shadow-red-600/20"
+            >
+              <PhoneOff className="w-4 h-4" />
+            </button>
+            <button 
+              onClick={() => {
+                setTargetChatChannel('video-general');
+                setCurrentTab('chat');
+              }}
+              className="ml-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black rounded-xl uppercase tracking-tighter transition-all flex items-center gap-1.5 shadow-lg shadow-blue-600/20 cursor-pointer"
+              title="Maximize Voice"
+            >
+              <Maximize2 className="w-3.5 h-3.5" />
+              <span>Maximize</span>
+            </button>
+          </div>
+        </motion.div>
+      )}
 
-      {/* VERIZON-STYLE PHONE CALL SYSTEM */}
-      <PhoneCallOverlay
-        incomingCall={globalChat.incomingCall}
-        outgoingCall={globalChat.outgoingCall}
-        onAccept={(type) => {
-          setCurrentTab('chat');
-          globalChat.acceptCall();
-        }}
-        onDecline={() => globalChat.dismissIncomingCall()}
-        onCancel={() => globalChat.dismissOutgoingCall()}
-        currentUser={globalChat.currentUser}
-        isVoicemail={globalChat.isVoicemail}
-        isRecording={globalChat.isRecording}
+      {/* Theme & Style Selector Modal */}
+      <ThemeSelectorModal
+        isOpen={isThemeModalOpen}
+        onClose={() => setIsThemeModalOpen(false)}
+        config={themeConfig}
+        onUpdateConfig={updateThemeConfig}
+        onResetTheme={resetTheme}
       />
 
       </div>

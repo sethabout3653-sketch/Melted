@@ -38,10 +38,23 @@ export interface DbMessage {
   created_at: number;
 }
 
+export interface PendingSignal {
+  id: string;
+  fromUserId: string;
+  fromUserName?: string;
+  targetUserId: string;
+  type: 'RTC_SIGNAL' | 'USER_CALL' | 'CALL_ANSWERED' | 'CALL_ENDED' | 'DIRECT_RTC_SIGNAL' | 'VOICEMAIL_NOTIFICATION' | 'CALL_SYNC';
+  callType?: 'audio' | 'video';
+  signal?: any;
+  voicemail?: any;
+  timestamp: number;
+}
+
 // Authoritative in-memory state with local JSON persistence
-class WebSocketDatabase {
+export class WebSocketDatabase {
   public users: Map<string, DbUser> = new Map();
   public messages: DbMessage[] = [];
+  public pendingSignals: Map<string, PendingSignal[]> = new Map(); // targetUserId -> signals
   private dbFilePath: string;
 
   public channels = [
@@ -81,7 +94,21 @@ class WebSocketDatabase {
   }
 
   public getUsers(): DbUser[] {
-    return Array.from(this.users.values()).sort((a, b) => b.updated_at - a.updated_at);
+    const now = Date.now();
+    const active: DbUser[] = [];
+    this.users.forEach((u) => {
+      if (now - (u.updated_at || 0) < 60000) {
+        active.push(u);
+      }
+    });
+    return active.sort((a, b) => {
+      const nameA = (a.username || '').toLowerCase();
+      const nameB = (b.username || '').toLowerCase();
+      if (nameA !== nameB) {
+        return nameA.localeCompare(nameB);
+      }
+      return (a.id || '').localeCompare(b.id || '');
+    });
   }
 
   public getUser(userId: string): DbUser | null {
@@ -119,37 +146,77 @@ class WebSocketDatabase {
     this.messages = this.messages.filter((m) => m.id !== id);
     this.saveStore();
   }
+
+  public deleteChannelMessages(channelId: string): void {
+    this.messages = this.messages.filter((m) => m.channel_id !== channelId);
+    this.saveStore();
+  }
+
+  public addPendingSignal(signal: PendingSignal): void {
+    const list = this.pendingSignals.get(signal.targetUserId) || [];
+    list.push(signal);
+    if (list.length > 50) list.shift();
+    this.pendingSignals.set(signal.targetUserId, list);
+  }
+
+  public popPendingSignals(targetUserId: string): PendingSignal[] {
+    const list = this.pendingSignals.get(targetUserId) || [];
+    this.pendingSignals.delete(targetUserId);
+    return list;
+  }
+}
+
+export const globalWsDb = new WebSocketDatabase();
+
+let activeWss: WebSocketServer | null = null;
+const userSocketsMap = new Map<string, Set<WebSocket>>();
+
+export function sendToUserSockets(targetUserId: string, payload: any): boolean {
+  if (!targetUserId) return false;
+  const sockets = userSocketsMap.get(targetUserId);
+  if (!sockets || sockets.size === 0) return false;
+  const str = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  let delivered = false;
+  sockets.forEach((s) => {
+    if (s.readyState === WebSocket.OPEN) {
+      try {
+        s.send(str);
+        delivered = true;
+      } catch {}
+    }
+  });
+  return delivered;
+}
+
+export function broadcastWss(payload: any) {
+  if (!activeWss) return;
+  const str = typeof payload === 'string' ? payload : JSON.stringify(payload);
+  activeWss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      try {
+        client.send(str);
+      } catch {}
+    }
+  });
+}
+
+export function broadcastTable(tableName: string, data: any) {
+  broadcastWss({
+    type: 'DB_SYNC',
+    table: tableName,
+    data: Array.isArray(data) ? data : [],
+    timestamp: Date.now(),
+  });
 }
 
 export function initWebSocketDatabase(server: Server) {
   const wss = new WebSocketServer({ server, path: '/ws-db' });
-  const db = new WebSocketDatabase();
+  activeWss = wss;
 
-  const userSockets = new Map<string, Set<WebSocket>>();
   const disconnectTimers = new Map<string, NodeJS.Timeout>();
 
-  function broadcast(payload: any) {
-    const str = typeof payload === 'string' ? payload : JSON.stringify(payload);
-    wss.clients.forEach((client) => {
-      if (client.readyState === WebSocket.OPEN) {
-        try {
-          client.send(str);
-        } catch {}
-      }
-    });
-  }
-
-  function broadcastTable(tableName: string, data: any) {
-    broadcast({
-      type: 'DB_SYNC',
-      table: tableName,
-      data: Array.isArray(data) ? data : [],
-      timestamp: Date.now(),
-    });
-  }
-
   function broadcastMediaPresence(type: 'USER_JOINED_MEDIA' | 'USER_LEFT_MEDIA' | 'USER_MEDIA_UPDATE', userId: string, channel: string) {
-    broadcast({
+    broadcastWss({
       type,
       userId,
       channel,
@@ -160,14 +227,13 @@ export function initWebSocketDatabase(server: Server) {
   wss.on('connection', (ws) => {
     let boundUserId: string | null = null;
 
-    // Send initial snapshot immediately upon connecting
     try {
       ws.send(JSON.stringify({
         type: 'DB_INIT',
         tables: {
-          users: db.getUsers(),
-          messages: db.messages,
-          channels: db.channels,
+          users: globalWsDb.getUsers(),
+          messages: globalWsDb.messages,
+          channels: globalWsDb.channels,
         },
       }));
     } catch {}
@@ -182,46 +248,52 @@ export function initWebSocketDatabase(server: Server) {
               const uId: string = msg.user.id;
               boundUserId = uId;
 
-              // Cancel pending disconnect timer if user reconnected
               if (disconnectTimers.has(uId)) {
                 clearTimeout(disconnectTimers.get(uId)!);
                 disconnectTimers.delete(uId);
               }
 
-              if (!userSockets.has(uId)) {
-                userSockets.set(uId, new Set());
+              if (!userSocketsMap.has(uId)) {
+                userSocketsMap.set(uId, new Set());
               }
-              userSockets.get(uId)!.add(ws);
+              userSocketsMap.get(uId)!.add(ws);
 
-              const existingUser = db.getUser(uId);
+              const existingUser = globalWsDb.getUser(uId);
               const userObj: DbUser = {
                 id: uId,
                 username: msg.user.username || existingUser?.username || 'Player',
                 avatar_color: msg.user.avatar_color || existingUser?.avatar_color || '#0066ff',
                 avatar_url: msg.user.avatar_url ?? existingUser?.avatar_url ?? '',
                 current_channel: msg.user.current_channel || existingUser?.current_channel || 'text-general',
-                is_speaking: Boolean(msg.user.is_speaking),
-                is_muted: Boolean(msg.user.is_muted),
-                is_deafened: Boolean(msg.user.is_deafened),
-                has_video: msg.user.has_video === true,
-                is_screen_sharing: msg.user.is_screen_sharing === true,
+                is_speaking: msg.user.is_speaking !== undefined ? Boolean(msg.user.is_speaking) : Boolean(existingUser?.is_speaking),
+                is_muted: msg.user.is_muted !== undefined ? Boolean(msg.user.is_muted) : Boolean(existingUser?.is_muted),
+                is_deafened: msg.user.is_deafened !== undefined ? Boolean(msg.user.is_deafened) : Boolean(existingUser?.is_deafened),
+                has_video: msg.user.has_video !== undefined ? Boolean(msg.user.has_video) : Boolean(existingUser?.has_video),
+                is_screen_sharing: msg.user.is_screen_sharing !== undefined ? Boolean(msg.user.is_screen_sharing) : Boolean(existingUser?.is_screen_sharing),
                 activity: msg.user.activity ?? existingUser?.activity ?? '',
                 updated_at: Date.now(),
               };
 
-              db.upsertUser(userObj);
-              broadcastTable('users', db.getUsers());
+              globalWsDb.upsertUser(userObj);
+              broadcastTable('users', globalWsDb.getUsers());
 
               if (userObj.current_channel === 'voice-general' || userObj.current_channel === 'video-general') {
                 broadcastMediaPresence('USER_JOINED_MEDIA', uId, userObj.current_channel);
               }
+
+              const queued = globalWsDb.popPendingSignals(uId);
+              queued.forEach((s) => {
+                try {
+                  ws.send(JSON.stringify(s));
+                } catch {}
+              });
             }
             break;
           }
 
           case 'SQL_UPDATE': {
             if (msg.table === 'users' && msg.id) {
-              const existing = db.getUser(msg.id);
+              const existing = globalWsDb.getUser(msg.id);
               const oldChannel = existing?.current_channel || 'text-general';
               const updated: DbUser = {
                 id: msg.id,
@@ -229,37 +301,34 @@ export function initWebSocketDatabase(server: Server) {
                 avatar_color: existing?.avatar_color || '#0066ff',
                 avatar_url: existing?.avatar_url || '',
                 current_channel: existing?.current_channel || 'text-general',
-                is_speaking: false,
-                is_muted: false,
-                is_deafened: false,
-                has_video: false,
-                is_screen_sharing: false,
+                is_speaking: existing?.is_speaking || false,
+                is_muted: existing?.is_muted || false,
+                is_deafened: existing?.is_deafened || false,
+                has_video: existing?.has_video || false,
+                is_screen_sharing: existing?.is_screen_sharing || false,
                 activity: existing?.activity || '',
                 ...existing,
                 ...msg.set,
                 updated_at: Date.now(),
               };
 
-              // If switching to text-general or offline, clear media active flags
               if (updated.current_channel === 'text-general' || updated.current_channel === 'offline') {
                 updated.has_video = false;
                 updated.is_screen_sharing = false;
                 updated.is_speaking = false;
               }
 
-              // Single screen sharer enforcement
               if (msg.set?.is_screen_sharing) {
-                db.users.forEach((u, uid) => {
+                globalWsDb.users.forEach((u, uid) => {
                   if (uid !== msg.id && u.is_screen_sharing) {
                     u.is_screen_sharing = false;
                   }
                 });
               }
 
-              db.upsertUser(updated);
-              broadcastTable('users', db.getUsers());
+              globalWsDb.upsertUser(updated);
+              broadcastTable('users', globalWsDb.getUsers());
 
-              // Channel media transitions
               if (msg.set?.current_channel !== undefined && msg.set.current_channel !== oldChannel) {
                 if (msg.set.current_channel === 'voice-general' || msg.set.current_channel === 'video-general') {
                   broadcastMediaPresence('USER_JOINED_MEDIA', msg.id, msg.set.current_channel);
@@ -269,7 +338,6 @@ export function initWebSocketDatabase(server: Server) {
                 }
               }
 
-              // Explicit media updates
               if (
                 msg.set?.has_video !== undefined ||
                 msg.set?.is_muted !== undefined ||
@@ -282,7 +350,7 @@ export function initWebSocketDatabase(server: Server) {
           }
 
           case 'GET_USERS': {
-            broadcastTable('users', db.getUsers());
+            broadcastTable('users', globalWsDb.getUsers());
             break;
           }
 
@@ -303,34 +371,47 @@ export function initWebSocketDatabase(server: Server) {
                 timestamp: row.timestamp || ('Today at ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
                 created_at: Number(row.created_at) || Date.now(),
               };
-              db.insertMessage(newMsg);
-              broadcastTable('messages', db.messages);
+              globalWsDb.insertMessage(newMsg);
+              broadcastTable('messages', globalWsDb.messages);
             }
             break;
           }
 
           case 'SQL_DELETE': {
             if (msg.table === 'messages' && msg.id) {
-              db.deleteMessage(msg.id);
-              broadcastTable('messages', db.messages);
+              globalWsDb.deleteMessage(msg.id);
+              broadcastTable('messages', globalWsDb.messages);
+            }
+            break;
+          }
+
+          case 'SQL_DELETE_CHANNEL': {
+            if (msg.channel_id) {
+              globalWsDb.deleteChannelMessages(msg.channel_id);
+              broadcastTable('messages', globalWsDb.messages);
             }
             break;
           }
 
           case 'RTC_SIGNAL': {
-            if (msg.targetUserId) {
-              const sockets = userSockets.get(msg.targetUserId);
-              if (sockets && sockets.size > 0) {
-                const signalPayload = JSON.stringify({
-                  type: 'RTC_SIGNAL',
-                  fromUserId: msg.fromUserId || boundUserId,
+            if (msg.targetUserId && msg.targetUserId !== boundUserId) {
+              const signalPayload = {
+                type: 'RTC_SIGNAL',
+                fromUserId: msg.fromUserId || boundUserId,
+                targetUserId: msg.targetUserId,
+                signal: msg.signal,
+              };
+
+              const delivered = sendToUserSockets(msg.targetUserId, signalPayload);
+
+              if (!delivered) {
+                globalWsDb.addPendingSignal({
+                  id: 'sig-' + Date.now(),
+                  fromUserId: msg.fromUserId || boundUserId || 'anon',
                   targetUserId: msg.targetUserId,
+                  type: 'RTC_SIGNAL',
                   signal: msg.signal,
-                });
-                sockets.forEach((s) => {
-                  if (s.readyState === WebSocket.OPEN) {
-                    try { s.send(signalPayload); } catch {}
-                  }
+                  timestamp: Date.now(),
                 });
               }
             }
@@ -338,22 +419,107 @@ export function initWebSocketDatabase(server: Server) {
           }
 
           case 'USER_CALL': {
-            if (msg.targetUserId) {
-              const sockets = userSockets.get(msg.targetUserId);
-              if (sockets) {
-                const callPayload = JSON.stringify({
-                  type: 'USER_CALL',
-                  fromUserId: msg.fromUserId || boundUserId,
+            if (msg.targetUserId && msg.targetUserId !== boundUserId) {
+              const callPayload = {
+                type: 'USER_CALL',
+                fromUserId: msg.fromUserId || boundUserId,
+                fromUserName: msg.fromUserName || 'Player',
+                targetUserId: msg.targetUserId,
+                callType: msg.callType || 'audio',
+              };
+
+              const delivered = sendToUserSockets(msg.targetUserId, callPayload);
+
+              if (!delivered) {
+                globalWsDb.addPendingSignal({
+                  id: 'call-' + Date.now(),
+                  fromUserId: msg.fromUserId || boundUserId || 'anon',
                   fromUserName: msg.fromUserName || 'Player',
                   targetUserId: msg.targetUserId,
+                  type: 'USER_CALL',
                   callType: msg.callType || 'audio',
-                });
-                sockets.forEach((s) => {
-                  if (s.readyState === WebSocket.OPEN) {
-                    try { s.send(callPayload); } catch {}
-                  }
+                  timestamp: Date.now(),
                 });
               }
+            }
+            break;
+          }
+
+          case 'CALL_ANSWERED': {
+            if (msg.targetUserId && msg.targetUserId !== boundUserId) {
+              const payload = {
+                type: 'CALL_ANSWERED',
+                fromUserId: msg.fromUserId || boundUserId,
+                fromUserName: msg.fromUserName || 'Player',
+                targetUserId: msg.targetUserId,
+                callType: msg.callType || 'audio',
+              };
+              sendToUserSockets(msg.targetUserId, payload);
+            }
+            break;
+          }
+
+          case 'CALL_ENDED': {
+            if (msg.targetUserId && msg.targetUserId !== boundUserId) {
+              const payload = {
+                type: 'CALL_ENDED',
+                fromUserId: msg.fromUserId || boundUserId,
+                targetUserId: msg.targetUserId,
+              };
+              sendToUserSockets(msg.targetUserId, payload);
+            }
+            break;
+          }
+
+          case 'DIRECT_RTC_SIGNAL': {
+            if (msg.targetUserId && msg.targetUserId !== boundUserId) {
+              const payload = {
+                type: 'DIRECT_RTC_SIGNAL',
+                fromUserId: msg.fromUserId || boundUserId,
+                targetUserId: msg.targetUserId,
+                signal: msg.signal,
+              };
+              sendToUserSockets(msg.targetUserId, payload);
+            }
+            break;
+          }
+
+          case 'VOICEMAIL_NOTIFICATION': {
+            if (msg.targetUserId && msg.targetUserId !== boundUserId) {
+              const payload = {
+                type: 'VOICEMAIL_NOTIFICATION',
+                fromUserId: msg.fromUserId || boundUserId,
+                fromUserName: msg.fromUserName || 'Player',
+                targetUserId: msg.targetUserId,
+                voicemail: msg.voicemail,
+              };
+              const delivered = sendToUserSockets(msg.targetUserId, payload);
+              if (!delivered) {
+                globalWsDb.addPendingSignal({
+                  id: 'vm-' + Date.now(),
+                  fromUserId: msg.fromUserId || boundUserId || 'anon',
+                  fromUserName: msg.fromUserName || 'Player',
+                  targetUserId: msg.targetUserId,
+                  type: 'VOICEMAIL_NOTIFICATION',
+                  voicemail: msg.voicemail,
+                  timestamp: Date.now(),
+                });
+              }
+            }
+            break;
+          }
+
+          case 'CALL_SYNC': {
+            if (msg.targetUserId && msg.targetUserId !== boundUserId) {
+              const payload = {
+                type: 'CALL_SYNC',
+                fromUserId: msg.fromUserId || boundUserId,
+                targetUserId: msg.targetUserId,
+                hold: msg.hold,
+                muted: msg.muted,
+                video: msg.video,
+              };
+              sendToUserSockets(msg.targetUserId, payload);
             }
             break;
           }
@@ -385,25 +551,24 @@ export function initWebSocketDatabase(server: Server) {
       clearInterval(pingTimer);
       if (boundUserId) {
         const uId = boundUserId;
-        const sockets = userSockets.get(uId);
+        const sockets = userSocketsMap.get(uId);
         if (sockets) {
           sockets.delete(ws);
           if (sockets.size === 0) {
-            userSockets.delete(uId);
+            userSocketsMap.delete(uId);
 
-            // 5 second disconnect grace period before removing user from online roster
             const timer = setTimeout(() => {
               disconnectTimers.delete(uId);
-              if (!userSockets.has(uId)) {
-                const user = db.getUser(uId);
+              if (!userSocketsMap.has(uId)) {
+                const user = globalWsDb.getUser(uId);
                 const oldChannel = user?.current_channel;
-                db.deleteUser(uId);
+                globalWsDb.deleteUser(uId);
                 if (oldChannel === 'video-general' || oldChannel === 'voice-general') {
                   broadcastMediaPresence('USER_LEFT_MEDIA', uId, oldChannel);
                 }
-                broadcastTable('users', db.getUsers());
+                broadcastTable('users', globalWsDb.getUsers());
               }
-            }, 5000);
+            }, 10000);
             disconnectTimers.set(uId, timer);
           }
         }

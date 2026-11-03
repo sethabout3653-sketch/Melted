@@ -8,7 +8,6 @@ import {
   MicOff, 
   Headphones, 
   PhoneOff, 
-  Phone,
   Send, 
   PlusCircle, 
   Search, 
@@ -31,13 +30,18 @@ import {
   ShieldCheck,
   Check,
   Snowflake,
-  Hand
+  Hand,
+  MessageCircle,
+  Trash2
 } from 'lucide-react';
 import { GiphyFetch } from '@giphy/js-fetch-api';
-import { useWebRTC } from '../services/useWebRTC';
+import { UserAvatar } from './UserAvatar';
+import { processAvatarImage, persistAvatarUrl } from '../utils/avatarUtils';
+import { FontSettingsSection } from './FontSettingsSection';
 
 interface ChatViewProps {
   globalChat: any;
+  initialChannel?: string | null;
 }
 
 // Official Giphy SDK Client with active Web API Key
@@ -58,7 +62,7 @@ const GIPHY_CATEGORIES = [
   { label: '🤝 Respect', query: 'respect' },
 ];
 
-// Dedicated Audio Player Component
+// Audio attachment player remains local to ChatView for message history context
 const AudioAttachmentPlayer: React.FC<{
   url: string;
   name?: string;
@@ -197,105 +201,57 @@ const AudioAttachmentPlayer: React.FC<{
   );
 };
 
-// Single Audio Track Player - plays a specific track with full volume, unmute detection, and autoplay resilience
-const SingleAudioTrackPlayer: React.FC<{ track: MediaStreamTrack; isDeafened: boolean; volume: number }> = ({ track, isDeafened, volume }) => {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+// Shared offscreen canvas for lightweight, real-time black frame detection
+let sampleCanvas: HTMLCanvasElement | null = null;
+let sampleCtx: CanvasRenderingContext2D | null = null;
 
-  useEffect(() => {
-    const el = audioRef.current;
-    if (!el || !track) return;
-
-    // Check if the element already has a stream with this track
-    const currentStream = el.srcObject as MediaStream | null;
-    const currentTrackId = currentStream?.getAudioTracks()[0]?.id;
-
-    if (currentTrackId !== track.id) {
-      el.srcObject = new MediaStream([track]);
+function checkIsVideoFrameBlack(video: HTMLVideoElement | null): boolean {
+  if (!video || video.videoWidth === 0 || video.videoHeight === 0 || video.readyState < 2 || video.paused || video.ended) {
+    return true; // Not ready, 0 dimensions, paused, or ended -> treat as black
+  }
+  try {
+    if (!sampleCanvas && typeof document !== 'undefined') {
+      sampleCanvas = document.createElement('canvas');
+      sampleCanvas.width = 16;
+      sampleCanvas.height = 16;
+      sampleCtx = sampleCanvas.getContext('2d', { willReadFrequently: true });
     }
-
-    el.muted = isDeafened;
-    el.volume = Math.max(0, Math.min(1, volume));
-
-    const tryPlay = () => {
-      if (el) {
-        el.play().catch(() => {});
-      }
-    };
-
-    tryPlay();
-    track.addEventListener('unmute', tryPlay);
-
-    const onUserGesture = () => {
-      tryPlay();
-    };
-
-    window.addEventListener('click', onUserGesture, { once: true });
-    window.addEventListener('touchstart', onUserGesture, { once: true });
-    window.addEventListener('keydown', onUserGesture, { once: true });
-
-    return () => {
-      track.removeEventListener('unmute', tryPlay);
-      window.removeEventListener('click', onUserGesture);
-      window.removeEventListener('touchstart', onUserGesture);
-      window.removeEventListener('keydown', onUserGesture);
-    };
-  }, [track, isDeafened, volume]);
-
-  return <audio ref={audioRef} autoPlay playsInline style={{ position: 'fixed', top: -9999, left: -9999, width: 1, height: 1, pointerEvents: 'none' }} />;
-};
-
-// Dedicated audio player for WebRTC voice peers (plays both microphone and screen share audio tracks!)
-const RemoteAudioPlayer: React.FC<{ stream: MediaStream | undefined; isDeafened: boolean; volume?: number }> = ({ stream, isDeafened, volume = 1 }) => {
-  const [tracks, setTracks] = useState<MediaStreamTrack[]>([]);
-
-  useEffect(() => {
-    if (!stream) {
-      setTracks([]);
-      return;
+    if (!sampleCtx || !sampleCanvas) return true;
+    sampleCtx.drawImage(video, 0, 0, 16, 16);
+    const data = sampleCtx.getImageData(0, 0, 16, 16).data;
+    let totalLuminance = 0;
+    let maxLuma = 0;
+    // Sample 256 pixels (16x16)
+    for (let i = 0; i < data.length; i += 4) {
+      const luma = (data[i] * 299 + data[i + 1] * 587 + data[i + 2] * 114) / 1000;
+      totalLuminance += luma;
+      if (luma > maxLuma) maxLuma = luma;
     }
+    const avgLuminance = totalLuminance / 256;
+    // If average brightness is less than 10 (out of 255) and max pixel brightness < 20,
+    // the frame is black / dark void
+    return avgLuminance < 10 && maxLuma < 20;
+  } catch {
+    return true; // If error reading canvas, treat as black so avatar shows!
+  }
+}
 
-    const updateTracks = () => {
-      const live = stream.getAudioTracks().filter((t) => t.readyState === 'live');
-      setTracks(live);
-    };
-
-    updateTracks();
-    stream.onaddtrack = updateTracks;
-    stream.onremovetrack = updateTracks;
-
-    return () => {
-      stream.onaddtrack = null;
-      stream.onremovetrack = null;
-    };
-  }, [stream]);
-
-  if (!stream || tracks.length === 0) return null;
-
-  return (
-    <>
-      {tracks.map((track) => (
-        <SingleAudioTrackPlayer
-          key={track.id}
-          track={track}
-          isDeafened={isDeafened}
-          volume={volume}
-        />
-      ))}
-    </>
-  );
-};
-
-// Remote Video Player with robust frame detection, orientation checking, and black screen prevention
+// Remote Video Player with robust black frame detection, orientation checking, and avatar fallback
 const RemoteVideoPlayer: React.FC<{ 
   stream: MediaStream | undefined;
   username: string;
   avatarColor?: string;
+  user?: any;
+  renderAvatar?: (u: any, sizeClass: string) => React.ReactNode;
   onOrientationChange?: (isVertical: boolean) => void;
+  onBlackStateChange?: (isBlack: boolean) => void;
   isScreen?: boolean;
   isVertical?: boolean;
-}> = ({ stream, username, avatarColor, onOrientationChange, isScreen = false, isVertical = false }) => {
+  isSpeaking?: boolean;
+}> = ({ stream, username, avatarColor, user, renderAvatar, onOrientationChange, onBlackStateChange, isScreen = false, isVertical = false, isSpeaking = false }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [hasVideoFrame, setHasVideoFrame] = useState(false);
+  const [isBlack, setIsBlack] = useState(!isScreen);
 
   const checkOrientation = useCallback(() => {
     const video = videoRef.current;
@@ -325,18 +281,23 @@ const RemoteVideoPlayer: React.FC<{
 
     if (!stream) {
       video.srcObject = null;
+      try {
+        video.load();
+      } catch {}
       setHasVideoFrame(false);
+      setIsBlack(true);
+      onBlackStateChange?.(true);
       return;
     }
 
-    const liveTracks = stream.getVideoTracks().filter((t) => t.readyState === 'live');
+    const allVideoTracks = stream.getVideoTracks();
+    const liveTracks = allVideoTracks.filter((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled && !t.muted);
+    
     if (liveTracks.length === 0) {
-      video.srcObject = null;
       setHasVideoFrame(false);
-      return;
+      setIsBlack(true);
+      onBlackStateChange?.(true);
     }
-
-    liveTracks.forEach((t) => { t.enabled = true; });
 
     if (video.srcObject !== stream) {
       video.srcObject = stream;
@@ -346,9 +307,30 @@ const RemoteVideoPlayer: React.FC<{
     video.defaultMuted = true;
 
     const checkFrame = () => {
-      if (video && video.videoWidth > 0 && video.videoHeight > 0) {
-        setHasVideoFrame(true);
-        checkOrientationRef.current();
+      const vid = videoRef.current;
+      if (!vid) return;
+
+      if (isScreen) {
+        if (vid.videoWidth > 0 && vid.videoHeight > 0) {
+          setHasVideoFrame(true);
+          setIsBlack(false);
+          onBlackStateChange?.(false);
+          checkOrientationRef.current();
+        }
+        return;
+      }
+
+      if (vid.videoWidth > 0 && vid.videoHeight > 0 && vid.readyState >= 2 && !vid.paused && !vid.ended) {
+        const frameIsBlack = checkIsVideoFrameBlack(vid);
+        setIsBlack(frameIsBlack);
+        onBlackStateChange?.(frameIsBlack);
+        if (!frameIsBlack) {
+          setHasVideoFrame(true);
+          checkOrientationRef.current();
+        }
+      } else {
+        setIsBlack(true);
+        onBlackStateChange?.(true);
       }
     };
 
@@ -365,18 +347,28 @@ const RemoteVideoPlayer: React.FC<{
     tryPlay();
 
     const handleUnmute = () => {
-      liveTracks.forEach((t) => { t.enabled = true; });
+      allVideoTracks.forEach((t: MediaStreamTrack) => { t.enabled = true; });
       tryPlay();
     };
 
-    liveTracks.forEach((t) => {
+    const handleMuteOrEnd = () => {
+      setIsBlack(true);
+      setHasVideoFrame(false);
+      onBlackStateChange?.(true);
+    };
+
+    allVideoTracks.forEach((t: MediaStreamTrack) => {
       t.addEventListener('unmute', handleUnmute);
+      t.addEventListener('mute', handleMuteOrEnd);
+      t.addEventListener('ended', handleMuteOrEnd);
     });
 
     const handleAddTrack = (e: MediaStreamTrackEvent) => {
       if (e.track.kind === 'video') {
         e.track.enabled = true;
         e.track.addEventListener('unmute', handleUnmute);
+        e.track.addEventListener('mute', handleMuteOrEnd);
+        e.track.addEventListener('ended', handleMuteOrEnd);
         tryPlay();
       }
     };
@@ -386,6 +378,17 @@ const RemoteVideoPlayer: React.FC<{
     video.addEventListener('loadedmetadata', checkFrame);
     video.addEventListener('canplay', checkFrame);
     video.addEventListener('playing', checkFrame);
+    video.addEventListener('pause', checkFrame);
+    video.addEventListener('emptied', handleMuteOrEnd);
+
+    const freezeWatchdog = setInterval(() => {
+      if (video) {
+        if (video.paused && video.srcObject) {
+          video.play().catch(() => {});
+        }
+        checkFrame();
+      }
+    }, 1000);
 
     const onUserGesture = () => {
       tryPlay();
@@ -396,22 +399,36 @@ const RemoteVideoPlayer: React.FC<{
     window.addEventListener('keydown', onUserGesture, { once: true });
 
     return () => {
-      liveTracks.forEach((t) => {
+      clearInterval(freezeWatchdog);
+      allVideoTracks.forEach((t: MediaStreamTrack) => {
         t.removeEventListener('unmute', handleUnmute);
+        t.removeEventListener('mute', handleMuteOrEnd);
+        t.removeEventListener('ended', handleMuteOrEnd);
       });
       stream.removeEventListener('addtrack', handleAddTrack);
       video.removeEventListener('loadeddata', checkFrame);
       video.removeEventListener('loadedmetadata', checkFrame);
       video.removeEventListener('canplay', checkFrame);
       video.removeEventListener('playing', checkFrame);
+      video.removeEventListener('pause', checkFrame);
+      video.removeEventListener('emptied', handleMuteOrEnd);
       window.removeEventListener('click', onUserGesture);
       window.removeEventListener('touchstart', onUserGesture);
       window.removeEventListener('keydown', onUserGesture);
     };
-  }, [stream]);
+  }, [stream, isScreen, onBlackStateChange]);
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-[#0f0f12]">
+    <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-white dark:bg-slate-900">
+      {!isScreen && renderAvatar && user && (isBlack || !hasVideoFrame || !stream) && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-slate-900 z-10 transition-opacity duration-200">
+          <div className="relative flex items-center justify-center">
+            <div className={`transition-all ${isSpeaking ? 'ring-4 ring-amber-500 rounded-full shadow-[0_0_30px_#f59e0b]' : ''}`}>
+              {renderAvatar(user, 'w-28 h-28 text-3xl')}
+            </div>
+          </div>
+        </div>
+      )}
       <video
         ref={videoRef}
         autoPlay
@@ -424,21 +441,51 @@ const RemoteVideoPlayer: React.FC<{
         onLoadedData={() => {
           const video = videoRef.current;
           if (video && video.videoWidth > 0) {
-            setHasVideoFrame(true);
+            if (isScreen) {
+              setHasVideoFrame(true);
+              setIsBlack(false);
+              onBlackStateChange?.(false);
+            } else {
+              const black = checkIsVideoFrameBlack(video);
+              setIsBlack(black);
+              onBlackStateChange?.(black);
+              if (!black) setHasVideoFrame(true);
+            }
           }
         }}
         onCanPlay={() => {
           const video = videoRef.current;
           if (video && video.videoWidth > 0) {
-            setHasVideoFrame(true);
+            if (isScreen) {
+              setHasVideoFrame(true);
+              setIsBlack(false);
+              onBlackStateChange?.(false);
+            } else {
+              const black = checkIsVideoFrameBlack(video);
+              setIsBlack(black);
+              onBlackStateChange?.(black);
+              if (!black) setHasVideoFrame(true);
+            }
           }
         }}
         onPlaying={() => {
-          setHasVideoFrame(true);
+          const video = videoRef.current;
+          if (video) {
+            if (isScreen) {
+              setHasVideoFrame(true);
+              setIsBlack(false);
+              onBlackStateChange?.(false);
+            } else {
+              const black = checkIsVideoFrameBlack(video);
+              setIsBlack(black);
+              onBlackStateChange?.(black);
+              if (!black) setHasVideoFrame(true);
+            }
+          }
           checkOrientation();
         }}
         onResize={checkOrientation}
-        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl opacity-100 transition-opacity duration-200`}
+        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl ${isScreen || (!isBlack && hasVideoFrame && stream) ? 'opacity-100' : 'opacity-0 pointer-events-none'} transition-opacity duration-200`}
       />
     </div>
   );
@@ -450,11 +497,14 @@ const LocalVideoPlayer: React.FC<{
   user: any;
   renderAvatar: (u: any, sizeClass: string) => React.ReactNode;
   onOrientationChange?: (isVertical: boolean) => void;
+  onBlackStateChange?: (isBlack: boolean) => void;
   isMirrored?: boolean;
   isScreen?: boolean;
-}> = ({ stream, user, renderAvatar, onOrientationChange, isMirrored = true, isScreen = false }) => {
+  isSpeaking?: boolean;
+}> = ({ stream, user, renderAvatar, onOrientationChange, onBlackStateChange, isMirrored = true, isScreen = false, isSpeaking = false }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [hasFrame, setHasFrame] = useState(false);
+  const [isBlack, setIsBlack] = useState(!isScreen);
 
   const checkOrientation = useCallback(() => {
     const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -478,24 +528,33 @@ const LocalVideoPlayer: React.FC<{
     }
   }, [onOrientationChange, stream]);
 
+  const checkOrientationRef = useRef(checkOrientation);
+  useEffect(() => {
+    checkOrientationRef.current = checkOrientation;
+  }, [checkOrientation]);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
     if (!stream) {
       video.srcObject = null;
+      try {
+        video.load();
+      } catch {}
       setHasFrame(false);
+      setIsBlack(true);
+      onBlackStateChange?.(true);
       return;
     }
 
-    const liveTracks = stream.getVideoTracks().filter((t) => t.readyState === 'live');
+    const allVideoTracks = stream.getVideoTracks();
+    const liveTracks = allVideoTracks.filter((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled && !t.muted);
     if (liveTracks.length === 0) {
-      video.srcObject = null;
       setHasFrame(false);
-      return;
+      setIsBlack(true);
+      onBlackStateChange?.(true);
     }
-
-    liveTracks.forEach((t) => { t.enabled = true; });
 
     if (video.srcObject !== stream) {
       video.srcObject = stream;
@@ -505,9 +564,30 @@ const LocalVideoPlayer: React.FC<{
     video.defaultMuted = true;
 
     const checkFrame = () => {
-      if (video && video.videoWidth > 0 && video.videoHeight > 0) {
-        setHasFrame(true);
-        checkOrientation();
+      const vid = videoRef.current;
+      if (!vid) return;
+
+      if (isScreen) {
+        if (vid.videoWidth > 0 && vid.videoHeight > 0) {
+          setHasFrame(true);
+          setIsBlack(false);
+          onBlackStateChange?.(false);
+          checkOrientationRef.current();
+        }
+        return;
+      }
+
+      if (vid.videoWidth > 0 && vid.videoHeight > 0 && vid.readyState >= 2 && !vid.paused && !vid.ended) {
+        const frameIsBlack = checkIsVideoFrameBlack(vid);
+        setIsBlack(frameIsBlack);
+        onBlackStateChange?.(frameIsBlack);
+        if (!frameIsBlack) {
+          setHasFrame(true);
+          checkOrientationRef.current();
+        }
+      } else {
+        setIsBlack(true);
+        onBlackStateChange?.(true);
       }
     };
 
@@ -515,22 +595,59 @@ const LocalVideoPlayer: React.FC<{
       checkFrame();
     }).catch(() => {});
 
+    const handleMuteOrEnd = () => {
+      setIsBlack(true);
+      setHasFrame(false);
+      onBlackStateChange?.(true);
+    };
+
+    allVideoTracks.forEach((t: MediaStreamTrack) => {
+      t.addEventListener('unmute', checkFrame);
+      t.addEventListener('mute', handleMuteOrEnd);
+      t.addEventListener('ended', handleMuteOrEnd);
+    });
+
     video.addEventListener('loadeddata', checkFrame);
     video.addEventListener('loadedmetadata', checkFrame);
+    video.addEventListener('canplay', checkFrame);
     video.addEventListener('playing', checkFrame);
+    video.addEventListener('pause', checkFrame);
+    video.addEventListener('emptied', handleMuteOrEnd);
+
+    const freezeWatchdog = setInterval(() => {
+      if (video) {
+        if (video.paused && video.srcObject) {
+          video.play().catch(() => {});
+        }
+        checkFrame();
+      }
+    }, 1000);
 
     return () => {
+      clearInterval(freezeWatchdog);
+      allVideoTracks.forEach((t: MediaStreamTrack) => {
+        t.removeEventListener('unmute', checkFrame);
+        t.removeEventListener('mute', handleMuteOrEnd);
+        t.removeEventListener('ended', handleMuteOrEnd);
+      });
       video.removeEventListener('loadeddata', checkFrame);
       video.removeEventListener('loadedmetadata', checkFrame);
+      video.removeEventListener('canplay', checkFrame);
       video.removeEventListener('playing', checkFrame);
+      video.removeEventListener('pause', checkFrame);
+      video.removeEventListener('emptied', handleMuteOrEnd);
     };
-  }, [stream, checkOrientation]);
+  }, [stream, isScreen, onBlackStateChange]);
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-black">
-      {!stream && (
-        <div className="absolute inset-0 flex items-center justify-center bg-[#1c1c22]">
-          {renderAvatar(user, 'w-24 h-24 text-3xl')}
+    <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-white dark:bg-slate-900">
+      {!isScreen && (isBlack || !stream || !hasFrame) && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-slate-900 z-10 transition-opacity duration-200">
+          <div className="relative flex items-center justify-center">
+            <div className={`transition-all ${isSpeaking ? 'ring-4 ring-amber-500 rounded-full shadow-[0_0_30px_#f59e0b]' : ''}`}>
+              {renderAvatar(user, 'w-28 h-28 text-3xl')}
+            </div>
+          </div>
         </div>
       )}
       {/* Local Video Stream with optional mirror preview */}
@@ -544,13 +661,13 @@ const LocalVideoPlayer: React.FC<{
           (e.target as HTMLVideoElement).play().catch(() => {});
         }}
         onResize={checkOrientation}
-        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl ${isMirrored && !isScreen ? 'transform scale-x-[-1]' : ''} ${stream ? 'opacity-100' : 'opacity-0'} transition-opacity duration-200`}
+        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl ${isMirrored && !isScreen ? 'transform scale-x-[-1]' : ''} ${isScreen || (!isBlack && stream && hasFrame) ? 'opacity-100' : 'opacity-0 pointer-events-none'} transition-opacity duration-200`}
       />
     </div>
   );
 };
 
-export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
+export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }) => {
   const {
     currentUser,
     setCurrentUser,
@@ -559,23 +676,178 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     updateUser,
     insertMessage,
     deleteMessage,
+    deleteChannelMessages,
     registerUser,
     sendRtcSignal,
     setRtcSignalHandler,
     setMediaHandlers,
-    incomingCall,
-    outgoingCall,
-    dismissIncomingCall,
-    dismissOutgoingCall,
     isConnected,
+    isInVideo,
+    isVideoEnabled,
+    isScreenSharing,
+    isMuted,
+    setIsMuted,
+    isDeafened,
+    setIsDeafened,
+    localAudioStream,
+    cameraStream,
+    screenStream,
+    activeVideoStream,
+    remoteStreams,
+    remoteScreenAudioStreams,
+    remoteCameraStreams,
+    remoteScreenStreams,
+    remoteSpeaking,
+    joinVoiceChannel,
+    stopVoiceChannel,
+    micPermissionStatus,
+    requestMicrophonePermission,
+    micError,
+    toggleCamera,
+    toggleScreenShare,
   } = globalChat;
 
-  const [activeChannel, setActiveChannel] = useState<'text-general' | 'video-general'>('text-general');
+  const toggleMute = () => setIsMuted(!isMuted);
+
+  const voiceUsers = useMemo(() => {
+    return users.filter((u: any) => (u.current_channel === 'video-general' || u.current_channel === 'voice-general') && u.id !== currentUser.id);
+  }, [users, currentUser.id]);
+
+  const isUserSpeaking = useCallback((userId: string) => {
+    if (userId === currentUser.id) return globalChat.is_speaking;
+    const peer = users.find((u: any) => u.id === userId);
+    return peer?.is_speaking || remoteSpeaking[userId];
+  }, [currentUser.id, globalChat.is_speaking, users, remoteSpeaking]);
+
+  const renderUserActivity = useCallback((u: any) => {
+    if (!u) return <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium truncate block">In #general</span>;
+    if (typeof u === 'string') {
+      return <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium truncate block">{u}</span>;
+    }
+    let text = 'In #general';
+    let textColor = 'text-slate-400 dark:text-slate-500';
+    if (u.is_hand_raised) {
+      text = '✋ Hand Raised';
+      textColor = 'text-amber-500 font-bold';
+    } else if (u.current_channel === 'video-general' || u.current_channel === 'voice-general') {
+      text = 'In General Voice';
+      textColor = 'text-blue-500 font-semibold';
+    } else if (u.current_channel && u.current_channel.startsWith('dm-')) {
+      text = 'In Private Chat';
+      textColor = 'text-emerald-500 font-semibold';
+    } else if (u.activity && u.activity !== 'Online' && u.activity !== 'Browsing Games' && u.activity !== 'In #general') {
+      text = u.activity;
+      textColor = 'text-purple-500 font-semibold';
+    } else {
+      text = 'In #general';
+      textColor = 'text-slate-400 dark:text-slate-500';
+    }
+    return <span className={`text-[11px] ${textColor} font-medium truncate block`}>{text}</span>;
+  }, []);
+
+  const [activeChannel, setActiveChannel] = useState<string>(initialChannel || 'text-general');
+  const [showMicPermissionModal, setShowMicPermissionModal] = useState(false);
+
+  useEffect(() => {
+    if (initialChannel) {
+      setActiveChannel(initialChannel);
+    }
+  }, [initialChannel]);
+
+  const handleStopVoice = useCallback(() => {
+    stopVoiceChannel();
+    setActiveChannel('text-general');
+  }, [stopVoiceChannel]);
+
+  // Automatically join voice when opening General Voice channel if not already in video
+  useEffect(() => {
+    if (activeChannel === 'video-general' && !isInVideo) {
+      joinVoiceChannel(false);
+    }
+  }, [activeChannel, isInVideo, joinVoiceChannel]);
+
+
+
+  // Track message counts for DM channels to handle auto-closing deleted chats
+  const prevDmCountsRef = useRef<Record<string, number>>({});
+
+  useEffect(() => {
+    if (activeChannel.startsWith('dm-')) {
+      const dmMsgCount = messages.filter((m: any) => m.channel_id === activeChannel).length;
+      const prevCount = prevDmCountsRef.current[activeChannel];
+
+      // If this DM channel previously had messages (>0) and now has 0 messages, automatically revert to general chat
+      if (prevCount !== undefined && prevCount > 0 && dmMsgCount === 0) {
+        setActiveChannel('text-general');
+      }
+
+      prevDmCountsRef.current[activeChannel] = dmMsgCount;
+    }
+  }, [messages, activeChannel]);
+
   const [inputText, setInputText] = useState('');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
   const [editAvatarUrl, setEditAvatarUrl] = useState('');
+
+  // Helper for 1-on-1 direct message channel ID
+  const getDmChannelId = useCallback((peerId: string) => `dm-${[currentUser.id, peerId].sort().join('-')}`, [currentUser.id]);
+
+  // Active DM peers list from messages
+  const dmPeers = useMemo(() => {
+    const peerMap = new Map<string, any>();
+    messages.forEach((m: any) => {
+      if (m.channel_id && m.channel_id.startsWith('dm-') && m.channel_id.includes(currentUser.id)) {
+        const parts = m.channel_id.replace('dm-', '').split('-');
+        const peerId = parts.find((p: string) => p !== currentUser.id);
+        if (peerId) {
+          const knownUser = users.find((u: any) => u.id === peerId);
+          if (knownUser) {
+            peerMap.set(peerId, { ...knownUser, lastMessage: m });
+          } else {
+            const fallbackName = m.sender_id === peerId ? m.sender_name : 'Player';
+            peerMap.set(peerId, {
+              id: peerId,
+              username: fallbackName,
+              avatar_color: m.avatar_color || '#0066ff',
+              avatar_url: m.sender_avatar_url || '',
+              lastMessage: m,
+            });
+          }
+        }
+      }
+    });
+    return Array.from(peerMap.values());
+  }, [messages, users, currentUser.id]);
+
+  // Current active DM peer if activeChannel is a dm-
+  const activeDmPeerId = useMemo(() => {
+    if (!activeChannel.startsWith('dm-')) return null;
+    const parts = activeChannel.replace('dm-', '').split('-');
+    return parts.find((p: string) => p !== currentUser.id) || null;
+  }, [activeChannel, currentUser.id]);
+
+  const activeDmPeer = useMemo(() => {
+    if (!activeDmPeerId) return null;
+    return users.find((u: any) => u.id === activeDmPeerId) || dmPeers.find((p: any) => p.id === activeDmPeerId) || {
+      id: activeDmPeerId,
+      username: 'Player',
+      avatar_color: '#0066ff',
+      avatar_url: '',
+    };
+  }, [activeDmPeerId, users, dmPeers]);
+
+  // Filter messages for currently selected channel
+  const activeChannelMessages = useMemo(() => {
+    if (activeChannel === 'text-general') {
+      return messages.filter((m: any) => !m.channel_id || m.channel_id === 'text-general' || m.channel_id === 'general');
+    }
+    if (activeChannel.startsWith('dm-')) {
+      return messages.filter((m: any) => m.channel_id === activeChannel);
+    }
+    return [];
+  }, [messages, activeChannel]);
 
   const profileAvatarInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -606,359 +878,33 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
   const [audioLevel, setAudioLevel] = useState<number>(0);
   const [isMicTesting, setIsMicTesting] = useState(false);
 
-  useEffect(() => {
-    setEditName(currentUser.username);
-    setEditColor(currentUser.avatar_color || 'var(--vibrant-cyan)');
-    setEditAvatarUrl(currentUser.avatar_url || '');
-  }, [currentUser.username, currentUser.avatar_color, currentUser.avatar_url]);
+  // Mobile Drawer toggles
+  const [isMobileChannelsOpen, setIsMobileChannelsOpen] = useState(false);
+  const [isMobileMembersOpen, setIsMobileMembersOpen] = useState(false);
 
-  const handleProfileAvatarFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const base64Data = reader.result as string;
-      try {
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ filename: file.name, base64Data, mimeType: file.type }),
-        });
-        const data = await res.json();
-        if (data.success && data.url) {
-          setEditAvatarUrl(data.url);
-        } else {
-          setEditAvatarUrl(base64Data);
-        }
-      } catch {
-        setEditAvatarUrl(base64Data);
-      }
-    };
-    reader.readAsDataURL(file);
-    e.target.value = '';
-  };
+  // Refs for scrolling and canvas
+  const chatScrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const animFrameRef = useRef<number | null>(null);
 
-  const saveProfile = () => {
-    const updatedUser = { ...currentUser, username: editName, avatar_color: editColor, avatar_url: editAvatarUrl };
-    setCurrentUser(updatedUser);
-    localStorage.setItem('frosted_chat_username', editName);
-    localStorage.setItem('frosted_chat_usercolor', editColor);
-    localStorage.setItem('frosted_chat_avatar_url', editAvatarUrl);
-    
-    updateUser({ username: editName, avatar_color: editColor, avatar_url: editAvatarUrl });
-    registerUser(updatedUser);
-    
-    setIsProfileModalOpen(false);
-  };
-
-  // Helper to render user avatar (supports custom image upload / URL or colored initials fallback)
-  const renderAvatar = (u: { username: string; avatar_color?: string; avatar_url?: string }, sizeClass: string = 'w-9 h-9 text-xs') => {
-    if (u.avatar_url && u.avatar_url.trim()) {
-      return (
-        <div className={`${sizeClass} rounded-full overflow-hidden shrink-0 border border-white/10 bg-black`}>
-          <img src={u.avatar_url} alt={u.username} className="w-full h-full object-cover" />
-        </div>
-      );
-    }
-    return (
-      <div 
-        className={`${sizeClass} rounded-full text-black font-extrabold flex items-center justify-center shrink-0 shadow-sm`}
-        style={{ backgroundColor: u.avatar_color || 'var(--vibrant-cyan)' }}
-      >
-        {(u.username || 'P').slice(0, 2).toUpperCase()}
-      </div>
-    );
-  };
-
-  // Voice & Video Call States
-  const [isInVideo, setIsInVideo] = useState(false);
-  const [isCameraStarting, setIsCameraStarting] = useState(false);
-  const [cameraError, setCameraError] = useState<string | null>(null);
+  // Orientation and sync states
   const [localIsVertical, setLocalIsVertical] = useState(() => {
     return typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
   });
   const [peerOrientations, setPeerOrientations] = useState<Record<string, boolean>>({});
-
-  // Standard robust camera streamer
-  const acquireCameraStream = async (): Promise<MediaStream> => {
-    try {
-      return await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'user',
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-        },
-        audio: false,
-      });
-    } catch {
-      try {
-        return await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user' },
-          audio: false,
-        });
-      } catch {
-        return await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false,
-        });
-      }
-    }
-  };
-
-  const [isMuted, setIsMuted] = useState(false);
-  const [isDeafened, setIsDeafened] = useState(false);
-  const [isVideoEnabled, setIsVideoEnabled] = useState(false);
-  const [isScreenSharing, setIsScreenSharing] = useState(false);
-  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
+  const [peerCameraBlack, setPeerCameraBlack] = useState<Record<string, boolean>>({});
+  const [localCameraBlack, setLocalCameraBlack] = useState<boolean>(true);
   const [screenShareError, setScreenShareError] = useState<string | null>(null);
 
-  // Mobile Drawer toggles for adapting to mobile devices
-  const [isMobileChannelsOpen, setIsMobileChannelsOpen] = useState(false);
-  const [isMobileMembersOpen, setIsMobileMembersOpen] = useState(false);
+  // GIF items state
+  const [gifs, setGifs] = useState<any[]>([]);
+  const [isGifsLoading, setIsGifsLoading] = useState(false);
 
-  // Local Reactive Media Streams
-  const [localAudioStream, setLocalAudioStream] = useState<MediaStream | null>(null);
-  const [cameraStream, setCameraStream] = useState<MediaStream | null>(null);
-  const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
-  const [activeVideoStream, setActiveVideoStream] = useState<MediaStream | null>(null); // For WebRTC hook (combined)
-
-  // Media Stream refs
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const micStreamRef = useRef<MediaStream | null>(null);
-  const cameraStreamRef = useRef<MediaStream | null>(null);
-  const screenStreamRef = useRef<MediaStream | null>(null);
-  const animFrameRef = useRef<number | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-
-  // Combine streams for WebRTC
-  const activeVideoStreamRef = useRef<MediaStream | null>(null);
-
-  useEffect(() => {
-    const cameraTracks = cameraStream?.getVideoTracks() || [];
-    const screenTracks = screenStream?.getVideoTracks() || [];
-    
-    // Check if tracks have actually changed
-    const currentTrackIds = [...cameraTracks, ...screenTracks].map(t => t.id).join(',');
-    const previousTrackIds = activeVideoStreamRef.current ? 
-        activeVideoStreamRef.current.getVideoTracks().map(t => t.id).join(',') : '';
-
-    if (currentTrackIds !== previousTrackIds) {
-        const combined = new MediaStream();
-        cameraTracks.forEach(t => combined.addTrack(t));
-        screenTracks.forEach(t => combined.addTrack(t));
-        activeVideoStreamRef.current = combined;
-        setActiveVideoStream(combined);
-    }
-  }, [cameraStream, screenStream]);
-
-  // Keep microphone and screen share audio strictly separated!
-  // localAudioStream contains purely the microphone stream with echo cancellation.
-  useEffect(() => {
-    if (micStreamRef.current) {
-      micStreamRef.current.getAudioTracks().forEach((track) => {
-        track.enabled = !isMuted;
-      });
-    }
-  }, [isMuted]);
-
-
-  const [micError, setMicError] = useState<string | null>(null);
-  const [micPermissionStatus, setMicPermissionStatus] = useState<'prompt' | 'granted' | 'denied' | 'unknown'>('unknown');
-  const [showMicPermissionModal, setShowMicPermissionModal] = useState(false);
-
-  // Probe browser microphone permission state
-  useEffect(() => {
-    if (navigator.permissions && navigator.permissions.query) {
-      navigator.permissions.query({ name: 'microphone' as any })
-        .then((status) => {
-          setMicPermissionStatus(status.state as any);
-          status.onchange = () => {
-            setMicPermissionStatus(status.state as any);
-          };
-        })
-        .catch(() => {
-          setMicPermissionStatus('prompt');
-        });
-    } else {
-      setMicPermissionStatus('prompt');
-    }
-  }, []);
-
-  // Explicit microphone permission requester with instant browser prompt
-  const requestMicrophonePermission = async (withVideo: boolean = false) => {
-    // Unlock AudioContext inside user gesture
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (AudioCtx) {
-      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-        audioContextRef.current = new AudioCtx();
-      }
-      if (audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume().catch(() => {});
-      }
-    }
-
-    setMicError(null);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: false,
-          autoGainControl: false,
-          googEchoCancellation: true,
-          googAutoGainControl: false,
-          googNoiseSuppression: false,
-          googHighpassFilter: false,
-          googTypingNoiseDetection: false,
-          googAudioMirroring: false,
-        } as any,
-        video: false,
-      });
-
-      setMicPermissionStatus('granted');
-      setShowMicPermissionModal(false);
-      micStreamRef.current = stream;
-      setLocalAudioStream(stream);
-      setIsMuted(false);
-      setIsInVideo(true);
-      setActiveChannel('video-general');
-
-      setCurrentUser((prev: any) => ({
-        ...prev,
-        current_channel: 'video-general',
-        activity: 'In General Voice',
-      }));
-
-      updateUser({
-        current_channel: 'video-general',
-        activity: 'In General Voice',
-        has_video: false,
-        is_speaking: false,
-        is_muted: false,
-        is_deafened: false,
-        is_screen_sharing: false,
-      });
-
-      if (withVideo) {
-        toggleCamera();
-      }
-    } catch (err: any) {
-      console.warn('Microphone permission request result:', err);
-      setMicPermissionStatus('denied');
-      setMicError('Microphone permission was not allowed. Please click the site settings/lock icon in your browser URL bar to allow microphone access.');
-    }
+  const handleCategorySelect = (category: { label: string; query: string }) => {
+    setActiveCategoryLabel(category.label);
+    setGiphySearch(category.query);
   };
-
-  // Helper rendering live presence activities (e.g. playing "Slope", searching games, in #general)
-  const renderUserActivity = (activity?: string) => {
-    if (!activity) return null;
-    const isPlaying = activity.startsWith('Playing');
-    const isSearching = activity.includes('Searching');
-    const isVoice = activity.includes('Voice');
-    const isChat = activity.includes('#general');
-
-    if (isPlaying) {
-      return (
-        <div className="flex items-center gap-1 text-[11px] text-emerald-400 font-semibold truncate mt-0.5" title={activity}>
-          <Gamepad2 className="w-3 h-3 text-emerald-400 shrink-0" />
-          <span className="truncate">{activity}</span>
-        </div>
-      );
-    }
-
-    if (isSearching) {
-      return (
-        <div className="flex items-center gap-1 text-[11px] text-amber-400 font-semibold truncate mt-0.5" title={activity}>
-          <Search className="w-3 h-3 text-amber-400 shrink-0" />
-          <span className="truncate">{activity}</span>
-        </div>
-      );
-    }
-
-    if (isVoice) {
-      return (
-        <div className="flex items-center gap-1 text-[11px] text-blue-400 font-semibold truncate mt-0.5" title={activity}>
-          <Mic className="w-3 h-3 text-blue-400 shrink-0" />
-          <span className="truncate">{activity}</span>
-        </div>
-      );
-    }
-
-    if (isChat) {
-      return (
-        <div className="flex items-center gap-1 text-[11px] text-zinc-400 font-medium truncate mt-0.5" title={activity}>
-          <MessageSquare className="w-3 h-3 text-zinc-500 shrink-0" />
-          <span className="truncate">{activity}</span>
-        </div>
-      );
-    }
-
-    return (
-      <div className="flex items-center gap-1 text-[11px] text-zinc-400 font-medium truncate mt-0.5" title={activity}>
-        <span className="truncate">{activity}</span>
-      </div>
-    );
-  };
-
-  // Connected peers in voice and video channels
-  const voiceUsers = useMemo(() => {
-    return users.filter(
-      (u: any) =>
-        (u.current_channel === 'video-general' || u.current_channel === 'voice-general') &&
-        u.id !== currentUser.id
-    );
-  }, [users, currentUser.id]);
-  
-  const lastHandRaisedStates = useRef<Map<string, boolean>>(new Map());
-
-  const playHandRaiseSound = useCallback(() => {
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioCtx) return;
-      const ctx = new AudioCtx();
-      
-      const playChime = (time: number, freq: number) => {
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(freq, time);
-        osc.frequency.exponentialRampToValueAtTime(freq * 1.5, time + 0.1);
-        osc.frequency.exponentialRampToValueAtTime(freq * 0.8, time + 0.3);
-
-        gain.gain.setValueAtTime(0.8, time);
-        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.4);
-
-        osc.connect(gain);
-        gain.connect(ctx.destination);
-        osc.start(time);
-        osc.stop(time + 0.4);
-      };
-
-      // Double chime for maximum attention
-      playChime(ctx.currentTime, 660);
-      playChime(ctx.currentTime + 0.15, 880);
-    } catch (e) {
-      console.warn('Failed to play hand raise sound:', e);
-    }
-  }, []);
-
-  useEffect(() => {
-    voiceUsers.forEach((u: any) => {
-      const wasRaised = lastHandRaisedStates.current.get(u.id) || false;
-      const isRaised = !!u.is_hand_raised;
-      
-      if (!wasRaised && isRaised) {
-        playHandRaiseSound();
-      }
-      
-      lastHandRaisedStates.current.set(u.id, isRaised);
-    });
-
-    // Cleanup stale users
-    const currentIds = new Set(voiceUsers.map((u: any) => u.id));
-    Array.from(lastHandRaisedStates.current.keys()).forEach(id => {
-      if (!currentIds.has(id)) lastHandRaisedStates.current.delete(id);
-    });
-  }, [voiceUsers, playHandRaiseSound]);
 
   const toggleHandRaise = () => {
     const nextState = !currentUser.is_hand_raised;
@@ -966,61 +912,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     updateUser({ is_hand_raised: nextState });
   };
 
-  const isMediaActive = activeChannel === 'video-general' || isInVideo;
-
-  const activePeers = useMemo(() => {
-    if (!isMediaActive) return [];
-    return voiceUsers;
-  }, [voiceUsers, isMediaActive]);
-
-  const { remoteStreams, remoteScreenAudioStreams, remoteCameraStreams, remoteScreenStreams, remoteSpeaking } = useWebRTC({
-    currentUserId: currentUser.id,
-    activeChannel: isMediaActive ? 'video-general' : 'text-general',
-    localAudioStream,
-    localVideoStream: activeVideoStream,
-    cameraStream,
-    screenStream,
-    isVertical: localIsVertical,
-    peers: activePeers,
-    sendRtcSignal,
-    setRtcSignalHandler,
-    setMediaHandlers,
-  });
-
-  // Enforce single screen share: if another user starts screen sharing, instantly stop our screen share
-  useEffect(() => {
-    if (isScreenSharing) {
-      const activeOtherSharer = users.find((u: any) => u.is_screen_sharing && u.id !== currentUser.id);
-      if (activeOtherSharer) {
-        if (screenStreamRef.current) {
-          screenStreamRef.current.getTracks().forEach((t) => t.stop());
-          screenStreamRef.current = null;
-        }
-        setIsScreenSharing(false);
-        setScreenStream(null);
-        updateUser({ is_screen_sharing: false, has_video: isVideoEnabled });
-      }
-    }
-  }, [users, isScreenSharing, currentUser.id, isVideoEnabled, updateUser]);
-
-  // Sync scroll to bottom on new messages
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages.length]);
-
-  const updateUserRef = useRef(updateUser);
-  updateUserRef.current = updateUser;
-
-  // GIF items state
-  const [gifs, setGifs] = useState<any[]>([]);
-  const [isGifsLoading, setIsGifsLoading] = useState(false);
-
   // Fetch GIFs effect
   useEffect(() => {
     if (!isGiphyOpen) return;
     let isCurrent = true;
     setIsGifsLoading(true);
-
     const loadGifs = async () => {
       try {
         const query = giphySearch.trim();
@@ -1036,425 +932,93 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
         if (isCurrent) setIsGifsLoading(false);
       }
     };
-
     loadGifs();
-
-    return () => {
-      isCurrent = false;
-    };
+    return () => { isCurrent = false; };
   }, [isGiphyOpen, giphySearch]);
 
-  const handleCategorySelect = (category: { label: string; query: string }) => {
-    setActiveCategoryLabel(category.label);
-    setGiphySearch(category.query);
-  };
-
-  // Voice Detection Logic
+  // Sync scroll to bottom on new messages - Smart Scroll Logic
   useEffect(() => {
-    if (!localAudioStream || isMuted) {
-      if (!isMicTesting) {
-        setIsUserSpeaking((prev) => (prev ? false : prev));
-        setAudioLevel((prev) => (prev !== 0 ? 0 : prev));
-        updateUserRef.current({ is_speaking: false });
-      }
-      return;
+    const container = chatScrollRef.current;
+    if (!container) return;
+
+    // Even smaller threshold for mobile to avoid jumping while reading
+    const threshold = 60; 
+    const isNearBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + threshold;
+    const lastMsg = messages[messages.length - 1];
+    const isFromMe = lastMsg?.sender_id === currentUser.id;
+
+    // Only auto-scroll if near bottom or if I sent the message
+    if (isNearBottom || isFromMe) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
+  }, [messages.length, currentUser.id]);
 
-    try {
-      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-        audioContextRef.current = new AudioCtx();
-      }
-      const ctx = audioContextRef.current;
-      if (ctx.state === 'suspended') {
-        ctx.resume().catch(() => {});
-      }
-
-      const source = ctx.createMediaStreamSource(localAudioStream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.4;
-      source.connect(analyser);
-
-      const bufferLength = analyser.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
-
-      let speakingCounter = 0;
-      let lastSpeaking = false;
-
-      const detectSpeaking = () => {
-        analyser.getByteFrequencyData(dataArray);
-        let sum = 0;
-        for (let i = 0; i < bufferLength; i++) {
-          sum += dataArray[i];
-        }
-        const avg = sum / bufferLength;
-        const normalized = Math.min(100, Math.round((avg / 128) * 100));
-
-        if (isMicTesting) {
-          setAudioLevel(normalized);
-        }
-
-        const speakingThreshold = 8;
-        if (normalized > speakingThreshold) {
-          speakingCounter = Math.min(speakingCounter + 1, 8);
-        } else {
-          speakingCounter = Math.max(speakingCounter - 1, 0);
-        }
-
-        const currentlySpeaking = speakingCounter > 2;
-        if (lastSpeaking !== currentlySpeaking) {
-          lastSpeaking = currentlySpeaking;
-          setIsUserSpeaking(currentlySpeaking);
-          updateUserRef.current({ is_speaking: currentlySpeaking });
-        }
-
-        animFrameRef.current = requestAnimationFrame(detectSpeaking);
-      };
-
-      detectSpeaking();
-
-      return () => {
-        if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-        source.disconnect();
-        analyser.disconnect();
-      };
-    } catch {
-      // Audio analysis error handled gracefully
-    }
-  }, [localAudioStream, isMuted, isMicTesting]);
-
-  // Robust media acquisition allowing any noise with echo cancellation
-  const acquireAudioStream = async (): Promise<MediaStream> => {
-    try {
-      return await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: false,
-          autoGainControl: false,
-          googEchoCancellation: true,
-          googAutoGainControl: false,
-          googNoiseSuppression: false,
-          googHighpassFilter: false,
-          googTypingNoiseDetection: false,
-          googAudioMirroring: false,
-        } as any,
-        video: false,
-      });
-    } catch {
-      try {
-        return await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-          },
-          video: false,
-        });
-      } catch (err) {
-        console.error('[WebRTC] Audio acquisition failed:', err);
-        throw err;
-      }
-    }
-  };
-
-  // Re-acquire stream if device change occurs
   useEffect(() => {
-    const handleDeviceChange = async () => {
-      if (isInVideo) {
-        console.log('[WebRTC] Audio device change detected, re-initializing...');
-        try {
-          const newStream = await acquireAudioStream();
-          micStreamRef.current = newStream;
-          setLocalAudioStream(newStream);
-        } catch (e) {
-          console.error('[WebRTC] Failed to re-acquire audio after device change:', e);
-        }
-      }
-    };
+    setEditName(currentUser.username);
+    setEditColor(currentUser.avatar_color || 'var(--vibrant-cyan)');
+    setEditAvatarUrl(currentUser.avatar_url || '');
+  }, [currentUser.username, currentUser.avatar_color, currentUser.avatar_url]);
 
-    navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
-    return () => {
-      navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
-    };
-  }, [isInVideo]);
+  const [isAvatarProcessing, setIsAvatarProcessing] = useState(false);
+  const [avatarUploadError, setAvatarUploadError] = useState<string | null>(null);
 
-  // Updated joinVoiceChannel using robust acquisition
-  const joinVoiceChannel = async (withVideo: boolean = false) => {
-    // Unlock AudioContext inside user gesture
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (AudioCtx) {
-      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-        audioContextRef.current = new AudioCtx();
-      }
-      if (audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume().catch(() => {});
-      }
-    }
-
-    setMicError(null);
-    setCameraError(null);
-
-    let audioStream: MediaStream | null = null;
-    let videoStream: MediaStream | null = null;
-
+  const handleProfileAvatarFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarUploadError(null);
+    setIsAvatarProcessing(true);
     try {
-      audioStream = await acquireAudioStream();
-      setMicPermissionStatus('granted');
-      micStreamRef.current = audioStream;
-      setLocalAudioStream(audioStream);
-      setIsMuted(false);
+      const optimizedDataUrl = await processAvatarImage(file, 256);
+      setEditAvatarUrl(optimizedDataUrl);
     } catch (err: any) {
-      setMicPermissionStatus('denied');
-      setMicError('Could not access microphone. Please check your connection and allow microphone permission.');
-    }
-
-    if (withVideo) {
-      setIsCameraStarting(true);
-      try {
-        videoStream = await acquireCameraStream();
-
-        cameraStreamRef.current = videoStream;
-        setIsVideoEnabled(true);
-        setCameraStream(videoStream);
-        updateUser({ has_video: true });
-      } catch (err: any) {
-        setCameraError('Could not access camera.');
-        setIsVideoEnabled(false);
-      } finally {
-        setIsCameraStarting(false);
-      }
-    }
-
-    setIsInVideo(true);
-    setActiveChannel('video-general');
-
-    setCurrentUser((prev: any) => ({
-      ...prev,
-      current_channel: 'video-general',
-      activity: 'In General Voice',
-    }));
-
-    updateUser({
-      current_channel: 'video-general',
-      activity: 'In General Voice',
-      has_video: !!videoStream,
-      is_speaking: false,
-      is_muted: false,
-      is_deafened: false,
-      is_screen_sharing: false,
-    });
-  };
-
-  // Sync call acceptance from global overlay
-  useEffect(() => {
-    if (globalChat.callAccepted && incomingCall) {
-      joinVoiceChannel(incomingCall.callType === 'video');
-      if (dismissIncomingCall) dismissIncomingCall();
-    }
-  }, [globalChat.callAccepted, incomingCall, dismissIncomingCall]);
-
-  // Toggle Camera
-  const toggleCamera = async () => {
-    if (isVideoEnabled) {
-      if (cameraStreamRef.current) {
-        cameraStreamRef.current.getTracks().forEach((track) => track.stop());
-        cameraStreamRef.current = null;
-      }
-      setIsVideoEnabled(false);
-      setCameraStream(null);
-      updateUser({ has_video: false });
-    } else {
-      setIsCameraStarting(true);
-      setCameraError(null);
-      try {
-        const stream = await acquireCameraStream();
-
-        cameraStreamRef.current = stream;
-        setIsVideoEnabled(true);
-        setCameraStream(stream);
-        updateUser({ has_video: true });
-      } catch (err: any) {
-        setCameraError('Camera access denied or unavailable.');
-        setIsVideoEnabled(false);
-      } finally {
-        setIsCameraStarting(false);
-      }
+      console.error('[Avatar upload error]:', err);
+      setAvatarUploadError(err?.message || 'Failed to process avatar image. Please try another file.');
+    } finally {
+      setIsAvatarProcessing(false);
+      e.target.value = '';
     }
   };
 
-  // Toggle Screen Sharing
-  const toggleScreenShare = async () => {
-    // Synchronously resume/create audio context inside user interaction click
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (AudioCtx) {
-      if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
-        audioContextRef.current = new AudioCtx();
-      }
-      if (audioContextRef.current.state === 'suspended') {
-        audioContextRef.current.resume().catch(() => {});
-      }
-    }
-
-    setScreenShareError(null);
-
-    if (isScreenSharing) {
-      if (screenStreamRef.current) {
-        screenStreamRef.current.getTracks().forEach((t) => t.stop());
-        screenStreamRef.current = null;
-      }
-      setIsScreenSharing(false);
-      setScreenStream(null);
-      updateUser({ is_screen_sharing: false, has_video: isVideoEnabled });
-    } else {
-      if (!isInVideo) {
-        await joinVoiceChannel(false);
-      }
-
-      // Feature detection for iOS Apple OS limitation
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-      if (isIOS) {
-        setScreenShareError('Screen sharing is not supported by web browsers on iOS due to Apple OS restrictions.');
-        return;
-      }
-
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
-        setScreenShareError('Screen sharing is not supported by this browser.');
-        return;
-      }
-
-      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-      let stream: MediaStream | null = null;
-
-      try {
-        if (isMobile) {
-          // Android Chrome requires simple/flexible constraints with lower framerate
-          stream = await navigator.mediaDevices.getDisplayMedia({
-            video: {
-              width: { ideal: 1280 },
-              height: { ideal: 720 },
-              frameRate: { ideal: 15 },
-            },
-            audio: false,
-          });
-        } else {
-          try {
-            stream = await navigator.mediaDevices.getDisplayMedia({
-              video: true,
-              audio: {
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false,
-              } as any,
-            });
-          } catch {
-            try {
-              stream = await navigator.mediaDevices.getDisplayMedia({
-                video: true,
-                audio: true,
-              });
-            } catch {
-              stream = await navigator.mediaDevices.getDisplayMedia({
-                video: true,
-                audio: false,
-              });
-            }
-          }
-        }
-      } catch (err: any) {
-        console.warn('Screen share cancelled or failed:', err);
-        if (err.name !== 'NotAllowedError') {
-          setScreenShareError(err.message || 'Could not start screen sharing.');
-        }
-        return;
-      }
-
-      if (!stream) return;
-
-      screenStreamRef.current = stream;
-      setIsScreenSharing(true);
-      setScreenStream(stream);
-      updateUser({ is_screen_sharing: true, has_video: isVideoEnabled });
-
-      stream.getTracks().forEach((track) => {
-        track.onended = () => {
-          if (screenStreamRef.current) {
-            screenStreamRef.current.getTracks().forEach((t) => t.stop());
-            screenStreamRef.current = null;
-          }
-          setIsScreenSharing(false);
-          setScreenStream(null);
-          updateUser({ is_screen_sharing: false, has_video: isVideoEnabled });
-        };
-      });
-    }
+  const saveProfile = () => {
+    const updatedUser = { ...currentUser, username: editName, avatar_color: editColor, avatar_url: editAvatarUrl };
+    setCurrentUser(updatedUser);
+    localStorage.setItem('frosted_chat_username', editName);
+    localStorage.setItem('frosted_chat_usercolor', editColor);
+    persistAvatarUrl(editAvatarUrl);
+    
+    updateUser({ username: editName, avatar_color: editColor, avatar_url: editAvatarUrl });
+    registerUser(updatedUser);
+    
+    setIsProfileModalOpen(false);
   };
 
-  // Stop / Disconnect Voice Channel
-  const stopVoiceChannel = () => {
-    if (micStreamRef.current) {
-      micStreamRef.current.getTracks().forEach((t) => t.stop());
-      micStreamRef.current = null;
-    }
-    if (cameraStreamRef.current) {
-      cameraStreamRef.current.getTracks().forEach((t) => t.stop());
-      cameraStreamRef.current = null;
-    }
-    if (screenStreamRef.current) {
-      screenStreamRef.current.getTracks().forEach((t) => t.stop());
-      screenStreamRef.current = null;
-    }
-
-    setLocalAudioStream(null);
-    setCameraStream(null);
-    setScreenStream(null);
-    setIsInVideo(false);
-    setIsVideoEnabled(false);
-    setIsScreenSharing(false);
-    setIsUserSpeaking(false);
-
-    setCurrentUser((prev: any) => ({
-      ...prev,
-      current_channel: 'text-general',
-      activity: 'In #general',
-      is_hand_raised: false,
-    }));
-
-    updateUser({
-      current_channel: 'text-general',
-      activity: 'In #general',
-      has_video: false,
-      is_speaking: false,
-      is_screen_sharing: false,
-      is_hand_raised: false,
-    });
-    setActiveChannel('text-general');
+  // Helper to render user avatar (supports custom image upload / URL or colored initials fallback with robust error handling)
+  const renderAvatar = (u: { username: string; avatar_color?: string; avatar_url?: string }, sizeClass: string = 'w-9 h-9 text-xs') => {
+    return (
+      <UserAvatar
+        username={u.username}
+        avatarColor={u.avatar_color}
+        avatarUrl={u.avatar_url}
+        sizeClass={sizeClass}
+      />
+    );
   };
 
-  const toggleMute = () => {
-    const nextMuted = !isMuted;
-    setIsMuted(nextMuted);
-    if (micStreamRef.current) {
-      micStreamRef.current.getAudioTracks().forEach((t) => (t.enabled = !nextMuted));
-    }
-    updateUser({ is_muted: nextMuted });
-  };
+  const isMediaActive = activeChannel === 'video-general' || isInVideo;
 
-  const toggleDeafen = () => {
-    const nextDeafened = !isDeafened;
-    setIsDeafened(nextDeafened);
-    updateUser({ is_deafened: nextDeafened });
-  };
-
-  const handleChannelSelect = (channel: 'text-general' | 'video-general') => {
+  const handleChannelSelect = (channel: string) => {
     setActiveChannel(channel);
-    // If user is currently active in voice, browsing to text chat shouldn't kick them out of voice!
+    setIsMobileChannelsOpen(false);
     if (!isInVideo) {
-      const newActivity = channel === 'video-general' ? 'In General Voice' : 'In #general';
-      setCurrentUser((prev: any) => ({ ...prev, current_channel: channel, activity: newActivity }));
-      updateUser({ current_channel: channel, activity: newActivity });
+      let newActivity = 'In #general';
+      if (channel === 'video-general') newActivity = 'In General Voice';
+      else if (channel.startsWith('dm-')) newActivity = 'In Private Chat';
+      setCurrentUser((prev: any) => ({ ...prev, current_channel: channel as any, activity: newActivity }));
+      updateUser({ current_channel: channel as any, activity: newActivity });
     }
     if (channel === 'video-general' && !isInVideo) {
-      if (micPermissionStatus === 'prompt') {
-        setShowMicPermissionModal(true);
+      if (globalChat.micPermissionStatus === 'prompt') {
+        globalChat.requestMicrophonePermission();
       } else {
         joinVoiceChannel(false);
       }
@@ -1651,16 +1215,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
     setIsGiphyOpen(false);
   };
 
-  // Accept Call
-  const handleAcceptIncomingCall = () => {
-    if (incomingCall) {
-      joinVoiceChannel(incomingCall.callType === 'video');
-      if (dismissIncomingCall) dismissIncomingCall();
-    }
-  };
-
   return (
-    <div className="flex flex-1 min-h-0 h-full w-full bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans antialiased overflow-hidden select-none transition-colors">
+    <div className="flex flex-1 min-h-0 h-full w-full bg-white/90 dark:bg-slate-950/80 text-slate-900 dark:text-slate-100 font-sans antialiased overflow-hidden select-none transition-colors max-h-[100dvh]">
       
       {/* Hidden Global File Input */}
       <input 
@@ -1673,10 +1229,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
       {/* LEFT NAVIGATION SIDEBAR - Desktop view */}
       <aside className="hidden md:flex w-72 bg-slate-50 dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 flex-col justify-between shrink-0 overflow-hidden">
-        <div className="p-6 space-y-8 shrink-0">
+        <div className="p-6 space-y-6 flex-1 min-h-0 overflow-y-auto">
           
           {/* Header Branding */}
-          <div className="flex items-center gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-3 pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
             <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-xl shadow-blue-600/20">
               <Snowflake className="w-6 h-6 fill-none" />
             </div>
@@ -1692,6 +1248,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 Text Channels
               </div>
 
+              {/* General Text Channel */}
               <motion.button
                 whileHover={{ x: 4 }}
                 whileTap={{ scale: 0.98 }}
@@ -1709,7 +1266,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 <span className={`text-[10px] px-2 py-0.5 rounded-full font-black border ${
                   activeChannel === 'text-general' ? 'bg-white/20 border-white/20' : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-300'
                 }`}>
-                  {messages.length}
+                  {messages.filter((m: any) => !m.channel_id || m.channel_id === 'text-general' || m.channel_id === 'general').length}
                 </span>
               </motion.button>
             </div>
@@ -1740,6 +1297,60 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                   {voiceUsers.length + (isInVideo ? 1 : 0)}
                 </span>
               </motion.button>
+            </div>
+
+            {/* Direct Messages (Private Chats) */}
+            <div className="space-y-2 pt-2 border-t border-slate-200/60 dark:border-slate-800/60">
+              <div className="px-2 text-[10px] font-black text-slate-400 dark:text-slate-500 tracking-[0.2em] uppercase flex items-center justify-between">
+                <span>Private Chats</span>
+                {dmPeers.length > 0 && (
+                  <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                    {dmPeers.length}
+                  </span>
+                )}
+              </div>
+
+              {dmPeers.length === 0 ? (
+                <div className="px-3 py-2 text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+                  Click the message icon on any member to start a private chat.
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  {dmPeers.map((peer: any) => {
+                    const dmChan = getDmChannelId(peer.id);
+                    const isDmActive = activeChannel === dmChan;
+                    const peerMessages = messages.filter((m: any) => m.channel_id === dmChan);
+                    return (
+                      <motion.button
+                        key={peer.id}
+                        whileHover={{ x: 3 }}
+                        whileTap={{ scale: 0.98 }}
+                        onClick={() => handleChannelSelect(dmChan)}
+                        className={`w-full px-3 py-2 rounded-2xl flex items-center justify-between transition-all cursor-pointer border ${
+                          isDmActive
+                            ? 'bg-blue-600 text-white font-black shadow-lg shadow-blue-600/20 border-blue-500'
+                            : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 border-transparent'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className="relative shrink-0">
+                            {renderAvatar(peer, 'w-6 h-6 text-[10px]')}
+                            <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-white dark:border-slate-900" />
+                          </div>
+                          <span className="text-xs font-bold truncate">{peer.username}</span>
+                        </div>
+                        {peerMessages.length > 0 && (
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                            isDmActive ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
+                          }`}>
+                            {peerMessages.length}
+                          </span>
+                        )}
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
           </div>
@@ -1785,8 +1396,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
       {/* MAIN CONTENT AREA */}
       <main className="flex-1 flex flex-col bg-white dark:bg-slate-950 min-w-0 min-h-0 relative overflow-hidden">
         
-        {/* TEXT CHANNEL VIEW */}
-        {activeChannel === 'text-general' && (
+        {/* TEXT CHANNEL & PRIVATE CHAT VIEW */}
+        {(activeChannel === 'text-general' || activeChannel.startsWith('dm-')) && (
           <div className="flex-1 min-h-0 flex overflow-hidden">
             
             {/* Center Chat Messages Column */}
@@ -1805,26 +1416,65 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     <Menu className="w-5 h-5" />
                   </button>
 
-                  <Hash className="w-5 h-5 text-slate-900 dark:text-white shrink-0" />
-                  <span className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base truncate">general</span>
-                  <button
-                    type="button"
-                    onClick={() => setIsMobileMembersOpen(true)}
-                    className="px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-bold bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800 flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
-                    title="View Online Members"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
-                    <span>{users.length} online</span>
-                  </button>
+                  {activeChannel.startsWith('dm-') ? (
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="relative shrink-0">
+                        {renderAvatar(activeDmPeer, 'w-9 h-9 text-xs')}
+                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base truncate">{activeDmPeer?.username}</span>
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                            Private Chat
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium truncate block">
+                          {activeDmPeer?.activity || 'Active Now'}
+                        </span>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <Hash className="w-5 h-5 text-slate-900 dark:text-white shrink-0" />
+                      <span className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base truncate">general</span>
+                      <button
+                        type="button"
+                        onClick={() => setIsMobileMembersOpen(true)}
+                        className="px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-bold bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800 flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+                        title="View Online Members"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                        <span>{users.length} online</span>
+                      </button>
+                    </>
+                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
+                  {activeChannel.startsWith('dm-') && activeDmPeer && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          deleteChannelMessages(activeChannel);
+                          setActiveChannel('text-general');
+                        }}
+                        className="px-3 py-1.5 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer border border-red-200 dark:border-red-800"
+                        title="Delete Chat for both participants"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Delete Chat</span>
+                      </button>
+                    </div>
+                  )}
+
                   <div className="relative hidden sm:block">
                     <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
                     <input 
                       type="text" 
                       placeholder="Search messages"
-                      className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-9 pr-3 py-2 w-36 sm:w-48 focus:outline-none focus:border-blue-500"
+                      className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-base md:text-xs text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-9 pr-3 py-2 w-36 sm:w-48 focus:outline-none focus:border-blue-500 transition-all"
                     />
                   </div>
 
@@ -1842,12 +1492,26 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               </header>
 
               {/* Chat Scroll Area (Messages) */}
-              <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6">
+              <div 
+                ref={chatScrollRef}
+                className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6"
+              >
                 
-
+                {/* Empty State for DMs */}
+                {activeChannel.startsWith('dm-') && activeChannelMessages.length === 0 && (
+                  <div className="py-16 text-center space-y-3 max-w-sm mx-auto">
+                    <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800 shadow-md">
+                      <MessageCircle className="w-8 h-8" />
+                    </div>
+                    <h3 className="font-extrabold text-slate-900 dark:text-white text-base">Direct Messages with {activeDmPeer?.username}</h3>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed font-medium">
+                      This is the start of your 1-on-1 private chat. You can send messages, audio clips, and files.
+                    </p>
+                  </div>
+                )}
 
                 {/* Messages List */}
-                {messages.map((msg: any) => {
+                {activeChannelMessages.map((msg: any) => {
                   const msgUser = users.find((u: any) => u.id === msg.sender_id);
                   const displayUsername = msgUser?.username || msg.sender_name;
                   const displayAvatarColor = msgUser?.avatar_color || msg.avatar_color;
@@ -2089,7 +1753,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         setActiveCategoryLabel('');
                       }}
                       placeholder="Search GIFs..."
-                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-10 pr-9 py-2.5 focus:outline-none focus:border-blue-500 transition-colors"
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-base md:text-xs text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-10 pr-9 py-2.5 focus:outline-none focus:border-blue-500 transition-all"
                       autoFocus
                     />
                     {giphySearch && (
@@ -2168,8 +1832,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     type="text"
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
-                    placeholder="Message #general..."
-                    className="flex-1 bg-transparent text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none"
+                    placeholder={activeChannel.startsWith('dm-') ? `Message @${activeDmPeer?.username || 'user'} privately...` : "Message #general..."}
+                    className="flex-1 bg-transparent text-base md:text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none py-2"
                   />
 
                   {/* File Attachment Button */}
@@ -2255,15 +1919,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       {renderUserActivity(u.activity || (u.current_channel === 'video-general' ? 'In General Voice' : 'In #general'))}
                     </div>
 
-                    {/* Desktop Direct Call Button */}
+                    {/* Desktop Direct Action Buttons */}
                     {u.id !== currentUser.id && (
-                      <button
-                        onClick={() => globalChat.initiateCall(u.id, u.username, 'audio')}
-                        className="p-1.5 rounded-lg text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-500/10 transition-all cursor-pointer opacity-0 group-hover:opacity-100"
-                        title={`Call ${u.username}`}
-                      >
-                        <Phone className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          onClick={() => handleChannelSelect(getDmChannelId(u.id))}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all cursor-pointer"
+                          title={`Private chat with ${u.username}`}
+                        >
+                          <MessageCircle className="w-4 h-4" />
+                        </button>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -2298,12 +1965,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     {users.map((u: any) => (
                       <div key={u.id} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] transition-colors">
                         <div className="relative shrink-0">
-                          <div 
-                            className="w-9 h-9 rounded-full text-black font-extrabold flex items-center justify-center text-xs shadow-sm"
-                            style={{ backgroundColor: u.avatar_color || 'var(--vibrant-cyan)' }}
-                          >
-                            {u.username.slice(0, 2).toUpperCase()}
-                          </div>
+                          {renderAvatar(u, 'w-9 h-9 text-xs')}
                           <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
                         </div>
 
@@ -2322,15 +1984,21 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                           {renderUserActivity(u.activity || (u.current_channel === 'video-general' ? 'In General Voice' : 'In #general'))}
                         </div>
 
-                        {/* Mobile Direct Call Button */}
+                        {/* Mobile Direct Action Buttons */}
                         {u.id !== currentUser.id && (
-                          <button
-                            onClick={() => globalChat.initiateCall(u.id, u.username, 'audio')}
-                            className="p-2 rounded-xl text-zinc-400 hover:text-emerald-500 hover:bg-white/5 transition-all cursor-pointer"
-                            title={`Call ${u.username}`}
-                          >
-                            <Phone className="w-5 h-5" />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                handleChannelSelect(getDmChannelId(u.id));
+                                setIsMobileMembersOpen(false);
+                              }}
+                              className="p-2 rounded-xl text-zinc-400 hover:text-blue-500 hover:bg-white/5 transition-all cursor-pointer"
+                              title={`Private chat with ${u.username}`}
+                            >
+                              <MessageCircle className="w-5 h-5" />
+                            </button>
+                          </div>
                         )}
                       </div>
                     ))}
@@ -2421,55 +2089,100 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 {isInVideo ? (
                   <div className="flex flex-wrap items-center justify-center gap-6 w-full max-w-6xl max-h-full overflow-y-auto p-2">
                     
-                    {/* Camera Tile */}
-                    {isVideoEnabled && cameraStream && (
-                      <div className={`relative rounded-3xl overflow-hidden bg-slate-900 dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
-                        localIsVertical 
-                          ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
-                          : 'aspect-video w-full max-w-[500px]'
-                      } ${
-                        isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-slate-200 dark:border-slate-800'
-                      }`}>
-                        <LocalVideoPlayer 
-                          stream={cameraStream} 
-                          user={currentUser}
-                          renderAvatar={renderAvatar}
-                          onOrientationChange={setLocalIsVertical}
-                          isMirrored={true}
-                        />
+                    {/* Local Camera Tile & Local Avatar Tile */}
+                    {(() => {
+                      const isLocalCameraActive = Boolean(
+                        isVideoEnabled && 
+                        cameraStream && 
+                        cameraStream.getVideoTracks().some((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled && !t.muted)
+                      );
+                      const isLocalDisplayingVideo = isLocalCameraActive && !localCameraBlack;
 
-                        {/* Orientation Badge */}
-                        <div className="absolute top-3 right-3 px-2.5 py-1 rounded-xl bg-slate-950/70 backdrop-blur-md border border-white/10 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none">
-                          {localIsVertical ? (
-                            <>
-                              <Smartphone className="w-3.5 h-3.5 text-amber-400" />
-                              <span>Portrait</span>
-                            </>
-                          ) : (
-                            <>
-                              <Monitor className="w-3.5 h-3.5 text-blue-400" />
-                              <span>Landscape</span>
-                            </>
+                      return (
+                        <>
+                          {isLocalCameraActive && (
+                            <div className={`relative rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                              isLocalDisplayingVideo && localIsVertical 
+                                ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
+                                : 'aspect-video w-full max-w-[500px]'
+                            } ${
+                              isUserSpeaking(currentUser.id) ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-slate-200 dark:border-slate-800'
+                            }`}>
+                              <LocalVideoPlayer 
+                                stream={cameraStream} 
+                                user={currentUser}
+                                renderAvatar={renderAvatar}
+                                onOrientationChange={setLocalIsVertical}
+                                onBlackStateChange={setLocalCameraBlack}
+                                isMirrored={true}
+                                isSpeaking={isUserSpeaking(currentUser.id)}
+                              />
+
+                              {/* Orientation Badge (only shown when live camera is visible and not black) */}
+                              {isLocalDisplayingVideo && (
+                                <div className="absolute top-3 right-3 px-2.5 py-1 rounded-xl bg-slate-950/70 backdrop-blur-md border border-white/10 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none">
+                                  {localIsVertical ? (
+                                    <>
+                                      <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+                                      <span>Portrait</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Monitor className="w-3.5 h-3.5 text-blue-400" />
+                                      <span>Landscape</span>
+                                    </>
+                                  )}
+                                </div>
+                              )}
+
+                              {/* Hand Raised Indicator */}
+                              {currentUser.is_hand_raised && (
+                                <div className="absolute top-3 left-3 px-2.5 py-1 rounded-xl bg-amber-500/90 backdrop-blur-md border border-amber-400 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none animate-bounce">
+                                  <Hand className="w-3.5 h-3.5" />
+                                  <span>Hand Raised</span>
+                                </div>
+                              )}
+
+                              {/* Bottom-Left Overlay */}
+                              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                                <div className="text-sm font-extrabold text-white">
+                                  {currentUser.username} {isLocalDisplayingVideo ? '(You - Camera)' : '(You)'}
+                                </div>
+                                {isMuted && <MicOff className="w-4 h-4 text-red-400" />}
+                              </div>
+                            </div>
                           )}
-                        </div>
 
-                        {/* Hand Raised Indicator */}
-                        {currentUser.is_hand_raised && (
-                          <div className="absolute top-3 left-3 px-2.5 py-1 rounded-xl bg-amber-500/90 backdrop-blur-md border border-amber-400 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none animate-bounce">
-                            <Hand className="w-3.5 h-3.5" />
-                            <span>Hand Raised</span>
-                          </div>
-                        )}
+                          {/* Avatar Tile (shown when camera is completely off) */}
+                          {!isLocalCameraActive && (
+                            <div className={`relative rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-xl aspect-video w-full max-w-[500px] ${
+                              isUserSpeaking(currentUser.id) ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-slate-200 dark:border-slate-800'
+                            }`}>
+                              <div className="relative flex items-center justify-center">
+                                <div className={`transition-all ${isUserSpeaking(currentUser.id) ? 'ring-4 ring-amber-500 rounded-full shadow-[0_0_30px_#f59e0b]' : ''}`}>
+                                  {renderAvatar(currentUser, 'w-28 h-28 text-3xl')}
+                                </div>
+                              </div>
 
-                        {/* Bottom-Left Overlay */}
-                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
-                          <div className="text-sm font-extrabold text-white">
-                            {currentUser.username} (You - Camera)
-                          </div>
-                          {isMuted && <MicOff className="w-4 h-4 text-red-400" />}
-                        </div>
-                      </div>
-                    )}
+                              {/* Hand Raised Indicator */}
+                              {currentUser.is_hand_raised && (
+                                <div className="absolute top-3 left-3 px-2.5 py-1 rounded-xl bg-amber-500/90 backdrop-blur-md border border-amber-400 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none animate-bounce">
+                                  <Hand className="w-3.5 h-3.5" />
+                                  <span>Hand Raised</span>
+                                </div>
+                              )}
+                              {/* Bottom-Left Overlay */}
+                              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-slate-950/80 via-slate-950/30 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                                <div className="text-sm font-extrabold text-white">
+                                  {currentUser.username} (You)
+                                </div>
+                                {isMuted && <MicOff className="w-4 h-4 text-red-400" />}
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
 
                     {/* Local Screen Share Tile - Shows you are sharing (no video preview for self) */}
                     {isScreenSharing && (
@@ -2501,50 +2214,32 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                       </div>
                     )}
 
-                    {/* Avatar Tile (ALWAYS shown when camera is off, even if screen sharing!) */}
-                    {(!isVideoEnabled || !cameraStream) && (
-                      <div className={`relative rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-xl aspect-video w-full max-w-[500px] ${
-                        isUserSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-slate-200 dark:border-slate-800'
-                      }`}>
-                        <div className="relative flex items-center justify-center">
-                          <div className={`transition-all ${isUserSpeaking ? 'ring-4 ring-amber-500 rounded-full shadow-[0_0_30px_#f59e0b]' : ''}`}>
-                            {renderAvatar(currentUser, 'w-28 h-28 text-3xl')}
-                          </div>
-                        </div>
-
-                        {/* Hand Raised Indicator */}
-                        {currentUser.is_hand_raised && (
-                          <div className="absolute top-3 left-3 px-2.5 py-1 rounded-xl bg-amber-500/90 backdrop-blur-md border border-amber-400 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none animate-bounce">
-                            <Hand className="w-3.5 h-3.5" />
-                            <span>Hand Raised</span>
-                          </div>
-                        )}
-                        {/* Bottom-Left Overlay */}
-                        <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-slate-950/80 via-slate-950/30 to-transparent flex items-end justify-between z-20 pointer-events-none">
-                          <div className="text-sm font-extrabold text-white">
-                            {currentUser.username} (You)
-                          </div>
-                          {isMuted && <MicOff className="w-4 h-4 text-red-400" />}
-                        </div>
-                      </div>
-                    )}
-
                     {/* Remote Peers Tiles */}
                     {voiceUsers.map((u: any) => {
                       const isPeerSpeaking = remoteSpeaking[u.id] || u.is_speaking;
                       const camStream = remoteCameraStreams[u.id];
                       const scrStream = remoteScreenStreams[u.id];
 
-                      const hasCamera = Boolean(camStream && camStream.getVideoTracks().some((t) => t.readyState === 'live' && t.enabled));
-                      const hasScreen = Boolean(scrStream && scrStream.getVideoTracks().some((t) => t.readyState === 'live' && t.enabled));
+                      const hasCamera = Boolean(
+                        u.has_video &&
+                        camStream &&
+                        camStream.getVideoTracks().some((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled && !t.muted)
+                      );
+                      const hasScreen = Boolean(
+                        u.is_screen_sharing &&
+                        scrStream &&
+                        scrStream.getVideoTracks().some((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled && !t.muted)
+                      );
                       const isPeerCameraVertical = Boolean(peerOrientations[`${u.id}-camera`]);
+                      const isPeerCameraBlack = Boolean(peerCameraBlack[u.id]);
+                      const isPeerDisplayingVideo = hasCamera && !isPeerCameraBlack;
 
                       return (
                         <React.Fragment key={u.id}>
                           {/* Dedicated Remote Camera Tile (when camera is on) */}
                           {hasCamera && (
-                            <div className={`relative rounded-3xl overflow-hidden bg-slate-900 dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
-                              isPeerCameraVertical 
+                            <div className={`relative rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                              isPeerDisplayingVideo && isPeerCameraVertical 
                                 ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
                                 : 'aspect-video w-full max-w-[500px]'
                             } ${
@@ -2554,24 +2249,30 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                                 stream={camStream} 
                                 username={u.username}
                                 avatarColor={u.avatar_color}
+                                user={u}
+                                renderAvatar={renderAvatar}
                                 onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [`${u.id}-camera`]: vert }))}
+                                onBlackStateChange={(isBlack) => setPeerCameraBlack((prev) => ({ ...prev, [u.id]: isBlack }))}
                                 isScreen={false}
+                                isSpeaking={isPeerSpeaking}
                               />
 
-                              {/* Orientation Badge */}
-                              <div className="absolute top-3 right-3 px-2.5 py-1 rounded-xl bg-slate-950/70 backdrop-blur-md border border-white/10 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none">
-                                {isPeerCameraVertical ? (
-                                  <>
-                                    <Smartphone className="w-3.5 h-3.5 text-amber-400" />
-                                    <span>Portrait</span>
-                                  </>
-                                ) : (
-                                  <>
-                                    <Monitor className="w-3.5 h-3.5 text-blue-400" />
-                                    <span>Landscape</span>
-                                  </>
-                                )}
-                              </div>
+                              {/* Orientation Badge (only shown when camera is active and not black) */}
+                              {isPeerDisplayingVideo && (
+                                <div className="absolute top-3 right-3 px-2.5 py-1 rounded-xl bg-slate-950/70 backdrop-blur-md border border-white/10 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none">
+                                  {isPeerCameraVertical ? (
+                                    <>
+                                      <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+                                      <span>Portrait</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Monitor className="w-3.5 h-3.5 text-blue-400" />
+                                      <span>Landscape</span>
+                                    </>
+                                  )}
+                                </div>
+                              )}
 
                               {/* Hand Raised Indicator */}
                               {u.is_hand_raised && (
@@ -2583,7 +2284,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                               <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
                                 <div className="text-sm font-extrabold text-white">
-                                  {u.username} (Camera)
+                                  {u.username} {isPeerDisplayingVideo ? '(Camera)' : ''}
                                 </div>
                                 {u.is_muted && <MicOff className="w-4 h-4 text-zinc-400" />}
                               </div>
@@ -2641,44 +2342,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                   </div>
                 ) : (
-                  /* Join Prompt Card when not connected */
-                  <div className="text-center space-y-5 max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-3xl shadow-xl">
-                    <div className="w-20 h-20 rounded-3xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto shadow-sm">
-                      <Mic className="w-10 h-10" />
+                  /* Connecting State while auto-joining */
+                  <div className="text-center space-y-4 max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-3xl shadow-xl">
+                    <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto shadow-sm animate-pulse">
+                      <Mic className="w-8 h-8" />
                     </div>
-                    <div className="space-y-1.5">
-                      <h2 className="text-2xl font-black text-slate-900 dark:text-white font-heading">General Voice</h2>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto leading-relaxed font-medium">
-                        Talk with players with crystal-clear voice, share your camera, or stream gameplay with low latency.
-                      </p>
-                    </div>
-
-                    {micError ? (
-                      <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-800 rounded-2xl flex items-start gap-2.5 text-left text-xs text-red-600 dark:text-red-300">
-                        <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-bold">Microphone access required</p>
-                          <p className="text-[11px] text-red-500/80 dark:text-red-300/80 mt-0.5">
-                            Please click the permissions/lock icon in your browser URL bar and allow microphone.
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 rounded-2xl flex items-center justify-center gap-2 text-xs text-blue-600 dark:text-blue-400 font-semibold">
-                        <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                        <span>Requires microphone permission</span>
-                      </div>
-                    )}
-
-                    <div className="pt-2">
-                      <button 
-                        onClick={() => requestMicrophonePermission(false)}
-                        className="w-full py-3.5 px-6 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-black text-sm shadow-xl shadow-blue-600/30 transition-all cursor-pointer flex items-center justify-center gap-2"
-                      >
-                        <Mic className="w-4 h-4" />
-                        <span>Allow Microphone & Join Voice</span>
-                      </button>
-                    </div>
+                    <h3 className="text-xl font-black text-slate-900 dark:text-white font-heading">Connecting to General Voice...</h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">Please allow microphone access when prompted.</p>
                   </div>
                 )}
 
@@ -2740,7 +2410,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
                     {/* Disconnect Button */}
                     <button 
-                      onClick={stopVoiceChannel}
+                      onClick={handleStopVoice}
                       className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-red-600 text-white flex items-center justify-center shadow-lg shadow-red-600/30 hover:bg-red-700 transition-all cursor-pointer"
                       title="Disconnect"
                     >
@@ -2770,12 +2440,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     <div className="p-2.5 rounded-2xl bg-blue-50 dark:bg-blue-600/10 border border-blue-200 dark:border-blue-500/30 flex items-center justify-between">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="relative shrink-0">
-                          <div 
-                            className="w-8 h-8 rounded-full text-black font-extrabold flex items-center justify-center text-xs"
-                            style={{ backgroundColor: currentUser.avatar_color || 'var(--vibrant-cyan)' }}
-                          >
-                            {currentUser.username.slice(0, 2).toUpperCase()}
-                          </div>
+                          {renderAvatar(currentUser, 'w-8 h-8 text-xs')}
                           <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
                         </div>
                         <div className="min-w-0 leading-tight">
@@ -2794,12 +2459,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     <div key={u.id} className="p-2.5 rounded-2xl bg-blue-50 dark:bg-blue-600/10 border border-blue-200 dark:border-blue-500/30 flex items-center justify-between">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="relative shrink-0">
-                          <div 
-                            className="w-8 h-8 rounded-full text-black font-extrabold flex items-center justify-center text-xs"
-                            style={{ backgroundColor: u.avatar_color || 'var(--vibrant-cyan)' }}
-                          >
-                            {u.username.slice(0, 2).toUpperCase()}
-                          </div>
+                          {renderAvatar(u, 'w-8 h-8 text-xs')}
                           <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
                         </div>
                         <div className="min-w-0 leading-tight">
@@ -2818,19 +2478,28 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                     <span>ONLINE — {Math.max(0, users.length - (voiceUsers.length + (isInVideo ? 1 : 0)))}</span>
                   </div>
                   {users.filter((u: any) => u.id !== currentUser.id && !voiceUsers.some((vu: any) => vu.id === u.id)).map((u: any) => (
-                    <div key={u.id} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors">
+                    <div key={u.id} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors group">
                       <div className="relative shrink-0">
-                        <div 
-                          className="w-7 h-7 rounded-full text-black font-extrabold flex items-center justify-center text-[10px]"
-                          style={{ backgroundColor: u.avatar_color || 'var(--vibrant-cyan)' }}
-                        >
-                          {u.username.slice(0, 2).toUpperCase()}
-                        </div>
+                        {renderAvatar(u, 'w-7 h-7 text-[10px]')}
                         <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
                       </div>
                       <div className="min-w-0 flex-1 leading-tight">
                         <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">{u.username}</span>
                         {renderUserActivity(u.activity || 'In #general')}
+                      </div>
+                      
+                      {/* Action buttons on hover */}
+                      <div className="hidden group-hover:flex items-center gap-1 shrink-0">
+                        <button 
+                          onClick={() => {
+                            const dmChan = getDmChannelId(u.id);
+                            handleChannelSelect(dmChan);
+                          }}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all cursor-pointer"
+                          title="Send Private Message"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -2867,12 +2536,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         <div className="p-2.5 rounded-2xl bg-blue-50 dark:bg-blue-600/10 border border-blue-200 dark:border-blue-500/30 flex items-center justify-between">
                           <div className="flex items-center gap-2.5 min-w-0">
                             <div className="relative shrink-0">
-                              <div 
-                                className="w-8 h-8 rounded-full text-black font-extrabold flex items-center justify-center text-xs"
-                                style={{ backgroundColor: currentUser.avatar_color || 'var(--vibrant-cyan)' }}
-                              >
-                                {currentUser.username.slice(0, 2).toUpperCase()}
-                              </div>
+                              {renderAvatar(currentUser, 'w-8 h-8 text-xs')}
                               <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
                             </div>
                             <div className="min-w-0 leading-tight">
@@ -2891,12 +2555,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         <div key={u.id} className="p-2.5 rounded-2xl bg-blue-50 dark:bg-blue-600/10 border border-blue-200 dark:border-blue-500/30 flex items-center justify-between">
                           <div className="flex items-center gap-2.5 min-w-0">
                             <div className="relative shrink-0">
-                              <div 
-                                className="w-8 h-8 rounded-full text-black font-extrabold flex items-center justify-center text-xs"
-                                style={{ backgroundColor: u.avatar_color || 'var(--vibrant-cyan)' }}
-                              >
-                                {u.username.slice(0, 2).toUpperCase()}
-                              </div>
+                              {renderAvatar(u, 'w-8 h-8 text-xs')}
                               <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
                             </div>
                             <div className="min-w-0 leading-tight">
@@ -2914,19 +2573,28 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                         <span>ONLINE — {Math.max(0, users.length - (voiceUsers.length + (isInVideo ? 1 : 0)))}</span>
                       </div>
                       {users.filter((u: any) => u.id !== currentUser.id && !voiceUsers.some((vu: any) => vu.id === u.id)).map((u: any) => (
-                        <div key={u.id} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors">
+                        <div key={u.id} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors group">
                           <div className="relative shrink-0">
-                            <div 
-                              className="w-7 h-7 rounded-full text-black font-extrabold flex items-center justify-center text-[10px]"
-                              style={{ backgroundColor: u.avatar_color || 'var(--vibrant-cyan)' }}
-                            >
-                              {u.username.slice(0, 2).toUpperCase()}
-                            </div>
+                            {renderAvatar(u, 'w-7 h-7 text-[10px]')}
                             <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
                           </div>
                           <div className="min-w-0 flex-1 leading-tight">
                             <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">{u.username}</span>
                             {renderUserActivity(u.activity || 'In #general')}
+                          </div>
+
+                          <div className="flex items-center gap-1 shrink-0">
+                            <button 
+                              onClick={() => {
+                                const dmChan = getDmChannelId(u.id);
+                                handleChannelSelect(dmChan);
+                                setIsMobileMembersOpen(false);
+                              }}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all cursor-pointer"
+                              title="Send Private Message"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -2941,79 +2609,145 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
 
       </main>
 
-      {/* INCOMING CALL MODAL */}
-      {incomingCall && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
-          <div className="bg-white dark:bg-slate-900 p-7 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-sm flex flex-col items-center text-center space-y-5 shadow-2xl">
-            <div className="relative">
-              <div className="w-20 h-20 rounded-full bg-blue-600 text-white font-black text-2xl flex items-center justify-center ring-4 ring-blue-500/40 animate-pulse shadow-lg shadow-blue-600/30">
-                {(incomingCall.fromUserName || 'P').slice(0, 2).toUpperCase()}
-              </div>
-              <div className="absolute -bottom-1 -right-1 p-2 rounded-full bg-blue-500 text-white shadow-md">
-                <Mic className="w-3.5 h-3.5" />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">
-                {incomingCall.fromUserName || 'Friend'}
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                Incoming {incomingCall.callType === 'video' ? 'Video' : 'Voice'} Call...
-              </p>
-            </div>
-
-            <div className="flex gap-4 w-full pt-2">
-              <button
-                onClick={() => dismissIncomingCall && dismissIncomingCall()}
-                className="flex-1 py-3 rounded-2xl bg-red-50 dark:bg-red-600/20 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-600/30 hover:bg-red-100 dark:hover:bg-red-600/30 font-extrabold text-xs transition-colors cursor-pointer"
-              >
-                Decline
-              </button>
-              <button
-                onClick={handleAcceptIncomingCall}
-                className="flex-1 py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs shadow-lg shadow-blue-600/30 transition-colors cursor-pointer"
-              >
-                Accept Call
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* OUTGOING CALL MODAL */}
-      {outgoingCall && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
-          <div className="bg-white dark:bg-slate-900 p-7 rounded-3xl border border-slate-200 dark:border-slate-800 w-full max-w-sm flex flex-col items-center text-center space-y-5 shadow-2xl">
-            <div className="relative">
-              <div className="w-20 h-20 rounded-full bg-blue-600 text-white font-black text-2xl flex items-center justify-center ring-4 ring-blue-500/40 animate-pulse shadow-lg shadow-blue-600/30">
-                {(outgoingCall.targetUserName || 'P').slice(0, 2).toUpperCase()}
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <h3 className="text-xl font-extrabold text-slate-900 dark:text-white">
-                Calling {outgoingCall.targetUserName}...
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                Waiting for answer...
-              </p>
-            </div>
-
-            <button
-              onClick={() => dismissOutgoingCall && dismissOutgoingCall()}
-              className="w-full py-3 rounded-2xl bg-red-600 hover:bg-red-700 text-white font-extrabold text-xs shadow-lg shadow-red-600/30 transition-colors cursor-pointer"
+      {/* MOBILE CHANNELS DRAWER OVERLAY */}
+      <AnimatePresence>
+        {isMobileChannelsOpen && (
+          <div className="fixed inset-0 z-[250] md:hidden flex">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+              onClick={() => setIsMobileChannelsOpen(false)}
+            />
+            <motion.aside 
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="relative w-72 max-w-[85vw] h-full bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-6 flex flex-col z-10 shadow-2xl overflow-hidden"
             >
-              Cancel Call
-            </button>
+              <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white">
+                    <Snowflake className="w-5 h-5 fill-none" />
+                  </div>
+                  <h1 className="font-black text-slate-900 dark:text-white text-base tracking-tight">Community</h1>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsMobileChannelsOpen(false)}
+                  className="p-1 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <div className="mt-6 space-y-6 flex-1 min-h-0 overflow-y-auto pr-1">
+                {/* Text Channels Section */}
+                <div className="space-y-2">
+                  <div className="px-2 text-[10px] font-black text-slate-400 dark:text-slate-500 tracking-[0.2em] uppercase">
+                    Text Channels
+                  </div>
+                  
+                  {/* General channel */}
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleChannelSelect('text-general')}
+                    className={`w-full px-4 py-3 rounded-2xl flex items-center justify-between transition-all cursor-pointer border ${
+                      activeChannel === 'text-general'
+                        ? 'bg-blue-600 text-white font-black shadow-lg shadow-blue-600/20 border-blue-500'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Hash className="w-4 h-4 opacity-70" />
+                      <span className="text-sm font-bold">general</span>
+                    </div>
+                  </motion.button>
+                </div>
+
+                {/* Voice Channels Section */}
+                <div className="space-y-2">
+                  <div className="px-2 text-[10px] font-black text-slate-400 dark:text-slate-500 tracking-[0.2em] uppercase">
+                    Voice Channels
+                  </div>
+                  <motion.button
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => handleChannelSelect('video-general')}
+                    className={`w-full px-4 py-3 rounded-2xl flex items-center justify-between transition-all cursor-pointer border ${
+                      activeChannel === 'video-general'
+                        ? 'bg-blue-600 text-white font-black shadow-lg shadow-blue-600/20 border-blue-500'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 border-transparent'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Mic className={`w-4 h-4 ${activeChannel === 'video-general' ? 'text-white' : 'text-blue-500'}`} />
+                      <span className="text-sm font-bold">General Voice</span>
+                    </div>
+                  </motion.button>
+                </div>
+
+                {/* Private Chats Section */}
+                {dmPeers.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="px-2 text-[10px] font-black text-slate-400 dark:text-slate-500 tracking-[0.2em] uppercase">
+                      Private Chats
+                    </div>
+                    <div className="space-y-1">
+                      {dmPeers.map((peer: any) => {
+                        const dmChan = getDmChannelId(peer.id);
+                        const isDmActive = activeChannel === dmChan;
+                        return (
+                          <motion.button
+                            key={peer.id}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => handleChannelSelect(dmChan)}
+                            className={`w-full px-3 py-2 rounded-2xl flex items-center gap-2.5 transition-all cursor-pointer border ${
+                              isDmActive
+                                ? 'bg-blue-600 text-white font-black shadow-lg shadow-blue-600/20 border-blue-500'
+                                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 border-transparent'
+                            }`}
+                          >
+                            <div className="relative shrink-0">
+                              {renderAvatar(peer, 'w-6 h-6 text-[10px]')}
+                              <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-white dark:border-slate-900" />
+                            </div>
+                            <span className="text-xs font-bold truncate">{peer.username}</span>
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Mobile User Footer */}
+              <div className="mt-auto pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  {renderAvatar(currentUser, 'w-9 h-9 text-xs')}
+                  <div className="min-w-0">
+                    <div className="font-black text-slate-900 dark:text-white text-xs truncate">{currentUser.username}</div>
+                    <div className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Active</div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleMute}
+                  className={`p-2 rounded-xl border ${isMuted ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-transparent'}`}
+                >
+                  {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                </button>
+              </div>
+            </motion.aside>
           </div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
 
       {/* PROFILE EDIT MODAL */}
       {isProfileModalOpen && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 sm:p-8 rounded-3xl w-full max-w-md shadow-2xl space-y-6">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 sm:p-7 rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl space-y-6">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
               <h3 className="text-lg font-black text-slate-900 dark:text-white font-heading">
                 User Profile Settings
@@ -3037,22 +2771,40 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
                 className="hidden"
               />
               <div 
-                onClick={() => profileAvatarInputRef.current?.click()}
+                onClick={() => !isAvatarProcessing && profileAvatarInputRef.current?.click()}
                 className="relative cursor-pointer group"
                 title="Click to upload custom avatar image"
               >
                 {renderAvatar({ username: editName || 'P', avatar_color: editColor, avatar_url: editAvatarUrl }, 'w-20 h-20 text-xl')}
-                <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity">
-                  Upload
+                <div className="absolute inset-0 rounded-full bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity">
+                  {isAvatarProcessing ? 'Optimizing...' : (editAvatarUrl ? 'Change' : 'Upload')}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => profileAvatarInputRef.current?.click()}
-                className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
-              >
-                Change Avatar Image
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  disabled={isAvatarProcessing}
+                  onClick={() => profileAvatarInputRef.current?.click()}
+                  className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer disabled:opacity-50"
+                >
+                  {isAvatarProcessing ? 'Processing image...' : (editAvatarUrl ? 'Change Avatar Image' : 'Upload Avatar Image')}
+                </button>
+                {editAvatarUrl && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditAvatarUrl('');
+                      setAvatarUploadError(null);
+                    }}
+                    className="text-xs font-bold text-rose-500 hover:text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
+                  >
+                    Remove Avatar
+                  </button>
+                )}
+              </div>
+              {avatarUploadError && (
+                <p className="text-[11px] text-rose-500 font-semibold text-center max-w-xs">{avatarUploadError}</p>
+              )}
             </div>
 
             {/* Display Name Input */}
@@ -3089,6 +2841,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
               </div>
             </div>
 
+            {/* App Typography & Custom Font Settings */}
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800">
+              <FontSettingsSection />
+            </div>
+
             {/* Modal Actions */}
             <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
               <button
@@ -3109,24 +2866,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat }) => {
           </div>
         </div>
       )}
-
-      {/* Remote Peer Voice Audio (Microphone Speech) */}
-      {Object.entries(remoteStreams).map(([peerId, stream]) => (
-        <RemoteAudioPlayer
-          key={`mic-${peerId}`}
-          stream={stream}
-          isDeafened={isDeafened}
-        />
-      ))}
-
-      {/* Remote Screen Share Audio (Separate stream, pristine audio, no mic echo) */}
-      {Object.entries(remoteScreenAudioStreams).map(([peerId, stream]) => (
-        <RemoteAudioPlayer
-          key={`screen-audio-${peerId}`}
-          stream={stream}
-          isDeafened={isDeafened}
-        />
-      ))}
 
     </div>
   );

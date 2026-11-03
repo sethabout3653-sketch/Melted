@@ -7,7 +7,7 @@ export interface RtcSignalPayload {
   signal: any;
 }
 
-function deduplicateUsers(users: DbUser[]): DbUser[] {
+function deduplicateUsers(users: DbUser[], currentUserId?: string): DbUser[] {
   const map = new Map<string, DbUser>();
   users.forEach((u) => {
     if (!u || !u.id) return;
@@ -16,7 +16,19 @@ function deduplicateUsers(users: DbUser[]): DbUser[] {
       map.set(u.id, u);
     }
   });
-  return Array.from(map.values());
+  const list = Array.from(map.values());
+  return list.sort((a, b) => {
+    if (currentUserId) {
+      if (a.id === currentUserId) return -1;
+      if (b.id === currentUserId) return 1;
+    }
+    const nameA = (a.username || '').toLowerCase();
+    const nameB = (b.username || '').toLowerCase();
+    if (nameA !== nameB) {
+      return nameA.localeCompare(nameB);
+    }
+    return (a.id || '').localeCompare(b.id || '');
+  });
 }
 
 export function resolveWebSocketUrl(): string {
@@ -87,10 +99,12 @@ export function useWebSocketDatabase(currentUser: {
     return [];
   });
   const [isWsConnected, setIsWsConnected] = useState(false);
+  const [isHttpSyncActive, setIsHttpSyncActive] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<any>(null);
   const pingIntervalRef = useRef<any>(null);
+  const httpSyncIntervalRef = useRef<any>(null);
   const outgoingQueueRef = useRef<string[]>([]);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
   const processedRtcSignalsRef = useRef<Set<string>>(new Set());
@@ -125,6 +139,11 @@ export function useWebSocketDatabase(currentUser: {
 
   const onRtcSignalRef = useRef<((fromUserId: string, signal: any) => void) | null>(null);
   const onUserCallRef = useRef<((fromUserId: string, fromUserName: string, callType: 'audio' | 'video') => void) | null>(null);
+  const onCallAnsweredRef = useRef<((fromUserId: string, fromUserName: string, callType: 'audio' | 'video') => void) | null>(null);
+  const onCallEndedRef = useRef<((fromUserId: string) => void) | null>(null);
+  const onDirectRtcSignalRef = useRef<((fromUserId: string, signal: any) => void) | null>(null);
+  const onVoicemailNotificationRef = useRef<((fromUserId: string, fromUserName: string, voicemail: any) => void) | null>(null);
+  const onCallSyncRef = useRef<((fromUserId: string, data: any) => void) | null>(null);
   const onUserJoinedMediaRef = useRef<((userId: string, channel: string) => void) | null>(null);
   const onUserLeftMediaRef = useRef<((userId: string, channel: string) => void) | null>(null);
 
@@ -134,6 +153,26 @@ export function useWebSocketDatabase(currentUser: {
 
   const setUserCallHandler = useCallback((fn: (fromUserId: string, fromUserName: string, callType: 'audio' | 'video') => void) => {
     onUserCallRef.current = fn;
+  }, []);
+
+  const setCallAnsweredHandler = useCallback((fn: (fromUserId: string, fromUserName: string, callType: 'audio' | 'video') => void) => {
+    onCallAnsweredRef.current = fn;
+  }, []);
+
+  const setCallEndedHandler = useCallback((fn: (fromUserId: string) => void) => {
+    onCallEndedRef.current = fn;
+  }, []);
+
+  const setDirectRtcSignalHandler = useCallback((fn: ((fromUserId: string, signal: any) => void) | null) => {
+    onDirectRtcSignalRef.current = fn;
+  }, []);
+
+  const setVoicemailNotificationHandler = useCallback((fn: (fromUserId: string, fromUserName: string, voicemail: any) => void) => {
+    onVoicemailNotificationRef.current = fn;
+  }, []);
+
+  const setCallSyncHandler = useCallback((fn: (fromUserId: string, data: any) => void) => {
+    onCallSyncRef.current = fn;
   }, []);
 
   const setMediaHandlers = useCallback((
@@ -158,7 +197,7 @@ export function useWebSocketDatabase(currentUser: {
     }
   }, []);
 
-  // Multi-tab BroadcastChannel for sync across tabs
+  // Multi-tab BroadcastChannel for sync across tabs in same browser
   useEffect(() => {
     try {
       const bc = new BroadcastChannel('frosted_ws_channel');
@@ -168,7 +207,7 @@ export function useWebSocketDatabase(currentUser: {
         const data = event.data;
         if (!data) return;
         if (data.type === 'SYNC_USERS' && Array.isArray(data.users)) {
-          setUsers(data.users);
+          setUsers(deduplicateUsers(data.users, currentUserRef.current.id));
         } else if (data.type === 'SYNC_MESSAGES' && Array.isArray(data.messages)) {
           setMessages(data.messages);
         }
@@ -188,6 +227,72 @@ export function useWebSocketDatabase(currentUser: {
       localStorage.setItem('frosted_db_messages', JSON.stringify(messages.slice(-200)));
     } catch {}
   }, [messages]);
+
+  // HTTP Fallback Polling Loop: Fetches database snapshot & pending signals over REST API
+  const fetchHttpSync = useCallback(async () => {
+    try {
+      const u = currentUserRef.current;
+      
+      // 1. Snapshot fetch
+      const res = await fetch('/api/ws-db/snapshot');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setIsHttpSyncActive(true);
+          if (Array.isArray(data.users)) {
+            setUsers(deduplicateUsers(data.users, u.id));
+          }
+          if (Array.isArray(data.messages) && data.messages.length > 0) {
+            setMessages(data.messages);
+          }
+        }
+      }
+
+      // 2. Register / Heartbeat via HTTP
+      fetch('/api/ws-db/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: activeUserStateRef.current }),
+      }).catch(() => {});
+
+      // 3. Consume pending signals via HTTP
+      const sigRes = await fetch(`/api/ws-db/signals/${encodeURIComponent(u.id)}`);
+      if (sigRes.ok) {
+        const sigData = await sigRes.json();
+        if (sigData.success && Array.isArray(sigData.signals)) {
+          sigData.signals.forEach((s: any) => {
+            if (s.targetUserId === u.id && s.fromUserId !== u.id) {
+              const sigKey = `${s.fromUserId}:${s.id}`;
+              if (!processedRtcSignalsRef.current.has(sigKey)) {
+                processedRtcSignalsRef.current.add(sigKey);
+                if (processedRtcSignalsRef.current.size > 200) {
+                  const [first] = processedRtcSignalsRef.current;
+                  processedRtcSignalsRef.current.delete(first);
+                }
+                if (s.type === 'RTC_SIGNAL' && onRtcSignalRef.current) {
+                  onRtcSignalRef.current(s.fromUserId, s.signal);
+                } else if (s.type === 'USER_CALL' && onUserCallRef.current) {
+                  onUserCallRef.current(s.fromUserId, s.fromUserName || 'Player', s.callType || 'audio');
+                } else if (s.type === 'CALL_ANSWERED' && onCallAnsweredRef.current) {
+                  onCallAnsweredRef.current(s.fromUserId, s.fromUserName || 'Player', s.callType || 'audio');
+                } else if (s.type === 'CALL_ENDED' && onCallEndedRef.current) {
+                  onCallEndedRef.current(s.fromUserId);
+                } else if (s.type === 'DIRECT_RTC_SIGNAL' && onDirectRtcSignalRef.current) {
+                  onDirectRtcSignalRef.current(s.fromUserId, s.signal);
+                } else if (s.type === 'VOICEMAIL_NOTIFICATION' && onVoicemailNotificationRef.current) {
+                  onVoicemailNotificationRef.current(s.fromUserId, s.fromUserName || 'Player', s.voicemail);
+                } else if (s.type === 'CALL_SYNC' && onCallSyncRef.current) {
+                  onCallSyncRef.current(s.fromUserId, s);
+                }
+              }
+            }
+          });
+        }
+      }
+    } catch (err) {
+      // Ignore network errors gracefully
+    }
+  }, []);
 
   // WebSocket Heartbeat
   const startHeartbeat = useCallback(() => {
@@ -262,32 +367,66 @@ export function useWebSocketDatabase(currentUser: {
 
           if (msg.type === 'DB_INIT') {
             if (Array.isArray(msg.tables?.users) && msg.tables.users.length > 0) {
-              setUsers(deduplicateUsers(msg.tables.users));
+              setUsers(deduplicateUsers(msg.tables.users, currentUserRef.current.id));
             }
             if (Array.isArray(msg.tables?.messages) && msg.tables.messages.length > 0) {
               setMessages(msg.tables.messages);
             }
           } else if (msg.type === 'DB_SYNC') {
             if (msg.table === 'users' && Array.isArray(msg.data)) {
-              setUsers(deduplicateUsers(msg.data));
+              setUsers(deduplicateUsers(msg.data, currentUserRef.current.id));
             } else if (msg.table === 'messages' && Array.isArray(msg.data)) {
               setMessages(msg.data);
             }
           } else if (msg.type === 'RTC_SIGNAL') {
-            const sigKey = `${msg.fromUserId}:${JSON.stringify(msg.signal).slice(0, 100)}`;
-            if (!processedRtcSignalsRef.current.has(sigKey)) {
-              processedRtcSignalsRef.current.add(sigKey);
-              if (processedRtcSignalsRef.current.size > 200) {
-                const [first] = processedRtcSignalsRef.current;
-                processedRtcSignalsRef.current.delete(first);
-              }
-              if (onRtcSignalRef.current) {
-                onRtcSignalRef.current(msg.fromUserId, msg.signal);
+            if (msg.targetUserId === currentUserRef.current.id && msg.fromUserId !== currentUserRef.current.id) {
+              const sigKey = `${msg.fromUserId}:${JSON.stringify(msg.signal).slice(0, 100)}`;
+              if (!processedRtcSignalsRef.current.has(sigKey)) {
+                processedRtcSignalsRef.current.add(sigKey);
+                if (processedRtcSignalsRef.current.size > 200) {
+                  const [first] = processedRtcSignalsRef.current;
+                  processedRtcSignalsRef.current.delete(first);
+                }
+                if (onRtcSignalRef.current) {
+                  onRtcSignalRef.current(msg.fromUserId, msg.signal);
+                }
               }
             }
           } else if (msg.type === 'USER_CALL') {
-            if (onUserCallRef.current) {
-              onUserCallRef.current(msg.fromUserId, msg.fromUserName, msg.callType);
+            if (msg.targetUserId === currentUserRef.current.id && msg.fromUserId !== currentUserRef.current.id) {
+              if (onUserCallRef.current) {
+                onUserCallRef.current(msg.fromUserId, msg.fromUserName, msg.callType);
+              }
+            }
+          } else if (msg.type === 'CALL_ANSWERED') {
+            if (msg.targetUserId === currentUserRef.current.id && msg.fromUserId !== currentUserRef.current.id) {
+              if (onCallAnsweredRef.current) {
+                onCallAnsweredRef.current(msg.fromUserId, msg.fromUserName, msg.callType);
+              }
+            }
+          } else if (msg.type === 'CALL_ENDED') {
+            if (msg.targetUserId === currentUserRef.current.id && msg.fromUserId !== currentUserRef.current.id) {
+              if (onCallEndedRef.current) {
+                onCallEndedRef.current(msg.fromUserId);
+              }
+            }
+          } else if (msg.type === 'DIRECT_RTC_SIGNAL') {
+            if (msg.targetUserId === currentUserRef.current.id && msg.fromUserId !== currentUserRef.current.id) {
+              if (onDirectRtcSignalRef.current) {
+                onDirectRtcSignalRef.current(msg.fromUserId, msg.signal);
+              }
+            }
+          } else if (msg.type === 'CALL_SYNC') {
+            if (msg.targetUserId === currentUserRef.current.id && msg.fromUserId !== currentUserRef.current.id) {
+              if (onCallSyncRef.current) {
+                onCallSyncRef.current(msg.fromUserId, msg);
+              }
+            }
+          } else if (msg.type === 'VOICEMAIL_NOTIFICATION') {
+            if (msg.targetUserId === currentUserRef.current.id && msg.fromUserId !== currentUserRef.current.id) {
+              if (onVoicemailNotificationRef.current) {
+                onVoicemailNotificationRef.current(msg.fromUserId, msg.fromUserName, msg.voicemail);
+              }
             }
           } else if (msg.type === 'USER_JOINED_MEDIA') {
             if (onUserJoinedMediaRef.current) {
@@ -313,7 +452,7 @@ export function useWebSocketDatabase(currentUser: {
           reconnectTimeoutRef.current = setTimeout(() => {
             reconnectTimeoutRef.current = null;
             connect();
-          }, 3500);
+          }, 2500);
         }
       };
 
@@ -325,15 +464,26 @@ export function useWebSocketDatabase(currentUser: {
         reconnectTimeoutRef.current = setTimeout(() => {
           reconnectTimeoutRef.current = null;
           connect();
-        }, 3500);
+        }, 2500);
       }
     }
   }, [startHeartbeat, stopHeartbeat]);
 
+  // Boot & HTTP Fallback Sync Loop
   useEffect(() => {
+    // 1. Immediate cold HTTP fetch to display active players & messages instantly
+    fetchHttpSync();
+
+    // 2. Connect WebSocket
     connect();
 
+    // 3. HTTP Sync fallback interval running every 2.5s (runs seamlessly alongside WebSockets)
+    httpSyncIntervalRef.current = setInterval(() => {
+      fetchHttpSync();
+    }, 2500);
+
     const handleOnline = () => {
+      fetchHttpSync();
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
         connect();
       }
@@ -344,11 +494,12 @@ export function useWebSocketDatabase(currentUser: {
       window.removeEventListener('online', handleOnline);
       stopHeartbeat();
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
+      if (httpSyncIntervalRef.current) clearInterval(httpSyncIntervalRef.current);
       if (wsRef.current) {
         try { wsRef.current.close(); } catch {}
       }
     };
-  }, [connect, stopHeartbeat]);
+  }, [connect, stopHeartbeat, fetchHttpSync]);
 
   const updateUser = useCallback((set: Partial<DbUser>) => {
     const u = currentUserRef.current;
@@ -359,16 +510,25 @@ export function useWebSocketDatabase(currentUser: {
     setUsers((prev) => {
       const safePrev = Array.isArray(prev) ? prev : [];
       const next = safePrev.map((user) => (user.id === u.id ? { ...user, ...set, updated_at: Date.now() } : user));
-      broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: next });
-      return next;
+      const sorted = deduplicateUsers(next, u.id);
+      broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: sorted });
+      return sorted;
     });
 
+    // Send via WebSocket
     safeSend({
       type: 'SQL_UPDATE',
       table: 'users',
       id: u.id,
       set,
     });
+
+    // Dual dispatch via HTTP API
+    fetch('/api/ws-db/update-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: u.id, set }),
+    }).catch(() => {});
   }, [safeSend]);
 
   const insertMessage = useCallback((content: string, channelId: string = 'text-general', attachment?: { url: string; type: string; name?: string }) => {
@@ -400,11 +560,19 @@ export function useWebSocketDatabase(currentUser: {
       return next;
     });
 
+    // Send via WebSocket
     safeSend({
       type: 'SQL_INSERT',
       table: 'messages',
       row: newMsg,
     });
+
+    // Dual dispatch via HTTP API
+    fetch('/api/ws-db/message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ row: newMsg }),
+    }).catch(() => {});
   }, [safeSend]);
 
   const deleteMessage = useCallback((messageId: string) => {
@@ -418,11 +586,41 @@ export function useWebSocketDatabase(currentUser: {
       return next;
     });
 
+    // Send via WebSocket
     safeSend({
       type: 'SQL_DELETE',
       table: 'messages',
       id: messageId,
     });
+
+    // Dual dispatch via HTTP API
+    fetch(`/api/ws-db/message/${encodeURIComponent(messageId)}`, {
+      method: 'DELETE',
+    }).catch(() => {});
+  }, [safeSend]);
+
+  const deleteChannelMessages = useCallback((channelId: string) => {
+    setMessages((prev) => {
+      const safePrev = Array.isArray(prev) ? prev : [];
+      const next = safePrev.filter((m) => m && m.channel_id !== channelId);
+      try {
+        localStorage.setItem('frosted_db_messages', JSON.stringify(next.slice(-200)));
+      } catch {}
+      broadcastChannelRef.current?.postMessage({ type: 'SYNC_MESSAGES', messages: next });
+      return next;
+    });
+
+    // Send via WebSocket
+    safeSend({
+      type: 'SQL_DELETE_CHANNEL',
+      table: 'messages',
+      channel_id: channelId,
+    });
+
+    // Dual dispatch via HTTP API
+    fetch(`/api/ws-db/channel-messages/${encodeURIComponent(channelId)}`, {
+      method: 'DELETE',
+    }).catch(() => {});
   }, [safeSend]);
 
   const registerUser = useCallback((user: { 
@@ -447,15 +645,23 @@ export function useWebSocketDatabase(currentUser: {
 
     Object.assign(activeUserStateRef.current, dbUser);
 
+    // Send via WebSocket
     safeSend({
       type: 'REGISTER_USER',
       user: dbUser,
     });
 
+    // Dual dispatch via HTTP API
+    fetch('/api/ws-db/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user: dbUser }),
+    }).catch(() => {});
+
     setUsers((prev) => {
       const safePrev = Array.isArray(prev) ? prev : [];
       const filtered = safePrev.filter((x) => x && x.id !== user.id);
-      const next = [dbUser, ...filtered];
+      const next = deduplicateUsers([dbUser, ...filtered], user.id);
       broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: next });
       return next;
     });
@@ -469,6 +675,12 @@ export function useWebSocketDatabase(currentUser: {
       targetUserId,
       signal,
     });
+
+    fetch('/api/ws-db/signal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fromUserId, targetUserId, type: 'RTC_SIGNAL', signal }),
+    }).catch(() => {});
   }, [safeSend]);
 
   const callUser = useCallback((targetUserId: string, callType: 'audio' | 'video') => {
@@ -480,20 +692,119 @@ export function useWebSocketDatabase(currentUser: {
       targetUserId,
       callType,
     });
+
+    fetch('/api/ws-db/signal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fromUserId: u.id, fromUserName: u.username, targetUserId, type: 'USER_CALL', callType }),
+    }).catch(() => {});
+  }, [safeSend]);
+
+  const answerCall = useCallback((targetUserId: string, callType: 'audio' | 'video' = 'audio') => {
+    const u = currentUserRef.current;
+    safeSend({
+      type: 'CALL_ANSWERED',
+      fromUserId: u.id,
+      fromUserName: u.username,
+      targetUserId,
+      callType,
+    });
+
+    fetch('/api/ws-db/signal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fromUserId: u.id, fromUserName: u.username, targetUserId, type: 'CALL_ANSWERED', callType }),
+    }).catch(() => {});
+  }, [safeSend]);
+
+  const endCallSignal = useCallback((targetUserId: string) => {
+    const u = currentUserRef.current;
+    safeSend({
+      type: 'CALL_ENDED',
+      fromUserId: u.id,
+      targetUserId,
+    });
+
+    fetch('/api/ws-db/signal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fromUserId: u.id, targetUserId, type: 'CALL_ENDED' }),
+    }).catch(() => {});
+  }, [safeSend]);
+
+  const sendDirectRtcSignal = useCallback((targetUserId: string, signal: any) => {
+    const fromUserId = currentUserRef.current.id;
+    safeSend({
+      type: 'DIRECT_RTC_SIGNAL',
+      fromUserId,
+      targetUserId,
+      signal,
+    });
+
+    fetch('/api/ws-db/signal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fromUserId, targetUserId, type: 'DIRECT_RTC_SIGNAL', signal }),
+    }).catch(() => {});
+  }, [safeSend]);
+
+  const sendVoicemailNotification = useCallback((targetUserId: string, voicemail: any) => {
+    const u = currentUserRef.current;
+    safeSend({
+      type: 'VOICEMAIL_NOTIFICATION',
+      fromUserId: u.id,
+      fromUserName: u.username,
+      targetUserId,
+      voicemail,
+    });
+
+    fetch('/api/ws-db/signal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fromUserId: u.id, fromUserName: u.username, targetUserId, type: 'VOICEMAIL_NOTIFICATION', voicemail }),
+    }).catch(() => {});
+  }, [safeSend]);
+
+  const sendCallSync = useCallback((targetUserId: string, data: { hold?: boolean; muted?: boolean; video?: boolean }) => {
+    const fromUserId = currentUserRef.current.id;
+    const payload = {
+      type: 'CALL_SYNC',
+      fromUserId,
+      targetUserId,
+      ...data
+    };
+    safeSend(payload);
+    
+    fetch('/api/ws-db/signal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    }).catch(() => {});
   }, [safeSend]);
 
   return {
     users,
     messages,
-    isConnected: isWsConnected,
+    isConnected: isWsConnected || isHttpSyncActive,
     updateUser,
     insertMessage,
     deleteMessage,
+    deleteChannelMessages,
     registerUser,
     callUser,
+    answerCall,
+    endCallSignal,
+    sendDirectRtcSignal,
+    sendVoicemailNotification,
+    sendCallSync,
     sendRtcSignal,
     setRtcSignalHandler,
     setUserCallHandler,
+    setCallAnsweredHandler,
+    setCallEndedHandler,
+    setDirectRtcSignalHandler,
+    setVoicemailNotificationHandler,
+    setCallSyncHandler,
     setMediaHandlers,
     ws: wsRef.current,
   };

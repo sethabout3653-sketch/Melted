@@ -1,9 +1,0 @@
-name = "melted"
-main = "worker.ts"
-compatibility_date = "2024-09-23"
-
-[assets]
-directory = "./dist"
-
-[vars]
-ENVIRONMENT = "production"

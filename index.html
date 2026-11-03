@@ -4,37 +4,22 @@
     <script>
       (function(){
         try {
-          var winUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
-          Object.defineProperty(navigator, 'userAgent', { get: function() { return winUA; }, configurable: true });
-          Object.defineProperty(navigator, 'platform', { get: function() { return 'Win32'; }, configurable: true });
-          Object.defineProperty(navigator, 'vendor', { get: function() { return 'Google Inc.'; }, configurable: true });
-          if (navigator.userAgentData) {
-            Object.defineProperty(navigator, 'userAgentData', {
-              get: function() {
-                return {
-                  brands: [
-                    { brand: 'Chromium', version: '124' },
-                    { brand: 'Google Chrome', version: '124' }
-                  ],
-                  mobile: false,
-                  platform: 'Windows',
-                  getHighEntropyValues: function() {
-                    return Promise.resolve({ architecture: 'x86', bitness: '64', mobile: false, platform: 'Windows' });
-                  }
-                };
-              },
-              configurable: true
-            });
+          var saved = localStorage.getItem('frosted_theme');
+          var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+          if (saved === 'dark' || (!saved && prefersDark)) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
           }
         } catch(e){}
       })();
     </script>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title id="app-title">Frosted</title>
-    <meta name="description" content="Fast, modern unblocked gaming portal featuring instant titles with 60 FPS in-browser play." />
-    <meta property="og:title" content="Frosted" />
-    <meta property="og:description" content="Fast, modern unblocked gaming portal featuring instant titles with 60 FPS in-browser play." />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title id="app-title">Frosted Arcade</title>
+    <meta name="description" content="Premium editorial unblocked gaming portal with community chat and AI study assistant." />
+    <meta property="og:title" content="Frosted Arcade" />
+    <meta property="og:description" content="Premium editorial unblocked gaming portal with community chat and AI study assistant." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="theme-color" content="#000000" />
@@ -44,12 +29,8 @@
     <meta name="apple-mobile-web-app-title" content="Frosted" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,100..1000&family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link id="dynamic-favicon" rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='46' fill='%230066FF'/><path d='M30 65 Q50 25 70 65 Q60 80 50 65 Q40 80 30 65 Z' fill='%23FFF'/></svg>" />
-    <script src="https://pl31903885.profitableratecpmnetwork.com/6e/fc/cf/6efccf8ee58ae6fc768e72346b7a6cb0.js" async></script>
-    <script src="https://pl31903986.profitableratecpmnetwork.com/e8/7d/44/e87d448fef97659cd2531b6b0cb5ff7e.js" async></script>
   </head>
   <body class="bg-[#050505] text-[#f1f3f9] antialiased selection:bg-[#0066ff] selection:text-white">
     <div id="root"></div>
