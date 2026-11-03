@@ -28,13 +28,10 @@ export function getContinueWatchingList(): ContinueWatchingEntry[] {
 
 export function saveContinueWatchingEntry(entry: ContinueWatchingEntry): ContinueWatchingEntry[] {
   try {
-    // DO NOT SAVE IF NO PROGRESS
-    if (entry.progressSeconds <= 0) return getContinueWatchingList();
-
+    // Save as soon as playback starts, even before an embed reports its first time update.
     const current = getContinueWatchingList();
-    // Replace existing entry if present
     const filtered = current.filter(item => item.id !== entry.id);
-    const updated = [entry, ...filtered].slice(0, 15); // Increased limit to 15 to ensure it doesn't get pushed out
+    const updated = [entry, ...filtered].slice(0, 15);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
     return updated;
   } catch {
