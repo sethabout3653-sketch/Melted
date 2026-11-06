@@ -3,6 +3,9 @@ import Hls from 'hls.js';
 import { Tv, Search, Volume2, VolumeX, Maximize2, Play, Pause } from 'lucide-react';
 import { TV_CHANNELS, TVChannel } from '../data/channels';
 
+const DEFAULT_CHANNEL_ID = 'pluto-funny-af';
+const DEFAULT_CHANNEL = TV_CHANNELS.find(channel => channel.id === DEFAULT_CHANNEL_ID) ?? TV_CHANNELS[0] ?? null;
+
 const ChannelLogo: React.FC<{ logo?: string; name: string }> = ({ logo, name }) => {
   const [hasError, setHasError] = useState(false);
 
@@ -37,7 +40,7 @@ const ChannelLogo: React.FC<{ logo?: string; name: string }> = ({ logo, name }) 
 };
 
 export const LiveTVView: React.FC = () => {
-  const [selectedChannel, setSelectedChannel] = useState<TVChannel | null>(TV_CHANNELS[0] || null);
+  const [selectedChannel, setSelectedChannel] = useState<TVChannel | null>(DEFAULT_CHANNEL);
   const [searchQuery, setSearchQuery] = useState('');
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
@@ -63,7 +66,6 @@ export const LiveTVView: React.FC = () => {
     let isCancelled = false;
 
     if (selectedChannel && videoRef.current) {
-      // Force disable all existing text tracks from previous stream
       for (let i = 0; i < videoRef.current.textTracks.length; i++) {
         videoRef.current.textTracks[i].mode = 'disabled';
       }
