@@ -45,7 +45,7 @@ export const LiveTVView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [captionsEnabled, setCaptionsEnabled] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
-  
+
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -61,7 +61,7 @@ export const LiveTVView: React.FC = () => {
   // HLS Player Setup
   useEffect(() => {
     let isCancelled = false;
-    
+
     if (selectedChannel && videoRef.current) {
       // Force disable all existing text tracks from previous stream
       for (let i = 0; i < videoRef.current.textTracks.length; i++) {
@@ -98,7 +98,7 @@ export const LiveTVView: React.FC = () => {
         hlsRef.current = hls;
         hls.loadSource(url);
         hls.attachMedia(video);
-        
+
         const selectEnglishAudioTrack = () => {
           if (hls.audioTracks && hls.audioTracks.length > 0) {
             const tracks = hls.audioTracks;
@@ -215,7 +215,7 @@ export const LiveTVView: React.FC = () => {
               }
             }
           }
-          
+
           if (captionsEnabled) {
             const textTracks = video.textTracks;
             for (let i = 0; i < textTracks.length; i++) {
@@ -344,11 +344,8 @@ export const LiveTVView: React.FC = () => {
 
   const [isGuideVisible, setIsGuideVisible] = useState(true);
 
-  // ... (inside component)
-
   return (
     <div className="flex-1 flex flex-col min-h-0 h-full w-full bg-[#0b0e14] text-slate-100 overflow-hidden font-sans">
-      {/* Top Header */}
       <div className="flex items-center justify-between gap-6 px-6 py-3.5 bg-[#0e121b] border-b border-slate-800/60 shrink-0">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
@@ -364,8 +361,8 @@ export const LiveTVView: React.FC = () => {
           </div>
         </div>
         {!isGuideVisible && (
-          <button 
-            onClick={() => setIsGuideVisible(true)} 
+          <button
+            onClick={() => setIsGuideVisible(true)}
             className="p-2 bg-slate-800 rounded-lg text-white"
             title="Show Guide"
           >
@@ -376,88 +373,61 @@ export const LiveTVView: React.FC = () => {
         )}
       </div>
 
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-row min-h-0 overflow-hidden">
-        {/* Player Container */}
-        <div className="flex-1 bg-[#07090e] relative flex items-center justify-center p-4 sm:p-6 overflow-hidden border-r border-slate-800/60">
-           {/* ... player container ... */}
-        </div>
-
-        {/* Sidebar Guide */}
-        {isGuideVisible && (
-          <div className="w-80 sm:w-96 bg-[#0e121b] flex flex-col shrink-0 min-h-0 border-l border-slate-800">
-            {/* Guide Header with Toggle */}
-            <div className="p-4 border-b border-slate-800/60 flex items-center justify-between">
-              <h2 className="text-sm font-semibold text-slate-300">Channel Guide</h2>
-              <button 
-                onClick={() => setIsGuideVisible(false)} 
-                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-                title="Hide Guide"
-              >
-                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-            </div>
-            
-            {/* Category Tabs */}
-            <div className="p-4 border-b border-slate-800/60 flex items-center gap-2 overflow-x-auto no-scrollbar">
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-row min-h-0 overflow-hidden">
-        
-        {/* Player Container */}
         <div className="flex-1 bg-[#07090e] relative flex items-center justify-center p-4 sm:p-6 overflow-hidden border-r border-slate-800/60">
           {selectedChannel ? (
-            <div 
+            <div
               ref={containerRef}
-              className={`w-full h-full max-w-5xl mx-auto relative group flex items-center justify-center bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-800/80`}
+              className="w-full h-full max-w-5xl mx-auto relative group flex items-center justify-center bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-800/80"
             >
-              <video 
+              <video
                 ref={videoRef}
                 className="w-full h-full object-contain"
                 playsInline
                 autoPlay
                 controls={false}
               />
-              
-              {/* Controls Bar */}
-              <div className={`absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-black/90 via-black/40 to-transparent transition-opacity duration-500 z-10 flex items-center justify-between gap-4`}>
+
+              <div className="absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10 flex items-center justify-between gap-4">
                 <div className="flex items-center gap-4">
+                  <button onClick={togglePlayPause} className="p-2 text-white hover:text-blue-400 hover:bg-white/10 rounded-lg transition-colors" title={isPlaying ? 'Pause' : 'Play'}>
+                    {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                  </button>
                   <div className="flex items-center gap-2">
-                    <button onClick={toggleMute} className="p-2 text-white hover:text-blue-400 hover:bg-white/10 rounded-lg transition-colors">
+                    <button onClick={toggleMute} className="p-2 text-white hover:text-blue-400 hover:bg-white/10 rounded-lg transition-colors" title={isMuted ? 'Unmute' : 'Mute'}>
                       {isMuted ? <VolumeX className="w-5 h-5 text-red-400" /> : <Volume2 className="w-5 h-5" />}
                     </button>
-                    <input 
-                      type="range" min="0" max="1" step="0.1" value={volume} 
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      value={volume}
                       onChange={handleVolumeChange}
+                      aria-label="Volume"
                       className="w-20 sm:w-28 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-blue-400"
                     />
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-3">
-                  <button 
+                  <button
                     onClick={() => setCaptionsEnabled(!captionsEnabled)}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors border ${
-                      captionsEnabled 
-                        ? 'bg-blue-500 text-white border-blue-500' 
-                        : 'bg-white/10 text-slate-300 border-white/10 hover:bg-white/20'
-                    }`}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors border ${captionsEnabled ? 'bg-blue-500 text-white border-blue-500' : 'bg-white/10 text-slate-300 border-white/10 hover:bg-white/20'}`}
+                    aria-pressed={captionsEnabled}
                   >
                     CC
                   </button>
-                  
-                  <button 
+                  <button
                     onClick={enterFullscreen}
                     className="p-2 text-white hover:text-blue-400 hover:bg-white/10 rounded-lg transition-colors"
+                    title="Fullscreen"
                   >
                     <Maximize2 className="w-5 h-5" />
                   </button>
                 </div>
               </div>
 
-              {/* Quiet Loading Spinner */}
               {isLoading && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-xs z-20">
                   <div className="w-8 h-8 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
@@ -471,66 +441,73 @@ export const LiveTVView: React.FC = () => {
           )}
         </div>
 
-        {/* Sidebar Guide */}
         {isGuideVisible && (
-          <div className="w-80 sm:w-96 bg-[#0e121b] flex flex-col shrink-0 min-h-0 border-l border-slate-800">
-            {/* Category Tabs */}
+          <aside className="w-80 sm:w-96 bg-[#0e121b] flex flex-col shrink-0 min-h-0 border-l border-slate-800">
+            <div className="p-4 border-b border-slate-800/60 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-slate-300">Channel Guide</h2>
+              <button
+                onClick={() => setIsGuideVisible(false)}
+                className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                title="Hide Guide"
+              >
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-4 border-b border-slate-800/60">
+              <label className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-900 border border-slate-800 text-slate-400">
+                <Search className="w-4 h-4 shrink-0" />
+                <input
+                  type="search"
+                  value={searchQuery}
+                  onChange={e => setSearchQuery(e.target.value)}
+                  placeholder="Search channels..."
+                  aria-label="Search channels"
+                  className="w-full bg-transparent text-sm text-slate-200 outline-none placeholder:text-slate-500"
+                />
+              </label>
+            </div>
+
             <div className="p-4 border-b border-slate-800/60 flex items-center gap-2 overflow-x-auto no-scrollbar">
               {categories.map(cat => (
                 <button
                   key={cat}
                   onClick={() => setSelectedCategory(cat)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                    selectedCategory === cat
-                      ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20'
-                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-                  }`}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${selectedCategory === cat ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'}`}
                 >
                   {cat}
                 </button>
               ))}
             </div>
-            
-            {/* Station List */}
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
-              {filteredChannels.map((channel) => {
-                const isSelected = selectedChannel?.id === channel.id;
 
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
+              {filteredChannels.map(channel => {
+                const isSelected = selectedChannel?.id === channel.id;
                 return (
                   <button
                     key={channel.id}
                     onClick={() => setSelectedChannel(channel)}
-                    className={`w-full flex items-center gap-4 p-4 rounded-xl transition-colors border text-left group ${
-                      isSelected 
-                        ? 'bg-blue-500/10 border-blue-500/30 text-white font-medium' 
-                        : 'border-transparent text-slate-300 hover:bg-slate-800/50 hover:text-white'
-                    }`}
+                    className={`w-full flex items-center gap-4 p-4 rounded-xl transition-colors border text-left group ${isSelected ? 'bg-blue-500/10 border-blue-500/30 text-white font-medium' : 'border-transparent text-slate-300 hover:bg-slate-800/50 hover:text-white'}`}
                   >
                     <div className="w-20 h-14 rounded-md bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden shrink-0 p-1">
                       <ChannelLogo logo={channel.logo} name={channel.name} />
                     </div>
-
                     <div className="min-w-0 flex-1">
                       <div className="text-sm truncate text-slate-200 font-medium group-hover:text-blue-400 transition-colors">
                         {channel.name}
                       </div>
-                      <div className="text-xs text-slate-500 font-normal">
-                        {channel.category}
-                      </div>
+                      <div className="text-xs text-slate-500 font-normal">{channel.category}</div>
                     </div>
-
-                    {isSelected && (
-                      <div className="w-3 h-3 rounded-full bg-blue-400 shrink-0" />
-                    )}
+                    {isSelected && <div className="w-3 h-3 rounded-full bg-blue-400 shrink-0" />}
                   </button>
                 );
               })}
             </div>
-          </div>
+          </aside>
         )}
       </div>
     </div>
-  );
-
   );
 };
