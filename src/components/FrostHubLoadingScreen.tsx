@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 export const FrostHubLoadingScreen: React.FC = () => {
   const [isFading, setIsFading] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const hasFinishedRef = useRef(false);
 
   useEffect(() => {
     // Lock scroll when mounting
@@ -11,33 +12,18 @@ export const FrostHubLoadingScreen: React.FC = () => {
 
     const startAudio = () => {
       const video = videoRef.current;
-      if (!video) return;
+      if (!video || hasFinishedRef.current) return;
       video.muted = false;
       video.play().catch(() => undefined);
-    };
-
-    const restartIntro = () => {
-      setIsFading(false);
-      window.setTimeout(() => {
-        const video = videoRef.current;
-        if (!video) return;
-        video.currentTime = 0;
-        video.muted = false;
-        video.play().catch(() => undefined);
-      }, 0);
     };
 
     videoRef.current?.play().catch(() => undefined);
     window.addEventListener('pointerdown', startAudio, { once: true });
     window.addEventListener('keydown', startAudio, { once: true });
-    window.addEventListener('blur', restartIntro);
-    document.addEventListener('visibilitychange', restartIntro);
 
     return () => {
       window.removeEventListener('pointerdown', startAudio);
       window.removeEventListener('keydown', startAudio);
-      window.removeEventListener('blur', restartIntro);
-      document.removeEventListener('visibilitychange', restartIntro);
       // Unlock scroll when unmounting
       document.body.style.overflow = '';
       document.documentElement.style.overflow = '';
@@ -45,7 +31,7 @@ export const FrostHubLoadingScreen: React.FC = () => {
   }, []);
 
   const handleVideoEnd = () => {
-    // Start fade out process immediately
+    hasFinishedRef.current = true;
     setIsFading(true);
   };
 
