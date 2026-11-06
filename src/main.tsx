@@ -1,5 +1,5 @@
-import './data/registerExtraChannels';
 import { createRoot } from 'react-dom/client';
+import './data/registerExtraChannels';
 import App from './App.tsx';
 import { ErrorBoundary } from './components/ErrorBoundary.tsx';
 import './index.css';
