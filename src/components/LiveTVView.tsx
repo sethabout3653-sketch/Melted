@@ -3,7 +3,7 @@ import Hls from 'hls.js';
 import { Tv, Search, Volume2, VolumeX, Maximize2, Play, Pause } from 'lucide-react';
 import { TV_CHANNELS, TVChannel } from '../data/channels';
 
-const DEFAULT_CHANNEL_ID = 'pluto-funny-af';
+const DEFAULT_CHANNEL_ID = 'afv-always-funny';
 const DEFAULT_CHANNEL = TV_CHANNELS.find(channel => channel.id === DEFAULT_CHANNEL_ID) ?? TV_CHANNELS[0] ?? null;
 
 const EXTRA_CATEGORIES = [
@@ -491,16 +491,19 @@ export const LiveTVView: React.FC = () => {
               </label>
             </div>
 
-            <div className="p-4 border-b border-slate-800/60 flex items-center gap-2 overflow-x-auto no-scrollbar">
-              {categories.map(cat => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedCategory(cat)}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${selectedCategory === cat ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'}`}
-                >
-                  {cat}
-                </button>
-              ))}
+            <div className="p-4 border-b border-slate-800/60">
+              <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto overscroll-contain pr-1 custom-scrollbar" role="group" aria-label="Channel categories">
+                {categories.map(cat => (
+                  <button
+                    key={cat}
+                    onClick={() => setSelectedCategory(cat)}
+                    aria-pressed={selectedCategory === cat}
+                    className={`px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${selectedCategory === cat ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'}`}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
