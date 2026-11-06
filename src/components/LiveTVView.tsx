@@ -1,29 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Hls from 'hls.js';
-import { Tv, Search, Volume2, VolumeX, Maximize2, Play, Pause } from 'lucide-react';
+import { Tv, Search, Volume2, VolumeX, Maximize2 } from 'lucide-react';
 import { TV_CHANNELS, TVChannel } from '../data/channels';
 
 const DEFAULT_CHANNEL_ID = 'afv-always-funny';
 const DEFAULT_CHANNEL = TV_CHANNELS.find(channel => channel.id === DEFAULT_CHANNEL_ID) ?? TV_CHANNELS[0] ?? null;
 
 const EXTRA_CATEGORIES = [
-  'All',
-  'News',
-  'Comedy',
-  'Entertainment',
-  'Kids',
-  'Sports',
-  'Movies',
-  'Series',
-  'Educational',
-  'Lifestyle',
-  'Music',
-  'General',
-  'Family',
-  'Documentary',
-  'Reality',
-  'Travel',
-  'Faith'
+  'All', 'News', 'Comedy', 'Entertainment', 'Kids', 'Sports', 'Movies', 'Series',
+  'Educational', 'Lifestyle', 'Music', 'General', 'Family', 'Documentary', 'Reality', 'Travel', 'Faith'
 ];
 
 const ChannelLogo: React.FC<{ logo?: string; name: string }> = ({ logo, name }) => {
@@ -62,7 +47,7 @@ const ChannelLogo: React.FC<{ logo?: string; name: string }> = ({ logo, name }) 
 export const LiveTVView: React.FC = () => {
   const [selectedChannel, setSelectedChannel] = useState<TVChannel | null>(DEFAULT_CHANNEL);
   const [searchQuery, setSearchQuery] = useState('');
-  const [isPlaying, setIsPlaying] = useState(true);
+  const [, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -320,18 +305,6 @@ export const LiveTVView: React.FC = () => {
     }
   }, [captionsEnabled, selectedChannel]);
 
-  const togglePlayPause = () => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-        setIsPlaying(false);
-      } else {
-        videoRef.current.play();
-        setIsPlaying(true);
-      }
-    }
-  };
-
   const toggleMute = () => {
     if (videoRef.current) {
       const newMuted = !isMuted;
@@ -410,25 +383,20 @@ export const LiveTVView: React.FC = () => {
               />
 
               <div className="absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <button onClick={togglePlayPause} className="p-2 text-white hover:text-blue-400 hover:bg-white/10 rounded-lg transition-colors" title={isPlaying ? 'Pause' : 'Play'}>
-                    {isPlaying ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5" />}
+                <div className="flex items-center gap-2">
+                  <button onClick={toggleMute} className="p-2 text-white hover:text-blue-400 hover:bg-white/10 rounded-lg transition-colors" title={isMuted ? 'Unmute' : 'Mute'}>
+                    {isMuted ? <VolumeX className="w-5 h-5 text-red-400" /> : <Volume2 className="w-5 h-5" />}
                   </button>
-                  <div className="flex items-center gap-2">
-                    <button onClick={toggleMute} className="p-2 text-white hover:text-blue-400 hover:bg-white/10 rounded-lg transition-colors" title={isMuted ? 'Unmute' : 'Mute'}>
-                      {isMuted ? <VolumeX className="w-5 h-5 text-red-400" /> : <Volume2 className="w-5 h-5" />}
-                    </button>
-                    <input
-                      type="range"
-                      min="0"
-                      max="1"
-                      step="0.1"
-                      value={volume}
-                      onChange={handleVolumeChange}
-                      aria-label="Volume"
-                      className="w-20 sm:w-28 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-blue-400"
-                    />
-                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={volume}
+                    onChange={handleVolumeChange}
+                    aria-label="Volume"
+                    className="w-20 sm:w-28 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-blue-400"
+                  />
                 </div>
 
                 <div className="flex items-center gap-3">
