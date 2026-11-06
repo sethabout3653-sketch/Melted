@@ -6,6 +6,11 @@ const logo = (channelId: string) => `https://images.iptv-org.github.io/epg/logos
 
 const EXTRA_TV_CHANNELS: TVChannel[] = [
   {
+    id: 'pbs-mpt-baltimore', name: 'MPT',
+    url: 'https://2-fss-2.streamhoster.com/pl_138/amlst:201814-1291584/playlist.m3u8',
+    category: 'Educational', logo: logo('PBS.us'), description: 'Maryland Public Television (WMPB) live stream.'
+  },
+  {
     id: 'pbs-kids-alaska', name: 'PBS Kids Alaska',
     url: 'https://livestream.pbskids.org/out/v1/94b88ad58fc14f84a9382341f1c00b82/akst.m3u8',
     category: 'Kids', logo: logo('PBSKidsAlaska.us'), description: 'PBS Kids live feed for Alaska; availability may vary by region.'
@@ -24,11 +29,6 @@ const EXTRA_TV_CHANNELS: TVChannel[] = [
     id: 'pbs-kids-pacific', name: 'PBS Kids Pacific',
     url: 'https://livestream.pbskids.org/out/v1/11f2e6b73eaa4887b3746cb863960e79/pst.m3u8',
     category: 'Kids', logo: logo('PBSKidsPacific.us'), description: 'PBS Kids live feed for the Pacific time zone.'
-  },
-  {
-    id: 'pbs-mpt-baltimore', name: 'MPT',
-    url: 'https://2-fss-2.streamhoster.com/pl_138/amlst:201814-1291584/playlist.m3u8',
-    category: 'Educational', logo: logo('PBS.us'), description: 'Maryland Public Television (WMPB) live stream.'
   },
   {
     id: 'pbs-ket-kentucky', name: 'PBS KET Kentucky',
@@ -157,6 +157,9 @@ const EXTRA_TV_CHANNELS: TVChannel[] = [
   }
 ];
 
-// Preserve the existing channel guide and append these extras once, without duplicate IDs.
+// Put the added channels first so they're immediately visible in the long guide, then keep the existing channels.
 const existingIds = new Set(TV_CHANNELS.map(channel => channel.id));
-TV_CHANNELS.push(...EXTRA_TV_CHANNELS.filter(channel => !existingIds.has(channel.id)));
+export const CHANNEL_GUIDE: TVChannel[] = [
+  ...EXTRA_TV_CHANNELS.filter(channel => !existingIds.has(channel.id)),
+  ...TV_CHANNELS
+];
