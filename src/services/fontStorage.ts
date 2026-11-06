@@ -1,4 +1,4 @@
-// Font Configuration and Storage Engine for Frosted
+// Font Configuration and Storage Engine for FrostHub
 
 export type FontPresetId = 'default' | 'modern-clean' | 'custom';
 export type ModernCleanBodyFont = 'plus-jakarta' | 'inter' | 'dm-sans';

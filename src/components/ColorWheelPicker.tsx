@@ -236,25 +236,25 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onCha
           {/* Wheel Canvas */}
           <canvas
             ref={canvasRef}
-            className="w-[220px] h-[220px] rounded-full shadow-xl transition-shadow group-hover:shadow-2xl border-4 border-white dark:border-slate-800"
+            className="w-[220px] h-[220px] rounded-3xl shadow-xl transition-shadow group-hover:shadow-2xl border-4 border-white dark:border-slate-800"
           />
 
           {/* Center Glow Indicator */}
           <div
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-full blur-md pointer-events-none transition-colors"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-md blur-md pointer-events-none transition-colors"
             style={{ backgroundColor: color }}
           />
 
           {/* Interactive Handle Cursor */}
           <div
-            className="absolute w-6 h-6 -ml-3 -mt-3 rounded-full border-2 border-white shadow-lg pointer-events-none transition-transform flex items-center justify-center scale-110"
+            className="absolute w-6 h-6 -ml-3 -mt-3 rounded-md border-2 border-white shadow-lg pointer-events-none transition-transform flex items-center justify-center scale-110"
             style={{
               left: `${handleX}px`,
               top: `${handleY}px`,
               backgroundColor: color,
             }}
           >
-            <div className="w-1.5 h-1.5 rounded-full bg-white shadow-sm" />
+            <div className="w-1.5 h-1.5 rounded-sm bg-white shadow-sm" />
           </div>
         </div>
 
@@ -262,9 +262,9 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onCha
         <div className="flex-1 w-full space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-blue-500" /> 360° Chromatic Wheel
+              <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> 360° Chromatic Wheel
             </span>
-            <span className="px-2.5 py-1 rounded-full bg-slate-200 dark:bg-slate-800 text-[11px] font-mono font-bold text-slate-700 dark:text-slate-300">
+            <span className="px-2.5 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-[11px] font-mono font-bold text-slate-700 dark:text-slate-300">
               {hue}° Hue
             </span>
           </div>
@@ -338,16 +338,17 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onCha
                 Primary Button
               </button>
               <span
-                className="px-2.5 py-1 text-[11px] font-bold rounded-full border shadow-xs"
+                className="px-2.5 py-1 text-[11px] font-bold rounded-lg border shadow-xs flex items-center gap-1.5"
                 style={{
                   borderColor: `${color}40`,
                   backgroundColor: `${color}15`,
                   color: color,
                 }}
               >
-                ● Active Pill
+                <span className="w-1.5 h-1.5 rounded-xs inline-block" style={{ backgroundColor: color }} />
+                Active Pill
               </span>
-              <div className="w-5 h-5 rounded-full border-2" style={{ borderColor: color }} />
+              <div className="w-5 h-5 rounded-md border-2" style={{ borderColor: color }} />
             </div>
           </div>
         </div>

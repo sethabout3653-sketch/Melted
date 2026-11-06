@@ -94,7 +94,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 sm:p-6 bg-black/75 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 sm:p-6 bg-black/80 animate-in fade-in duration-200">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -105,7 +105,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
           {/* Header */}
           <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-slate-50/50 dark:bg-slate-900/50">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-blue-600/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-2xl bg-cyan-500/10 dark:bg-cyan-400/20 text-cyan-500 dark:text-cyan-300 flex items-center justify-center">
                 <Palette className="w-5 h-5" />
               </div>
               <div>
@@ -131,7 +131,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
               onClick={() => setActiveTab('accent')}
               className={`px-4 py-3 text-xs font-bold rounded-t-xl transition-all flex items-center gap-2 border-b-2 cursor-pointer ${
                 activeTab === 'accent'
-                  ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900'
+                  ? 'border-cyan-500 text-cyan-500 dark:text-cyan-300 bg-white dark:bg-slate-900'
                   : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -142,7 +142,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
               onClick={() => setActiveTab('radius')}
               className={`px-4 py-3 text-xs font-bold rounded-t-xl transition-all flex items-center gap-2 border-b-2 cursor-pointer ${
                 activeTab === 'radius'
-                  ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900'
+                  ? 'border-cyan-500 text-cyan-500 dark:text-cyan-300 bg-white dark:bg-slate-900'
                   : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -153,7 +153,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
               onClick={() => setActiveTab('background')}
               className={`px-4 py-3 text-xs font-bold rounded-t-xl transition-all flex items-center gap-2 border-b-2 cursor-pointer ${
                 activeTab === 'background'
-                  ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900'
+                  ? 'border-cyan-500 text-cyan-500 dark:text-cyan-300 bg-white dark:bg-slate-900'
                   : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -164,7 +164,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
               onClick={() => setActiveTab('typography')}
               className={`px-4 py-3 text-xs font-bold rounded-t-xl transition-all flex items-center gap-2 border-b-2 cursor-pointer ${
                 activeTab === 'typography'
-                  ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900'
+                  ? 'border-cyan-500 text-cyan-500 dark:text-cyan-300 bg-white dark:bg-slate-900'
                   : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
@@ -213,12 +213,12 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                           }}
                           className={`p-3 rounded-2xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
                             isSelected
-                              ? 'border-blue-500 ring-2 ring-blue-500/30 bg-blue-50/50 dark:bg-blue-950/30'
+                              ? 'border-cyan-400 ring-2 ring-cyan-400/30 bg-blue-50/50 dark:bg-blue-950/30'
                               : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900'
                           }`}
                         >
                           <div
-                            className="w-6 h-6 rounded-full shrink-0 shadow-sm flex items-center justify-center text-white"
+                            className="w-6 h-6 rounded-md shrink-0 shadow-sm flex items-center justify-center text-white"
                             style={{ backgroundColor: p.color }}
                           >
                             {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
@@ -259,7 +259,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                         }
                       }}
                       placeholder="#2563eb"
-                      className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-xs font-mono font-bold text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-cyan-400"
                     />
                   </div>
                 </div>
@@ -284,13 +284,13 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                             r.class
                           } ${
                             isSelected
-                              ? 'border-blue-500 ring-2 ring-blue-500/30 bg-blue-50/50 dark:bg-blue-950/30'
+                              ? 'border-cyan-400 ring-2 ring-cyan-400/30 bg-blue-50/50 dark:bg-blue-950/30'
                               : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900'
                           }`}
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-5 h-5 rounded-full border-2 border-slate-300 dark:border-slate-700 flex items-center justify-center">
-                              {isSelected && <div className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                            <div className="w-5 h-5 rounded-md border-2 border-slate-300 dark:border-slate-700 flex items-center justify-center">
+                              {isSelected && <div className="w-2.5 h-2.5 rounded-[2px] bg-cyan-500" />}
                             </div>
                             <div>
                               <span className="text-sm font-black text-slate-900 dark:text-white block font-heading">
@@ -303,7 +303,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                           </div>
 
                           <div
-                            className={`px-3 py-1 bg-blue-600 text-white text-xs font-bold ${r.class}`}
+                            className={`px-3 py-1 bg-cyan-500 text-white text-xs font-bold ${r.class}`}
                           >
                             Sample Card
                           </div>
@@ -375,12 +375,12 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                             }}
                             className={`p-3 rounded-2xl border text-left flex items-center gap-2.5 transition-all cursor-pointer ${
                               isSelected
-                                ? 'border-blue-500 ring-2 ring-blue-500/30'
+                                ? 'border-cyan-400 ring-2 ring-cyan-400/30'
                                 : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                             }`}
                           >
                             <div
-                              className="w-5 h-5 rounded-full border border-white/20 shrink-0 shadow-sm flex items-center justify-center text-white"
+                              className="w-5 h-5 rounded-lg border border-white/20 shrink-0 shadow-sm flex items-center justify-center text-white"
                               style={{ backgroundColor: b.color }}
                             >
                               {isSelected && <Check className="w-3 h-3 stroke-[3]" />}
@@ -435,7 +435,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                             key={g.id}
                             onClick={() => onUpdateConfig({ bgGradientPreset: g.id })}
                             className={`p-4 rounded-2xl border text-left h-20 flex items-end justify-between transition-all cursor-pointer overflow-hidden relative ${
-                              isSelected ? 'border-blue-500 ring-2 ring-blue-500/30' : 'border-slate-200 dark:border-slate-800'
+                              isSelected ? 'border-cyan-400 ring-2 ring-cyan-400/30' : 'border-slate-200 dark:border-slate-800'
                             }`}
                             style={{ background: g.css }}
                           >
@@ -468,7 +468,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                                 setCustomUrlInput(img.url);
                               }}
                               className={`h-24 rounded-2xl border overflow-hidden relative group text-left p-3 flex items-end transition-all cursor-pointer ${
-                                isSelected ? 'border-blue-500 ring-2 ring-blue-500/30' : 'border-slate-200 dark:border-slate-800'
+                                isSelected ? 'border-cyan-400 ring-2 ring-cyan-400/30' : 'border-slate-200 dark:border-slate-800'
                               }`}
                             >
                               <img src={img.url} alt={img.name} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform" />
@@ -502,7 +502,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                           type="button"
                           onClick={() => fileInputRef.current?.click()}
                           disabled={isUploading}
-                          className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center gap-2 cursor-pointer shrink-0 shadow-md"
+                          className="px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-white font-bold text-xs flex items-center gap-2 cursor-pointer shrink-0 shadow-md"
                         >
                           <Upload className="w-4 h-4" />
                           <span>{isUploading ? 'Uploading...' : 'Upload File'}</span>
@@ -521,7 +521,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                     {/* Image Controls: Blur & Dimming Opacity */}
                     <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
                       <div className="flex items-center gap-2 text-xs font-bold text-slate-900 dark:text-white">
-                        <Sliders className="w-4 h-4 text-blue-500" />
+                        <Sliders className="w-4 h-4 text-cyan-400" />
                         <span>Background Adjustments</span>
                       </div>
 
@@ -536,7 +536,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                           max={20}
                           value={config.bgBlur}
                           onChange={(e) => onUpdateConfig({ bgBlur: Number(e.target.value) })}
-                          className="w-full accent-blue-600 cursor-pointer"
+                          className="w-full accent-cyan-500 cursor-pointer"
                         />
                       </div>
 
@@ -552,7 +552,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                           step={0.05}
                           value={config.bgOverlayOpacity}
                           onChange={(e) => onUpdateConfig({ bgOverlayOpacity: Number(e.target.value) })}
-                          className="w-full accent-blue-600 cursor-pointer"
+                          className="w-full accent-cyan-500 cursor-pointer"
                         />
                       </div>
                     </div>
@@ -586,7 +586,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
 
             <button
               onClick={onClose}
-              className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-extrabold text-xs shadow-lg shadow-blue-600/30 transition-all cursor-pointer font-heading"
+              className="px-6 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-white font-extrabold text-xs shadow-lg shadow-cyan-500/30 transition-all cursor-pointer font-heading"
             >
               Done
             </button>

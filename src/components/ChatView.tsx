@@ -29,12 +29,11 @@ import {
   ShieldAlert,
   ShieldCheck,
   Check,
-  Snowflake,
   Hand,
   MessageCircle,
   Trash2
 } from 'lucide-react';
-import { GiphyFetch } from '@giphy/js-fetch-api';
+
 import { UserAvatar } from './UserAvatar';
 import { processAvatarImage, persistAvatarUrl } from '../utils/avatarUtils';
 import { FontSettingsSection } from './FontSettingsSection';
@@ -43,6 +42,8 @@ interface ChatViewProps {
   globalChat: any;
   initialChannel?: string | null;
 }
+import { GiphyFetch } from '@giphy/js-fetch-api';
+import { entryVariants, containerVariants, hoverTransition } from '../utils/animations';
 
 // Official Giphy SDK Client with active Web API Key
 const gf = new GiphyFetch('sXpGFDGZs0Dv1mmNFvYaGUvYwKX0PWIh');
@@ -148,7 +149,7 @@ const AudioAttachmentPlayer: React.FC<{
         <button
           type="button"
           onClick={togglePlay}
-          className="w-9 h-9 rounded-full bg-blue-600 hover:bg-blue-500 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-600/30 transition-all cursor-pointer"
+          className="w-9 h-9 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-white flex items-center justify-center shrink-0 shadow-md shadow-cyan-500/30 transition-all cursor-pointer"
           title={isPlaying ? 'Pause' : 'Play'}
         >
           {isPlaying ? (
@@ -167,7 +168,7 @@ const AudioAttachmentPlayer: React.FC<{
             value={currentTime}
             onChange={handleSeek}
             disabled={!duration}
-            className="w-full h-1.5 bg-[#1f1f2e] rounded-lg appearance-none cursor-pointer accent-blue-500 transition-all"
+            className="w-full h-1.5 bg-[#1f1f2e] rounded-lg appearance-none cursor-pointer accent-cyan-400 transition-all"
           />
           <div className="flex items-center justify-between text-[10px] text-zinc-400 font-mono">
             <span>{formatTime(currentTime)}</span>
@@ -423,7 +424,7 @@ const RemoteVideoPlayer: React.FC<{
       {!isScreen && renderAvatar && user && (isBlack || !hasVideoFrame || !stream) && (
         <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-slate-900 z-10 transition-opacity duration-200">
           <div className="relative flex items-center justify-center">
-            <div className={`transition-all ${isSpeaking ? 'ring-4 ring-amber-500 rounded-full shadow-[0_0_30px_#f59e0b]' : ''}`}>
+            <div className={`transition-all ${isSpeaking ? 'ring-4 ring-amber-500 rounded-2xl shadow-[0_0_30px_#f59e0b]' : ''}`}>
               {renderAvatar(user, 'w-28 h-28 text-3xl')}
             </div>
           </div>
@@ -644,7 +645,7 @@ const LocalVideoPlayer: React.FC<{
       {!isScreen && (isBlack || !stream || !hasFrame) && (
         <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-slate-900 z-10 transition-opacity duration-200">
           <div className="relative flex items-center justify-center">
-            <div className={`transition-all ${isSpeaking ? 'ring-4 ring-amber-500 rounded-full shadow-[0_0_30px_#f59e0b]' : ''}`}>
+            <div className={`transition-all ${isSpeaking ? 'ring-4 ring-amber-500 rounded-2xl shadow-[0_0_30px_#f59e0b]' : ''}`}>
               {renderAvatar(user, 'w-28 h-28 text-3xl')}
             </div>
           </div>
@@ -731,7 +732,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
       textColor = 'text-amber-500 font-bold';
     } else if (u.current_channel === 'video-general' || u.current_channel === 'voice-general') {
       text = 'In General Voice';
-      textColor = 'text-blue-500 font-semibold';
+      textColor = 'text-cyan-400 font-semibold';
     } else if (u.current_channel && u.current_channel.startsWith('dm-')) {
       text = 'In Private Chat';
       textColor = 'text-emerald-500 font-semibold';
@@ -915,19 +916,31 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
   // Fetch GIFs effect
   useEffect(() => {
     if (!isGiphyOpen) return;
+    
+    // Custom blocklist
+    const blocklist = ['twerk'];
+    const query = giphySearch.trim().toLowerCase();
+    
+    if (blocklist.some(term => query.includes(term))) {
+      setGifs([]);
+      setIsGifsLoading(false);
+      return;
+    }
+
     let isCurrent = true;
     setIsGifsLoading(true);
+    
     const loadGifs = async () => {
       try {
-        const query = giphySearch.trim();
         const res = query 
-          ? await gf.search(query, { limit: 24 })
-          : await gf.trending({ limit: 24 });
+          ? await gf.search(query, { limit: 24, rating: 'g' })
+          : await gf.trending({ limit: 24, rating: 'g' });
+        
         if (isCurrent && res?.data) {
           setGifs(res.data);
         }
       } catch (err) {
-        console.warn('Giphy fetch notice:', err);
+        console.warn('Giphy fetch error:', err);
       } finally {
         if (isCurrent) setIsGifsLoading(false);
       }
@@ -982,8 +995,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
   const saveProfile = () => {
     const updatedUser = { ...currentUser, username: editName, avatar_color: editColor, avatar_url: editAvatarUrl };
     setCurrentUser(updatedUser);
-    localStorage.setItem('frosted_chat_username', editName);
-    localStorage.setItem('frosted_chat_usercolor', editColor);
+    localStorage.setItem('frosthub_chat_username', editName);
+    localStorage.setItem('frosthub_chat_usercolor', editColor);
     persistAvatarUrl(editAvatarUrl);
     
     updateUser({ username: editName, avatar_color: editColor, avatar_url: editAvatarUrl });
@@ -1232,11 +1245,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
         <div className="p-6 space-y-6 flex-1 min-h-0 overflow-y-auto">
           
           {/* Header Branding */}
-          <div className="flex items-center gap-3 pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
-            <div className="w-10 h-10 rounded-2xl bg-blue-600 flex items-center justify-center text-white shadow-xl shadow-blue-600/20">
-              <Snowflake className="w-6 h-6 fill-none" />
-            </div>
-            <h1 className="font-black text-slate-900 dark:text-white text-lg tracking-tight">Community</h1>
+          <div className="flex items-center justify-center py-2 pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0 w-full">
+            <motion.img 
+              src="/assets/aistudio/Screenshot_2026-11-04_190449-removebg-preview_511312fb.png" 
+              alt="FrostHub Community" 
+              whileHover={{ scale: 1.05 }}
+              transition={{ type: "spring", stiffness: 400, damping: 10 }}
+              className="h-24 sm:h-28 max-w-full w-auto object-contain cursor-pointer drop-shadow-[0_0_12px_rgba(0,240,255,0.25)]"
+            />
           </div>
 
           {/* CHANNELS SECTION */}
@@ -1255,7 +1271,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                 onClick={() => handleChannelSelect('text-general')}
                 className={`w-full px-4 py-3 rounded-2xl flex items-center justify-between transition-all cursor-pointer border ${
                   activeChannel === 'text-general'
-                    ? 'bg-blue-600 text-white font-black shadow-xl shadow-blue-600/20 border-blue-500'
+                    ? 'bg-cyan-500 text-white font-black shadow-xl shadow-cyan-500/20 border-cyan-400'
                     : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 border-transparent'
                 }`}
               >
@@ -1263,7 +1279,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                   <Hash className="w-4 h-4 opacity-70" />
                   <span className="text-sm font-bold">general</span>
                 </div>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-black border ${
+                <span className={`text-[10px] px-2 py-0.5 rounded-lg font-black border ${
                   activeChannel === 'text-general' ? 'bg-white/20 border-white/20' : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 dark:text-slate-300'
                 }`}>
                   {messages.filter((m: any) => !m.channel_id || m.channel_id === 'text-general' || m.channel_id === 'general').length}
@@ -1278,21 +1294,21 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
               </div>
 
               <motion.button
-                whileHover={{ x: 4 }}
+                whileHover={{ x: 4, backgroundColor: activeChannel === 'video-general' ? undefined : 'rgba(241, 245, 249, 1)' }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => handleChannelSelect('video-general')}
                 className={`w-full px-4 py-3 rounded-2xl flex items-center justify-between transition-all cursor-pointer border ${
                   activeChannel === 'video-general'
-                    ? 'bg-blue-600 text-white font-black shadow-xl shadow-blue-600/20 border-blue-500'
+                    ? 'bg-cyan-500 text-white font-black shadow-xl shadow-cyan-500/20 border-cyan-400'
                     : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 border-transparent'
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Mic className={`w-4 h-4 ${activeChannel === 'video-general' ? 'text-white' : 'text-blue-500'}`} />
+                  <Mic className={`w-4 h-4 ${activeChannel === 'video-general' ? 'text-white' : 'text-cyan-400'}`} />
                   <span className="text-sm font-bold">General Voice</span>
                 </div>
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-black border ${
-                  activeChannel === 'video-general' ? 'bg-white/20 border-white/20' : 'bg-blue-50 dark:bg-blue-900/40 border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400'
+                <span className={`text-[10px] px-2 py-0.5 rounded-lg font-black border ${
+                  activeChannel === 'video-general' ? 'bg-white/20 border-white/20' : 'bg-blue-50 dark:bg-blue-900/40 border-blue-100 dark:border-blue-800 text-cyan-500 dark:text-cyan-300'
                 }`}>
                   {voiceUsers.length + (isInVideo ? 1 : 0)}
                 </span>
@@ -1304,7 +1320,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
               <div className="px-2 text-[10px] font-black text-slate-400 dark:text-slate-500 tracking-[0.2em] uppercase flex items-center justify-between">
                 <span>Private Chats</span>
                 {dmPeers.length > 0 && (
-                  <span className="text-[10px] font-bold text-blue-600 dark:text-blue-400">
+                  <span className="text-[10px] font-bold text-cyan-500 dark:text-cyan-300">
                     {dmPeers.length}
                   </span>
                 )}
@@ -1328,19 +1344,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                         onClick={() => handleChannelSelect(dmChan)}
                         className={`w-full px-3 py-2 rounded-2xl flex items-center justify-between transition-all cursor-pointer border ${
                           isDmActive
-                            ? 'bg-blue-600 text-white font-black shadow-lg shadow-blue-600/20 border-blue-500'
+                            ? 'bg-cyan-500 text-white font-black shadow-lg shadow-cyan-500/20 border-cyan-400'
                             : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 border-transparent'
                         }`}
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="relative shrink-0">
                             {renderAvatar(peer, 'w-6 h-6 text-[10px]')}
-                            <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-white dark:border-slate-900" />
+                            <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-sm bg-emerald-500 border border-white dark:border-slate-900" />
                           </div>
                           <span className="text-xs font-bold truncate">{peer.username}</span>
                         </div>
                         {peerMessages.length > 0 && (
-                          <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded-lg font-bold ${
                             isDmActive ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
                           }`}>
                             {peerMessages.length}
@@ -1365,7 +1381,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
           >
             <div className="relative shrink-0">
               {renderAvatar(currentUser, 'w-10 h-10 text-xs')}
-              <div className="absolute bottom-0 right-0 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" />
+              <div className="absolute bottom-0 right-0 w-3 h-3 rounded-sm bg-emerald-500 border-2 border-white dark:border-slate-900" />
             </div>
 
             <div className="min-w-0">
@@ -1420,12 +1436,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="relative shrink-0">
                         {renderAvatar(activeDmPeer, 'w-9 h-9 text-xs')}
-                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" />
+                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-sm bg-emerald-500 border-2 border-white dark:border-slate-900" />
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base truncate">{activeDmPeer?.username}</span>
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
                             Private Chat
                           </span>
                         </div>
@@ -1441,10 +1457,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                       <button
                         type="button"
                         onClick={() => setIsMobileMembersOpen(true)}
-                        className="px-2.5 py-1 rounded-full text-[10px] sm:text-[11px] font-bold bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800 flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+                        className="px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-cyan-500 dark:text-cyan-300 border border-blue-100 dark:border-blue-800 flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
                         title="View Online Members"
                       >
-                        <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                        <span className="w-1.5 h-1.5 rounded-sm bg-cyan-400" />
                         <span>{users.length} online</span>
                       </button>
                     </>
@@ -1474,7 +1490,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     <input 
                       type="text" 
                       placeholder="Search messages"
-                      className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-base md:text-xs text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-9 pr-3 py-2 w-36 sm:w-48 focus:outline-none focus:border-blue-500 transition-all"
+                      className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-base md:text-xs text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-9 pr-3 py-2 w-36 sm:w-48 focus:outline-none focus:border-cyan-400 transition-all"
                     />
                   </div>
 
@@ -1500,7 +1516,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                 {/* Empty State for DMs */}
                 {activeChannel.startsWith('dm-') && activeChannelMessages.length === 0 && (
                   <div className="py-16 text-center space-y-3 max-w-sm mx-auto">
-                    <div className="w-16 h-16 rounded-full mx-auto flex items-center justify-center bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800 shadow-md">
+                    <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center bg-blue-50 dark:bg-blue-900/30 text-cyan-500 dark:text-cyan-300 border border-blue-100 dark:border-blue-800 shadow-md">
                       <MessageCircle className="w-8 h-8" />
                     </div>
                     <h3 className="font-extrabold text-slate-900 dark:text-white text-base">Direct Messages with {activeDmPeer?.username}</h3>
@@ -1511,139 +1527,153 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                 )}
 
                 {/* Messages List */}
-                {activeChannelMessages.map((msg: any) => {
-                  const msgUser = users.find((u: any) => u.id === msg.sender_id);
-                  const displayUsername = msgUser?.username || msg.sender_name;
-                  const displayAvatarColor = msgUser?.avatar_color || msg.avatar_color;
-                  const displayAvatarUrl = msgUser?.avatar_url || msg.sender_avatar_url;
+                <motion.div 
+                  variants={containerVariants}
+                  initial="hidden"
+                  animate="visible"
+                  className="space-y-1"
+                >
+                  <AnimatePresence mode="popLayout">
+                    {activeChannelMessages.map((msg: any, idx: number) => {
+                      const msgUser = users.find((u: any) => u.id === msg.sender_id);
+                      const displayUsername = msgUser?.username || msg.sender_name;
+                      const displayAvatarColor = msgUser?.avatar_color || msg.avatar_color;
+                      const displayAvatarUrl = msgUser?.avatar_url || msg.sender_avatar_url;
 
-                  return (
-                    <div key={msg.id} className="flex items-start gap-3.5 group hover:bg-slate-50 dark:hover:bg-slate-900/40 -mx-4 px-4 py-1.5 rounded-xl transition-colors">
-                      <div className="shrink-0">
-                        {renderAvatar({ username: displayUsername, avatar_color: displayAvatarColor, avatar_url: displayAvatarUrl }, 'w-10 h-10 text-xs')}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-baseline gap-2">
-                          <span className="font-extrabold text-slate-900 dark:text-white text-sm hover:underline cursor-pointer">
-                            {displayUsername}
-                          </span>
-                          <span className="text-[10px] text-slate-400 dark:text-slate-500">
-                            {msg.timestamp}
-                          </span>
+                      return (
+                        <motion.div 
+                          key={msg.id} 
+                          variants={entryVariants}
+                          custom={idx}
+                          layout
+                          className="flex items-start gap-3.5 group hover:bg-slate-50 dark:hover:bg-slate-900/40 -mx-4 px-4 py-1.5 rounded-xl transition-colors"
+                        >
+                          <div className="shrink-0">
+                            {renderAvatar({ username: displayUsername, avatar_color: displayAvatarColor, avatar_url: displayAvatarUrl }, 'w-10 h-10 text-xs')}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-baseline gap-2">
+                              <span className="font-extrabold text-slate-900 dark:text-white text-sm hover:underline cursor-pointer">
+                                {displayUsername}
+                              </span>
+                              <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                                {msg.timestamp}
+                              </span>
+                            </div>
+                          
+                          {msg.content && (
+                            <p className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed break-words whitespace-pre-wrap mt-0.5">
+                              {msg.content}
+                            </p>
+                          )}
+
+                          {/* Attachment Rendering */}
+                          {msg.attachment_url && (() => {
+                            const category = getAttachmentCategory(msg.attachment_url, msg.attachment_name, msg.attachment_type);
+
+                            if (category === 'audio') {
+                              return (
+                                <div className="mt-2">
+                                  <AudioAttachmentPlayer
+                                    url={msg.attachment_url}
+                                    name={msg.attachment_name}
+                                    onDownload={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'audio.mp3')}
+                                  />
+                                </div>
+                              );
+                            }
+
+                            if (category === 'video') {
+                              return (
+                                <div className="mt-2 space-y-2 max-w-lg">
+                                  {msg.attachment_name && (
+                                    <p className="text-xs font-semibold text-white truncate">
+                                      {msg.attachment_name}
+                                    </p>
+                                  )}
+                                  <video
+                                    src={msg.attachment_url}
+                                    controls
+                                    playsInline
+                                    preload="metadata"
+                                    className="max-h-80 w-auto rounded-xl bg-black border border-white/10"
+                                  />
+                                  <div>
+                                    <button
+                                      type="button"
+                                      onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'video.mp4')}
+                                      className="inline-flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white bg-[#1a1a24] hover:bg-[#252534] px-3 py-1.5 rounded-lg border border-white/10 transition-colors cursor-pointer"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                      <span>Download</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            if (category === 'image') {
+                              return (
+                                <div className="mt-2 space-y-2 inline-block max-w-md">
+                                  {msg.attachment_name && (
+                                    <p className="text-xs font-semibold text-white truncate">
+                                      {msg.attachment_name}
+                                    </p>
+                                  )}
+                                  <img
+                                    src={msg.attachment_url}
+                                    alt=""
+                                    className="max-h-80 w-auto object-contain rounded-xl border border-white/10 bg-black/20"
+                                  />
+                                  <div>
+                                    <button
+                                      type="button"
+                                      onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'image.png')}
+                                      className="inline-flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white bg-[#1a1a24] hover:bg-[#252534] px-3 py-1.5 rounded-lg border border-white/10 transition-colors cursor-pointer"
+                                    >
+                                      <Download className="w-3.5 h-3.5" />
+                                      <span>Download</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div className="mt-2 p-3 bg-[#121218] border border-[#22222e] rounded-xl max-w-sm flex items-center justify-between gap-3">
+                                <span className="text-xs font-semibold text-white truncate max-w-[200px]">
+                                  {msg.attachment_name || 'Attachment'}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'attachment')}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-white text-xs font-semibold rounded-lg transition-colors shrink-0 cursor-pointer"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>Download</span>
+                                </button>
+                              </div>
+                            );
+                          })()}
+
                         </div>
-                      
-                      {msg.content && (
-                        <p className="text-sm text-slate-800 dark:text-slate-200 leading-relaxed break-words whitespace-pre-wrap mt-0.5">
-                          {msg.content}
-                        </p>
-                      )}
-
-                      {/* Attachment Rendering */}
-                      {msg.attachment_url && (() => {
-                        const category = getAttachmentCategory(msg.attachment_url, msg.attachment_name, msg.attachment_type);
-
-                        // Audio Attachment
-                        if (category === 'audio') {
-                          return (
-                            <div className="mt-2">
-                              <AudioAttachmentPlayer
-                                url={msg.attachment_url}
-                                name={msg.attachment_name}
-                                onDownload={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'audio.mp3')}
-                              />
-                            </div>
-                          );
-                        }
-
-                        // Video Attachment
-                        if (category === 'video') {
-                          return (
-                            <div className="mt-2 space-y-2 max-w-lg">
-                              {msg.attachment_name && (
-                                <p className="text-xs font-semibold text-white truncate">
-                                  {msg.attachment_name}
-                                </p>
-                              )}
-                              <video
-                                src={msg.attachment_url}
-                                controls
-                                playsInline
-                                preload="metadata"
-                                className="max-h-80 w-auto rounded-xl bg-black border border-white/10"
-                              />
-                              <div>
-                                <button
-                                  type="button"
-                                  onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'video.mp4')}
-                                  className="inline-flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white bg-[#1a1a24] hover:bg-[#252534] px-3 py-1.5 rounded-lg border border-white/10 transition-colors cursor-pointer"
-                                >
-                                  <Download className="w-3.5 h-3.5" />
-                                  <span>Download</span>
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        }
-
-                        // Image Attachment (including GIFs)
-                        if (category === 'image') {
-                          return (
-                            <div className="mt-2 space-y-2 inline-block max-w-md">
-                              {msg.attachment_name && (
-                                <p className="text-xs font-semibold text-white truncate">
-                                  {msg.attachment_name}
-                                </p>
-                              )}
-                              <img
-                                src={msg.attachment_url}
-                                alt=""
-                                className="max-h-80 w-auto object-contain rounded-xl border border-white/10 bg-black/20"
-                              />
-                              <div>
-                                <button
-                                  type="button"
-                                  onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'image.png')}
-                                  className="inline-flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white bg-[#1a1a24] hover:bg-[#252534] px-3 py-1.5 rounded-lg border border-white/10 transition-colors cursor-pointer"
-                                >
-                                  <Download className="w-3.5 h-3.5" />
-                                  <span>Download</span>
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        }
-
-                        // Unknown attachment fallback
-                        return (
-                          <div className="mt-2 p-3 bg-[#121218] border border-[#22222e] rounded-xl max-w-sm flex items-center justify-between gap-3">
-                            <span className="text-xs font-semibold text-white truncate max-w-[200px]">
-                              {msg.attachment_name || 'Attachment'}
-                            </span>
+                        {msg.sender_id === currentUser.id && (
+                          <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                             <button
                               type="button"
-                              onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'attachment')}
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition-colors shrink-0 cursor-pointer"
+                              onClick={() => deleteMessage(msg.id)}
+                              className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                              title="Delete message"
                             >
-                              <Download className="w-3.5 h-3.5" />
-                              <span>Download</span>
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
-                        );
-                      })()}
-
-                    </div>
-                    {msg.sender_id === currentUser.id && (
-                      <button
-                        onClick={() => deleteMessage(msg.id)}
-                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-all cursor-pointer"
-                        title="Delete message"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    </div>
-                  );
-                })}
+                        )}
+                      </motion.div>
+                      );
+                    })}
+                  </AnimatePresence>
+                </motion.div>
                 <div ref={messagesEndRef} />
               </div>
 
@@ -1688,7 +1718,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     {/* If File/Other: Clean file info */}
                     {pendingFile.type === 'file' && (
                       <div className="flex items-center gap-2.5 p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-                        <FileText className="w-6 h-6 text-blue-500 shrink-0" />
+                        <FileText className="w-6 h-6 text-cyan-400 shrink-0" />
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-slate-900 dark:text-white truncate max-w-xs">{pendingFile.filename}</p>
                           <p className="text-[11px] text-slate-500 dark:text-slate-400">{(pendingFile.size / 1024).toFixed(1)} KB</p>
@@ -1704,9 +1734,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                             <span>Uploading...</span>
                             <span>{pendingFile.uploadProgress}%</span>
                           </div>
-                          <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-800 rounded-sm overflow-hidden">
                             <div 
-                              className="h-full bg-blue-500 transition-all duration-150 rounded-full" 
+                              className="h-full bg-cyan-400 transition-all duration-150 rounded-sm" 
                               style={{ width: `${pendingFile.uploadProgress}%` }} 
                             />
                           </div>
@@ -1753,7 +1783,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                         setActiveCategoryLabel('');
                       }}
                       placeholder="Search GIFs..."
-                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-base md:text-xs text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-10 pr-9 py-2.5 focus:outline-none focus:border-blue-500 transition-all"
+                      className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-base md:text-xs text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-10 pr-9 py-2.5 focus:outline-none focus:border-cyan-400 transition-all"
                       autoFocus
                     />
                     {giphySearch && (
@@ -1779,7 +1809,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                           onClick={() => handleCategorySelect(cat)}
                           className={`px-3 py-1.5 rounded-xl text-[11px] font-extrabold transition-all cursor-pointer shrink-0 border ${
                             isActive
-                              ? 'bg-blue-600 border-blue-500 text-white shadow-md shadow-blue-600/30'
+                              ? 'bg-cyan-500 border-cyan-400 text-white shadow-md shadow-cyan-500/30'
                               : 'bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700'
                           }`}
                         >
@@ -1797,24 +1827,21 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                       </div>
                     ) : gifs.length > 0 ? (
                       <div className="grid grid-cols-3 gap-2">
-                        {gifs.map((gif) => {
-                          const previewImg = gif.images?.fixed_width?.url || gif.images?.fixed_height?.url || gif.images?.downsized?.url;
-                          return (
-                            <button
-                              key={gif.id}
-                              type="button"
-                              onClick={() => selectGiphyGif(gif)}
-                              className="relative aspect-video rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 hover:opacity-90 hover:scale-[1.02] transition-all cursor-pointer group border border-slate-200 dark:border-slate-700"
-                            >
-                              <img
-                                src={previewImg}
-                                alt={gif.title || 'GIF'}
-                                loading="lazy"
-                                className="w-full h-full object-cover"
-                              />
-                            </button>
-                          );
-                        })}
+                        {gifs.map((gif) => (
+                          <button
+                            key={gif.id}
+                            type="button"
+                            onClick={() => selectGiphyGif(gif)}
+                            className="relative aspect-video rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 hover:opacity-90 hover:scale-[1.02] transition-all cursor-pointer group border border-slate-200 dark:border-slate-700"
+                          >
+                            <img
+                              src={gif.images?.fixed_width?.url}
+                              alt={gif.title || 'GIF'}
+                              loading="lazy"
+                              className="w-full h-full object-cover"
+                            />
+                          </button>
+                        ))}
                       </div>
                     ) : (
                       <div className="py-12 text-center text-xs text-slate-400">
@@ -1827,7 +1854,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
               )}
 
               <div className="p-4 pt-0 shrink-0">
-                <form onSubmit={handleSendMessage} className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus-within:border-blue-500 dark:focus-within:border-blue-500 rounded-2xl px-4 py-3 flex items-center gap-3 transition-colors shadow-lg">
+                <form onSubmit={handleSendMessage} className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus-within:border-cyan-400 dark:focus-within:border-cyan-400 rounded-2xl px-4 py-3 flex items-center gap-3 transition-colors shadow-lg">
                   <input
                     type="text"
                     value={inputText}
@@ -1856,7 +1883,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     onClick={() => setIsGiphyOpen(!isGiphyOpen)}
                     className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center justify-center border ${
                       isGiphyOpen 
-                        ? 'bg-blue-600 text-white shadow-sm border-blue-400' 
+                        ? 'bg-cyan-500 text-white shadow-sm border-cyan-300' 
                         : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
                     }`}
                     title="GIFs"
@@ -1872,7 +1899,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     disabled={!inputText.trim() && !pendingFile}
                     className={`px-3.5 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer border ${
                       (inputText.trim() || pendingFile)
-                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30 border-blue-400' 
+                        ? 'bg-cyan-500 text-white shadow-md shadow-cyan-500/30 border-cyan-300' 
                         : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 opacity-50 cursor-not-allowed border-transparent'
                     }`}
                   >
@@ -1900,7 +1927,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                   <div key={u.id} className="group flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors">
                     <div className="relative shrink-0">
                       {renderAvatar(u, 'w-9 h-9 text-xs')}
-                      <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
+                      <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-sm bg-cyan-400 border-2 border-white dark:border-slate-900" />
                     </div>
 
                     <div className="flex-1 min-w-0">
@@ -1925,7 +1952,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                         <button
                           type="button"
                           onClick={() => handleChannelSelect(getDmChannelId(u.id))}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-500/10 transition-all cursor-pointer"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-400 hover:bg-blue-50 dark:hover:bg-cyan-400/10 transition-all cursor-pointer"
                           title={`Private chat with ${u.username}`}
                         >
                           <MessageCircle className="w-4 h-4" />
@@ -1966,7 +1993,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                       <div key={u.id} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] transition-colors">
                         <div className="relative shrink-0">
                           {renderAvatar(u, 'w-9 h-9 text-xs')}
-                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-[#08080a]" />
+                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-sm bg-cyan-400 border-2 border-[#08080a]" />
                         </div>
 
                         <div className="flex-1 min-w-0">
@@ -1993,7 +2020,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                                 handleChannelSelect(getDmChannelId(u.id));
                                 setIsMobileMembersOpen(false);
                               }}
-                              className="p-2 rounded-xl text-zinc-400 hover:text-blue-500 hover:bg-white/5 transition-all cursor-pointer"
+                              className="p-2 rounded-xl text-zinc-400 hover:text-cyan-400 hover:bg-white/5 transition-all cursor-pointer"
                               title={`Private chat with ${u.username}`}
                             >
                               <MessageCircle className="w-5 h-5" />
@@ -2030,7 +2057,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     <Menu className="w-5 h-5" />
                   </button>
 
-                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-blue-600/15 border border-blue-500/30 flex items-center justify-center text-blue-600 dark:text-blue-400 shrink-0">
+                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-cyan-500/15 border border-cyan-400/30 flex items-center justify-center text-cyan-500 dark:text-cyan-300 shrink-0">
                     <Mic className="w-4 h-4 sm:w-5 sm:h-5" />
                   </div>
                   <div className="min-w-0">
@@ -2047,7 +2074,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                   <button
                     onClick={toggleScreenShare}
                     className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 sm:gap-2 border transition-all cursor-pointer ${
-                      isScreenSharing ? 'bg-blue-600 border-blue-600 text-white shadow-md shadow-blue-600/30' : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      isScreenSharing ? 'bg-cyan-500 border-cyan-500 text-white shadow-md shadow-cyan-500/30' : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'
                     }`}
                   >
                     <Monitor className="w-4 h-4" />
@@ -2128,7 +2155,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                                     </>
                                   ) : (
                                     <>
-                                      <Monitor className="w-3.5 h-3.5 text-blue-400" />
+                                      <Monitor className="w-3.5 h-3.5 text-cyan-300" />
                                       <span>Landscape</span>
                                     </>
                                   )}
@@ -2159,7 +2186,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                               isUserSpeaking(currentUser.id) ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-slate-200 dark:border-slate-800'
                             }`}>
                               <div className="relative flex items-center justify-center">
-                                <div className={`transition-all ${isUserSpeaking(currentUser.id) ? 'ring-4 ring-amber-500 rounded-full shadow-[0_0_30px_#f59e0b]' : ''}`}>
+                                <div className={`transition-all ${isUserSpeaking(currentUser.id) ? 'ring-4 ring-amber-500 rounded-2xl shadow-[0_0_30px_#f59e0b]' : ''}`}>
                                   {renderAvatar(currentUser, 'w-28 h-28 text-3xl')}
                                 </div>
                               </div>
@@ -2186,10 +2213,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
                     {/* Local Screen Share Tile - Shows you are sharing (no video preview for self) */}
                     {isScreenSharing && (
-                      <div className="relative rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border border-blue-500/40 transition-all duration-300 flex flex-col items-center justify-center shadow-xl aspect-video w-full max-w-[500px]">
-                        <div className="flex flex-col items-center justify-center gap-4 text-blue-600 dark:text-blue-400">
-                          <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 flex items-center justify-center shadow-lg shadow-blue-500/10">
-                            <Monitor className="w-8 h-8 text-blue-600 dark:text-blue-400 animate-pulse" />
+                      <div className="relative rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border border-cyan-400/40 transition-all duration-300 flex flex-col items-center justify-center shadow-xl aspect-video w-full max-w-[500px]">
+                        <div className="flex flex-col items-center justify-center gap-4 text-cyan-500 dark:text-cyan-300">
+                          <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 flex items-center justify-center shadow-lg shadow-cyan-400/10">
+                            <Monitor className="w-8 h-8 text-cyan-500 dark:text-cyan-300" />
                           </div>
                           <div className="text-center px-4">
                             <span className="text-base font-bold text-slate-900 dark:text-white block font-heading">You are sharing your screen</span>
@@ -2200,7 +2227,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                         {/* Bottom-Left Overlay */}
                         <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent flex items-end justify-between z-20 pointer-events-auto">
                           <div className="text-sm font-extrabold text-white flex items-center gap-2">
-                            <Monitor className="w-4 h-4 text-blue-400" />
+                            <Monitor className="w-4 h-4 text-cyan-300" />
                             <span>Your Screen (Sharing)</span>
                           </div>
                           <button
@@ -2267,7 +2294,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                                     </>
                                   ) : (
                                     <>
-                                      <Monitor className="w-3.5 h-3.5 text-blue-400" />
+                                      <Monitor className="w-3.5 h-3.5 text-cyan-300" />
                                       <span>Landscape</span>
                                     </>
                                   )}
@@ -2293,7 +2320,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
                           {/* Dedicated Remote Screen Share Tile (when screen share is on) */}
                           {hasScreen && (
-                            <div className="relative rounded-3xl overflow-hidden bg-slate-900 dark:bg-slate-900 border border-blue-500/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
+                            <div className="relative rounded-3xl overflow-hidden bg-slate-900 dark:bg-slate-900 border border-cyan-400/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
                               <RemoteVideoPlayer 
                                 stream={scrStream} 
                                 username={`${u.username}'s Screen`}
@@ -2303,7 +2330,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                               />
                               <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
                                 <div className="text-sm font-extrabold text-white flex items-center gap-2">
-                                  <Monitor className="w-4 h-4 text-blue-400" />
+                                  <Monitor className="w-4 h-4 text-cyan-300" />
                                   <span>{u.username}&apos;s Screen</span>
                                 </div>
                               </div>
@@ -2316,7 +2343,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                               isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-slate-200 dark:border-slate-800'
                             }`}>
                               <div className="relative flex items-center justify-center">
-                                <div className={`transition-all ${isPeerSpeaking ? 'ring-4 ring-amber-500 rounded-full shadow-[0_0_30px_#f59e0b]' : ''}`}>
+                                <div className={`transition-all ${isPeerSpeaking ? 'ring-4 ring-amber-500 rounded-2xl shadow-[0_0_30px_#f59e0b]' : ''}`}>
                                   {renderAvatar(u, 'w-28 h-28 text-3xl')}
                                 </div>
                               </div>
@@ -2344,7 +2371,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                 ) : (
                   /* Connecting State while auto-joining */
                   <div className="text-center space-y-4 max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-3xl shadow-xl">
-                    <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto shadow-sm animate-pulse">
+                    <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 text-cyan-500 dark:text-cyan-300 flex items-center justify-center mx-auto shadow-sm">
                       <Mic className="w-8 h-8" />
                     </div>
                     <h3 className="text-xl font-black text-slate-900 dark:text-white font-heading">Connecting to General Voice...</h3>
@@ -2362,7 +2389,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     <button 
                       onClick={toggleMute}
                       className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
-                        isMuted ? 'bg-red-600 text-white shadow-red-600/30' : 'bg-blue-600 text-white shadow-blue-600/30'
+                        isMuted ? 'bg-red-600 text-white shadow-red-600/30' : 'bg-cyan-500 text-white shadow-cyan-500/30'
                       }`}
                       title={isMuted ? 'Unmute Mic' : 'Mute Mic'}
                     >
@@ -2374,8 +2401,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                       onClick={() => toggleCamera()}
                       className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
                         isVideoEnabled 
-                          ? 'bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500' 
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                          ? 'bg-cyan-500 text-white shadow-cyan-500/30 hover:bg-cyan-400' 
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-cyan-500 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
                       }`}
                       title={isVideoEnabled ? 'Turn Off Camera' : 'Turn On Camera'}
                     >
@@ -2387,8 +2414,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                       onClick={toggleScreenShare}
                       className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
                         isScreenSharing 
-                          ? 'bg-blue-600 text-white shadow-blue-600/30 hover:bg-blue-500' 
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                          ? 'bg-cyan-500 text-white shadow-cyan-500/30 hover:bg-cyan-400' 
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-cyan-500 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
                       }`}
                       title={isScreenSharing ? 'Stop Screen Share' : 'Share Screen'}
                     >
@@ -2427,7 +2454,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
               
               {/* VOICE USERS LIST */}
               <div className="shrink-0 pb-3 border-b border-slate-100 dark:border-slate-800">
-                <div className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400 tracking-wider uppercase">
+                <div className="flex items-center gap-2 text-xs font-bold text-cyan-500 dark:text-cyan-300 tracking-wider uppercase">
                   <Mic className="w-4 h-4" />
                   <span>VOICE — {voiceUsers.length + (isInVideo ? 1 : 0)}</span>
                 </div>
@@ -2437,11 +2464,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
               <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pt-3 pr-1">
                 <div className="space-y-2">
                   {isInVideo && (
-                    <div className="p-2.5 rounded-2xl bg-blue-50 dark:bg-blue-600/10 border border-blue-200 dark:border-blue-500/30 flex items-center justify-between">
+                    <div className="p-2.5 rounded-2xl bg-blue-50 dark:bg-cyan-500/10 border border-blue-200 dark:border-cyan-400/30 flex items-center justify-between">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="relative shrink-0">
                           {renderAvatar(currentUser, 'w-8 h-8 text-xs')}
-                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
+                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-sm bg-cyan-400 border-2 border-white dark:border-slate-900" />
                         </div>
                         <div className="min-w-0 leading-tight">
                           <div className="flex items-center gap-1">
@@ -2451,23 +2478,23 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                           {renderUserActivity('In General Voice')}
                         </div>
                       </div>
-                      <Mic className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                      <Mic className="w-4 h-4 text-cyan-500 dark:text-cyan-300 shrink-0" />
                     </div>
                   )}
 
                   {voiceUsers.map((u: any) => (
-                    <div key={u.id} className="p-2.5 rounded-2xl bg-blue-50 dark:bg-blue-600/10 border border-blue-200 dark:border-blue-500/30 flex items-center justify-between">
+                    <div key={u.id} className="p-2.5 rounded-2xl bg-blue-50 dark:bg-cyan-500/10 border border-blue-200 dark:border-cyan-400/30 flex items-center justify-between">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="relative shrink-0">
                           {renderAvatar(u, 'w-8 h-8 text-xs')}
-                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
+                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-sm bg-cyan-400 border-2 border-white dark:border-slate-900" />
                         </div>
                         <div className="min-w-0 leading-tight">
                           <span className="font-extrabold text-slate-900 dark:text-white text-xs truncate block">{u.username}</span>
                           {renderUserActivity(u.activity || 'In General Voice')}
                         </div>
                       </div>
-                      <Mic className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                      <Mic className="w-4 h-4 text-cyan-500 dark:text-cyan-300 shrink-0" />
                     </div>
                   ))}
                 </div>
@@ -2481,7 +2508,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     <div key={u.id} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors group">
                       <div className="relative shrink-0">
                         {renderAvatar(u, 'w-7 h-7 text-[10px]')}
-                        <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
+                        <div className="absolute bottom-0 right-0 w-2 h-2 rounded-sm bg-cyan-400 border-2 border-white dark:border-slate-900" />
                       </div>
                       <div className="min-w-0 flex-1 leading-tight">
                         <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">{u.username}</span>
@@ -2495,7 +2522,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                             const dmChan = getDmChannelId(u.id);
                             handleChannelSelect(dmChan);
                           }}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all cursor-pointer"
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all cursor-pointer"
                           title="Send Private Message"
                         >
                           <MessageCircle className="w-3.5 h-3.5" />
@@ -2517,7 +2544,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                 />
                 <aside className="relative w-72 max-w-[85vw] h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 p-4 flex flex-col z-10 shadow-2xl animate-in slide-in-from-right duration-200">
                   <div className="shrink-0 pb-3 flex items-center justify-between border-b border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center gap-2 text-xs font-bold text-blue-600 dark:text-blue-400 tracking-wider uppercase">
+                    <div className="flex items-center gap-2 text-xs font-bold text-cyan-500 dark:text-cyan-300 tracking-wider uppercase">
                       <Mic className="w-4 h-4" />
                       <span>VOICE — {voiceUsers.length + (isInVideo ? 1 : 0)}</span>
                     </div>
@@ -2533,11 +2560,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                   <div className="flex-1 min-h-0 overflow-y-auto space-y-4 pt-3 pr-1">
                     <div className="space-y-2">
                       {isInVideo && (
-                        <div className="p-2.5 rounded-2xl bg-blue-50 dark:bg-blue-600/10 border border-blue-200 dark:border-blue-500/30 flex items-center justify-between">
+                        <div className="p-2.5 rounded-2xl bg-blue-50 dark:bg-cyan-500/10 border border-blue-200 dark:border-cyan-400/30 flex items-center justify-between">
                           <div className="flex items-center gap-2.5 min-w-0">
                             <div className="relative shrink-0">
                               {renderAvatar(currentUser, 'w-8 h-8 text-xs')}
-                              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
+                              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-sm bg-cyan-400 border-2 border-white dark:border-slate-900" />
                             </div>
                             <div className="min-w-0 leading-tight">
                               <div className="flex items-center gap-1">
@@ -2547,23 +2574,23 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                               {renderUserActivity('In General Voice')}
                             </div>
                           </div>
-                          <Mic className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                          <Mic className="w-4 h-4 text-cyan-500 dark:text-cyan-300 shrink-0" />
                         </div>
                       )}
 
                       {voiceUsers.map((u: any) => (
-                        <div key={u.id} className="p-2.5 rounded-2xl bg-blue-50 dark:bg-blue-600/10 border border-blue-200 dark:border-blue-500/30 flex items-center justify-between">
+                        <div key={u.id} className="p-2.5 rounded-2xl bg-blue-50 dark:bg-cyan-500/10 border border-blue-200 dark:border-cyan-400/30 flex items-center justify-between">
                           <div className="flex items-center gap-2.5 min-w-0">
                             <div className="relative shrink-0">
                               {renderAvatar(u, 'w-8 h-8 text-xs')}
-                              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
+                              <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-sm bg-cyan-400 border-2 border-white dark:border-slate-900" />
                             </div>
                             <div className="min-w-0 leading-tight">
                               <span className="font-extrabold text-slate-900 dark:text-white text-xs truncate block">{u.username}</span>
                               {renderUserActivity(u.activity || 'In General Voice')}
                             </div>
                           </div>
-                          <Mic className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+                          <Mic className="w-4 h-4 text-cyan-500 dark:text-cyan-300 shrink-0" />
                         </div>
                       ))}
                     </div>
@@ -2576,7 +2603,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                         <div key={u.id} className="flex items-center gap-2.5 p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors group">
                           <div className="relative shrink-0">
                             {renderAvatar(u, 'w-7 h-7 text-[10px]')}
-                            <div className="absolute bottom-0 right-0 w-2 h-2 rounded-full bg-blue-500 border-2 border-white dark:border-slate-900" />
+                            <div className="absolute bottom-0 right-0 w-2 h-2 rounded-sm bg-cyan-400 border-2 border-white dark:border-slate-900" />
                           </div>
                           <div className="min-w-0 flex-1 leading-tight">
                             <span className="font-bold text-slate-700 dark:text-slate-200 text-xs truncate block">{u.username}</span>
@@ -2590,7 +2617,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                                 handleChannelSelect(dmChan);
                                 setIsMobileMembersOpen(false);
                               }}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all cursor-pointer"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all cursor-pointer"
                               title="Send Private Message"
                             >
                               <MessageCircle className="w-3.5 h-3.5" />
@@ -2628,11 +2655,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
               className="relative w-72 max-w-[85vw] h-full bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-6 flex flex-col z-10 shadow-2xl overflow-hidden"
             >
               <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-xl bg-blue-600 flex items-center justify-center text-white">
-                    <Snowflake className="w-5 h-5 fill-none" />
-                  </div>
-                  <h1 className="font-black text-slate-900 dark:text-white text-base tracking-tight">Community</h1>
+                <div className="flex items-center">
+                  <motion.img 
+                    src="/assets/aistudio/Screenshot_2026-11-04_190449-removebg-preview_511312fb.png" 
+                    alt="FrostHub Community" 
+                    whileHover={{ scale: 1.05 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                    className="h-20 max-w-full w-auto object-contain cursor-pointer drop-shadow-[0_0_10px_rgba(0,240,255,0.25)]"
+                  />
                 </div>
                 <button
                   type="button"
@@ -2656,7 +2686,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     onClick={() => handleChannelSelect('text-general')}
                     className={`w-full px-4 py-3 rounded-2xl flex items-center justify-between transition-all cursor-pointer border ${
                       activeChannel === 'text-general'
-                        ? 'bg-blue-600 text-white font-black shadow-lg shadow-blue-600/20 border-blue-500'
+                        ? 'bg-cyan-500 text-white font-black shadow-lg shadow-cyan-500/20 border-cyan-400'
                         : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 border-transparent'
                     }`}
                   >
@@ -2677,12 +2707,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     onClick={() => handleChannelSelect('video-general')}
                     className={`w-full px-4 py-3 rounded-2xl flex items-center justify-between transition-all cursor-pointer border ${
                       activeChannel === 'video-general'
-                        ? 'bg-blue-600 text-white font-black shadow-lg shadow-blue-600/20 border-blue-500'
+                        ? 'bg-cyan-500 text-white font-black shadow-lg shadow-cyan-500/20 border-cyan-400'
                         : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 border-transparent'
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <Mic className={`w-4 h-4 ${activeChannel === 'video-general' ? 'text-white' : 'text-blue-500'}`} />
+                      <Mic className={`w-4 h-4 ${activeChannel === 'video-general' ? 'text-white' : 'text-cyan-400'}`} />
                       <span className="text-sm font-bold">General Voice</span>
                     </div>
                   </motion.button>
@@ -2705,13 +2735,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                             onClick={() => handleChannelSelect(dmChan)}
                             className={`w-full px-3 py-2 rounded-2xl flex items-center gap-2.5 transition-all cursor-pointer border ${
                               isDmActive
-                                ? 'bg-blue-600 text-white font-black shadow-lg shadow-blue-600/20 border-blue-500'
+                                ? 'bg-cyan-500 text-white font-black shadow-lg shadow-cyan-500/20 border-cyan-400'
                                 : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 border-transparent'
                             }`}
                           >
                             <div className="relative shrink-0">
                               {renderAvatar(peer, 'w-6 h-6 text-[10px]')}
-                              <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full bg-emerald-500 border border-white dark:border-slate-900" />
+                              <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-sm bg-emerald-500 border border-white dark:border-slate-900" />
                             </div>
                             <span className="text-xs font-bold truncate">{peer.username}</span>
                           </motion.button>
@@ -2776,7 +2806,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                 title="Click to upload custom avatar image"
               >
                 {renderAvatar({ username: editName || 'P', avatar_color: editColor, avatar_url: editAvatarUrl }, 'w-20 h-20 text-xl')}
-                <div className="absolute inset-0 rounded-full bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity">
+                <div className="absolute inset-0 rounded-2xl bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity">
                   {isAvatarProcessing ? 'Optimizing...' : (editAvatarUrl ? 'Change' : 'Upload')}
                 </div>
               </div>
@@ -2785,7 +2815,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                   type="button"
                   disabled={isAvatarProcessing}
                   onClick={() => profileAvatarInputRef.current?.click()}
-                  className="text-xs font-bold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer disabled:opacity-50"
+                  className="text-xs font-bold text-cyan-500 dark:text-cyan-300 hover:underline cursor-pointer disabled:opacity-50"
                 >
                   {isAvatarProcessing ? 'Processing image...' : (editAvatarUrl ? 'Change Avatar Image' : 'Upload Avatar Image')}
                 </button>
@@ -2817,7 +2847,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 placeholder="Enter username..."
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-900 dark:text-white rounded-2xl px-4 py-3 focus:outline-none focus:border-blue-500 transition-colors font-bold"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-900 dark:text-white rounded-2xl px-4 py-3 focus:outline-none focus:border-cyan-400 transition-colors font-bold"
               />
             </div>
 
@@ -2832,7 +2862,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     key={color}
                     type="button"
                     onClick={() => setEditColor(color)}
-                    className={`w-8 h-8 rounded-full border-2 transition-all cursor-pointer ${
+                    className={`w-8 h-8 rounded-lg border-2 transition-all cursor-pointer ${
                       editColor === color ? 'border-slate-900 dark:border-white scale-110 shadow-md' : 'border-transparent opacity-80 hover:opacity-100'
                     }`}
                     style={{ backgroundColor: color }}
@@ -2858,7 +2888,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
               <button
                 type="button"
                 onClick={saveProfile}
-                className="px-6 py-2.5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-black shadow-lg shadow-blue-600/30 transition-colors cursor-pointer"
+                className="px-6 py-2.5 rounded-2xl bg-cyan-500 hover:bg-cyan-400 text-white text-xs font-black shadow-lg shadow-cyan-500/30 transition-colors cursor-pointer"
               >
                 Save Changes
               </button>

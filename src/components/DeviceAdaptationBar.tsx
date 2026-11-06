@@ -60,8 +60,8 @@ export const DeviceAdaptationBar: React.FC<DeviceAdaptationBarProps> = ({
             <div className="relative">
               <MessageSquare className="w-5 h-5" />
               {onlineCount > 0 && (
-                <span className={`absolute -top-1 -right-2 px-1 py-0.2 rounded-full text-[9px] font-black border border-white/20 ${
-                  isConnected ? 'bg-blue-600 text-white' : 'bg-red-500 text-white'
+                <span className={`absolute -top-1 -right-2 px-1 py-0.2 rounded-sm text-[9px] font-black border border-white/20 ${
+                  isConnected ? 'bg-cyan-500 text-white' : 'bg-red-500 text-white'
                 }`}>
                   {onlineCount}
                 </span>
@@ -85,7 +85,7 @@ export const DeviceAdaptationBar: React.FC<DeviceAdaptationBarProps> = ({
             <div className="relative">
               <Heart className={`w-5 h-5 ${showFavoritesOnly ? 'fill-[var(--vibrant-cyan)]' : ''}`} />
               {favoritesCount > 0 && (
-                <span className="absolute -top-1 -right-2 px-1 py-0.2 rounded-full bg-blue-600/30 text-blue-400 text-[9px] font-black border border-blue-500/30">
+                <span className="absolute -top-1 -right-2 px-1 py-0.2 rounded-sm bg-cyan-500/30 text-cyan-300 text-[9px] font-black border border-cyan-400/30">
                   {favoritesCount}
                 </span>
               )}

@@ -1,25 +1,21 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useRef } from 'react';
 import { 
-  Snowflake, 
   Search, 
   Shuffle, 
-  EyeOff, 
   Heart, 
   X, 
-  Gamepad2, 
-  MessageSquare,
   Sun,
   Moon,
   Palette
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion } from 'motion/react';
 import { CloakPreset } from '../hooks/useCloak';
 import { GameCategory } from '../types/game';
-import { UserAvatar } from './UserAvatar';
+import { containerVariants, slideInVariants } from '../utils/animations';
 
 interface NavbarProps {
-  currentTab: 'games' | 'chat' | 'ai' | 'movies';
-  onTabChange: (tab: 'games' | 'chat' | 'ai' | 'movies') => void;
+  currentTab: 'games' | 'chat' | 'ai' | 'movies' | 'tv';
+  onTabChange: (tab: 'games' | 'chat' | 'ai' | 'movies' | 'tv') => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onRandomGame: () => void;
@@ -50,102 +46,42 @@ export const Navbar: React.FC<NavbarProps> = ({
   searchQuery,
   onSearchChange,
   onRandomGame,
-  favoritesCount,
   showFavoritesOnly,
   onToggleFavoritesOnly,
-  activePreset,
-  presets,
-  onSelectPreset,
   onGoHome,
   onlineCount = 0,
-  isConnected = false,
-  theme = 'light',
+  theme = 'dark',
   onToggleTheme,
-  onOpenFirebase,
-  firebaseUser,
-  users = [],
-  currentUser,
   onOpenThemeSelector,
 }) => {
-  const [isCloakOpen, setIsCloakOpen] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const cloakDropdownRef = useRef<HTMLDivElement>(null);
-
-  // Close dropdowns on click outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (cloakDropdownRef.current && !cloakDropdownRef.current.contains(event.target as Node)) {
-        setIsCloakOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-white/90 dark:bg-slate-950/90 backdrop-blur-xl border-b border-slate-100 dark:border-slate-800 shrink-0 shadow-sm transition-colors">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-12">
+    <header className="sticky top-0 z-50 w-full bg-[#0d0d12] border-b border-[#1e1e2d] text-white shrink-0 shadow-md">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-4 sm:gap-8">
         
-        {/* Zone 1: Brand */}
-        <div className="flex items-center gap-8 shrink-0">
+        {/* Zone 1: FrostHub Logo */}
+        <div className="flex items-center shrink-0">
           <button 
             type="button"
             onClick={() => {
               onTabChange('games');
               onGoHome();
             }}
-            className="flex items-center gap-2 group cursor-pointer focus:outline-none"
+            className="flex items-center group cursor-pointer focus:outline-none select-none"
           >
-            <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-600/20">
-              <Snowflake className="w-6 h-6 text-white fill-none" />
-            </div>
-            <span className="text-2xl font-black tracking-tight text-slate-900 dark:text-white font-heading">
-              Frosted
-            </span>
+            <img 
+              src="/assets/aistudio/Screenshot_2026-11-04_190053-removebg-preview_82d6e6a3.png" 
+              alt="FrostHub" 
+              className="h-10 sm:h-12 w-auto object-contain brightness-110 drop-shadow-[0_0_10px_rgba(0,240,255,0.25)] transition-transform group-hover:scale-105"
+            />
           </button>
-
-          {/* Navigation Links */}
-          <nav className="hidden md:flex items-center gap-3">
-            <button 
-              type="button"
-              onClick={() => onTabChange('games')}
-              className={`text-sm font-bold transition-all px-4 py-2 rounded-xl border ${currentTab === 'games' ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/30 border-blue-100 dark:border-blue-800' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border-transparent hover:border-slate-100 dark:hover:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'}`}
-            >
-              Games
-            </button>
-            <button 
-              type="button"
-              onClick={() => onTabChange('movies')}
-              className={`text-sm font-bold transition-all flex items-center gap-2 px-4 py-2 rounded-xl border ${currentTab === 'movies' ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/30 border-blue-100 dark:border-blue-800' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border-transparent hover:border-slate-100 dark:hover:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'}`}
-            >
-              Movies
-            </button>
-            <button 
-              type="button"
-              onClick={() => onTabChange('ai')}
-              className={`text-sm font-bold transition-all flex items-center gap-2 px-4 py-2 rounded-xl border ${currentTab === 'ai' ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/30 border-blue-100 dark:border-blue-800' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border-transparent hover:border-slate-100 dark:hover:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'}`}
-            >
-              AI Assistant
-            </button>
-            <button 
-              type="button"
-              onClick={() => onTabChange('chat')}
-              className={`text-sm font-bold transition-all flex items-center gap-2 px-4 py-2 rounded-xl border ${currentTab === 'chat' ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/30 border-blue-100 dark:border-blue-800' : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white border-transparent hover:border-slate-100 dark:hover:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'}`}
-            >
-              Community
-              {onlineCount > 0 && (
-                <span className="bg-blue-50 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 text-[10px] px-1.5 py-0.5 rounded-full border border-blue-100 dark:border-blue-800">
-                  {onlineCount}
-                </span>
-              )}
-            </button>
-          </nav>
         </div>
 
-        {/* Zone 2: Search (Integrated) */}
-        <div className="flex-1 max-w-xl mx-2 sm:mx-4">
+        {/* Zone 2: Central Search Bar */}
+        <div className="flex-1 max-w-xl mx-1 sm:mx-4">
           <div className="relative group">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 group-focus-within:text-blue-600 dark:group-focus-within:text-blue-400 transition-colors" />
+            <Search className="w-4 h-4 text-[#00f0ff] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors" />
             <input
               ref={searchInputRef}
               type="text"
@@ -154,14 +90,14 @@ export const Navbar: React.FC<NavbarProps> = ({
                 if (currentTab !== 'games') onTabChange('games');
                 onSearchChange(e.target.value);
               }}
-              placeholder="Search 1,000+ premium titles..."
-              className="w-full bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800/80 focus:bg-white dark:focus:bg-slate-900 text-base md:text-sm text-slate-900 dark:text-white placeholder-slate-400 rounded-2xl pl-10 sm:pl-12 pr-10 sm:pr-12 py-3 border border-slate-100 dark:border-slate-800 focus:border-blue-200 dark:focus:border-blue-700 transition-all focus:outline-none shadow-sm"
+              placeholder="Search titles..."
+              className="w-full bg-[#181824] hover:bg-[#1e1e2d] focus:bg-[#13131c] text-sm text-white placeholder-slate-400 rounded-xl pl-10 pr-10 py-2.5 border border-[#2a2a3c] focus:border-[#00f0ff] focus:ring-1 focus:ring-[#00f0ff] transition-all focus:outline-none shadow-inner"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => onSearchChange('')}
-                className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-white transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -169,118 +105,79 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </div>
 
-        {/* Zone 3: Primary Action */}
+        {/* Zone 3: Navigation Links & Actions */}
         <div className="flex items-center gap-2 sm:gap-4 shrink-0">
-          <div className="flex items-center gap-2 pr-2 sm:pr-4 border-r border-slate-100 dark:border-slate-800 hidden sm:flex">
+          <nav className="hidden lg:flex items-center gap-1">
+            {[
+              { id: 'games', label: 'Games' },
+              { id: 'movies', label: 'Movies' },
+              { id: 'tv', label: 'Live TV' },
+              { id: 'ai', label: 'AI Assistant' },
+              { id: 'chat', label: 'Community' },
+            ].map((tab) => {
+              const isActive = currentTab === tab.id;
+              
+              return (
+                <button 
+                  key={tab.id}
+                  type="button"
+                  onClick={() => onTabChange(tab.id as any)}
+                  className={`text-xs font-extrabold uppercase tracking-wider transition-all px-3 py-2 rounded-lg border ${
+                    isActive 
+                      ? 'text-[#00f0ff] bg-[#00f0ff]/10 border-[#00f0ff]/30 shadow-sm' 
+                      : 'text-slate-300 hover:text-white border-transparent hover:bg-[#1a1a26]'
+                  }`}
+                >
+                  {tab.label}
+                  {tab.id === 'chat' && onlineCount > 0 && (
+                    <span className="ml-1.5 bg-[#00f0ff] text-slate-950 text-[9px] font-black px-1.5 py-0.2 rounded-md">
+                      {onlineCount}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
+
+          {/* Quick Action Icons */}
+          <div className="flex items-center gap-1.5 border-l border-[#242436] pl-2 sm:pl-3">
             <button
               type="button"
               onClick={onRandomGame}
-              className="p-2.5 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-all cursor-pointer border border-transparent hover:border-blue-100 dark:hover:border-blue-800"
-              title="Surprise Me"
+              className="p-2 text-slate-400 hover:text-[#00f0ff] hover:bg-[#1a1a26] rounded-lg transition-all cursor-pointer"
+              title="Surprise / Shuffle"
             >
-              <Shuffle className="w-5 h-5" />
+              <Shuffle className="w-4 h-4" />
             </button>
             
             <button
               type="button"
               onClick={onToggleFavoritesOnly}
-              className={`p-2.5 rounded-xl transition-all cursor-pointer border ${
-                showFavoritesOnly ? 'bg-red-50 dark:bg-red-900/30 text-red-500 border-red-100 dark:border-red-800' : 'text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 border-transparent hover:border-red-100 dark:hover:border-red-800'
+              className={`p-2 rounded-lg transition-all cursor-pointer ${
+                showFavoritesOnly 
+                  ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' 
+                  : 'text-slate-400 hover:text-rose-400 hover:bg-[#1a1a26]'
               }`}
-              title="Saved Games"
+              title="Saved Collection"
             >
-              <Heart className={`w-5 h-5 ${showFavoritesOnly ? 'fill-current' : ''}`} />
+              <Heart className={`w-4 h-4 ${showFavoritesOnly ? 'fill-current' : ''}`} />
             </button>
 
-            {/* Theme Toggle Button */}
-            {onToggleTheme && (
-              <button
-                type="button"
-                onClick={onToggleTheme}
-                className="p-2.5 rounded-xl transition-all cursor-pointer border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:border-blue-200 dark:hover:border-blue-800"
-                title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
-              >
-                {theme === 'dark' ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
-              </button>
-            )}
-
-            {/* Theme & Palette Selector Button */}
             {onOpenThemeSelector && (
               <button
                 type="button"
                 onClick={onOpenThemeSelector}
-                className="p-2.5 rounded-xl transition-all cursor-pointer border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:border-blue-200 dark:hover:border-blue-800 shadow-sm"
-                title="Customize Theme & Canvas Background"
+                className="p-2 rounded-lg text-slate-400 hover:text-[#00f0ff] hover:bg-[#1a1a26] transition-all cursor-pointer"
+                title="Theme Customizer"
               >
-                <Palette className="w-5 h-5" />
+                <Palette className="w-4 h-4" />
               </button>
             )}
           </div>
 
-          <div className="relative" ref={cloakDropdownRef}>
-            <motion.button
-              type="button"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => setIsCloakOpen(!isCloakOpen)}
-              className="bg-slate-900 dark:bg-blue-600 hover:bg-black dark:hover:bg-blue-700 text-white px-6 py-3 rounded-2xl text-sm font-black shadow-xl shadow-slate-900/10 transition-all cursor-pointer flex items-center gap-2 border border-slate-800 dark:border-blue-500"
-            >
-              <EyeOff className="w-4 h-4" />
-              <span>Cloak</span>
-            </motion.button>
-
-            <AnimatePresence>
-              {isCloakOpen && (
-                <motion.div 
-                  initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 20 }}
-                  className="absolute right-0 mt-3 w-72 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-[24px] shadow-[0_20px_50px_rgba(0,0,0,0.1)] p-3 z-50 overflow-hidden"
-                >
-                  <div className="px-4 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500 border-b border-slate-50 dark:border-slate-800 mb-2">
-                    Tab Displacement
-                  </div>
-                  <div className="max-h-80 overflow-y-auto custom-scrollbar space-y-1">
-                    {presets.map((preset) => {
-                      const isSelected = preset.id === activePreset;
-                      return (
-                        <button
-                          type="button"
-                          key={preset.id}
-                          onClick={() => {
-                            onSelectPreset(preset.id);
-                            setIsCloakOpen(false);
-                          }}
-                          className={`w-full flex items-center gap-3 px-4 py-3 text-xs text-left rounded-xl transition-all cursor-pointer ${
-                            isSelected 
-                              ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/20' 
-                              : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
-                          }`}
-                        >
-                          <img 
-                            src={preset.favicon || undefined} 
-                            alt="" 
-                            className="w-5 h-5 rounded-md object-contain bg-white p-0.5 shadow-sm"
-                          />
-                          <div className="truncate">
-                            <div className="font-black tracking-tight">{preset.name}</div>
-                            <div className={`text-[10px] truncate ${isSelected ? 'text-white/70' : 'text-slate-400 font-medium'}`}>
-                              {preset.title}
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
         </div>
 
       </div>
     </header>
   );
 };
-

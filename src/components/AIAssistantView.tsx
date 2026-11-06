@@ -17,11 +17,12 @@ import {
   ChevronRight,
   CheckCircle2
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
+import { entryVariants, containerVariants, hoverTransition, slideInVariants } from '../utils/animations';
 
 export interface ThinkingStep {
   id: string;
@@ -57,33 +58,21 @@ const QUICK_PROMPTS = [
 
 function cleanShortAnswer(text: string): string {
   if (!text) return '';
-  // Strip any trailing pleasantries, disclaimers, or "Would you like..." / "Do you want..." follow-ups
   const cleaned = text
     .replace(/(?:\r?\n)+(?:Would you like|Do you want|Let me know|Hope this helps|Feel free to|Should I|If you want|If you'd like|Can I help|Do you need)[\s\S]*$/i, '')
     .trim();
   return cleaned || text.trim();
 }
 
-/**
- * Pre-processes text to ensure LaTeX math is correctly delimited for remark-math.
- * Converts \( ... \) to $ ... $ and \[ ... \] to $$ ... $$.
- * Also handles cases where brackets might be missing but backslashes are present.
- */
 function preprocessLaTeX(text: string): string {
   if (!text) return '';
-  
   return text
-    // Convert \[ ... \] to $$ ... $$ (blocks)
     .replace(/\\\[([\s\S]*?)\\\]/g, (_, equation) => `\n$$\n${equation.trim()}\n$$\n`)
-    // Convert \( ... \) to $ ... $ (inline)
-    .replace(/\\\(([\s\S]*?)\\\)/g, (_, equation) => `$${equation.trim()}$`)
-    // Ensure that if the model used single $ for blocks, we don't accidentally double them up
-    // but we trust the model to follow the updated SYSTEM_INSTRUCTION
-    ;
+    .replace(/\\\(([\s\S]*?)\\\)/g, (_, equation) => `$${equation.trim()}$`);
 }
 
 const SYSTEM_INSTRUCTION =
-  "You are Frosted AI. Keep all answers short, direct, and concise (1 to 3 sentences maximum). For overview questions like 'what is ___ about' or 'what is the ___ all about', give a clear high-level answer with just a little tiny bit of explanation. Never give unsolicited multi-step lecture breakdowns, long essays, or repetitive summary lists. State formulas or facts directly. USE PROFESSIONAL LATEX FOR ALL MATH FORMULAS. CRITICAL: Use $...$ for inline math and $$...$$ for block math. ALWAYS use \\dfrac for fractions to make them clear and vertically stacked. NEVER include any follow-up questions or offers such as 'Would you like...', 'Do you want...', 'Let me know', 'Can I help with...', etc. NONE of that. Answer and stop.";
+  "You are FrostHub AI. Keep all answers short, direct, and concise (1 to 3 sentences maximum). For overview questions like 'what is ___ about' or 'what is the ___ all about', give a clear high-level answer with just a little tiny bit of explanation. Never give unsolicited multi-step lecture breakdowns, long essays, or repetitive summary lists. State formulas or facts directly. USE PROFESSIONAL LATEX FOR ALL MATH FORMULAS. CRITICAL: Use $...$ for inline math and $$...$$ for block math. ALWAYS use \\dfrac for fractions to make them clear and vertically stacked. NEVER include any follow-up questions or offers such as 'Would you like...', 'Do you want...', 'Let me know', 'Can I help with...', etc. NONE of that. Answer and stop.";
 
 export const AIAssistantView: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
@@ -102,8 +91,6 @@ export const AIAssistantView: React.FC = () => {
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const assistantScrollRef = useRef<HTMLDivElement>(null);
-
-  // Cancellation and session tracking refs
   const abortControllerRef = useRef<AbortController | null>(null);
   const requestIdRef = useRef<number>(0);
 
@@ -120,16 +107,10 @@ export const AIAssistantView: React.FC = () => {
   const scrollToBottom = () => {
     const container = assistantScrollRef.current;
     if (!container) return;
-
-    // Determine if user is currently near the bottom
-    const threshold = 200; // pixels from bottom
+    const threshold = 200;
     const isNearBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + threshold;
-    
-    // Check if the latest message was sent by the user
     const lastMsg = messages[messages.length - 1];
     const isFromMe = lastMsg?.sender === 'user';
-
-    // Auto-scroll if user is already at bottom, they just sent a message, or AI is currently thinking (isLoading)
     if (isNearBottom || isFromMe || isLoading) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
@@ -139,8 +120,6 @@ export const AIAssistantView: React.FC = () => {
     scrollToBottom();
   }, [messages, isLoading, activeSteps]);
 
-
-  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (abortControllerRef.current) {
@@ -149,7 +128,6 @@ export const AIAssistantView: React.FC = () => {
     };
   }, []);
 
-  // Cancel any active thinking/request and reset conversation immediately
   const handleNewSession = () => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
@@ -168,11 +146,9 @@ export const AIAssistantView: React.FC = () => {
     ]);
   };
 
-  // Direct Groq API client fallback (if backend server is temporarily unreachable)
   const callDirectGroq = async (promptText: string, msgHistory: any[], signal?: AbortSignal): Promise<string> => {
     const rawGroqKey = getActiveGroqKey();
     if (!rawGroqKey) return '';
-
     const groqMessages = [
       { role: 'system', content: SYSTEM_INSTRUCTION },
       ...msgHistory.map((m: any) => ({
@@ -181,25 +157,12 @@ export const AIAssistantView: React.FC = () => {
       })),
       { role: 'user', content: promptText },
     ];
-
-    const groqModels = [
-      'openai/gpt-oss-20b',
-      'llama-3.1-8b-instant',
-      'qwen/qwen3.8-27b',
-      'openai/gpt-oss-120b',
-      'allam-2-7b',
-      'llama-3.3-70b-versatile',
-    ].filter((m, idx, arr) => arr.indexOf(m) === idx);
-
+    const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
     for (const model of groqModels) {
       if (signal?.aborted) return '';
       try {
         const timeoutController = new AbortController();
         const timeoutId = setTimeout(() => timeoutController.abort(), 8000);
-
-        const onAbort = () => timeoutController.abort();
-        signal?.addEventListener('abort', onAbort);
-
         const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
           method: 'POST',
           headers: {
@@ -214,10 +177,7 @@ export const AIAssistantView: React.FC = () => {
           }),
           signal: timeoutController.signal,
         });
-
         clearTimeout(timeoutId);
-        signal?.removeEventListener('abort', onAbort);
-
         if (res.ok) {
           const data = await res.json();
           const text = data.choices?.[0]?.message?.content;
@@ -227,56 +187,40 @@ export const AIAssistantView: React.FC = () => {
         if (mErr?.name === 'AbortError' || signal?.aborted) return '';
       }
     }
-
     if (signal?.aborted) return '';
-    throw new Error("Groq API rate limit or model error. Please check your Groq API key.");
+    throw new Error("API error. Please check your key.");
   };
 
   const toggleStepExpansion = (msgId: string) => {
-    setExpandedStepsMap((prev) => ({
-      ...prev,
-      [msgId]: !prev[msgId],
-    }));
+    setExpandedStepsMap((prev) => ({ ...prev, [msgId]: !prev[msgId] }));
   };
 
   const handleSend = async (customPrompt?: string) => {
     const textToSend = customPrompt || input.trim();
     if (!textToSend || isLoading) return;
-
-    // Cancel any prior in-flight request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
+    if (abortControllerRef.current) abortControllerRef.current.abort();
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
     const currentRequestId = ++requestIdRef.current;
-
     const userMsg: Message = {
       id: Date.now().toString(),
       sender: 'user',
       text: textToSend,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
-
     setMessages((prev) => [...prev, userMsg]);
     if (!customPrompt) setInput('');
     setIsLoading(true);
     setActiveSteps([]);
-
-    const history = messages
-      .filter((m) => m.id !== 'welcome-1')
-      .map((m) => ({
-        role: m.sender === 'user' ? 'user' : 'assistant',
-        text: m.text,
-      }));
-
+    const history = messages.filter((m) => m.id !== 'welcome-1').map((m) => ({
+      role: m.sender === 'user' ? 'user' : 'assistant',
+      text: m.text,
+    }));
     const activeGroqKey = getActiveGroqKey();
     let replyText = '';
     let messageSources: MessageSource[] = [];
     let completedSteps: ThinkingStep[] = [];
-
     try {
-      // 1. Try real-time streaming endpoint /api/ai/assistant/stream
       const res = await fetch('/api/ai/assistant/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -289,29 +233,21 @@ export const AIAssistantView: React.FC = () => {
         }),
         signal: abortController.signal,
       });
-
-      if (abortController.signal.aborted || currentRequestId !== requestIdRef.current) {
-        return;
-      }
-
+      if (abortController.signal.aborted || currentRequestId !== requestIdRef.current) return;
       if (res.ok && res.body) {
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
-
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
           if (abortController.signal.aborted || currentRequestId !== requestIdRef.current) {
             reader.cancel();
             return;
           }
-
           buffer += decoder.decode(value, { stream: true });
           const lines = buffer.split('\n\n');
           buffer = lines.pop() || '';
-
           for (const line of lines) {
             const trimmed = line.trim();
             if (trimmed.startsWith('data:')) {
@@ -345,17 +281,9 @@ export const AIAssistantView: React.FC = () => {
         }
       }
     } catch (streamErr: any) {
-      if (streamErr?.name === 'AbortError' || abortController.signal.aborted || currentRequestId !== requestIdRef.current) {
-        return;
-      }
-      console.warn('Streaming assistant notice, trying standard endpoint:', streamErr?.message);
+      if (streamErr?.name === 'AbortError' || abortController.signal.aborted || currentRequestId !== requestIdRef.current) return;
     }
-
-    if (abortController.signal.aborted || currentRequestId !== requestIdRef.current) {
-      return;
-    }
-
-    // 2. Standard JSON endpoint fallback if stream did not return reply
+    if (abortController.signal.aborted || currentRequestId !== requestIdRef.current) return;
     if (!replyText) {
       try {
         const standardRes = await fetch('/api/ai/assistant', {
@@ -370,7 +298,6 @@ export const AIAssistantView: React.FC = () => {
           }),
           signal: abortController.signal,
         });
-
         if (standardRes.ok) {
           const data = await standardRes.json();
           if (data.success && data.reply) {
@@ -380,33 +307,22 @@ export const AIAssistantView: React.FC = () => {
           }
         }
       } catch (jsonErr: any) {
-        if (jsonErr?.name === 'AbortError' || abortController.signal.aborted || currentRequestId !== requestIdRef.current) {
-          return;
-        }
+        if (jsonErr?.name === 'AbortError' || abortController.signal.aborted || currentRequestId !== requestIdRef.current) return;
       }
     }
-
-    // 3. Direct Groq fallback if server is unreachable
     if (!replyText && activeGroqKey) {
       try {
         replyText = await callDirectGroq(textToSend, history, abortController.signal);
       } catch (clientErr: any) {
-        if (clientErr?.name === 'AbortError' || abortController.signal.aborted || currentRequestId !== requestIdRef.current) {
-          return;
-        }
-        console.error('Groq direct call error:', clientErr);
+        if (clientErr?.name === 'AbortError' || abortController.signal.aborted || currentRequestId !== requestIdRef.current) return;
       }
     }
-
-    if (abortController.signal.aborted || currentRequestId !== requestIdRef.current) {
-      return;
-    }
-
+    if (abortController.signal.aborted || currentRequestId !== requestIdRef.current) return;
     if (!replyText) {
       const errorMsg: Message = {
         id: (Date.now() + 1).toString(),
         sender: 'ai',
-        text: "I'm currently unable to retrieve a response. Please check your network or Groq key and try again.",
+        text: "I'm currently unable to retrieve a response.",
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -414,7 +330,6 @@ export const AIAssistantView: React.FC = () => {
       setActiveSteps([]);
       return;
     }
-
     const cleaned = cleanShortAnswer(replyText);
     const aiMsg: Message = {
       id: (Date.now() + 1).toString(),
@@ -424,7 +339,6 @@ export const AIAssistantView: React.FC = () => {
       sources: messageSources.length > 0 ? messageSources : undefined,
       steps: completedSteps.length > 0 ? completedSteps : undefined,
     };
-
     setMessages((prev) => [...prev, aiMsg]);
     setIsLoading(false);
     setActiveSteps([]);
@@ -436,16 +350,15 @@ export const AIAssistantView: React.FC = () => {
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  // No active model object needed for display
-
   const latestStep = activeSteps[activeSteps.length - 1];
 
   return (
     <div className="w-full h-[calc(100dvh-5rem)] md:h-[calc(100vh-5.5rem)] px-4 sm:px-8 py-4 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-4 flex flex-col font-sans overflow-hidden">
-      {/* Top Header Controls: Minimal Refresh Only */}
       <div className="mb-4 flex items-center justify-end shrink-0">
-        <button
+        <motion.button
           type="button"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
           onClick={handleNewSession}
           style={{ backgroundColor: 'var(--brand-blue)' }}
           className="px-5 py-2.5 rounded-2xl text-white hover:opacity-95 transition-all cursor-pointer text-xs font-bold flex items-center gap-2.5 shadow-lg glow-subtle-blue shrink-0"
@@ -453,140 +366,139 @@ export const AIAssistantView: React.FC = () => {
         >
           <RefreshCw className="w-4 h-4" />
           <span>New Session</span>
-        </button>
+        </motion.button>
       </div>
 
-      {/* Messages Scroll Area */}
-      <div 
+      <motion.div 
         ref={assistantScrollRef}
-        className="flex-1 min-h-0 overflow-y-auto space-y-4 pr-2 custom-scrollbar pb-4 w-full"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+        className="flex-1 min-h-0 overflow-y-auto space-y-6 pr-2 custom-scrollbar pb-6 w-full"
       >
-        {messages.map((msg) => (
-          <motion.div
-            key={msg.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={`flex gap-3 w-full ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            {/* AI Avatar with dynamic accent color */}
-            {msg.sender === 'ai' && (
-              <div 
-                style={{ backgroundColor: 'var(--brand-blue)' }}
-                className="w-10 h-10 rounded-2xl text-white flex items-center justify-center shrink-0 shadow-lg glow-subtle-blue"
-              >
-                <Bot className="w-6 h-6" />
-              </div>
-            )}
-
-            {/* Bubble */}
-            <div 
-              style={msg.sender === 'user' ? { backgroundColor: 'var(--brand-blue)' } : {}}
-              className={`group relative rounded-[2rem] p-6 text-[15px] leading-relaxed max-w-[85%] sm:max-w-[75%] ${
-                msg.sender === 'user'
-                  ? 'text-white rounded-tr-md shadow-xl'
-                  : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-tl-md border border-slate-100 dark:border-slate-800 shadow-md'
-              }`}
+        <AnimatePresence mode="popLayout">
+          {messages.map((msg, idx) => (
+            <motion.div
+              key={msg.id}
+              variants={entryVariants}
+              initial="hidden"
+              animate="visible"
+              custom={idx}
+              className={`flex gap-3 w-full ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
             >
-              {msg.sender === 'ai' ? (
-                <div className="prose prose-sm dark:prose-invert max-w-none font-[family-name:var(--app-font-family)] prose-p:leading-relaxed prose-pre:bg-slate-50 dark:prose-pre:bg-slate-800/50 prose-pre:border prose-pre:border-slate-100 dark:prose-pre:border-slate-700/50 [&_.katex-display]:my-4 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex]:text-[1.1em]">
-                  <ReactMarkdown
-                    remarkPlugins={[remarkMath]}
-                    rehypePlugins={[rehypeKatex]}
-                  >
-                    {preprocessLaTeX(msg.text)}
-                  </ReactMarkdown>
+              {msg.sender === 'ai' && (
+                <div 
+                  style={{ backgroundColor: 'var(--brand-blue)' }}
+                  className="w-10 h-10 rounded-2xl text-white flex items-center justify-center shrink-0 shadow-lg glow-subtle-blue"
+                >
+                  <Bot className="w-6 h-6" />
                 </div>
-              ) : (
-                <div className="whitespace-pre-wrap font-[family-name:var(--app-font-family)]">{msg.text}</div>
               )}
 
-              {/* Live Web Sources Citation Pills */}
-              {msg.sources && msg.sources.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-2">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mr-1">
-                    <Globe className="w-3.5 h-3.5 text-[var(--brand-blue)]" />
-                    Verified Sources
-                  </span>
-                  {msg.sources.map((src, i) => (
-                    <a
-                      key={i}
-                      href={src.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300 transition-all border border-slate-100 dark:border-slate-700/50 hover:border-slate-200 dark:hover:border-slate-600 shadow-sm"
-                      title={src.url}
+              <div 
+                style={msg.sender === 'user' ? { backgroundColor: 'var(--brand-blue)' } : {}}
+                className={`group relative rounded-[2rem] p-6 text-[15px] leading-relaxed max-w-[85%] sm:max-w-[75%] ${
+                  msg.sender === 'user'
+                    ? 'text-white rounded-tr-md shadow-xl'
+                    : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-tl-md border border-slate-100 dark:border-slate-800 shadow-md'
+                }`}
+              >
+                {msg.sender === 'ai' ? (
+                  <div className="prose prose-sm dark:prose-invert max-w-none font-[family-name:var(--app-font-family)] prose-p:leading-relaxed prose-pre:bg-slate-50 dark:prose-pre:bg-slate-800/50 prose-pre:border prose-pre:border-slate-100 dark:prose-pre:border-slate-700/50 [&_.katex-display]:my-4 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex]:text-[1.1em]">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkMath]}
+                      rehypePlugins={[rehypeKatex]}
                     >
-                      <span className="max-w-[130px] sm:max-w-[180px] truncate">{src.title}</span>
-                      <ExternalLink className="w-2.5 h-2.5 opacity-50" />
-                    </a>
-                  ))}
-                </div>
-              )}
+                      {preprocessLaTeX(msg.text)}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <div className="whitespace-pre-wrap font-[family-name:var(--app-font-family)]">{msg.text}</div>
+                )}
 
-              {/* Expandable Thinking Timeline Pill */}
-              {msg.steps && msg.steps.length > 0 && (
-                <div className="mt-2.5">
-                  <button
-                    type="button"
-                    onClick={() => toggleStepExpansion(msg.id)}
-                    className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer"
-                  >
-                    <ChevronRight className={`w-3.5 h-3.5 transition-transform ${expandedStepsMap[msg.id] ? 'rotate-90' : ''}`} />
-                    <span>
-                      {expandedStepsMap[msg.id] ? 'Hide thinking & search steps' : `View ${msg.steps.length} reasoning & search steps`}
+                {msg.sources && msg.sources.length > 0 && (
+                  <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mr-1">
+                      <Globe className="w-3.5 h-3.5 text-[var(--brand-blue)]" />
+                      Verified Sources
                     </span>
-                  </button>
+                    {msg.sources.map((src, i) => (
+                      <a
+                        key={i}
+                        href={src.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300 transition-all border border-slate-100 dark:border-slate-700/50 hover:border-slate-200 dark:hover:border-slate-600 shadow-sm"
+                        title={src.url}
+                      >
+                        <span className="max-w-[130px] sm:max-w-[180px] truncate">{src.title}</span>
+                        <ExternalLink className="w-2.5 h-2.5 opacity-50" />
+                      </a>
+                    ))}
+                  </div>
+                )}
 
-                  {expandedStepsMap[msg.id] && (
-                    <motion.div
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      className="mt-2 pl-3 border-l-2 border-slate-200 dark:border-slate-700 space-y-1.5 py-1"
+                {msg.steps && msg.steps.length > 0 && (
+                  <div className="mt-2.5">
+                    <button
+                      type="button"
+                      onClick={() => toggleStepExpansion(msg.id)}
+                      className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer"
                     >
-                      {msg.steps.map((st, sIdx) => (
-                        <div key={sIdx} className="text-[11px] flex items-start gap-2 text-slate-600 dark:text-slate-300">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                          <div>
-                            <span className="font-bold text-slate-800 dark:text-slate-100">{st.title}: </span>
-                            <span className="text-slate-500 dark:text-slate-400">{st.detail}</span>
+                      <ChevronRight className={`w-3.5 h-3.5 transition-transform ${expandedStepsMap[msg.id] ? 'rotate-90' : ''}`} />
+                      <span>
+                        {expandedStepsMap[msg.id] ? 'Hide thinking' : `View ${msg.steps.length} reasoning steps`}
+                      </span>
+                    </button>
+
+                    {expandedStepsMap[msg.id] && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: 'auto' }}
+                        className="mt-2 pl-3 border-l-2 border-slate-200 dark:border-slate-700 space-y-1.5 py-1"
+                      >
+                        {msg.steps.map((st, sIdx) => (
+                          <div key={sIdx} className="text-[11px] flex items-start gap-2 text-slate-600 dark:text-slate-300">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                            <div>
+                              <span className="font-bold text-slate-800 dark:text-slate-100">{st.title}: </span>
+                              <span className="text-slate-500 dark:text-slate-400">{st.detail}</span>
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </motion.div>
+                        ))}
+                      </motion.div>
+                    )}
+                  </div>
+                )}
+
+                <div className={`mt-2 flex items-center justify-between text-[10px] ${
+                  msg.sender === 'user' ? 'text-white/80' : 'text-slate-400'
+                }`}>
+                  <span>{msg.timestamp}</span>
+                  {msg.sender === 'ai' && (
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(msg.id, msg.text)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-[var(--brand-blue)] flex items-center gap-1 cursor-pointer ml-3"
+                      title="Copy response"
+                    >
+                      {copiedId === msg.id ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                      <span>{copiedId === msg.id ? 'Copied' : 'Copy'}</span>
+                    </button>
                   )}
                 </div>
+              </div>
+
+              {msg.sender === 'user' && (
+                <div className="w-9 h-9 rounded-2xl bg-slate-900 dark:bg-slate-800 text-white flex items-center justify-center shrink-0 shadow-sm">
+                  <User className="w-5 h-5" />
+                </div>
               )}
+            </motion.div>
+          ))}
+        </AnimatePresence>
 
-              {/* Footer Timestamp & Copy */}
-              <div className={`mt-2 flex items-center justify-between text-[10px] ${
-                msg.sender === 'user' ? 'text-white/80' : 'text-slate-400'
-              }`}>
-                <span>{msg.timestamp}</span>
-                {msg.sender === 'ai' && (
-                  <button
-                    type="button"
-                    onClick={() => handleCopy(msg.id, msg.text)}
-                    className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-[var(--brand-blue)] flex items-center gap-1 cursor-pointer ml-3"
-                    title="Copy response"
-                  >
-                    {copiedId === msg.id ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                    <span>{copiedId === msg.id ? 'Copied' : 'Copy'}</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* User Avatar */}
-            {msg.sender === 'user' && (
-              <div className="w-9 h-9 rounded-2xl bg-slate-900 dark:bg-slate-800 text-white flex items-center justify-center shrink-0 shadow-sm">
-                <User className="w-5 h-5" />
-              </div>
-            )}
-          </motion.div>
-        ))}
-
-        {/* Real-time Thinking & Action State Card */}
-        {isLoading && activeSteps.length > 0 && (
+        {isLoading && (
           <motion.div 
             initial={{ opacity: 0, y: 8 }} 
             animate={{ opacity: 1, y: 0 }} 
@@ -596,101 +508,60 @@ export const AIAssistantView: React.FC = () => {
               style={{ backgroundColor: 'var(--brand-blue)' }}
               className="w-10 h-10 rounded-2xl text-white flex items-center justify-center shrink-0 shadow-lg glow-subtle-blue"
             >
-              <Bot className="w-6 h-6 animate-pulse" />
+              <Bot className="w-6 h-6" />
             </div>
 
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl rounded-tl-sm p-4 shadow-md max-w-[90%] sm:max-w-[70%] space-y-3">
-              {/* Active Step Real-time Banner */}
-              {latestStep && (
+              {latestStep ? (
                 <div className="flex items-center gap-3">
                   <div 
                     style={{ backgroundColor: 'color-mix(in srgb, var(--brand-blue) 15%, transparent)' }}
                     className="w-8 h-8 rounded-xl text-[var(--brand-blue)] flex items-center justify-center shrink-0"
                   >
-                    {latestStep.icon === 'search' ? (
-                      <Search className="w-4 h-4 animate-spin" />
-                    ) : latestStep.icon === 'globe' ? (
-                      <Globe className="w-4 h-4 animate-pulse" />
-                    ) : latestStep.icon === 'brain' ? (
-                      <Cpu className="w-4 h-4 animate-pulse" />
-                    ) : (
-                      <Sparkles className="w-4 h-4 animate-spin" />
-                    )}
+                    {latestStep.icon === 'search' ? <Search className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 animate-spin" />}
                   </div>
-
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                        {latestStep.title}
-                      </span>
-                      <span 
-                        style={{ backgroundColor: 'var(--brand-blue)' }}
-                        className="w-2 h-2 rounded-full animate-ping" 
-                      />
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-100">{latestStep.title}</span>
                     </div>
-                    <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
-                      {latestStep.detail}
-                    </div>
+                    <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{latestStep.detail}</div>
                   </div>
                 </div>
+              ) : (
+                <div className="flex gap-1 items-center px-2 py-1">
+                  <div className="w-1.5 h-1.5 rounded-sm bg-cyan-400 opacity-60" />
+                  <div className="w-1.5 h-1.5 rounded-sm bg-cyan-400 opacity-60" />
+                  <div className="w-1.5 h-1.5 rounded-sm bg-cyan-400 opacity-60" />
+                </div>
               )}
-
-              {/* Chronological steps sequence */}
-              <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex flex-wrap gap-1.5">
-                {activeSteps.map((st, idx) => (
-                  <span
-                    key={idx}
-                    className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] font-medium text-slate-600 dark:text-slate-300"
-                  >
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    <span>{st.title}</span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          </motion.div>
-        )}
-        {isLoading && activeSteps.length === 0 && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="flex gap-3 w-full"
-          >
-             <div 
-              style={{ backgroundColor: 'var(--brand-blue)' }}
-              className="w-10 h-10 rounded-2xl text-white flex items-center justify-center shrink-0 shadow-lg glow-subtle-blue"
-            >
-              <Bot className="w-6 h-6 animate-pulse" />
             </div>
           </motion.div>
         )}
         <div ref={messagesEndRef} />
-      </div>
+      </motion.div>
 
-      {/* Quick Starter Prompts */}
       {messages.length <= 2 && !isLoading && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3 shrink-0 w-full">
           {QUICK_PROMPTS.map((qp, idx) => {
             const Icon = qp.icon;
             return (
-              <button
+              <motion.button
                 key={idx}
+                variants={slideInVariants}
+                whileHover={{ scale: 1.02, y: -2 }}
+                whileTap={{ scale: 0.98 }}
                 type="button"
                 onClick={() => handleSend(qp.prompt)}
                 className="p-3.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-2xl text-left transition-all cursor-pointer group shadow-sm flex flex-col justify-between"
               >
-                <Icon 
-                  style={{ color: 'var(--brand-blue)' }}
-                  className="w-4 h-4 mb-1 group-hover:scale-110 transition-transform" 
-                />
+                <Icon style={{ color: 'var(--brand-blue)' }} className="w-4 h-4 mb-1 group-hover:scale-110 transition-transform" />
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block truncate">{qp.label}</span>
-              </button>
+              </motion.button>
             );
           })}
         </div>
       )}
 
-      {/* Input Box */}
       <div className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-2 shadow-xl shadow-slate-200/50 dark:shadow-none flex items-center gap-2 shrink-0">
         <textarea
           rows={1}
@@ -702,12 +573,13 @@ export const AIAssistantView: React.FC = () => {
               handleSend();
             }
           }}
-          placeholder="Ask anything... (supports live web search & formulas)"
+          placeholder="Ask anything..."
           className="flex-1 bg-transparent px-3 py-3 text-base md:text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none resize-none"
         />
-
-        <button
+        <motion.button
           type="button"
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
           onClick={() => handleSend()}
           disabled={!input.trim() || isLoading}
           style={{ backgroundColor: 'var(--brand-blue)' }}
@@ -715,8 +587,9 @@ export const AIAssistantView: React.FC = () => {
         >
           <Send className="w-4 h-4" />
           <span className="hidden sm:inline">Send</span>
-        </button>
+        </motion.button>
       </div>
     </div>
   );
 };
+

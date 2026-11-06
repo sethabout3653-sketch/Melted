@@ -32,7 +32,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   if (cleanUrl && !hasError) {
     return (
       <div 
-        className={`${sizeClass} rounded-full overflow-hidden shrink-0 border border-black/10 dark:border-white/10 bg-slate-900 shadow-sm relative ${className}`}
+        className={`${sizeClass} rounded-2xl overflow-hidden shrink-0 border border-black/10 dark:border-white/10 bg-slate-900 shadow-sm relative ${className}`}
       >
         <img 
           src={cleanUrl} 
@@ -51,7 +51,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   // Graceful, stylish colored initials fallback
   return (
     <div 
-      className={`${sizeClass} rounded-full font-extrabold flex items-center justify-center shrink-0 shadow-sm text-black select-none ${className}`}
+      className={`${sizeClass} rounded-2xl font-extrabold flex items-center justify-center shrink-0 shadow-sm text-black select-none ${className}`}
       style={{ backgroundColor: avatarColor || '#0066ff' }}
       title={username}
     >
@@ -61,3 +61,4 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
 };
 
 export default UserAvatar;
+

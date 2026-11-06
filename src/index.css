@@ -30,11 +30,30 @@
   body {
     font-family: var(--app-font-family);
     background-color: var(--bg-white);
+    @variant dark {
+      background-color: #020617; /* slate-950 */
+    }
     color: var(--text-slate);
     overflow-x: hidden;
+    scrollbar-width: none; /* Hide scrollbar for Firefox */
     letter-spacing: -0.015em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    transform: translateZ(0);
+  }
+
+  /* 120 FPS GPU Hardware Acceleration & Smooth Motion Performance */
+  .gpu-accelerated,
+  iframe,
+  video,
+  canvas {
+    transform: translateZ(0);
+    will-change: transform;
+    backface-visibility: hidden;
+  }
+
+  ::-webkit-scrollbar {
+    display: none; /* Hide scrollbar for Chrome, Safari, and Opera */
   }
 
   h1, h2, h3, h4, .font-heading {
@@ -79,6 +98,11 @@
     margin: 0.75rem 0;
     overflow-x: auto;
     overflow-y: hidden;
+  }
+
+  /* Move native captions up slightly from the bottom */
+  video::cue {
+    bottom: 3rem;
   }
 }
 
@@ -171,32 +195,6 @@ body.font-modern-clean .font-heading {
   accent-color: var(--brand-blue) !important;
 }
 
-::-webkit-scrollbar {
-  width: 7px;
-  height: 7px;
-}
-
-::-webkit-scrollbar-track {
-  background: #f1f5f9;
-}
-
-.dark ::-webkit-scrollbar-track {
-  background: #0f172a;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 9999px;
-}
-
-.dark ::-webkit-scrollbar-thumb {
-  background: #334155;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--brand-blue);
-}
-
 .glow-blue {
   box-shadow: 0 0 25px -4px var(--brand-blue-glow) !important;
 }
@@ -204,7 +202,6 @@ body.font-modern-clean .font-heading {
 .glow-subtle-blue {
   box-shadow: 0 4px 20px -2px var(--brand-blue-glow) !important;
 }
-
 
 /* Mobile focus zoom prevention: iOS zooms if font-size < 16px */
 @media screen and (max-width: 768px) {

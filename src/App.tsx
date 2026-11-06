@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useMemo, useDeferredValue } from 'react';
 import { Navbar } from './components/Navbar';
 import { motion, AnimatePresence } from 'motion/react';
-import { HeroSpotlight } from './components/HeroSpotlight';
 import { CategoryFilter } from './components/CategoryFilter';
 import { GameCard } from './components/GameCard';
 import { GamePlayer } from './components/GamePlayer';
 import { ChatView } from './components/ChatView';
 import { AIAssistantView } from './components/AIAssistantView';
-import { FrostedLoadingScreen } from './components/FrostedLoadingScreen';
+import { FrostHubLoadingScreen } from './components/FrostHubLoadingScreen';
 import { InAppNotificationToast } from './components/InAppNotificationToast';
 import { VoiceAudioEngine } from './components/VoiceAudioEngine';
 import { PhoneCallOverlay } from './components/PhoneCallOverlay';
-import { getAllGames, resolveGameUrl, getUGSGames, getCKVGames, mergeUgsGames } from './services/gameService';
+import { getAllGames, resolveGameUrl, getUGSGames, getCKVGames, mergeUgsGames, getPlayableGameUrl } from './services/gameService';
+import { tabTransition, containerVariants, entryVariants } from './utils/animations';
 import { useCloak, launchAboutBlank } from './hooks/useCloak';
 import { useGlobalChat } from './hooks/useGlobalChat';
 import { useDeviceAdaptation } from './hooks/useDeviceAdaptation';
@@ -21,9 +21,9 @@ import { useFontConfig } from './hooks/useFontConfig';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal';
 import { AppCanvasBackground } from './components/AppCanvasBackground';
 import { MovieView } from './components/MovieView';
+import { LiveTVView } from './components/LiveTVView';
 import { GameItem, GameCategory } from './types/game';
 import { 
-  Snowflake, 
   Search, 
   ShieldCheck, 
   Zap, 
@@ -41,13 +41,15 @@ import {
   PhoneOff,
   Volume2,
   VolumeX,
-  Maximize2
+  Maximize2,
+  Film,
+  Tv
 } from 'lucide-react';
 
 const PAGE_SIZE = 36;
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'games' | 'chat' | 'ai' | 'movies'>('games');
+  const [currentTab, setCurrentTab] = useState<'games' | 'chat' | 'ai' | 'movies' | 'tv'>('games');
   const [searchQuery, setSearchQuery] = useState('');
   const deferredQuery = useDeferredValue(searchQuery);
 
@@ -58,13 +60,13 @@ export default function App() {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [targetChatChannel, setTargetChatChannel] = useState<string | null>(null);
 
-  // Theme state: light by default
+  // Theme state: dark by default
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     try {
-      const saved = localStorage.getItem('frosted_theme');
-      return (saved === 'dark' || saved === 'light') ? saved : 'light';
+      const saved = localStorage.getItem('frosthub_theme');
+      return (saved === 'dark' || saved === 'light') ? saved : 'dark';
     } catch {
-      return 'light';
+      return 'dark';
     }
   });
 
@@ -73,7 +75,7 @@ export default function App() {
 
   useEffect(() => {
     try {
-      localStorage.setItem('frosted_theme', theme);
+      localStorage.setItem('frosthub_theme', theme);
     } catch {}
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -162,7 +164,7 @@ export default function App() {
   // Favorites helpers
   function getFavorites(): number[] {
     try {
-      const stored = localStorage.getItem('frosted_favorites');
+      const stored = localStorage.getItem('frosthub_favorites');
       return stored ? JSON.parse(stored) : [];
     } catch {
       return [];
@@ -175,7 +177,7 @@ export default function App() {
       const updated = current.includes(id)
         ? current.filter((item) => item !== id)
         : [...current, id];
-      localStorage.setItem('frosted_favorites', JSON.stringify(updated));
+      localStorage.setItem('frosthub_favorites', JSON.stringify(updated));
       return updated;
     } catch {
       return [];
@@ -213,6 +215,8 @@ export default function App() {
       globalChat.updateUser({ activity: 'Using AI Assistant', current_channel: 'text-general' });
     } else if (currentTab === 'movies') {
       globalChat.updateUser({ activity: 'Browsing Movies & Shows', current_channel: 'text-general' });
+    } else if (currentTab === 'tv') {
+      globalChat.updateUser({ activity: 'Watching Live TV', current_channel: 'text-general' });
     } else {
       globalChat.updateUser({ activity: 'Browsing Games', current_channel: 'text-general' });
     }
@@ -232,7 +236,7 @@ export default function App() {
   };
 
   const handleAboutBlank = (game: GameItem) => {
-    const url = game.resolvedUrl || resolveGameUrl(game.url, game.id);
+    const url = getPlayableGameUrl(game);
     launchAboutBlank(url, game.name);
   };
 
@@ -298,16 +302,14 @@ export default function App() {
 
   return (
     <>
-      <FrostedLoadingScreen isLoading={isCatalogLoading} />
+      <FrostHubLoadingScreen isLoading={isCatalogLoading} />
       <AppCanvasBackground themeConfig={themeConfig} isDark={theme === 'dark'} />
       <div 
-        className={`relative z-10 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white border-white dark:border-slate-900 transition-colors ${
+        className={`relative z-10 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-white dark:border-slate-900 transition-colors overflow-hidden ${
           themeConfig.bgMode !== 'solid' || themeConfig.bgSolidColor !== '#090d16'
             ? 'bg-white/90 dark:bg-transparent'
             : 'bg-[#f8fafc] dark:bg-slate-950'
-        } ${
-          currentTab === 'chat' || currentTab === 'ai' ? 'h-[100dvh] max-h-[100dvh] overflow-hidden' : 'min-h-screen'
-        }`}
+        } h-[100dvh] max-h-[100dvh]`}
         style={
           theme === 'dark' && themeConfig.bgMode === 'solid'
             ? { backgroundColor: themeConfig.bgSolidColor }
@@ -344,10 +346,10 @@ export default function App() {
         {currentTab === 'chat' ? (
           <motion.div
             key="chat-tab-view"
-            initial={{ opacity: 0, y: 8, filter: 'blur(2px)' }}
-            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, y: -8, filter: 'blur(2px)' }}
-            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            variants={tabTransition}
+            initial="initial"
+            animate="animate"
+            exit="exit"
             className="flex-1 flex flex-col min-h-0 h-full w-full pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0"
           >
             <ChatView globalChat={globalChat} initialChannel={targetChatChannel} />
@@ -355,10 +357,10 @@ export default function App() {
         ) : currentTab === 'ai' ? (
           <motion.div
             key="ai-tab-view"
-            initial={{ opacity: 0, y: 8, filter: 'blur(2px)' }}
-            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, y: -8, filter: 'blur(2px)' }}
-            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            variants={tabTransition}
+            initial="initial"
+            animate="animate"
+            exit="exit"
             className="flex-1 flex flex-col min-h-0 h-full w-full overflow-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0"
           >
             <AIAssistantView />
@@ -366,34 +368,37 @@ export default function App() {
         ) : currentTab === 'movies' ? (
           <motion.div
             key="movies-tab-view"
-            initial={{ opacity: 0, y: 8, filter: 'blur(2px)' }}
-            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, y: -8, filter: 'blur(2px)' }}
-            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-            className="flex-1 flex flex-col min-h-0 h-full w-full"
+            variants={tabTransition}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-y-auto"
           >
             <MovieView onActiveMediaChange={setActiveMedia} />
+          </motion.div>
+        ) : currentTab === 'tv' ? (
+          <motion.div
+            key="tv-tab-view"
+            variants={tabTransition}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="flex-1 flex flex-col min-h-0 h-full w-full"
+          >
+            <LiveTVView />
           </motion.div>
         ) : (
           <motion.main
             key="games-tab-view"
-            initial={{ opacity: 0, y: 8, filter: 'blur(2px)' }}
-            animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
-            exit={{ opacity: 0, y: -8, filter: 'blur(2px)' }}
-            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-            className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-10 sm:py-16 pb-24 md:pb-16"
+            variants={tabTransition}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="flex-1 w-full overflow-y-auto"
           >
-            {/* Hero Section */}
-            {!searchQuery && !showFavoritesOnly && selectedCategory === 'All' && (
-              <HeroSpotlight
-                featuredGames={featuredGames}
-                onPlay={handlePlayGame}
-                onAboutBlank={handleAboutBlank}
-              />
-            )}
-
-            {/* Categories & Sorting */}
-            <div className="mb-12">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 pb-24 md:pb-16">
+            {/* Categories & Sorting - Directly at top below header */}
+            <div className="mb-6">
               <CategoryFilter
                 selectedCategory={selectedCategory}
                 onSelectCategory={(cat) => {
@@ -411,14 +416,14 @@ export default function App() {
             {searchQuery && (
               <div className="mb-10 flex items-center justify-between bg-white dark:bg-slate-900 px-6 py-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
                 <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300 font-medium">
-                  <Search className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  <Search className="w-5 h-5 text-cyan-500 dark:text-cyan-300" />
                   <span>
                     Found <strong className="text-slate-900 dark:text-white">{filteredGames.length}</strong> matches for &ldquo;{searchQuery}&rdquo;
                   </span>
                 </div>
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-700 font-bold cursor-pointer border border-blue-100 dark:border-blue-800 px-3 py-1.5 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+                  className="text-xs text-cyan-500 dark:text-cyan-300 hover:text-blue-700 font-bold cursor-pointer border border-blue-100 dark:border-blue-800 px-3 py-1.5 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
                 >
                   Clear search
                 </button>
@@ -428,7 +433,7 @@ export default function App() {
             {/* Empty State */}
             {filteredGames.length === 0 ? (
               <div className="py-24 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-12 max-w-lg mx-auto space-y-6 shadow-xl shadow-slate-200/20 dark:shadow-none">
-                <div className="w-20 h-24 rounded-3xl bg-blue-50 dark:bg-blue-900/40 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 flex items-center justify-center mx-auto shadow-inner">
+                <div className="w-20 h-24 rounded-3xl bg-blue-50 dark:bg-blue-900/40 border border-blue-100 dark:border-blue-800 text-cyan-500 dark:text-cyan-300 flex items-center justify-center mx-auto shadow-inner">
                   <Gamepad2 className="w-10 h-10" />
                 </div>
                 <h3 className="text-2xl font-black text-slate-900 dark:text-white font-heading">
@@ -445,153 +450,74 @@ export default function App() {
                     setSelectedCategory('All');
                     setShowFavoritesOnly(false);
                   }}
-                  className="px-8 py-3.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-2xl shadow-lg shadow-blue-600/30 transition-all cursor-pointer font-heading"
+                  className="px-8 py-3.5 bg-cyan-500 hover:bg-blue-700 text-white text-sm font-bold rounded-2xl shadow-lg shadow-cyan-500/30 transition-all cursor-pointer font-heading"
                 >
                   Explore All {allGames.length} Titles
                 </button>
               </div>
             ) : (
               /* Game Grid - Animated Container */
-              <motion.div 
-                layout
+              <div 
                 className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 sm:gap-8"
               >
-                <AnimatePresence>
-                  {visibleGames.map((game) => (
-                    <GameCard
-                      key={game.id}
-                      game={game}
-                      onPlay={handlePlayGame}
-                      onToggleFavorite={handleToggleFavorite}
-                      isFavorite={favorites.includes(game.id)}
-                      onAboutBlank={handleAboutBlank}
-                    />
-                  ))}
-                </AnimatePresence>
-              </motion.div>
+                {visibleGames.map((game, index) => (
+                  <GameCard
+                    key={game.id}
+                    game={game}
+                    index={index}
+                    onPlay={handlePlayGame}
+                    onToggleFavorite={handleToggleFavorite}
+                    isFavorite={favorites.includes(game.id)}
+                    onAboutBlank={handleAboutBlank}
+                  />
+                ))}
+              </div>
             )}
 
             {/* Load More Pagination */}
             {hasMore && (
-              <div className="mt-16 flex flex-wrap items-center justify-center gap-4">
-                <motion.button
+              <div className="mt-12 flex items-center justify-center">
+                <button
                   type="button"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
                   onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE * 2)}
-                  className="inline-flex items-center gap-3 px-8 py-4 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-white font-bold text-sm rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700 transition-all cursor-pointer font-heading shadow-sm"
+                  className="inline-flex items-center gap-3 px-8 py-3.5 bg-[#181824] hover:bg-[#202030] text-white font-bold text-xs uppercase tracking-wider rounded-xl border border-[#2a2a3e] hover:border-[#00f0ff]/40 transition-all cursor-pointer font-heading shadow-md"
                 >
                   <span>Discover More</span>
-                  <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full text-slate-500 dark:text-slate-400">
+                  <span className="text-[10px] bg-[#090d16] px-2 py-0.5 rounded-md text-[#00f0ff] font-extrabold">
                     {visibleCount} / {filteredGames.length}
                   </span>
-                  <ArrowRight className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                </motion.button>
-
-                <motion.button
-                  type="button"
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  onClick={() => setVisibleCount(filteredGames.length)}
-                  className="inline-flex items-center gap-3 px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-sm rounded-2xl transition-all cursor-pointer font-heading shadow-xl shadow-blue-600/25 border border-blue-400/30"
-                >
-                  <Zap className="w-4 h-4 fill-current" />
-                  <span>Show All Games</span>
-                </motion.button>
+                  <ArrowRight className="w-4 h-4 text-[#00f0ff]" />
+                </button>
               </div>
             )}
 
+            </div>
+
+            {/* Footer */}
+            <footer className="mt-16 border-t border-[#1f1f2e] bg-[#0d0d12] py-8 transition-colors">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+                  <button
+                    type="button"
+                    onClick={handleGoHome}
+                    className="flex items-center gap-2 group cursor-pointer focus:outline-none"
+                  >
+                    <img 
+                      src="/assets/aistudio/Screenshot_2026-11-04_190053-removebg-preview_82d6e6a3.png" 
+                      alt="FrostHub" 
+                      className="h-10 w-auto object-contain brightness-110 drop-shadow-[0_0_8px_rgba(0,240,255,0.2)]"
+                    />
+                  </button>
+
+                  <div className="text-slate-500 font-medium text-[11px]">
+                    &copy; {new Date().getFullYear()} FrostHub. All rights reserved.
+                  </div>
+                </div>
+              </div>
+            </footer>
           </motion.main>
         )}
       </AnimatePresence>
-
-      {/* Footer */}
-      {currentTab === 'games' && (
-        <footer className="mt-24 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-950 py-16 transition-colors">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
-              
-              {/* Brand Col */}
-              <div className="space-y-4 md:col-span-2">
-                <button
-                  type="button"
-                  onClick={handleGoHome}
-                  className="flex items-center gap-3 group cursor-pointer text-left focus:outline-none"
-                >
-                  <div className="w-11 h-11 rounded-2xl bg-blue-600 flex items-center justify-center shadow-xl shadow-blue-600/20 group-hover:rotate-12 transition-transform">
-                    <Snowflake className="w-7 h-7 text-white fill-none" />
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-black text-slate-900 dark:text-white tracking-tight font-heading">
-                      Frosted
-                    </h2>
-                    <p className="text-[10px] text-blue-600 dark:text-blue-400 font-bold uppercase tracking-widest">Premium Arcade</p>
-                  </div>
-                </button>
-                <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm leading-relaxed font-medium">
-                  The web's most refined collection of instant-play experiences. Hand-curated, performance-optimized, and always accessible.
-                </p>
-                <div className="flex items-center gap-4 pt-4">
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-100 dark:border-emerald-800 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold">
-                    <ShieldCheck className="w-3.5 h-3.5" />
-                    <span>ENCRYPTED END-TO-END</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Links */}
-              <div className="space-y-4">
-                <div className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                  Catalog
-                </div>
-                <ul className="space-y-2.5 text-sm text-slate-600 dark:text-slate-300 font-semibold">
-                  <li><button type="button" onClick={() => { setSelectedCategory('Action & Shooters'); setCurrentTab('games'); }} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer">High Action</button></li>
-                  <li><button type="button" onClick={() => { setSelectedCategory('Puzzle & Casual'); setCurrentTab('games'); }} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer">Logic & Puzzles</button></li>
-                  <li><button type="button" onClick={() => { setSelectedCategory('Driving & Racing'); setCurrentTab('games'); }} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer">Speed & Racing</button></li>
-                  <li><button type="button" onClick={() => { setSelectedCategory('Sports & Physics'); setCurrentTab('games'); }} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer">Competitive Sports</button></li>
-                </ul>
-              </div>
-
-              {/* Community & Stealth */}
-              <div className="space-y-4">
-                <div className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
-                  Ecosystem
-                </div>
-                <ul className="space-y-2.5 text-sm text-slate-600 dark:text-slate-300 font-semibold">
-                  <li>
-                    <button type="button" onClick={() => setCurrentTab('chat')} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer flex items-center gap-2 text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900 px-3 py-2 rounded-xl border border-slate-100 dark:border-slate-800">
-                      <MessageSquare className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                      <span>Community Chat</span>
-                    </button>
-                  </li>
-                  <li>
-                    <button type="button" onClick={() => applyPreset('classroom')} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer">
-                      School Mask
-                    </button>
-                  </li>
-                  <li>
-                    <button type="button" onClick={() => applyPreset('drive')} className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer">
-                      Productivity Mask
-                    </button>
-                  </li>
-                </ul>
-              </div>
-
-            </div>
-
-
-
-            <div className="pt-10 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between text-[12px] text-slate-400 font-medium gap-4">
-              <div>
-                &copy; {new Date().getFullYear()} Frosted. All rights reserved.
-              </div>
-              <div className="flex items-center gap-6">
-                <span>V3.8.2</span>
-              </div>
-            </div>
-          </div>
-        </footer>
-      )}
 
 
       {/* Game Player Modal */}
@@ -620,12 +546,9 @@ export default function App() {
       <nav aria-label="Mobile Navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/98 dark:bg-slate-950/98 backdrop-blur-2xl border-t border-slate-200 dark:border-slate-800 px-1 py-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] flex items-center justify-around shadow-[0_-10px_40px_rgba(0,0,0,0.12)] transition-colors">
         <button
           type="button"
-          onClick={() => {
-            setCurrentTab('games');
-            handleGoHome();
-          }}
+          onClick={() => setCurrentTab('games')}
           className={`flex flex-col items-center gap-2 transition-all cursor-pointer flex-1 py-1 ${
-            currentTab === 'games' ? 'text-blue-600 dark:text-blue-400 scale-110' : 'text-slate-400 dark:text-slate-500'
+            currentTab === 'games' ? 'text-cyan-500 dark:text-cyan-300 scale-110' : 'text-slate-400 dark:text-slate-500'
           }`}
         >
           <Gamepad2 className={`${currentTab === 'games' ? 'w-6 h-6' : 'w-5.5 h-5.5'}`} />
@@ -634,9 +557,20 @@ export default function App() {
 
         <button
           type="button"
+          onClick={() => setCurrentTab('movies')}
+          className={`flex flex-col items-center gap-2 transition-all cursor-pointer flex-1 py-1 ${
+            currentTab === 'movies' ? 'text-cyan-500 dark:text-cyan-300 scale-110' : 'text-slate-400 dark:text-slate-500'
+          }`}
+        >
+          <Film className={`${currentTab === 'movies' ? 'w-6 h-6' : 'w-5.5 h-5.5'}`} />
+          <span className="text-[10px] font-black uppercase tracking-tighter">Movies</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setCurrentTab('ai')}
           className={`flex flex-col items-center gap-2 transition-all cursor-pointer flex-1 py-1 ${
-            currentTab === 'ai' ? 'text-blue-600 dark:text-blue-400 scale-110' : 'text-slate-400 dark:text-slate-500'
+            currentTab === 'ai' ? 'text-cyan-500 dark:text-cyan-300 scale-110' : 'text-slate-400 dark:text-slate-500'
           }`}
         >
           <Sparkles className={`${currentTab === 'ai' ? 'w-6 h-6' : 'w-5.5 h-5.5'}`} />
@@ -645,15 +579,26 @@ export default function App() {
 
         <button
           type="button"
+          onClick={() => setCurrentTab('tv')}
+          className={`flex flex-col items-center gap-2 transition-all cursor-pointer flex-1 py-1 ${
+            currentTab === 'tv' ? 'text-cyan-500 dark:text-cyan-300 scale-110' : 'text-slate-400 dark:text-slate-500'
+          }`}
+        >
+          <Tv className={`${currentTab === 'tv' ? 'w-6 h-6' : 'w-5.5 h-5.5'}`} />
+          <span className="text-[10px] font-black uppercase tracking-tighter">TV</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setCurrentTab('chat')}
           className={`flex flex-col items-center gap-2 transition-all relative cursor-pointer flex-1 py-1 ${
-            currentTab === 'chat' ? 'text-blue-600 dark:text-blue-400 scale-110' : 'text-slate-400 dark:text-slate-500'
+            currentTab === 'chat' ? 'text-cyan-500 dark:text-cyan-300 scale-110' : 'text-slate-400 dark:text-slate-500'
           }`}
         >
           <div className="relative">
             <MessageSquare className={`${currentTab === 'chat' ? 'w-6 h-6' : 'w-5.5 h-5.5'}`} />
             {globalChat.users.length > 0 && (
-              <span className="absolute -top-2 -right-2.5 bg-blue-600 text-white text-[9px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center border-2 border-white dark:border-slate-900">
+              <span className="absolute -top-2 -right-2.5 bg-cyan-500 text-white text-[9px] font-black w-4.5 h-4.5 rounded-sm flex items-center justify-center border-2 border-white dark:border-slate-900">
                 {globalChat.users.length}
               </span>
             )}
@@ -686,7 +631,7 @@ export default function App() {
           className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-2xl px-4 py-3 flex items-center gap-4 shadow-2xl"
         >
           <div className="flex items-center gap-2 pr-4 border-r border-white/10">
-            <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center animate-pulse">
+            <div className="w-8 h-8 rounded-xl bg-cyan-500 flex items-center justify-center">
               <Mic className="w-4 h-4 text-white" />
             </div>
             <div className="flex flex-col">
@@ -719,7 +664,7 @@ export default function App() {
                 setTargetChatChannel('video-general');
                 setCurrentTab('chat');
               }}
-              className="ml-2 px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-black rounded-xl uppercase tracking-tighter transition-all flex items-center gap-1.5 shadow-lg shadow-blue-600/20 cursor-pointer"
+              className="ml-2 px-3.5 py-2 bg-cyan-500 hover:bg-cyan-400 text-white text-[10px] font-black rounded-xl uppercase tracking-tighter transition-all flex items-center gap-1.5 shadow-lg shadow-cyan-500/20 cursor-pointer"
               title="Maximize Voice"
             >
               <Maximize2 className="w-3.5 h-3.5" />

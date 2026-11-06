@@ -31,6 +31,28 @@ function deduplicateUsers(users: DbUser[], currentUserId?: string): DbUser[] {
   });
 }
 
+function mergeMessages(existing: DbMessage[], incoming: DbMessage[], isInitialSync: boolean = false, currentUserId?: string): DbMessage[] {
+  const map = new Map<string, DbMessage>();
+  
+  // 1. Prioritize server messages as the definitive truth
+  incoming.forEach(m => { if (m && m.id) map.set(m.id, m); });
+  
+  // 2. Add local messages that are missing from server
+  existing.forEach(m => {
+    if (m && m.id && !map.has(m.id)) {
+      // Keep if it's from the current user (sent while offline) 
+      // or if it's very recent (last 3 minutes)
+      const now = Date.now();
+      const isMine = currentUserId && m.sender_id === currentUserId;
+      if (isMine || (now - (m.created_at || 0) < 180000)) {
+        map.set(m.id, m);
+      }
+    }
+  });
+  
+  return Array.from(map.values()).sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
+}
+
 export function resolveWebSocketUrl(): string {
   try {
     if (typeof window !== 'undefined' && window.location) {
@@ -45,7 +67,7 @@ export function resolveWebSocketUrl(): string {
         return `${proto}//${clean}/ws-db`;
       }
 
-      const storedWs = localStorage.getItem('frosted_ws_url') || localStorage.getItem('frosted_server_url') || localStorage.getItem('frosted_backend_url');
+      const storedWs = localStorage.getItem('frosthub_ws_url') || localStorage.getItem('frosthub_server_url') || localStorage.getItem('frosthub_backend_url');
       if (storedWs) {
         if (storedWs.startsWith('ws://') || storedWs.startsWith('wss://')) {
           return storedWs.endsWith('/ws-db') ? storedWs : `${storedWs.replace(/\/$/, '')}/ws-db`;
@@ -90,7 +112,7 @@ export function useWebSocketDatabase(currentUser: {
   const [users, setUsers] = useState<DbUser[]>([]);
   const [messages, setMessages] = useState<DbMessage[]>(() => {
     try {
-      const saved = localStorage.getItem('frosted_db_messages');
+      const saved = localStorage.getItem('frosthub_db_messages');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) return parsed;
@@ -105,7 +127,12 @@ export function useWebSocketDatabase(currentUser: {
   const reconnectTimeoutRef = useRef<any>(null);
   const pingIntervalRef = useRef<any>(null);
   const httpSyncIntervalRef = useRef<any>(null);
-  const outgoingQueueRef = useRef<string[]>([]);
+  const outgoingQueueRef = useRef<string[]>((() => {
+    try {
+      const saved = localStorage.getItem('frosthub_chat_queue');
+      return saved ? JSON.parse(saved) : [];
+    } catch { return []; }
+  })());
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
   const processedRtcSignalsRef = useRef<Set<string>>(new Set());
 
@@ -191,16 +218,18 @@ export function useWebSocketDatabase(currentUser: {
       } catch (err) {
         console.warn('[wsDatabaseClient] Send failed, queueing:', err);
         outgoingQueueRef.current.push(raw);
+        localStorage.setItem('frosthub_chat_queue', JSON.stringify(outgoingQueueRef.current));
       }
     } else {
       outgoingQueueRef.current.push(raw);
+      localStorage.setItem('frosthub_chat_queue', JSON.stringify(outgoingQueueRef.current));
     }
   }, []);
 
   // Multi-tab BroadcastChannel for sync across tabs in same browser
   useEffect(() => {
     try {
-      const bc = new BroadcastChannel('frosted_ws_channel');
+      const bc = new BroadcastChannel('frosthub_ws_channel');
       broadcastChannelRef.current = bc;
 
       bc.onmessage = (event) => {
@@ -209,7 +238,7 @@ export function useWebSocketDatabase(currentUser: {
         if (data.type === 'SYNC_USERS' && Array.isArray(data.users)) {
           setUsers(deduplicateUsers(data.users, currentUserRef.current.id));
         } else if (data.type === 'SYNC_MESSAGES' && Array.isArray(data.messages)) {
-          setMessages(data.messages);
+          setMessages(prev => mergeMessages(prev, data.messages, false, currentUserRef.current.id));
         }
       };
     } catch {}
@@ -224,7 +253,7 @@ export function useWebSocketDatabase(currentUser: {
   // Save messages to local cache for instant cold rendering
   useEffect(() => {
     try {
-      localStorage.setItem('frosted_db_messages', JSON.stringify(messages.slice(-200)));
+      localStorage.setItem('frosthub_db_messages', JSON.stringify(messages));
     } catch {}
   }, [messages]);
 
@@ -243,7 +272,26 @@ export function useWebSocketDatabase(currentUser: {
             setUsers(deduplicateUsers(data.users, u.id));
           }
           if (Array.isArray(data.messages) && data.messages.length > 0) {
-            setMessages(data.messages);
+            setMessages(prev => {
+              const next = mergeMessages(prev, data.messages, true, u.id);
+              
+              // Reconciliation: Push local-only messages sent by me back to server
+              const serverIds = new Set(data.messages.map((m: any) => m.id));
+              const unsynced = next.filter(m => m.sender_id === u.id && !serverIds.has(m.id));
+              
+              if (unsynced.length > 0) {
+                console.log(`[wsDatabaseClient] Reconciling ${unsynced.length} unsynced messages...`);
+                unsynced.forEach(msg => {
+                  fetch('/api/ws-db/message', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ row: msg }),
+                  }).catch(() => {});
+                });
+              }
+              
+              return next;
+            });
           }
         }
       }
@@ -349,7 +397,13 @@ export function useWebSocketDatabase(currentUser: {
         while (outgoingQueueRef.current.length > 0) {
           const item = outgoingQueueRef.current.shift();
           if (item) {
-            try { ws.send(item); } catch {}
+            try { 
+              ws.send(item); 
+              localStorage.setItem('frosthub_chat_queue', JSON.stringify(outgoingQueueRef.current));
+            } catch {
+              if (item) outgoingQueueRef.current.unshift(item);
+              break;
+            }
           }
         }
       };
@@ -370,14 +424,32 @@ export function useWebSocketDatabase(currentUser: {
               setUsers(deduplicateUsers(msg.tables.users, currentUserRef.current.id));
             }
             if (Array.isArray(msg.tables?.messages) && msg.tables.messages.length > 0) {
-              setMessages(msg.tables.messages);
+              setMessages(prev => {
+                const next = mergeMessages(prev, msg.tables.messages, true, currentUserRef.current.id);
+                
+                // Reconciliation via WebSocket
+                const serverIds = new Set(msg.tables.messages.map((m: any) => m.id));
+                const unsynced = next.filter(m => m.sender_id === currentUserRef.current.id && !serverIds.has(m.id));
+                
+                if (unsynced.length > 0) {
+                  unsynced.forEach(m => {
+                    safeSend({ type: 'SQL_INSERT', table: 'messages', row: m });
+                  });
+                }
+                
+                return next;
+              });
             }
           } else if (msg.type === 'DB_SYNC') {
             if (msg.table === 'users' && Array.isArray(msg.data)) {
               setUsers(deduplicateUsers(msg.data, currentUserRef.current.id));
             } else if (msg.table === 'messages' && Array.isArray(msg.data)) {
-              setMessages(msg.data);
+              setMessages(prev => mergeMessages(prev, msg.data, false, currentUserRef.current.id));
             }
+          } else if (msg.type === 'DB_CLEAR_MESSAGES') {
+            setMessages([]);
+            localStorage.removeItem('frosthub_db_messages');
+            localStorage.removeItem('frosthub_chat_queue');
           } else if (msg.type === 'RTC_SIGNAL') {
             if (msg.targetUserId === currentUserRef.current.id && msg.fromUserId !== currentUserRef.current.id) {
               const sigKey = `${msg.fromUserId}:${JSON.stringify(msg.signal).slice(0, 100)}`;
@@ -554,7 +626,7 @@ export function useWebSocketDatabase(currentUser: {
       if (safePrev.some((m) => m.id === newMsg.id)) return safePrev;
       const next = [...safePrev, newMsg];
       try {
-        localStorage.setItem('frosted_db_messages', JSON.stringify(next.slice(-200)));
+        localStorage.setItem('frosthub_db_messages', JSON.stringify(next));
       } catch {}
       broadcastChannelRef.current?.postMessage({ type: 'SYNC_MESSAGES', messages: next });
       return next;
@@ -580,7 +652,7 @@ export function useWebSocketDatabase(currentUser: {
       const safePrev = Array.isArray(prev) ? prev : [];
       const next = safePrev.filter((m) => m && m.id !== messageId);
       try {
-        localStorage.setItem('frosted_db_messages', JSON.stringify(next.slice(-200)));
+        localStorage.setItem('frosthub_db_messages', JSON.stringify(next));
       } catch {}
       broadcastChannelRef.current?.postMessage({ type: 'SYNC_MESSAGES', messages: next });
       return next;
@@ -604,7 +676,7 @@ export function useWebSocketDatabase(currentUser: {
       const safePrev = Array.isArray(prev) ? prev : [];
       const next = safePrev.filter((m) => m && m.channel_id !== channelId);
       try {
-        localStorage.setItem('frosted_db_messages', JSON.stringify(next.slice(-200)));
+        localStorage.setItem('frosthub_db_messages', JSON.stringify(next));
       } catch {}
       broadcastChannelRef.current?.postMessage({ type: 'SYNC_MESSAGES', messages: next });
       return next;

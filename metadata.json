@@ -1,6 +1,6 @@
 {
-  "name": "Frosted Arcade",
-  "description": "Premium editorial unblocked gaming portal with community chat and AI study assistant.",
+  "name": "FrostHub",
+  "description": "Premium editorial unblocked entertainment portal with community chat and AI study assistant.",
   "requestFramePermissions": ["microphone", "camera"],
   "majorCapabilities": []
 }

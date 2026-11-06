@@ -17,7 +17,7 @@ export const PWAInstallButton: React.FC = () => {
       <button
         onClick={install}
         className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-white bg-[var(--vibrant-cyan)] hover:bg-[var(--bg-navy)] rounded-xl shadow-md shadow-[var(--vibrant-cyan)]/20 transition-all cursor-pointer font-heading"
-        title="Install Frosted as a desktop or mobile application"
+        title="Install FrostHub as a desktop or mobile application"
       >
         <Download className="w-3.5 h-3.5 stroke-[2.5]" />
         <span className="hidden md:inline">Install App</span>
@@ -57,15 +57,15 @@ export const PWAInstallButton: React.FC = () => {
               </div>
               <ol className="space-y-3 text-xs text-zinc-300 leading-relaxed">
                 <li className="flex items-start gap-2.5">
-                  <span className="w-5 h-5 rounded-full bg-[var(--vibrant-cyan)]/20 text-[var(--bg-navy)] font-bold flex items-center justify-center shrink-0 text-[11px]">1</span>
+                  <span className="w-5 h-5 rounded-sm bg-[var(--vibrant-cyan)]/20 text-[var(--bg-navy)] font-bold flex items-center justify-center shrink-0 text-[11px]">1</span>
                   <span>Tap the <strong className="text-white inline-flex items-center gap-1"><Share className="w-3.5 h-3.5 text-[var(--vibrant-cyan)]" /> Share</strong> icon in your Safari bottom navigation bar.</span>
                 </li>
                 <li className="flex items-start gap-2.5">
-                  <span className="w-5 h-5 rounded-full bg-[var(--vibrant-cyan)]/20 text-[var(--bg-navy)] font-bold flex items-center justify-center shrink-0 text-[11px]">2</span>
+                  <span className="w-5 h-5 rounded-sm bg-[var(--vibrant-cyan)]/20 text-[var(--bg-navy)] font-bold flex items-center justify-center shrink-0 text-[11px]">2</span>
                   <span>Scroll down and select <strong className="text-white">Add to Home Screen</strong>.</span>
                 </li>
                 <li className="flex items-start gap-2.5">
-                  <span className="w-5 h-5 rounded-full bg-[var(--vibrant-cyan)]/20 text-[var(--bg-navy)] font-bold flex items-center justify-center shrink-0 text-[11px]">3</span>
+                  <span className="w-5 h-5 rounded-sm bg-[var(--vibrant-cyan)]/20 text-[var(--bg-navy)] font-bold flex items-center justify-center shrink-0 text-[11px]">3</span>
                   <span>Launch Melted directly from your home screen for instant fullscreen play!</span>
                 </li>
               </ol>

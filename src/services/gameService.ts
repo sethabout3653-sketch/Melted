@@ -355,10 +355,7 @@ export function transformUgsEntry(
   const category = detectCategory({ name: trimmedName, special: [] } as any);
   const isCkv = entry.url.startsWith('/ckv/');
   const resolvedUrl = resolveUgsUrl(entry.url);
-  const proxyUrl = isCkv 
-    ? `/api/ckv/${entry.url.replace(/^\/ckv\//, '')}`
-    : `/api/ugs/${entry.url.replace(/^\//, '')}`;
-
+  
   let resolvedCover = '';
   if (coverLookupByName.has(normalized)) {
     resolvedCover = coverLookupByName.get(normalized)!;
@@ -380,7 +377,6 @@ export function transformUgsEntry(
     fallbackCover: resolvedCover,
     localCover: resolvedCover,
     resolvedUrl,
-    proxyUrl,
     featured: false,
     source: (isCkv ? 'CKV' : 'ugs'),
   };
@@ -462,6 +458,18 @@ export function mergeUgsGames(
   return [...baseGames, ...newGames];
 }
 
+export function getPlayableGameUrl(game: GameItem): string {
+  if (game.resolvedUrl) return game.resolvedUrl;
+  if (!game.url) return '';
+  if (game.source === 'ugs' || game.url.startsWith('/ugs/')) {
+    return resolveUgsUrl(game.url);
+  }
+  if (game.source === 'CKV' || game.url.startsWith('/ckv/')) {
+    return `https://wanocapy.github.io/ChickenKingsVault/${game.url.replace(/^\/ckv\//, '')}`;
+  }
+  return resolveGameUrl(game.url, game.id);
+}
+
 export function getAllGames(): GameItem[] {
   // 1. ALL EXISTING GN-MATH GAMES PRESERVED EXACTLY AS-IS (ZERO TOUCHED)
   const validGames = (rawGamesData as RawGame[]).filter(
@@ -473,21 +481,21 @@ export function getAllGames(): GameItem[] {
     const category = detectCategory(game);
     const resolvedCover = resolveCoverUrl(game.cover);
     const fallbackCover = getDirectCoverUrl(game.cover);
-    const localCover = getProxyCoverUrl(game.cover);
     const resolvedUrl = resolveGameUrl(game.url, game.id);
-    const proxyUrl = getProxyGameUrl(game.url, game.id);
 
     return {
       ...game,
+      source: 'native',
       featured: isFeatured,
       category,
       resolvedCover,
       fallbackCover,
-      localCover,
+      localCover: resolvedCover,
       resolvedUrl,
-      proxyUrl,
     };
   });
+
+
 
   // 2. Track existing names and high-quality covers to avoid duplicate entries
   const existingNames = new Set<string>();
@@ -495,6 +503,10 @@ export function getAllGames(): GameItem[] {
   for (const g of gnGames) {
     const norm = g.name.toLowerCase().replace(/[^a-z0-9]/g, '');
     existingNames.add(norm);
+    const baseWord = norm.replace(/(game|play|online|free|unblocked)/g, '');
+    if (baseWord.length >= 3) {
+      existingNames.add(baseWord);
+    }
     if (g.resolvedCover) {
       coverLookupByName.set(norm, g.resolvedCover);
     }

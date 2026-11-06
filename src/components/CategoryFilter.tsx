@@ -1,3 +1,4 @@
+import React from 'react';
 import { 
   Sparkles, 
   Gamepad2, 
@@ -12,7 +13,6 @@ import {
   ArrowUpDown
 } from 'lucide-react';
 import { GameCategory } from '../types/game';
-import { motion } from 'motion/react';
 
 interface CategoryFilterProps {
   selectedCategory: GameCategory;
@@ -23,7 +23,7 @@ interface CategoryFilterProps {
 }
 
 const CATEGORIES: { id: GameCategory; label: string; icon: React.ReactNode }[] = [
-  { id: 'All', label: 'All Games', icon: <Gamepad2 className="w-3.5 h-3.5" /> },
+  { id: 'All', label: 'All Titles', icon: <Gamepad2 className="w-3.5 h-3.5" /> },
   { id: 'Featured', label: 'Featured', icon: <Sparkles className="w-3.5 h-3.5" /> },
   { id: 'Action & Shooters', label: 'Action', icon: <Flame className="w-3.5 h-3.5" /> },
   { id: 'Driving & Racing', label: 'Driving', icon: <Car className="w-3.5 h-3.5" /> },
@@ -44,9 +44,9 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
   categoryCounts,
 }) => {
   return (
-    <div className="space-y-6">
-      {/* Category Navigation - Responsive Touch Scrollable on Mobile */}
-      <div className="flex overflow-x-auto pb-2 scrollbar-none touch-pan-x sm:flex-wrap items-center gap-x-4 sm:gap-x-8 gap-y-4 shrink-0">
+    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-2 border-b border-[#1f1f2e]">
+      {/* Category Navigation Bar / Chips */}
+      <div className="flex overflow-x-auto pb-2 sm:pb-0 scrollbar-none touch-pan-x sm:flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto">
         {CATEGORIES.map((cat) => {
           const isSelected = selectedCategory === cat.id;
           const count = categoryCounts[cat.id] || 0;
@@ -58,60 +58,40 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
               key={cat.id}
               type="button"
               onClick={() => onSelectCategory(cat.id)}
-              className={`group flex items-center gap-2.5 transition-all cursor-pointer relative py-1 px-3 rounded-xl border ${isSelected ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-100 dark:border-blue-800' : 'border-transparent hover:border-slate-100 dark:hover:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900'}`}
-            >
-              <span className={`text-sm font-bold tracking-tight transition-colors ${
-                isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-300 group-hover:text-slate-900 dark:group-hover:text-white'
-              }`}>
-                {cat.label}
-              </span>
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full transition-all ${
+              className={`flex items-center gap-2 transition-all cursor-pointer py-1.5 px-3.5 rounded-lg border text-xs font-bold font-heading whitespace-nowrap ${
                 isSelected 
-                  ? 'bg-blue-600 text-white' 
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 group-hover:bg-slate-200 dark:group-hover:bg-slate-700'
+                  ? 'bg-[#00f0ff] text-[#090d16] border-[#00f0ff] font-extrabold shadow-md shadow-[#00f0ff]/20' 
+                  : 'bg-[#181822] hover:bg-[#20202e] text-slate-300 hover:text-white border-[#262638]'
+              }`}
+            >
+              <span>{cat.label}</span>
+              <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-md ${
+                isSelected ? 'bg-[#090d16]/20 text-[#090d16]' : 'bg-[#262638] text-slate-400'
               }`}>
                 {count}
               </span>
-              {isSelected && (
-                <motion.div 
-                  layoutId="category-underline"
-                  className="absolute bottom-[-4px] left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full"
-                />
-              )}
             </button>
           );
         })}
       </div>
 
-      {/* Control Bar */}
-      <div className="flex flex-col sm:flex-row items-center justify-between gap-6 pt-6 border-t border-slate-100 dark:border-slate-800">
-        <div className="flex items-center gap-2 text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">
-          <span>Displaying</span>
-          <span className="text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900 px-2 py-0.5 rounded-md border border-slate-100 dark:border-slate-800">
-            {categoryCounts[selectedCategory] || 0}
-          </span>
-          <span>curated titles</span>
-        </div>
-
-        {/* Sort Selector - Clean UI */}
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Sort by:</span>
-          <div className="relative group">
-            <select
-              value={sortBy}
-              onChange={(e) => onSortChange(e.target.value as any)}
-              className="appearance-none bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-white font-bold px-4 py-2 pr-10 rounded-xl border border-slate-200 dark:border-slate-800 focus:border-blue-300 dark:focus:border-blue-700 focus:outline-none cursor-pointer text-xs shadow-sm transition-all"
-            >
-              <option value="popular" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Popularity</option>
-              <option value="alpha-asc" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Alphabetical A-Z</option>
-              <option value="alpha-desc" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Alphabetical Z-A</option>
-              <option value="random" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-white">Random Discovery</option>
-            </select>
-            <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          </div>
+      {/* Sort Selector Right Side */}
+      <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Sort:</span>
+        <div className="relative group">
+          <select
+            value={sortBy}
+            onChange={(e) => onSortChange(e.target.value as any)}
+            className="appearance-none bg-[#181822] hover:bg-[#20202e] text-white font-bold px-3 py-1.5 pr-8 rounded-lg border border-[#262638] focus:border-[#00f0ff] focus:outline-none cursor-pointer text-xs shadow-sm transition-all"
+          >
+            <option value="popular" className="bg-[#181822] text-white">Popularity</option>
+            <option value="alpha-asc" className="bg-[#181822] text-white">A-Z</option>
+            <option value="alpha-desc" className="bg-[#181822] text-white">Z-A</option>
+            <option value="random" className="bg-[#181822] text-white">Random</option>
+          </select>
+          <ArrowUpDown className="w-3.5 h-3.5 text-[#00f0ff] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
       </div>
     </div>
   );
 };
-

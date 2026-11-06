@@ -59,7 +59,7 @@ export const FontSettingsSection: React.FC<FontSettingsSectionProps> = ({ classN
       {/* Section Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Type className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+          <Type className="w-4 h-4 text-cyan-500 dark:text-cyan-300" />
           <h4 className="text-xs font-black uppercase tracking-widest text-slate-700 dark:text-slate-200">
             App Typography & Font
           </h4>
@@ -85,12 +85,12 @@ export const FontSettingsSection: React.FC<FontSettingsSectionProps> = ({ classN
           onClick={() => updateFontConfig({ preset: 'default' })}
           className={`p-3 rounded-2xl border text-left transition-all cursor-pointer relative flex flex-col justify-between ${
             fontConfig.preset === 'default'
-              ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-900/30 text-blue-900 dark:text-white shadow-sm ring-1 ring-blue-500'
+              ? 'border-cyan-500 bg-blue-50/60 dark:bg-blue-900/30 text-blue-900 dark:text-white shadow-sm ring-1 ring-cyan-400'
               : 'border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
           }`}
         >
           {fontConfig.preset === 'default' && (
-            <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center">
+            <div className="absolute top-2 right-2 w-4 h-4 rounded-sm bg-cyan-500 text-white flex items-center justify-center">
               <Check className="w-2.5 h-2.5 stroke-[3]" />
             </div>
           )}
@@ -107,12 +107,12 @@ export const FontSettingsSection: React.FC<FontSettingsSectionProps> = ({ classN
           onClick={() => updateFontConfig({ preset: 'modern-clean' })}
           className={`p-3 rounded-2xl border text-left transition-all cursor-pointer relative flex flex-col justify-between ${
             fontConfig.preset === 'modern-clean'
-              ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-900/30 text-blue-900 dark:text-white shadow-sm ring-1 ring-blue-500'
+              ? 'border-cyan-500 bg-blue-50/60 dark:bg-blue-900/30 text-blue-900 dark:text-white shadow-sm ring-1 ring-cyan-400'
               : 'border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
           }`}
         >
           {fontConfig.preset === 'modern-clean' && (
-            <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center">
+            <div className="absolute top-2 right-2 w-4 h-4 rounded-sm bg-cyan-500 text-white flex items-center justify-center">
               <Check className="w-2.5 h-2.5 stroke-[3]" />
             </div>
           )}
@@ -123,7 +123,7 @@ export const FontSettingsSection: React.FC<FontSettingsSectionProps> = ({ classN
             </div>
             <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Outfit & DM / Inter</div>
           </div>
-          <div className="mt-2 text-[10px] font-medium text-blue-600 dark:text-blue-400">Bold / Black Weight</div>
+          <div className="mt-2 text-[10px] font-medium text-cyan-500 dark:text-cyan-300">Bold / Black Weight</div>
         </button>
 
         {/* Preset 3: Custom Font File (.ttf / .otf) */}
@@ -138,12 +138,12 @@ export const FontSettingsSection: React.FC<FontSettingsSectionProps> = ({ classN
           }}
           className={`p-3 rounded-2xl border text-left transition-all cursor-pointer relative flex flex-col justify-between ${
             fontConfig.preset === 'custom'
-              ? 'border-blue-600 bg-blue-50/60 dark:bg-blue-900/30 text-blue-900 dark:text-white shadow-sm ring-1 ring-blue-500'
+              ? 'border-cyan-500 bg-blue-50/60 dark:bg-blue-900/30 text-blue-900 dark:text-white shadow-sm ring-1 ring-cyan-400'
               : 'border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/60 text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:border-slate-700'
           }`}
         >
           {fontConfig.preset === 'custom' && (
-            <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-blue-600 text-white flex items-center justify-center">
+            <div className="absolute top-2 right-2 w-4 h-4 rounded-sm bg-cyan-500 text-white flex items-center justify-center">
               <Check className="w-2.5 h-2.5 stroke-[3]" />
             </div>
           )}
@@ -186,7 +186,7 @@ export const FontSettingsSection: React.FC<FontSettingsSectionProps> = ({ classN
                   onClick={() => updateFontConfig({ modernCleanBody: f })}
                   className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                     fontConfig.modernCleanBody === f
-                      ? 'bg-blue-600 text-white shadow-sm'
+                      ? 'bg-cyan-500 text-white shadow-sm'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
@@ -213,7 +213,7 @@ export const FontSettingsSection: React.FC<FontSettingsSectionProps> = ({ classN
                   onClick={() => updateFontConfig({ modernCleanWeight: w })}
                   className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                     fontConfig.modernCleanWeight === w
-                      ? 'bg-blue-600 text-white shadow-sm'
+                      ? 'bg-cyan-500 text-white shadow-sm'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
@@ -230,7 +230,7 @@ export const FontSettingsSection: React.FC<FontSettingsSectionProps> = ({ classN
         <div className="p-3.5 bg-slate-50 dark:bg-slate-950/80 rounded-2xl border border-slate-200/80 dark:border-slate-800 space-y-3 animate-in fade-in duration-200">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-2 min-w-0">
-              <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 flex items-center justify-center shrink-0 text-blue-600 dark:text-blue-400">
+              <div className="w-8 h-8 rounded-xl bg-blue-50 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 flex items-center justify-center shrink-0 text-cyan-500 dark:text-cyan-300">
                 <FileText className="w-4 h-4" />
               </div>
               <div className="min-w-0">
@@ -264,7 +264,7 @@ export const FontSettingsSection: React.FC<FontSettingsSectionProps> = ({ classN
           type="button"
           onClick={() => fontFileInputRef.current?.click()}
           disabled={isApplying}
-          className="w-full py-2.5 px-4 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-blue-500 dark:hover:border-blue-500 bg-slate-50/50 dark:bg-slate-900/40 text-slate-600 dark:text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer flex items-center justify-center gap-2 text-xs font-bold"
+          className="w-full py-2.5 px-4 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 hover:border-cyan-400 dark:hover:border-cyan-400 bg-slate-50/50 dark:bg-slate-900/40 text-slate-600 dark:text-slate-400 hover:text-cyan-500 dark:hover:text-cyan-300 transition-colors cursor-pointer flex items-center justify-center gap-2 text-xs font-bold"
         >
           <Upload className="w-3.5 h-3.5" />
           <span>Upload Custom .TTF or .OTF Font File</span>
@@ -289,7 +289,7 @@ export const FontSettingsSection: React.FC<FontSettingsSectionProps> = ({ classN
       <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
         <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-400">
           <span>Live Typography Preview</span>
-          <span className="text-blue-600 dark:text-blue-400 font-bold">
+          <span className="text-cyan-500 dark:text-cyan-300 font-bold">
             {fontConfig.preset === 'custom'
               ? (fontConfig.customFontName || 'Custom Font')
               : fontConfig.preset === 'modern-clean'
@@ -306,7 +306,7 @@ export const FontSettingsSection: React.FC<FontSettingsSectionProps> = ({ classN
             fontWeight: 'var(--app-font-heading-weight)',
           }}
         >
-          Frosted Gaming & Community Hub
+          FrostHub Gaming & Community Hub
         </div>
 
         {/* Body Text Preview */}

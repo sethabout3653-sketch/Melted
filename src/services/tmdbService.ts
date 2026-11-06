@@ -1,4 +1,4 @@
-// TMDB API Service for Frosted Movies & TV Shows
+// TMDB API Service for FrostHub Movies & TV Shows
 const DEFAULT_TMDB_KEY = 'e378bd904d6b4952f9261f8f27882a9c';
 const BASE_URL = 'https://api.themoviedb.org/3';
 export const IMAGE_BASE_URL = 'https://image.tmdb.org/t/p';

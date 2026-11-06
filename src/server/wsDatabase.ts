@@ -73,7 +73,7 @@ export class WebSocketDatabase {
         const raw = fs.readFileSync(this.dbFilePath, 'utf-8');
         const data = JSON.parse(raw);
         if (Array.isArray(data.messages)) {
-          this.messages = data.messages.slice(-500);
+          this.messages = data.messages;
         }
       }
     } catch (err) {
@@ -84,7 +84,7 @@ export class WebSocketDatabase {
   private saveStore() {
     try {
       const data = {
-        messages: this.messages.slice(-500),
+        messages: this.messages,
         updated_at: Date.now(),
       };
       fs.writeFileSync(this.dbFilePath, JSON.stringify(data, null, 2), 'utf-8');
@@ -135,9 +135,6 @@ export class WebSocketDatabase {
       this.messages[existingIndex] = msg;
     } else {
       this.messages.push(msg);
-      if (this.messages.length > 500) {
-        this.messages.shift();
-      }
     }
     this.saveStore();
   }
@@ -149,6 +146,11 @@ export class WebSocketDatabase {
 
   public deleteChannelMessages(channelId: string): void {
     this.messages = this.messages.filter((m) => m.channel_id !== channelId);
+    this.saveStore();
+  }
+
+  public deleteAllMessages(): void {
+    this.messages = [];
     this.saveStore();
   }
 
@@ -390,6 +392,12 @@ export function initWebSocketDatabase(server: Server) {
               globalWsDb.deleteChannelMessages(msg.channel_id);
               broadcastTable('messages', globalWsDb.messages);
             }
+            break;
+          }
+
+          case 'SQL_DELETE_ALL': {
+            globalWsDb.deleteAllMessages();
+            broadcastWss({ type: 'DB_CLEAR_MESSAGES' });
             break;
           }
 

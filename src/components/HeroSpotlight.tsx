@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Play, Star, ExternalLink, Zap, ShieldCheck } from 'lucide-react';
+import { Play, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { GameItem } from '../types/game';
+import { entryVariants, hoverTransition, cardHover } from '../utils/animations';
 
 interface HeroSpotlightProps {
   featuredGames: GameItem[];
@@ -29,44 +30,49 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
         
         {/* Left Column: Content */}
         <div className="lg:col-span-6 space-y-10">
-          
-          <motion.div
-            key={activeGame.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ type: "spring", stiffness: 200, damping: 25 }}
-            className="space-y-6"
-          >
-            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 text-blue-600 dark:text-blue-400 text-[11px] font-black uppercase tracking-[0.2em]">
-              <Zap className="w-3.5 h-3.5 fill-current" />
-              Featured Experience
-            </div>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeGame.id}
+              variants={entryVariants}
+              initial="hidden"
+              animate="visible"
+              exit={{ opacity: 0, x: -20 }}
+              custom={0}
+              className="space-y-6"
+            >
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 text-cyan-500 dark:text-cyan-300 text-[11px] font-black uppercase tracking-[0.2em]">
+                <Zap className="w-3.5 h-3.5 fill-current" />
+                Featured Experience
+              </div>
 
-            <h2 className="text-5xl sm:text-6xl lg:text-7xl font-black text-slate-900 dark:text-white tracking-tight font-heading leading-[1.05]">
-              {activeGame.name}
-            </h2>
-            
-            <p className="text-xl text-slate-500 dark:text-slate-400 max-w-xl font-medium leading-relaxed">
-              Interactive educational modules, logic challenges, and study resources designed for student engagement.
-            </p>
-          </motion.div>
+              <h2 className="text-5xl sm:text-6xl lg:text-7xl font-black text-slate-900 dark:text-white tracking-tight font-heading leading-[1.05]">
+                {activeGame.name}
+              </h2>
+              
+              <p className="text-xl text-slate-500 dark:text-slate-400 max-w-xl font-medium leading-relaxed">
+                Interactive educational modules, logic challenges, and study resources designed for student engagement.
+              </p>
+            </motion.div>
+          </AnimatePresence>
 
           {/* Action CTAs */}
           <div className="flex flex-wrap items-center gap-6">
             <motion.button
               type="button"
-              whileHover={{ scale: 1.02, y: -4 }}
-              whileTap={{ scale: 0.98 }}
+              whileHover={{ scale: 1.05, y: -4, boxShadow: "0 20px 40px -10px rgba(6, 182, 212, 0.4)" }}
+              whileTap={{ scale: 0.95 }}
+              transition={hoverTransition}
               onClick={() => onPlay(activeGame)}
-              className="px-10 py-5 bg-blue-600 hover:bg-blue-700 text-white text-base font-black rounded-2xl shadow-2xl shadow-blue-600/30 transition-all cursor-pointer font-heading tracking-tight border border-blue-500"
+              className="px-10 py-5 bg-cyan-500 hover:bg-blue-700 text-white text-base font-black rounded-2xl shadow-2xl shadow-cyan-500/30 transition-all cursor-pointer font-heading tracking-tight border border-cyan-400"
             >
               Start Playing Now
             </motion.button>
 
             <motion.button
               type="button"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
+              whileHover={{ scale: 1.05, backgroundColor: "rgba(248, 250, 252, 1)" }}
+              whileTap={{ scale: 0.95 }}
+              transition={hoverTransition}
               onClick={() => onAboutBlank(activeGame)}
               className="px-8 py-5 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 text-base font-bold rounded-2xl border border-slate-200 dark:border-slate-800 transition-all cursor-pointer shadow-sm"
             >
@@ -80,11 +86,12 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
           <AnimatePresence mode="wait">
             <motion.div 
               key={activeGame.id}
-              initial={{ opacity: 0, scale: 0.9, rotate: -2 }}
+              initial={{ opacity: 0, scale: 0.8, rotate: -3 }}
               animate={{ opacity: 1, scale: 1, rotate: 0 }}
-              exit={{ opacity: 0, scale: 1.1, rotate: 2 }}
-              transition={{ type: "spring", stiffness: 150, damping: 20 }}
-              className="relative aspect-square sm:aspect-[4/3] rounded-[48px] overflow-hidden bg-slate-50 dark:bg-slate-950 border-[12px] border-white dark:border-slate-800 shadow-2xl shadow-slate-200/60 dark:shadow-none group cursor-pointer"
+              exit={{ opacity: 0, scale: 1.2, rotate: 3 }}
+              whileHover={cardHover}
+              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+              className="relative aspect-square sm:aspect-[4/3] rounded-[48px] overflow-hidden bg-slate-50 dark:bg-slate-950 border-4 border-white dark:border-slate-800 shadow-2xl shadow-slate-200/60 dark:shadow-none group cursor-pointer"
               onClick={() => onPlay(activeGame)}
             >
               <img
@@ -115,11 +122,13 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
             {featuredGames.slice(0, 5).map((game, idx) => {
               const isSelected = selectedIndex === idx;
               return (
-                <button
+                <motion.button
                   key={game.id}
+                  whileHover={{ scale: 1.2 }}
+                  whileTap={{ scale: 0.9 }}
                   onClick={() => setSelectedIndex(idx)}
-                  className={`w-3 h-3 rounded-full transition-all ${
-                    isSelected ? 'w-10 bg-blue-600' : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600'
+                  className={`w-3 h-3 rounded-sm transition-all ${
+                    isSelected ? 'w-10 bg-cyan-500' : 'bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600'
                   }`}
                   title={game.name}
                 />
@@ -132,3 +141,4 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = ({
     </div>
   );
 };
+

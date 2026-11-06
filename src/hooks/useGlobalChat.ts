@@ -69,33 +69,33 @@ export function useGlobalChat({
   const [currentUser, setCurrentUser] = useState(() => {
     // Clean up old/stale/corrupted localStorage keys while keeping valid ones
     try {
-      const validKeys = ['frosted_chat_user_id', 'frosted_chat_username', 'frosted_chat_usercolor', 'frosted_chat_avatar_url', 'frosted_db_messages'];
+      const validKeys = ['frosthub_chat_user_id', 'frosthub_chat_username', 'frosthub_chat_usercolor', 'frosthub_chat_avatar_url', 'frosthub_db_messages'];
       const allKeys = Object.keys(localStorage);
       allKeys.forEach((key) => {
-        if (key.startsWith('frosted_') && !validKeys.includes(key)) {
+        if (key.startsWith('frosted_') || (key.startsWith('frosthub_') && !validKeys.includes(key))) {
           localStorage.removeItem(key);
         }
       });
     } catch {}
 
     // Priority: Firebase Auth UID > Stored Guest ID > Random New ID
-    const storedId = localStorage.getItem('frosted_chat_user_id');
+    const storedId = localStorage.getItem('frosthub_chat_user_id');
     const savedId = firebaseUserId || storedId || ('u_' + Math.random().toString(36).substr(2, 6));
     
-    const savedName = localStorage.getItem('frosted_chat_username') || ('Player_' + Math.floor(100 + Math.random() * 900));
-    const savedColor = localStorage.getItem('frosted_chat_usercolor') || '#0066ff';
-    let savedAvatarUrl = localStorage.getItem('frosted_chat_avatar_url') || '';
+    const savedName = localStorage.getItem('frosthub_chat_username') || ('Player_' + Math.floor(100 + Math.random() * 900));
+    const savedColor = localStorage.getItem('frosthub_chat_usercolor') || '#0066ff';
+    let savedAvatarUrl = localStorage.getItem('frosthub_chat_avatar_url') || '';
     // Clean up any stale ephemeral /uploads/ links that were wiped during container restarts
     if (savedAvatarUrl && savedAvatarUrl.startsWith('/uploads/')) {
       savedAvatarUrl = '';
-      localStorage.removeItem('frosted_chat_avatar_url');
+      localStorage.removeItem('frosthub_chat_avatar_url');
     }
     
     // Always persist to ensure stability across reloads
-    localStorage.setItem('frosted_chat_user_id', savedId);
-    localStorage.setItem('frosted_chat_username', savedName);
-    localStorage.setItem('frosted_chat_usercolor', savedColor);
-    localStorage.setItem('frosted_chat_avatar_url', savedAvatarUrl);
+    localStorage.setItem('frosthub_chat_user_id', savedId);
+    localStorage.setItem('frosthub_chat_username', savedName);
+    localStorage.setItem('frosthub_chat_usercolor', savedColor);
+    localStorage.setItem('frosthub_chat_avatar_url', savedAvatarUrl);
     
     return {
       id: savedId,
@@ -111,7 +111,7 @@ export function useGlobalChat({
     if (firebaseUserId && currentUser.id !== firebaseUserId) {
       setCurrentUser(prev => {
         const next = { ...prev, id: firebaseUserId };
-        localStorage.setItem('frosted_chat_user_id', firebaseUserId);
+        localStorage.setItem('frosthub_chat_user_id', firebaseUserId);
         return next;
       });
     }
@@ -143,12 +143,12 @@ export function useGlobalChat({
 
   // Ringtone state
   const [ringtoneUrl, setRingtoneUrl] = useState(() => {
-    return localStorage.getItem('frosted_ringtone_url') || '/assets/aistudio/iphone_6_original_19117f02.mp3';
+    return localStorage.getItem('frosthub_ringtone_url') || '/assets/aistudio/iphone_6_original_19117f02.mp3';
   });
 
   const updateRingtone = useCallback((url: string) => {
     setRingtoneUrl(url);
-    localStorage.setItem('frosted_ringtone_url', url);
+    localStorage.setItem('frosthub_ringtone_url', url);
   }, []);
 
   // Call & notification state
@@ -375,7 +375,7 @@ export function useGlobalChat({
       const isDmMsg = lastMessage.channel_id.startsWith('dm-') && lastMessage.channel_id.includes(currentUser.id);
       const isGeneralMsg = lastMessage.channel_id === 'text-general' || lastMessage.channel_id === 'general';
 
-      if (isCreatedDuringSession && isFresh && lastMessage.sender_id !== currentUser.id && lastMessage.sender_name !== 'Frosted System') {
+      if (isCreatedDuringSession && isFresh && lastMessage.sender_id !== currentUser.id && lastMessage.sender_name !== 'FrostHub System') {
         if (isDmMsg) {
           playNotificationSound();
           setActiveNotification({
@@ -510,7 +510,7 @@ export function useGlobalChat({
 
       if (withVideo) {
         const videoStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60, max: 60 } },
           audio: false
         });
         cameraStreamRef.current = videoStream;
@@ -598,7 +598,7 @@ export function useGlobalChat({
     } else {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 } },
+          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60, max: 60 } },
           audio: false
         });
         cameraStreamRef.current = stream;
@@ -633,7 +633,7 @@ export function useGlobalChat({
             video: {
               width: { ideal: 1920, max: 1920 },
               height: { ideal: 1080, max: 1080 },
-              frameRate: { ideal: 30, max: 30 },
+              frameRate: { ideal: 60, max: 60 },
             },
             audio: true,
           });

@@ -8,6 +8,7 @@ import { Readable } from 'stream';
 import { initWebSocketDatabase, globalWsDb, broadcastTable, broadcastWss, sendToUserSockets } from './src/server/wsDatabase';
 import Groq from 'groq-sdk';
 import { processGameHtml, getScaffoldingBuffer } from './src/server/scaffoldingLoader';
+import { initSethsrcEngine } from './src/server/sethsrcEngine';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -15,6 +16,9 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const IS_PROD = process.env.NODE_ENV === 'production';
+
+// Initialize Sethsrc HLS Streaming & Reverse Proxy Engine
+initSethsrcEngine(app, __dirname);
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -106,7 +110,7 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
-    service: 'Frosted - Arcade & Chat',
+    service: 'FrostHub - Entertainment & Chat',
   });
 });
 
@@ -236,6 +240,16 @@ app.delete('/api/ws-db/channel-messages/:channelId', (req, res) => {
     res.json({ success: true, messages: globalWsDb.messages });
   } catch (err: any) {
     res.status(500).json({ error: 'Delete channel messages failed', message: err?.message });
+  }
+});
+
+app.delete('/api/ws-db/messages/all', (req, res) => {
+  try {
+    globalWsDb.deleteAllMessages();
+    broadcastWss({ type: 'DB_CLEAR_MESSAGES' });
+    res.json({ success: true, messages: [] });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Global delete failed', message: err?.message });
   }
 });
 

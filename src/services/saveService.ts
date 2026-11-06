@@ -10,8 +10,8 @@ export interface GameSaveData {
   version: number;
 }
 
-const SAVE_PREFIX = 'frosted_auto_save_';
-const DB_NAME = 'FrostedAutoSaveDB';
+const SAVE_PREFIX = 'frosthub_auto_save_';
+const DB_NAME = 'FrostHubAutoSaveDB';
 const DB_VERSION = 1;
 const STORE_NAME = 'game_saves';
 
