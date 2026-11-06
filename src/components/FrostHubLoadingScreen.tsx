@@ -10,9 +10,20 @@ export const FrostHubLoadingScreen: React.FC = () => {
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
 
+    const startAudio = () => {
+      const video = videoRef.current;
+      if (!video) return;
+      video.muted = false;
+      video.play().catch(() => undefined);
+    };
+
     videoRef.current?.play().catch(() => undefined);
+    window.addEventListener('pointerdown', startAudio, { once: true });
+    window.addEventListener('keydown', startAudio, { once: true });
 
     return () => {
+      window.removeEventListener('pointerdown', startAudio);
+      window.removeEventListener('keydown', startAudio);
       // Unlock scroll when unmounting
       document.body.style.overflow = '';
       document.documentElement.style.overflow = '';
@@ -43,7 +54,7 @@ export const FrostHubLoadingScreen: React.FC = () => {
               className="w-full h-full object-cover pointer-events-none"
               autoPlay
               playsInline
-              muted
+              muted={false}
               onEnded={handleVideoEnd}
             />
           </motion.div>
