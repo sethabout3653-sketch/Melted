@@ -26,9 +26,9 @@ const EXTRA_TV_CHANNELS: TVChannel[] = [
     category: 'Kids', logo: logo('PBSKidsPacific.us'), description: 'PBS Kids live feed for the Pacific time zone.'
   },
   {
-    id: 'pbs-mpt-baltimore', name: 'PBS MPT Baltimore (WMPB)',
+    id: 'pbs-mpt-baltimore', name: 'MPT',
     url: 'https://2-fss-2.streamhoster.com/pl_138/amlst:201814-1291584/playlist.m3u8',
-    category: 'Educational', logo: logo('PBS.us'), description: 'Maryland Public Television WMPB stream; schedule and availability may differ from OTA.'
+    category: 'Educational', logo: logo('PBS.us'), description: 'Maryland Public Television (WMPB) live stream.'
   },
   {
     id: 'pbs-ket-kentucky', name: 'PBS KET Kentucky',
