@@ -39,7 +39,7 @@ export const FrostHubLoadingScreen: React.FC = () => {
             {/* The Video Intro */}
             <video
               ref={videoRef}
-              src="/assets/aistudio/lv_0_20261105150314-60fps.mp4"
+              src="/assets/aistudio/video-1.mp4"
               className="w-full h-full object-cover pointer-events-none"
               autoPlay
               playsInline
