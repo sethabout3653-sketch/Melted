@@ -157,9 +157,8 @@ const EXTRA_TV_CHANNELS: TVChannel[] = [
   }
 ];
 
-// Put the added channels first so they're immediately visible in the long guide, then keep the existing channels.
+// Mutate the shared source so any existing import of TV_CHANNELS (including LiveTVView) receives the extras.
 const existingIds = new Set(TV_CHANNELS.map(channel => channel.id));
-export const CHANNEL_GUIDE: TVChannel[] = [
-  ...EXTRA_TV_CHANNELS.filter(channel => !existingIds.has(channel.id)),
-  ...TV_CHANNELS
-];
+const newChannels = EXTRA_TV_CHANNELS.filter(channel => !existingIds.has(channel.id));
+TV_CHANNELS.unshift(...newChannels);
+export const CHANNEL_GUIDE: TVChannel[] = TV_CHANNELS;
