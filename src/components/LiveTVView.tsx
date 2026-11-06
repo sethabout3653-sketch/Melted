@@ -6,6 +6,26 @@ import { TV_CHANNELS, TVChannel } from '../data/channels';
 const DEFAULT_CHANNEL_ID = 'pluto-funny-af';
 const DEFAULT_CHANNEL = TV_CHANNELS.find(channel => channel.id === DEFAULT_CHANNEL_ID) ?? TV_CHANNELS[0] ?? null;
 
+const EXTRA_CATEGORIES = [
+  'All',
+  'News',
+  'Comedy',
+  'Entertainment',
+  'Kids',
+  'Sports',
+  'Movies',
+  'Series',
+  'Educational',
+  'Lifestyle',
+  'Music',
+  'General',
+  'Family',
+  'Documentary',
+  'Reality',
+  'Travel',
+  'Faith'
+];
+
 const ChannelLogo: React.FC<{ logo?: string; name: string }> = ({ logo, name }) => {
   const [hasError, setHasError] = useState(false);
 
@@ -53,7 +73,7 @@ export const LiveTVView: React.FC = () => {
   const hlsRef = useRef<Hls | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const categories = ['All', ...Array.from(new Set(TV_CHANNELS.map(c => c.category)))];
+  const categories = Array.from(new Set([...EXTRA_CATEGORIES, ...TV_CHANNELS.map(c => c.category)]));
 
   const filteredChannels = TV_CHANNELS.filter(channel => {
     const matchesSearch = channel.name.toLowerCase().includes(searchQuery.toLowerCase());
@@ -61,7 +81,6 @@ export const LiveTVView: React.FC = () => {
     return matchesSearch && matchesCategory;
   });
 
-  // HLS Player Setup
   useEffect(() => {
     let isCancelled = false;
 
