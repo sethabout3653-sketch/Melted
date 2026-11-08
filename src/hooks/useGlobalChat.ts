@@ -11,6 +11,8 @@ export interface ActiveCall {
   targetUserName?: string;
   targetAvatarColor?: string;
   callType: 'audio' | 'video';
+  status?: 'declined';
+  declineMessage?: string;
 }
 
 export interface InAppNotification {
@@ -320,13 +322,22 @@ export function useGlobalChat({
       if (incomingCall?.fromUserId === fromUserId) {
         setIncomingCall(null);
       }
-      if (outgoingCallRef.current?.targetUserId === fromUserId) {
-        if (outgoingCallTimerRef.current) {
-          clearTimeout(outgoingCallTimerRef.current);
-          outgoingCallTimerRef.current = null;
-        }
-        setOutgoingCall(null);
-      }
+  if (outgoingCallRef.current?.targetUserId === fromUserId) {
+    if (outgoingCallTimerRef.current) {
+      clearTimeout(outgoingCallTimerRef.current);
+      outgoingCallTimerRef.current = null;
+    }
+    const declinedCall = outgoingCallRef.current;
+    setOutgoingCall({
+      ...declinedCall,
+      status: 'declined',
+      declineMessage: `${chat.users.find((user) => user.id === fromUserId)?.username || 'This user'} has declined`,
+    });
+    outgoingCallTimerRef.current = setTimeout(() => {
+      setOutgoingCall(null);
+      outgoingCallTimerRef.current = null;
+    }, 2500);
+  }
     });
   }, [setCallEndedHandler, incomingCall, chat]);
 

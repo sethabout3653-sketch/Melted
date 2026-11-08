@@ -110,7 +110,7 @@ export const PhoneCallOverlay: React.FC<PhoneCallOverlayProps> = ({
             ) : (
               <div className="mt-8 flex h-32 w-32 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-cyan-400/40 to-indigo-500/30 text-5xl font-semibold text-white ring-4 ring-white/10">{avatar ? <img src={avatar} alt="" className="h-full w-full object-cover" /> : initials}</div>
             )}
-            <p className="mt-8 text-2xl font-normal text-[#c6c2ca]">{isActive ? duration : 'Calling...'}</p>
+            <p className="mt-8 text-2xl font-normal text-[#c6c2ca]">{call?.status === 'declined' ? call.declineMessage : isActive ? duration : 'Calling...'}</p>
             <h2 className="mt-3 max-w-full truncate text-6xl font-normal tracking-tight">{name}</h2>
             <div className="mt-auto flex flex-col items-center gap-8">
               {isActive && <div className="flex items-center gap-6 text-white/70">
