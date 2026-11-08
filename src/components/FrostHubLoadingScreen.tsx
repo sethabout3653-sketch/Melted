@@ -1,6 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-export const FrostHubLoadingScreen: React.FC = () => {
+
+interface FrostHubLoadingScreenProps {
+  isLoading?: boolean;
+}
+
+export const FrostHubLoadingScreen: React.FC<FrostHubLoadingScreenProps> = () => {
   const [isFading, setIsFading] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const hasFinishedRef = useRef(false);
@@ -52,7 +57,7 @@ export const FrostHubLoadingScreen: React.FC = () => {
               className="w-full h-full object-cover pointer-events-none"
               autoPlay
               playsInline
-              muted={false}
+              muted
               onEnded={handleVideoEnd}
             />
           </motion.div>

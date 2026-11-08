@@ -339,6 +339,7 @@ export default function App() {
         users={globalChat.users}
         currentUser={globalChat.currentUser}
         onOpenThemeSelector={() => setIsThemeModalOpen(true)}
+        onStartCall={(user) => globalChat.initiateCall(user.id, user.username || user.display_name || 'Online user', 'audio')}
       />
 
       {/* Main Content Scrollable Area with Smooth Transitions */}
@@ -529,6 +530,16 @@ export default function App() {
           onToggleFavorite={handleToggleFavorite}
         />
       )}
+
+      <PhoneCallOverlay
+        incomingCall={globalChat.incomingCall}
+        outgoingCall={globalChat.outgoingCall}
+        activeDirectCall={globalChat.activeDirectCall}
+        isConnected={globalChat.directRtc?.isConnected}
+        onAccept={globalChat.acceptCall}
+        onDecline={globalChat.dismissIncomingCall}
+        onEnd={globalChat.endDirectCall}
+      />
 
       {/* Global In-App Message Notification Toast - visible on every screen and over games */}
       <InAppNotificationToast

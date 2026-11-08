@@ -736,6 +736,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
     } else if (u.current_channel && u.current_channel.startsWith('dm-')) {
       text = 'In Private Chat';
       textColor = 'text-emerald-500 font-semibold';
+    } else if (u.activity === 'Typing...') {
+      text = 'Typing...';
+      textColor = 'text-cyan-400 font-semibold animate-pulse';
     } else if (u.activity && u.activity !== 'Online' && u.activity !== 'Browsing Games' && u.activity !== 'In #general') {
       text = u.activity;
       textColor = 'text-purple-500 font-semibold';
@@ -787,6 +790,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
   }, [messages, activeChannel]);
 
   const [inputText, setInputText] = useState('');
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
@@ -1142,6 +1146,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
   // Submit Message immediately with uploaded file
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    updateUser({ activity: 'Online' });
     if (!inputText.trim() && !pendingFile) return;
 
     let finalAttachment: { url: string; type: 'image' | 'video' | 'audio' | 'file' | 'gif'; name?: string } | undefined = undefined;
@@ -1858,7 +1864,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                   <input
                     type="text"
                     value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setInputText(value);
+                      updateUser({ activity: value.trim() ? 'Typing...' : 'Online' });
+                      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                      if (value.trim()) {
+                        typingTimeoutRef.current = setTimeout(() => updateUser({ activity: 'Online' }), 1800);
+                      }
+                    }}
                     placeholder={activeChannel.startsWith('dm-') ? `Message @${activeDmPeer?.username || 'user'} privately...` : "Message #general..."}
                     className="flex-1 bg-transparent text-base md:text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none py-2"
                   />
