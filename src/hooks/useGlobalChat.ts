@@ -330,9 +330,23 @@ export function useGlobalChat({
     });
   }, [setCallEndedHandler, incomingCall, chat]);
 
-  const initiateCall = useCallback((_targetUserId: string, _targetUserName: string, _callType?: 'audio' | 'video') => {
-    // Calling feature removed
-  }, []);
+  const initiateCall = useCallback((targetUserId: string, targetUserName: string, callType: 'audio' | 'video' = 'audio') => {
+    if (!targetUserId || targetUserId === currentUser.id || outgoingCall || activeDirectCall) return;
+    const target = chat.users.find((user) => user.id === targetUserId);
+    if (!target) return;
+    const call: ActiveCall = {
+      targetUserId,
+      targetUserName,
+      targetAvatarColor: target.avatar_color,
+      callType,
+    };
+    setOutgoingCall(call);
+    outgoingCallTimerRef.current = setTimeout(() => {
+      setOutgoingCall(null);
+      outgoingCallTimerRef.current = null;
+    }, 30000);
+    rawCallUser(targetUserId, callType);
+  }, [activeDirectCall, chat.users, currentUser.id, outgoingCall, rawCallUser]);
 
   const dismissIncomingCall = useCallback(() => {
     setIncomingCall(null);
@@ -344,12 +358,27 @@ export function useGlobalChat({
   }, []);
 
   const acceptCall = useCallback(() => {
+    if (!incomingCall?.fromUserId) return;
+    const peer = chat.users.find((user) => user.id === incomingCall.fromUserId);
+    rawAnswerCall(incomingCall.fromUserId, incomingCall.callType);
     setIncomingCall(null);
-  }, []);
+    setActiveDirectCall({
+      peerId: incomingCall.fromUserId,
+      peerName: incomingCall.fromUserName || peer?.username || 'Player',
+      peerAvatarColor: incomingCall.fromAvatarColor || peer?.avatar_color,
+      callType: incomingCall.callType,
+      isInitiator: false,
+      startTime: Date.now(),
+    });
+  }, [chat.users, incomingCall, rawAnswerCall]);
 
   const endDirectCall = useCallback(() => {
+    const peerId = activeDirectCallRef.current?.peerId || incomingCall?.fromUserId || outgoingCallRef.current?.targetUserId;
+    if (peerId) rawEndCallSignal(peerId);
+    setIncomingCall(null);
+    setOutgoingCall(null);
     setActiveDirectCall(null);
-  }, []);
+  }, [incomingCall, rawEndCallSignal]);
 
   // Message notifications: Only trigger for NEW messages sent during the active session!
   // Prevents historical messages sent an hour ago from triggering sounds or toasts when entering the site.

@@ -530,6 +530,16 @@ export default function App() {
         />
       )}
 
+      <PhoneCallOverlay
+        incomingCall={globalChat.incomingCall}
+        outgoingCall={globalChat.outgoingCall}
+        activeDirectCall={globalChat.activeDirectCall}
+        isConnected={globalChat.directRtc?.isConnected}
+        onAccept={globalChat.acceptCall}
+        onDecline={globalChat.dismissIncomingCall}
+        onEnd={globalChat.endDirectCall}
+      />
+
       {/* Global In-App Message Notification Toast - visible on every screen and over games */}
       <InAppNotificationToast
         notification={globalChat.activeNotification}
