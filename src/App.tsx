@@ -340,6 +340,11 @@ export default function App() {
         currentUser={globalChat.currentUser}
         onOpenThemeSelector={() => setIsThemeModalOpen(true)}
         onStartCall={(user) => globalChat.initiateCall(user.id, user.username || user.display_name || 'Online user', 'audio')}
+        onStartVideoCall={(user) => globalChat.initiateCall(user.id, user.username || user.display_name || 'Online user', 'video')}
+        onStartGroupCall={(selectedUsers) => {
+          const firstUser = selectedUsers[0]
+          if (firstUser) globalChat.initiateCall(firstUser.id, firstUser.username || firstUser.display_name || 'Group call', 'audio')
+        }}
       />
 
       {/* Main Content Scrollable Area with Smooth Transitions */}
@@ -535,8 +540,11 @@ export default function App() {
         incomingCall={globalChat.incomingCall}
         outgoingCall={globalChat.outgoingCall}
         activeDirectCall={globalChat.activeDirectCall}
-        isConnected={globalChat.directRtc?.isConnected}
-        onAccept={globalChat.acceptCall}
+  isConnected={globalChat.directRtc?.isConnected}
+  localVideoStream={globalChat.cameraStream}
+  onToggleVideo={() => globalChat.toggleCamera()}
+  onToggleMic={(enabled) => globalChat.setIsMuted(!enabled)}
+  onAccept={globalChat.acceptCall}
         onDecline={globalChat.dismissIncomingCall}
         onEnd={globalChat.endDirectCall}
       />
