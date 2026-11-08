@@ -339,6 +339,7 @@ export default function App() {
         users={globalChat.users}
         currentUser={globalChat.currentUser}
         onOpenThemeSelector={() => setIsThemeModalOpen(true)}
+        onStartCall={(user) => globalChat.initiateCall(user.id, user.username || user.display_name || 'Online user', 'audio')}
       />
 
       {/* Main Content Scrollable Area with Smooth Transitions */}

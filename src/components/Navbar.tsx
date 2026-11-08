@@ -1,12 +1,12 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { 
   Search, 
   Shuffle, 
   Heart, 
   X, 
-  Sun,
-  Moon,
-  Palette
+  Palette,
+  Phone,
+  ChevronDown
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { CloakPreset } from '../hooks/useCloak';
@@ -38,6 +38,7 @@ interface NavbarProps {
   users?: any[];
   currentUser?: any;
   onOpenThemeSelector?: () => void;
+  onStartCall?: (user: any) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -53,8 +54,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   theme = 'dark',
   onToggleTheme,
   onOpenThemeSelector,
+  users = [],
+  currentUser,
+  onStartCall,
 }) => {
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [isCallMenuOpen, setIsCallMenuOpen] = useState(false);
+  const callableUsers = users.filter((user) => user.id !== currentUser?.id && user.status !== 'offline');
 
   return (
     <header className="sticky top-0 z-50 w-full bg-[#0d0d12] border-b border-[#1e1e2d] text-white shrink-0 shadow-md">
@@ -141,6 +147,43 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Quick Action Icons */}
           <div className="flex items-center gap-1.5 border-l border-[#242436] pl-2 sm:pl-3">
+            {onStartCall && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setIsCallMenuOpen((open) => !open)}
+                  className={`flex items-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold transition-all ${isCallMenuOpen ? 'bg-[#00f0ff]/15 text-[#00f0ff]' : 'text-slate-400 hover:bg-[#1a1a26] hover:text-[#00f0ff]'}`}
+                  title="Call someone online"
+                  aria-expanded={isCallMenuOpen}
+                  aria-haspopup="menu"
+                >
+                  <Phone className="h-4 w-4" />
+                  <span className="hidden xl:inline">Call</span>
+                  <ChevronDown className="h-3 w-3" />
+                </button>
+                {isCallMenuOpen && (
+                  <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-[#2a2a3c] bg-[#12121b] p-2 shadow-2xl" role="menu">
+                    <div className="px-2 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">Online people</div>
+                    {callableUsers.length === 0 ? (
+                      <div className="px-2 py-3 text-xs text-slate-500">No one else is online.</div>
+                    ) : callableUsers.map((user) => (
+                      <button
+                        key={user.id}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => { onStartCall(user); setIsCallMenuOpen(false); }}
+                        className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/10"
+                      >
+                        <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">{user.username || user.display_name || 'Online user'}</span>
+                        <Phone className="h-3.5 w-3.5 text-[#00f0ff]" />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
             <button
               type="button"
               onClick={onRandomGame}
