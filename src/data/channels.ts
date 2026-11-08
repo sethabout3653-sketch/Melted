@@ -8,6 +8,126 @@ export interface TVChannel {
 }
 
 export const TV_CHANNELS: TVChannel[] = [
+  {
+    id: 'pbs-mpt-baltimore', name: 'MPT',
+    url: 'https://2-fss-2.streamhoster.com/pl_138/amlst:201814-1291584/playlist.m3u8',
+    category: 'Lifestyle', logo: 'https://images.iptv-org.github.io/epg/logos/PBS.us.png', description: 'Maryland Public Television (WMPB) live stream.'
+  },
+  {
+    id: 'qvc-2-live', name: 'QVC 2',
+    url: 'https://qvc-amd-live.akamaized.net/hls/live/2034113/lsqvc2us/master.m3u8',
+    category: 'Lifestyle', logo: 'https://images.iptv-org.github.io/epg/logos/QVC2.us.png', description: 'QVC 2 live stream; primarily intended for US viewers.'
+  },
+  {
+    id: 'qvc-3-live', name: 'QVC 3',
+    url: 'https://qvc-amd-live.akamaized.net/hls/live/2034113/lsqvc3us/master.m3u8',
+    category: 'Lifestyle', logo: 'https://images.iptv-org.github.io/epg/logos/QVC3.us.png', description: 'QVC 3 live stream; primarily intended for US viewers.'
+  },
+  {
+    id: 'france-24-english-live', name: 'France 24 English',
+    url: 'https://live.france24.com/hls/live/2037218/F24_EN_HI_HLS/master_5000.m3u8',
+    category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/France24.fr.png', description: 'Official France 24 English live stream; regional availability may vary.'
+  },
+  {
+    id: 'france-24-arabic-live', name: 'France 24 Arabic',
+    url: 'https://live.france24.com/hls/live/2037222/F24_AR_HI_HLS/master_5000.m3u8',
+    category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/France24.fr.png', description: 'Official France 24 Arabic live stream; regional availability may vary.'
+  },
+  {
+    id: 'dw-english-live', name: 'DW English',
+    url: 'https://dwamdstream102.akamaized.net/hls/live/2015525/dwstream102/master.m3u8',
+    category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/DW.de.png', description: 'Deutsche Welle English live stream.'
+  },
+  {
+    id: 'dw-arabic-live', name: 'DW Arabic',
+    url: 'https://dwamdstream103.akamaized.net/hls/live/2015526/dwstream103/master.m3u8',
+    category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/DW.de.png', description: 'Deutsche Welle Arabic live stream.'
+  },
+  {
+    id: 'cgtn-english-live', name: 'CGTN English',
+    url: 'https://news.cgtn.com/resource/live/english/cgtn-news.m3u8',
+    category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/CGTN.cn.png', description: 'CGTN English news live stream.'
+  },
+  {
+    id: 'cgtn-arabic-live', name: 'CGTN Arabic',
+    url: 'https://news.cgtn.com/resource/live/arabic/cgtn-a.m3u8',
+    category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/CGTNArabic.cn.png', description: 'CGTN Arabic live stream; may be scheduled programming rather than continuous live news.'
+  },
+  {
+    id: 'cgtn-spanish-live', name: 'CGTN Español',
+    url: 'https://news.cgtn.com/resource/live/espanol/cgtn-e.m3u8',
+    category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/CGTNSpanish.cn.png', description: 'CGTN Spanish-language live stream.'
+  },
+  {
+    id: 'cgtn-french-live', name: 'CGTN Français',
+    url: 'https://news.cgtn.com/resource/live/french/cgtn-f.m3u8',
+    category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/CGTNFrench.cn.png', description: 'CGTN French-language live stream; feed may not be live 24/7.'
+  },
+  {
+    id: 'cgtn-russian-live', name: 'CGTN Русский',
+    url: 'https://news.cgtn.com/resource/live/russian/cgtn-r.m3u8',
+    category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/CGTNRussian.cn.png', description: 'CGTN Russian-language live stream.'
+  },
+  {
+    id: 'cgtn-documentary-live', name: 'CGTN Documentary',
+    url: 'https://news.cgtn.com/resource/live/document/cgtn-doc.m3u8',
+    category: 'Lifestyle', logo: 'https://images.iptv-org.github.io/epg/logos/CGTNDocumentary.cn.png', description: 'CGTN documentary stream; availability may be intermittent.'
+  },
+  {
+    id: 'al-jazeera-english-live', name: 'Al Jazeera English',
+    url: 'https://live-hls-web-aje.getaj.net/AJE/index.m3u8',
+    category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/AlJazeera.qa.png', description: 'Al Jazeera English live stream.'
+  },
+  {
+    id: 'nhk-world-japan-live', name: 'NHK World-Japan',
+    url: 'https://masterpl.hls.nhkworld.jp/hls/w/live/smarttv.m3u8',
+    category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/NHKWorldJapan.jp.png', description: 'NHK World-Japan international live stream.'
+  },
+  {
+    id: 'arirang-tv-live', name: 'Arirang TV',
+    url: 'https://amdlive-ch01-ctnd-com.akamaized.net/arirang_1ch/smil:arirang_1ch.smil/playlist.m3u8',
+    category: 'Entertainment', logo: 'https://images.iptv-org.github.io/epg/logos/ArirangTV.kr.png', description: 'Arirang Television international stream.'
+  },
+  {
+    id: 'newsmax-2-live', name: 'Newsmax 2',
+    url: 'https://nmxlive.akamaized.net/hls/live/529965/Live_1/index.m3u8',
+    category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/Newsmax2.us.png', description: 'Newsmax 2 live stream; US availability may apply.'
+  },
+  {
+    id: 'newsmax-tv-live', name: 'Newsmax TV',
+    url: 'https://nmx1ota.akamaized.net/hls/live/2107010/Live_1/index.m3u8',
+    category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/NewsmaxTV.us.png', description: 'Newsmax TV live stream; availability may vary by region.'
+  },
+  {
+    id: 'oan-plus-live', name: 'OAN Plus',
+    url: 'https://oan-plus-tcl.amagi.tv/playlist.m3u8',
+    category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/OANPlus.us.png', description: 'OAN Plus free streaming channel.'
+  },
+  {
+    id: 'bloomberg-originals-live', name: 'Bloomberg Originals',
+    url: 'https://www.bloomberg.com/media-manifest/streams/qt.m3u8',
+    category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/BloombergOriginals.us.png', description: 'Bloomberg Originals live programming; playback may depend on region and browser access.'
+  },
+  {
+    id: 'bloomberg-us-live', name: 'Bloomberg TV US',
+    url: 'https://www.bloomberg.com/media-manifest/streams/us.m3u8',
+    category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/BloombergTV.us.png', description: 'Bloomberg TV US live stream; playback availability may vary.'
+  },
+  {
+    id: 'buzzr-live', name: 'BUZZR',
+    url: 'https://buzzrota-ono.amagi.tv/playlist.m3u8',
+    category: 'Entertainment', logo: 'https://images.iptv-org.github.io/epg/logos/Buzzr.us.png', description: 'BUZZR classic game-show channel.'
+  },
+  {
+    id: 'euronews-english-live', name: 'Euronews English',
+    url: 'https://aegis-cloudfront-1.tubi.video/b1c4d439-03a5-4c40-ae9d-90a183e010c9/euronews-en.m3u8',
+    category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/EuronewsEnglish.fr.png', description: 'Euronews English stream via Tubi; service and regional availability may vary.'
+  },
+  {
+    id: 'reuters-now-live', name: 'Reuters Now',
+    url: 'https://amg00453-reuters-amg00453c1-xumo-us-2073.playouts.now.amagi.tv/reuters-reuters-hls/playlist.m3u8',
+    category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/ReutersTV.us.png', description: 'Reuters Now live news stream.'
+  },
 {
   "id": "wbff-fox-45",
   "name": "FOX 45 Baltimore",
@@ -68,7 +188,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pbs-kids",
   "name": "PBS Kids",
   "url": "https://livestream.pbskids.org/out/v1/14507d931bbe48a69287e4850e53443c/est.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTX0Cy8Om2kCYAkojjgCvXc_Fc-2l-CGhTwhwHtLfdO-YBbiGlY5Wy8bMA&s=10",
   "description": "PBS Kids Live Educational Programming"
 },
@@ -76,7 +196,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "baby-shark-tv",
   "name": "Baby Shark TV",
   "url": "https://newidco-babysharktv-1-us.roku.wurl.tv/playlist.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRze7KNswWV-ifpStKVfPWC0y-S3o_t7ZMfkB9JgRwhyQFBRHdTbiJlgOAG&s=10",
   "description": "Baby Shark nursery songs and preschool fun"
 },
@@ -84,7 +204,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "babyfirst",
   "name": "BabyFirst",
   "url": "https://cdn.fast.jwp.services/v1/channel/1_jB6940Ei_TvhvIHDL/manifest.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://upload.wikimedia.org/wikipedia/ru/d/d0/Babyfirst-logo.png?utm_source=ru.wikipedia.org&utm_campaign=index&utm_content=original",
   "description": "Educational programs for toddlers and infants"
 },
@@ -100,7 +220,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-nick-jr-pluto-tv-ptv1",
   "name": "Nick Jr.",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5ca6748a37b88b269472dad9.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://thumb.wikimedia.org/wikipedia/commons/thumb/e/e0/Nick_Jr._logo_2023.svg/1280px-Nick_Jr._logo_2023.svg.png?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=thumbnail&_=20250701043845",
   "description": "Nick Jr. Pluto TV live on Pluto TV"
 },
@@ -132,7 +252,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-little-stars-universe",
   "name": "Little Stars Universe",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-51c75f7bb6f26ba1cd00002f.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://images.pluto.tv/channels/51c75f7bb6f26ba1cd00002f/colorLogoPNG.png",
   "description": "Little Stars Universe live on Pluto TV"
 },
@@ -204,7 +324,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-forever-kids",
   "name": "Forever Kids",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-56171fafada51f8004c4b40f.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://images.pluto.tv/channels/56171fafada51f8004c4b40f/colorLogoPNG.png",
   "description": "Forever Kids live on Pluto TV"
 },
@@ -228,7 +348,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-pluto-tv-science",
   "name": "Pluto TV Science",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-563a970aa1a1f7fe7c9daad7.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/563a970aa1a1f7fe7c9daad7/colorLogoPNG.png",
   "description": "Pluto TV Science live on Pluto TV"
 },
@@ -276,7 +396,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-naturescape",
   "name": "Naturescape",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5812bd9f249444e05d09cc4e.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/5812bd9f249444e05d09cc4e/colorLogoPNG.png",
   "description": "Naturescape live on Pluto TV"
 },
@@ -348,7 +468,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-pluto-tv-history",
   "name": "Pluto TV History",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5a4d35dfa5c02e717a234f86.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/5a4d35dfa5c02e717a234f86/colorLogoPNG.png",
   "description": "Pluto TV History live on Pluto TV"
 },
@@ -436,7 +556,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-gordon-ramsays-hells-kitchen",
   "name": "Gordon Ramsay's Hell's Kitchen",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5b4e99f4423e067bd6df6903.m3u8",
-  "category": "Entertainment",
+  "category": "Reality",
   "logo": "https://images.pluto.tv/channels/5b4e99f4423e067bd6df6903/colorLogoPNG.png",
   "description": "Gordon Ramsay's Hell's Kitchen live on Pluto TV"
 },
@@ -468,7 +588,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-the-pet-collective",
   "name": "The Pet Collective",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5bb1ad55268cae539bcedb08.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/5bb1ad55268cae539bcedb08/colorLogoPNG.png",
   "description": "The Pet Collective live on Pluto TV"
 },
@@ -476,7 +596,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-forensic-files",
   "name": "Forensic Files",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5bb1af6a268cae539bcedb0a.m3u8",
-  "category": "Series",
+  "category": "Reality",
   "logo": "https://images.pluto.tv/channels/5bb1af6a268cae539bcedb0a/colorLogoPNG.png",
   "description": "Forensic Files live on Pluto TV"
 },
@@ -484,7 +604,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-pluto-tv-military",
   "name": "Pluto TV Military",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5bb3fea0f711fd76340eebff.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/5bb3fea0f711fd76340eebff/colorLogoPNG.png",
   "description": "Pluto TV Military live on Pluto TV"
 },
@@ -532,7 +652,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-cold-case-files-presented-by-aande",
   "name": "Cold Case Files by A&E",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5c37d6712de254456f7ec340.m3u8",
-  "category": "Series",
+  "category": "Reality",
   "logo": "https://images.pluto.tv/channels/5c37d6712de254456f7ec340/colorLogoPNG_1767744689997.png",
   "description": "Cold Case Files by A&E live on Pluto TV"
 },
@@ -652,7 +772,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-estrella-tv",
   "name": "EstrellaTV",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5cf0622da00ca1e2f6fac712.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5cf0622da00ca1e2f6fac712/colorLogoPNG.png",
   "description": "EstrellaTV live on Pluto TV"
 },
@@ -660,7 +780,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-cine-premiere",
   "name": "Cine Premiere",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5cf968040ab7d8f181e6a68b.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5cf968040ab7d8f181e6a68b/colorLogoPNG.png",
   "description": "Cine Premiere live on Pluto TV"
 },
@@ -668,7 +788,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-cine-en-espanol",
   "name": "Cine en espa\u00f1ol",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5cf96b1c4f1ca3f0629f4bf0.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5cf96b1c4f1ca3f0629f4bf0/colorLogoPNG.png",
   "description": "Cine en espa\u00f1ol live on Pluto TV"
 },
@@ -676,7 +796,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-investiga-ptv1",
   "name": "Investiga",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5cf96b8f4f1ca3f0629f4bf1.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5cf96b8f4f1ca3f0629f4bf1/colorLogoPNG.png",
   "description": "Investiga live on Pluto TV"
 },
@@ -684,7 +804,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-pluto-tv-novelas",
   "name": "Pluto TV Novelas",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5cf96c0222df39f1a338d163.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5cf96c0222df39f1a338d163/colorLogoPNG.png",
   "description": "Pluto TV Novelas live on Pluto TV"
 },
@@ -692,7 +812,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-telemundo-telenovelas-clasicas-ptv1",
   "name": "Telemundo telenovelas cl\u00e1sicas",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5cf96cc422df39f1a338d165.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5cf96cc422df39f1a338d165/colorLogoPNG.png",
   "description": "Telemundo telenovelas cl\u00e1sicas live on Pluto TV"
 },
@@ -700,7 +820,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-mtv-en-espanol",
   "name": "MTV en espa\u00f1ol",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5cf96d351652631e36d4331f.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5cf96d351652631e36d4331f/colorLogoPNG-1641928405432.png",
   "description": "MTV en espa\u00f1ol live on Pluto TV"
 },
@@ -708,7 +828,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-comedy-central-en-espanol",
   "name": "Comedy Central en espa\u00f1ol",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5cf96dad1652631e36d43320.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5cf96dad1652631e36d43320/colorLogoPNG_1731837238379.png",
   "description": "Comedy Central en espa\u00f1ol live on Pluto TV"
 },
@@ -724,7 +844,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-yo-mtv",
   "name": "Yo! MTV",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5d14fc31252d35decbc4080b.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5d14fc31252d35decbc4080b/colorLogoPNG.png",
   "description": "Yo! MTV live on Pluto TV"
 },
@@ -732,7 +852,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-mtv-biggest-pop",
   "name": "MTV Biggest Pop",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5d14fd1a252d35decbc4080c.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5d14fd1a252d35decbc4080c/colorLogoPNG_1758324914960.png",
   "description": "MTV Biggest Pop live on Pluto TV"
 },
@@ -740,7 +860,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-mtv-spankin-new",
   "name": "MTV Spankin' New",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5d14fdb8ca91eedee1633117.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5d14fdb8ca91eedee1633117/colorLogoPNG.png",
   "description": "MTV Spankin' New live on Pluto TV"
 },
@@ -748,7 +868,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-mtv-flow-latino-ptv1",
   "name": "MTV Flow Latino",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5d3609cd6a6c78d7672f2a81.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5d3609cd6a6c78d7672f2a81/colorLogoPNG_1731834717093.png",
   "description": "MTV Flow Latino live on Pluto TV"
 },
@@ -844,7 +964,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-pluto-tv-reality",
   "name": "Pluto TV Reality",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5d8bf0b06d2d855ee15115e3.m3u8",
-  "category": "Entertainment",
+  "category": "Reality",
   "logo": "https://images.pluto.tv/channels/5d8bf0b06d2d855ee15115e3/colorLogoPNG.png",
   "description": "Pluto TV Reality live on Pluto TV"
 },
@@ -852,7 +972,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-nick-en-espanol",
   "name": "Nickelodeon en espa\u00f1ol",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5d8d08395f39465da6fb3ec4.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://images.pluto.tv/channels/5d8d08395f39465da6fb3ec4/colorLogoPNG.png",
   "description": "Nickelodeon en espa\u00f1ol live on Pluto TV"
 },
@@ -860,7 +980,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-cine-adrenalina",
   "name": "Cine adrenalina",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5d8d164d92e97a5e107638d2.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5d8d164d92e97a5e107638d2/colorLogoPNG.png",
   "description": "Cine adrenalina live on Pluto TV"
 },
@@ -868,7 +988,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-cine-terror",
   "name": "Cine terror",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5d8d180092e97a5e107638d3.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5d8d180092e97a5e107638d3/colorLogoPNG.png",
   "description": "Cine terror live on Pluto TV"
 },
@@ -876,7 +996,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-vevo-pop",
   "name": "Vevo Pop",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5d93b635b43dd1a399b39eee.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5d93b635b43dd1a399b39eee/colorLogoPNG.png",
   "description": "Vevo Pop live on Pluto TV"
 },
@@ -900,7 +1020,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-vevo-country",
   "name": "Vevo Country",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5da0d75e84830900098a1ea0.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5da0d75e84830900098a1ea0/colorLogoPNG.png",
   "description": "Vevo Country live on Pluto TV"
 },
@@ -908,7 +1028,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-vevo-randb",
   "name": "Vevo R&B",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5da0d83f66c9700009b96d0e.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5da0d83f66c9700009b96d0e/colorLogoPNG.png",
   "description": "Vevo R&B live on Pluto TV"
 },
@@ -932,7 +1052,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-kids-movie-club",
   "name": "Kids Movie Club",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5db0ad56edc89300090d2ebb.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://images.pluto.tv/channels/5db0ad56edc89300090d2ebb/colorLogoPNG.png",
   "description": "Kids Movie Club live on Pluto TV"
 },
@@ -1012,7 +1132,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-cops",
   "name": "COPS",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5e1f7e089f23700009d66303.m3u8",
-  "category": "Entertainment",
+  "category": "Reality",
   "logo": "https://images.pluto.tv/channels/5e1f7e089f23700009d66303/colorLogoPNG.png",
   "description": "COPS live on Pluto TV"
 },
@@ -1052,7 +1172,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-all-reality-we-tv",
   "name": "All Reality WE tv",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5e82530945600e0007ca076c.m3u8",
-  "category": "Entertainment",
+  "category": "Reality",
   "logo": "https://images.pluto.tv/channels/5e82530945600e0007ca076c/colorLogoPNG.png",
   "description": "All Reality WE tv live on Pluto TV"
 },
@@ -1068,7 +1188,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-the-walking-dead-en-espanol",
   "name": "The Walking Dead en espa\u00f1ol",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5e82bb378601b80007b4bd78.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5e82bb378601b80007b4bd78/colorLogoPNG.png",
   "description": "The Walking Dead en espa\u00f1ol live on Pluto TV"
 },
@@ -1092,7 +1212,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-crimenes-imperfectos",
   "name": "Cr\u00edmenes imperfectos",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5e94cd036cc69d0007e8a1ba.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5e94cd036cc69d0007e8a1ba/colorLogoPNG.png",
   "description": "Cr\u00edmenes imperfectos live on Pluto TV"
 },
@@ -1252,7 +1372,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-smithsonian-channel-selects",
   "name": "Smithsonian Channel Selects",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5f21ea08007a49000762d349.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/5f21ea08007a49000762d349/colorLogoPNG.png",
   "description": "Smithsonian Channel Selects live on Pluto TV"
 },
@@ -1276,7 +1396,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-vevo-70s",
   "name": "Vevo '70s",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5f32f26bcd8aea00071240e5.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5f32f26bcd8aea00071240e5/colorLogoPNG.png",
   "description": "Vevo '70s live on Pluto TV"
 },
@@ -1332,7 +1452,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-misterios-sin-resolver-1",
   "name": "Misterios sin resolver",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5f4d882d5233170007ee880e.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5f4d882d5233170007ee880e/colorLogoPNG.png",
   "description": "Misterios sin resolver live on Pluto TV"
 },
@@ -1348,7 +1468,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-cine-comedia",
   "name": "Cine comedia",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5f513564e4622a0007c578c0.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5f513564e4622a0007c578c0/colorLogoPNG_1757954361053.png",
   "description": "Cine comedia live on Pluto TV"
 },
@@ -1356,7 +1476,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-cine-amor",
   "name": "Cine Amor",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5f5136317aedfb0007016f93.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5f5136317aedfb0007016f93/colorLogoPNG_1757957531383.png",
   "description": "Cine Amor live on Pluto TV"
 },
@@ -1364,7 +1484,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-cmt-equal-play",
   "name": "CMT Equal Play",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5f68f53eb1e5800007390bf8.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5f68f53eb1e5800007390bf8/colorLogoPNG.png",
   "description": "CMT Equal Play live on Pluto TV"
 },
@@ -1436,7 +1556,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-classica",
   "name": "Classica",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5f779951372da90007fd45e8.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5f779951372da90007fd45e8/colorLogoPNG.png",
   "description": "Classica live on Pluto TV"
 },
@@ -1460,7 +1580,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-ryan-and-friends",
   "name": "Ryan and Friends",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5fb584b7613a31000789de5a.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://images.pluto.tv/channels/5fb584b7613a31000789de5a/colorLogoPNG.png",
   "description": "Ryan and Friends live on Pluto TV"
 },
@@ -1476,7 +1596,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-vevo-80s",
   "name": "Vevo '80s",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5fd7b8bf927e090007685853.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5fd7b8bf927e090007685853/colorLogoPNG.png",
   "description": "Vevo '80s live on Pluto TV"
 },
@@ -1484,7 +1604,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-vevo-90s",
   "name": "Vevo '90s",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5fd7bb1f86d94a000796e2c2.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5fd7bb1f86d94a000796e2c2/colorLogoPNG.png",
   "description": "Vevo '90s live on Pluto TV"
 },
@@ -1492,7 +1612,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-vevo-2k",
   "name": "Vevo 2K",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5fd7bca3e0a4ee0007a38e8c.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/5fd7bca3e0a4ee0007a38e8c/colorLogoPNG.png",
   "description": "Vevo 2K live on Pluto TV"
 },
@@ -1564,7 +1684,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-csi-en-espanol",
   "name": "CSI en Espa\u00f1ol",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-604928d54a4f730007ff76bc.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/604928d54a4f730007ff76bc/colorLogoPNG.png",
   "description": "CSI en Espa\u00f1ol live on Pluto TV"
 },
@@ -1572,7 +1692,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-viaje-a-las-estrellas",
   "name": "Star Trek en espa\u00f1ol",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-6049295e7dcef800073c2499.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/6049295e7dcef800073c2499/colorLogoPNG_1771543916293.png",
   "description": "Star Trek en espa\u00f1ol live on Pluto TV"
 },
@@ -1580,7 +1700,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-estrella-news",
   "name": "Estrella News",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-60492e6d7f3f560007ab0f62.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/60492e6d7f3f560007ab0f62/colorLogoPNG.png",
   "description": "Estrella News live on Pluto TV"
 },
@@ -1596,7 +1716,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-jersey-shore",
   "name": "Jersey Shore",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-609bfa51fbecc1000733152e.m3u8",
-  "category": "Entertainment",
+  "category": "Reality",
   "logo": "https://images.pluto.tv/channels/609bfa51fbecc1000733152e/colorLogoPNG.png",
   "description": "Jersey Shore live on Pluto TV"
 },
@@ -1628,7 +1748,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-casos-de-la-dra-polo",
   "name": "Casos de la Dra. Polo",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-60d393e5579a420007ee553c.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/60d393e5579a420007ee553c/colorLogoPNG.png",
   "description": "Casos de la Dra. Polo live on Pluto TV"
 },
@@ -1692,7 +1812,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-garfield-and-friends",
   "name": "Garfield and Friends",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-60faf9ddfcc1f200070a5932.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://images.pluto.tv/channels/60faf9ddfcc1f200070a5932/colorLogoPNG.png",
   "description": "Garfield and Friends live on Pluto TV"
 },
@@ -1700,7 +1820,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-baby-shark-tv",
   "name": "Baby Shark TV",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-60faffc3fbbc120007fc4376.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://images.pluto.tv/channels/60faffc3fbbc120007fc4376/colorLogoPNG_1754073070812.png",
   "description": "Baby Shark TV live on Pluto TV"
 },
@@ -1708,7 +1828,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-lego-kids-tv",
   "name": "LEGO Kids TV",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-60fb01a24795a6000762fe83.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://images.pluto.tv/channels/60fb01a24795a6000762fe83/colorLogoPNG.png",
   "description": "LEGO Kids TV live on Pluto TV"
 },
@@ -1716,7 +1836,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-kartoon-channel",
   "name": "Kartoon Channel!",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-60fb040d4795a6000762fe8f.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://images.pluto.tv/channels/60fb040d4795a6000762fe8f/colorLogoPNG.png",
   "description": "Kartoon Channel! live on Pluto TV"
 },
@@ -1732,7 +1852,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-cine-aventura",
   "name": "Cine aventura",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-60fb2f47c133270007327375.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/60fb2f47c133270007327375/colorLogoPNG_1757954279063.png",
   "description": "Cine aventura live on Pluto TV"
 },
@@ -1740,7 +1860,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-teen-mom",
   "name": "Teen Mom",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-6127e12ed140e900077e7b6f.m3u8",
-  "category": "Entertainment",
+  "category": "Reality",
   "logo": "https://images.pluto.tv/channels/6127e12ed140e900077e7b6f/colorLogoPNG.png",
   "description": "Teen Mom live on Pluto TV"
 },
@@ -1860,7 +1980,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-vevo-rock",
   "name": "Vevo Rock",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-61d4b38226b8a50007fe03a6.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/61d4b38226b8a50007fe03a6/colorLogoPNG_1748797615724.png",
   "description": "Vevo Rock live on Pluto TV"
 },
@@ -1868,7 +1988,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-vevo-true-school-hip-hop",
   "name": "Vevo True School Hip-Hop",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-61d4c2817a823d00070ba53e.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/61d4c2817a823d00070ba53e/colorLogoPNG.png",
   "description": "Vevo True School Hip-Hop live on Pluto TV"
 },
@@ -1908,7 +2028,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-xite-rock",
   "name": "XITE Rock x Metal",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-623a1b5188ecdc0007c9ef5a.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/623a1b5188ecdc0007c9ef5a/colorLogoPNG.png",
   "description": "XITE Rock x Metal live on Pluto TV"
 },
@@ -1916,7 +2036,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-xite-classic-country",
   "name": "XITE Classic Country",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-623b92a2ccefed0007b1db48.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/623b92a2ccefed0007b1db48/colorLogoPNG.png",
   "description": "XITE Classic Country live on Pluto TV"
 },
@@ -1924,7 +2044,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-xite-gospel",
   "name": "XITE Gospel",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-623b93628e6ded0007337d4d.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/623b93628e6ded0007337d4d/colorLogoPNG.png",
   "description": "XITE Gospel live on Pluto TV"
 },
@@ -2004,7 +2124,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-csi-miami-en-espanol",
   "name": "CSI: Miami en espa\u00f1ol",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-632b5950b515b000079e6b81.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/632b5950b515b000079e6b81/colorLogoPNG_1731837336190.png",
   "description": "CSI: Miami en espa\u00f1ol live on Pluto TV"
 },
@@ -2012,7 +2132,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-csi-ny-en-espanol",
   "name": "CSI: NY en espa\u00f1ol",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-632b606e12a67b0007c9e371.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/632b606e12a67b0007c9e371/colorLogoPNG_1731837281479.png",
   "description": "CSI: NY en espa\u00f1ol live on Pluto TV"
 },
@@ -2068,7 +2188,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-cine-navideno-ptv1",
   "name": "Cine navide\u00f1o",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-6334a4d7ae975100073994a2.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/6334a4d7ae975100073994a2/colorLogoPNG_1793114630853.png",
   "description": "Cine navide\u00f1o live on Pluto TV"
 },
@@ -2196,7 +2316,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-pbs-nature",
   "name": "PBS Nature",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-640a64bd73e013000893d4e0.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/640a64bd73e013000893d4e0/colorLogoPNG.png",
   "description": "PBS Nature live on Pluto TV"
 },
@@ -2228,7 +2348,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-icarly-tv",
   "name": "iCarly TV",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-6450209d939a5900084dba1d.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://images.pluto.tv/channels/6450209d939a5900084dba1d/colorLogoPNG.png",
   "description": "iCarly TV live on Pluto TV"
 },
@@ -2236,7 +2356,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-90s-kids-tv-2",
   "name": "90s Kids TV 2",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-6452c77ed3fdde00080eb3a8.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://images.pluto.tv/channels/6452c77ed3fdde00080eb3a8/colorLogoPNG.png",
   "description": "90s Kids TV 2 live on Pluto TV"
 },
@@ -2244,7 +2364,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-90s-kids-tv",
   "name": "90's Kids",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-6452c814939a590008567a3b.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://images.pluto.tv/channels/6452c814939a590008567a3b/colorLogoPNG_1731836283044.png",
   "description": "90's Kids live on Pluto TV"
 },
@@ -2300,7 +2420,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-vevo-iconos-latinos",
   "name": "Vevo \u00cdconos Latinos",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-64d161c93c785e0008df575e.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/64d161c93c785e0008df575e/colorLogoPNG.png",
   "description": "Vevo \u00cdconos Latinos live on Pluto TV"
 },
@@ -2308,7 +2428,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-mayday-air-disaster",
   "name": "Mayday: Air Disaster",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-64d2b6bf9b414d0008187d83.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/64d2b6bf9b414d0008187d83/colorLogoPNG_1780955414910.png",
   "description": "Mayday: Air Disaster live on Pluto TV"
 },
@@ -2316,7 +2436,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-acapulco-shore-ptv1",
   "name": "Acapulco Shore",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-64dab1f835425100080e1e7b.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/64dab1f835425100080e1e7b/colorLogoPNG_1751300628513.png",
   "description": "Acapulco Shore live on Pluto TV"
 },
@@ -2324,7 +2444,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-vevo-regional-mexicano-ptv1",
   "name": "Vevo Regional Mexicano",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-64dab5fe35425100080e2991.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/64dab5fe35425100080e2991/colorLogoPNG.png",
   "description": "Vevo Regional Mexicano live on Pluto TV"
 },
@@ -2508,7 +2628,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-bbc-earth",
   "name": "BBC Earth",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-656535fc2c46f30008870fae.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/656535fc2c46f30008870fae/colorLogoPNG.png",
   "description": "BBC Earth live on Pluto TV"
 },
@@ -2564,7 +2684,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-modern-marvels-presented-by-history",
   "name": "Modern Marvels by HISTORY",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-65775d29dfed030008cb3db2.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/65775d29dfed030008cb3db2/colorLogoPNG.png",
   "description": "Modern Marvels by HISTORY live on Pluto TV"
 },
@@ -2580,7 +2700,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-telemundo-noticias-california",
   "name": "Telemundo Noticias California",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-65790feacbd0d60008fac87a.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/65790feacbd0d60008fac87a/colorLogoPNG.png",
   "description": "Telemundo Noticias California live on Pluto TV"
 },
@@ -2636,7 +2756,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-mister-rogers-neighborhood",
   "name": "Mister Rogers' Neighborhood",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-65e23f340d4561000821540d.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://images.pluto.tv/channels/65e23f340d4561000821540d/colorLogoPNG.png",
   "description": "Mister Rogers' Neighborhood live on Pluto TV"
 },
@@ -2668,7 +2788,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-dog-whisperer-with-cesar-millan",
   "name": "Dog Whisperer with Cesar Millan",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-664fd48894d5580008e45e7c.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/664fd48894d5580008e45e7c/colorLogoPNG.png",
   "description": "Dog Whisperer with Cesar Millan live on Pluto TV"
 },
@@ -2716,7 +2836,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-pokemon",
   "name": "Pok\u00e9mon",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-6675c7868768aa0008d7f1c7.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://images.pluto.tv/channels/6675c7868768aa0008d7f1c7/colorLogoPNG.png",
   "description": "Pok\u00e9mon live on Pluto TV"
 },
@@ -2740,7 +2860,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-go-go-gadget",
   "name": "Go Go Gadget!",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-667f3852efa2a10008e1e514.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://images.pluto.tv/channels/667f3852efa2a10008e1e514/colorLogoPNG.png",
   "description": "Go Go Gadget! live on Pluto TV"
 },
@@ -2748,7 +2868,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-strawberry-shortcake-and-friends",
   "name": "Strawberry Shortcake and Friends",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-667f393836a2f90008fd17c0.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://images.pluto.tv/channels/667f393836a2f90008fd17c0/colorLogoPNG_1753982261322.png",
   "description": "Strawberry Shortcake and Friends live on Pluto TV"
 },
@@ -2756,7 +2876,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-la-familia-del-barrio-ptv1",
   "name": "La Familia del Barrio",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-668c566d08d5490008075948.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/668c566d08d5490008075948/colorLogoPNG.png",
   "description": "La Familia del Barrio live on Pluto TV"
 },
@@ -2764,7 +2884,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-cbs-en-espanol",
   "name": "CBS en espa\u00f1ol",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-668c5cb4f01dbe0008dd4082.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/668c5cb4f01dbe0008dd4082/colorLogoPNG.png",
   "description": "CBS en espa\u00f1ol live on Pluto TV"
 },
@@ -2780,7 +2900,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-vh1-queens-of-reality",
   "name": "VH1 Queens of Reality",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-66abefe5d2d50d00082c7d12.m3u8",
-  "category": "Entertainment",
+  "category": "Reality",
   "logo": "https://images.pluto.tv/channels/66abefe5d2d50d00082c7d12/colorLogoPNG.png",
   "description": "VH1 Queens of Reality live on Pluto TV"
 },
@@ -2788,7 +2908,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-60-minutes",
   "name": "60 Minutes",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-66b646f9cd0d3100086af83c.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/66b646f9cd0d3100086af83c/colorLogoPNG.png",
   "description": "60 Minutes live on Pluto TV"
 },
@@ -2804,7 +2924,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-sala-de-emergencias",
   "name": "Sala de Emergencias: Historias In\u00e9ditas",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-66ba53cda4ee2700083fac09.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/66ba53cda4ee2700083fac09/colorLogoPNG.png",
   "description": "Sala de Emergencias: Historias In\u00e9ditas live on Pluto TV"
 },
@@ -2820,7 +2940,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-love-nature",
   "name": "Love Nature",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-66df8a29b25d2b0008fc5fe0.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/66df8a29b25d2b0008fc5fe0/colorLogoPNG.png",
   "description": "Love Nature live on Pluto TV"
 },
@@ -2844,7 +2964,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-cnn-originals",
   "name": "CNN Originals",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-66e0b4536ad04d0008fff4b2.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/66e0b4536ad04d0008fff4b2/colorLogoPNG_1755018282136.png",
   "description": "CNN Originals live on Pluto TV"
 },
@@ -2852,7 +2972,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-mythbusters",
   "name": "MythBusters",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-66e0b4866ad04d0008fff4d8.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/66e0b4866ad04d0008fff4d8/colorLogoPNG.png",
   "description": "MythBusters live on Pluto TV"
 },
@@ -2868,7 +2988,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-el-reino-infantil-ptv1",
   "name": "El Reino Infantil",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-66fedd65d7de140008dccd66.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://images.pluto.tv/channels/66fedd65d7de140008dccd66/colorLogoPNG.png",
   "description": "El Reino Infantil live on Pluto TV"
 },
@@ -2908,7 +3028,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-cnn-noticias",
   "name": "CNN Noticias",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-673248f9030a2c0008033af8.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/673248f9030a2c0008033af8/colorLogoPNG_1777908720377.png",
   "description": "CNN Noticias live on Pluto TV"
 },
@@ -2916,7 +3036,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-construcciones-asombrosas",
   "name": "Construcciones Asombrosas",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-673249433a61d400087a51ed.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/673249433a61d400087a51ed/colorLogoPNG_1732662528285.png",
   "description": "Construcciones Asombrosas live on Pluto TV"
 },
@@ -2924,7 +3044,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-crimen",
   "name": "Crimen",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-6732499ce40c4a0008bb9894.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/6732499ce40c4a0008bb9894/colorLogoPNG.png",
   "description": "Crimen live on Pluto TV"
 },
@@ -2932,7 +3052,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-vidas-extremas",
   "name": "Vidas Extremas",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-673249afc7626f0008c7205d.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/673249afc7626f0008c7205d/colorLogoPNG.png",
   "description": "Vidas Extremas live on Pluto TV"
 },
@@ -2948,7 +3068,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-dinos-247",
   "name": "Dinos 24/7",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-673bf05ddaad7f0008ac7a5c.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/673bf05ddaad7f0008ac7a5c/colorLogoPNG.png",
   "description": "Dinos 24/7 live on Pluto TV"
 },
@@ -3164,7 +3284,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-mas-adrenalina",
   "name": "M\u00e1s adrenalina",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-687fea9a4fa995eff284a1c8.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/687fea9a4fa995eff284a1c8/colorLogoPNG_1755151031497.png",
   "description": "M\u00e1s adrenalina live on Pluto TV"
 },
@@ -3212,7 +3332,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-storage-wars",
   "name": "Storage Wars by A&E",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-6887aaf4e3703b7d42b71a1e.m3u8",
-  "category": "Entertainment",
+  "category": "Reality",
   "logo": "https://images.pluto.tv/channels/6887aaf4e3703b7d42b71a1e/colorLogoPNG_1784129527094.png",
   "description": "Storage Wars by A&E live on Pluto TV"
 },
@@ -3364,7 +3484,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-tiktok-radio",
   "name": "TikTok Radio",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-69445a9a78c0c45b6c9aa8b9.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/69445a9a78c0c45b6c9aa8b9/colorLogoPNG_1771261855448.png",
   "description": "TikTok Radio live on Pluto TV"
 },
@@ -3388,7 +3508,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-djazz",
   "name": "Stingray DJAZZ",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-696689d13b9ce349c9be3a18.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/696689d13b9ce349c9be3a18/colorLogoPNG_1771027556714.png",
   "description": "Stingray DJAZZ live on Pluto TV"
 },
@@ -3404,7 +3524,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-qello-concerts",
   "name": "Qello Concerts",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-696998915a0ae9e1b563f0c6.m3u8",
-  "category": "Music",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/696998915a0ae9e1b563f0c6/colorLogoPNG_1770231500279.png",
   "description": "Qello Concerts live on Pluto TV"
 },
@@ -3412,7 +3532,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-zenlife",
   "name": "ZenLIFE by Stingray",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-696998dfa2b623e8b20125a3.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/696998dfa2b623e8b20125a3/colorLogoPNG_1770231337178.png",
   "description": "ZenLIFE by Stingray live on Pluto TV"
 },
@@ -3476,7 +3596,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-pokemon-en-espanol-us",
   "name": "Pok\u00e9mon en espa\u00f1ol",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-69e6be40fde57cd5ba562b29.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://images.pluto.tv/channels/69e6be40fde57cd5ba562b29/colorLogoPNG_1777592109830.png",
   "description": "Pok\u00e9mon en espa\u00f1ol live on Pluto TV"
 },
@@ -3620,7 +3740,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-dora-tv-ptv2",
   "name": "Dora TV",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-6a70da97a4bf6cded4fdaf53.m3u8",
-  "category": "Kids",
+  "category": "Family",
   "logo": "https://static.wikia.nocookie.net/pluto-tv/images/2/25/Dora_TV_on_Pluto_TV.webp/revision/latest/scale-to-width-down/1227?cb=20250804154117",
   "description": "Dora TV live on Pluto TV"
 },
@@ -3628,7 +3748,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-celia",
   "name": "Celia",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-6a722821ff94431f8bfbc260.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/6a722821ff94431f8bfbc260/colorLogoPNG_1788451076389.png",
   "description": "Celia live on Pluto TV"
 },
@@ -3636,7 +3756,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-el-capo",
   "name": "El Capo",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-6a7228e19307bc770a5b440c.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/6a7228e19307bc770a5b440c/colorLogoPNG_1788205371519.png",
   "description": "El Capo live on Pluto TV"
 },
@@ -3644,7 +3764,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-la-novia-de-estambul",
   "name": "La novia de Estambul",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-6a7b7c50307dc8b67b372008.m3u8",
-  "category": "General",
+  "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/6a7b7c50307dc8b67b372008/colorLogoPNG_1786477846466.png",
   "description": "La novia de Estambul live on Pluto TV"
 },
@@ -3692,7 +3812,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-pawn-stars-plus-by-history",
   "name": "Pawn Stars Plus by History",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-6aab1f18c349e6a78bb489ad.m3u8",
-  "category": "Entertainment",
+  "category": "Reality",
   "logo": "https://images.pluto.tv/channels/6aab1f18c349e6a78bb489ad/colorLogoPNG_1790808022808.png",
   "description": "Pawn Stars Plus by History live on Pluto TV"
 },
@@ -3732,7 +3852,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-how-to",
   "name": "How To",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-6ad7a1a6887970b5070d3994.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/6ad7a1a6887970b5070d3994/colorLogoPNG_1793382321239.png",
   "description": "How To live on Pluto TV"
 },
@@ -3748,7 +3868,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-mysterious-worlds",
   "name": "Mysterious Worlds",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-6ad7a32a91d45be5658a50fa.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/6ad7a32a91d45be5658a50fa/colorLogoPNG_1793382767636.png",
   "description": "Mysterious Worlds live on Pluto TV"
 },
@@ -3788,7 +3908,7 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-the-repair-shop",
   "name": "The Repair Shop",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-6ad7a7be43496b8a1caf7082.m3u8",
-  "category": "Educational",
+  "category": "Lifestyle",
   "logo": "https://images.pluto.tv/channels/6ad7a7be43496b8a1caf7082/colorLogoPNG_1793382170130.png",
   "description": "The Repair Shop live on Pluto TV"
 },

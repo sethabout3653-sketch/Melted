@@ -7,8 +7,7 @@ const DEFAULT_CHANNEL_ID = 'afv-always-funny';
 const DEFAULT_CHANNEL = TV_CHANNELS.find(channel => channel.id === DEFAULT_CHANNEL_ID) ?? TV_CHANNELS[0] ?? null;
 
 const EXTRA_CATEGORIES = [
-  'All', 'News', 'Comedy', 'Entertainment', 'Kids', 'Sports', 'Movies', 'Series',
-  'Educational', 'Lifestyle', 'Music', 'General', 'Family', 'Documentary', 'Reality', 'Travel', 'Faith'
+  'All', 'Family', 'Kids', 'Reality', 'Lifestyle', 'Series', 'Movies', 'Sports', 'Entertainment', 'Comedy', 'News'
 ];
 
 const ChannelLogo: React.FC<{ logo?: string; name: string }> = ({ logo, name }) => {
@@ -64,6 +63,14 @@ export const LiveTVView: React.FC = () => {
     const matchesSearch = channel.name.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === 'All' || channel.category === selectedCategory;
     return matchesSearch && matchesCategory;
+  }).sort((a, b) => {
+    const priority = ['Family', 'Kids'];
+    const aIdx = priority.indexOf(a.category);
+    const bIdx = priority.indexOf(b.category);
+    if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+    if (aIdx !== -1) return -1;
+    if (bIdx !== -1) return 1;
+    return 0;
   });
 
   useEffect(() => {

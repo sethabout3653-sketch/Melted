@@ -302,7 +302,7 @@ export default function App() {
 
   return (
     <>
-      <FrostHubLoadingScreen isLoading={isCatalogLoading} />
+      <FrostHubLoadingScreen />
       <AppCanvasBackground themeConfig={themeConfig} isDark={theme === 'dark'} />
       <div 
         className={`relative z-10 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-white dark:border-slate-900 transition-colors overflow-hidden ${
