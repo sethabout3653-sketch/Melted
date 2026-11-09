@@ -9,6 +9,10 @@ const RTC_CONFIG: RTCConfiguration = {
     { urls: 'stun:stun3.l.google.com:19302' },
     { urls: 'stun:stun4.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:stun.ekiga.net:3478' },
+    { urls: 'stun:stun.schlund.de:3478' },
+    { urls: 'stun:stun.voipbuster.com:3478' },
+    { urls: 'stun:stun.voipstunt.com:3478' },
   ],
 };
 
@@ -158,30 +162,29 @@ export function useWebRTC({
   }, [setMediaHandlers]);
 
   // Route audio tracks for a given peer (distinguishing mic vs screen share audio)
+  // Route audio tracks for a given peer (distinguishing mic vs screen share audio)
   const routeAudioTracksForPeer = useCallback((peerId: string) => {
     const peerAudioMap = remoteAudioTracks.current.get(peerId);
     const meta = peerTrackMetas.current.get(peerId);
+    const peerDb = peersRef.current.find((p) => p.id === peerId);
+
+    const isPeerMuted = meta?.isMuted ?? peerDb?.is_muted ?? false;
     
-    if (!peerAudioMap || peerAudioMap.size === 0 || meta?.isMuted === true) {
+    if (!peerAudioMap || peerAudioMap.size === 0) {
       setRemoteStreams((prev) => {
         if (!prev[peerId]) return prev;
         const copy = { ...prev };
         delete copy[peerId];
         return copy;
       });
-      // Also clear screen audio if no tracks or explicitly muted (though screen audio usually isn't "muted" the same way)
-      if (!peerAudioMap || peerAudioMap.size === 0) {
-        setRemoteScreenAudioStreams((prev) => {
-          if (!prev[peerId]) return prev;
-          const copy = { ...prev };
-          delete copy[peerId];
-          return copy;
-        });
-      }
+      setRemoteScreenAudioStreams((prev) => {
+        if (!prev[peerId]) return prev;
+        const copy = { ...prev };
+        delete copy[peerId];
+        return copy;
+      });
       return;
     }
-
-    const peerDb = peersRef.current.find((p) => p.id === peerId);
 
     let foundMicStream: MediaStream | null = null;
     let foundScreenAudioStream: MediaStream | null = null;
@@ -220,7 +223,7 @@ export function useWebRTC({
 
     // Update remote microphone audio
     setRemoteStreams((prev) => {
-      if (foundMicStream && meta?.isMuted !== true) {
+      if (foundMicStream && !isPeerMuted) {
         if (prev[peerId] === foundMicStream) return prev;
         return { ...prev, [peerId]: foundMicStream };
       }
@@ -233,8 +236,9 @@ export function useWebRTC({
     });
 
     // Update remote screen share audio (only if peer is actively screen sharing)
+    const isSharingScreen = Boolean(meta?.isScreenSharing || peerDb?.is_screen_sharing);
     setRemoteScreenAudioStreams((prev) => {
-      if (foundScreenAudioStream && (!peerDb || peerDb.is_screen_sharing !== false)) {
+      if (foundScreenAudioStream && isSharingScreen) {
         if (prev[peerId] === foundScreenAudioStream) return prev;
         return { ...prev, [peerId]: foundScreenAudioStream };
       }
@@ -253,12 +257,10 @@ export function useWebRTC({
     const meta = peerTrackMetas.current.get(peerId);
     const peerDb = peersRef.current.find((p) => p.id === peerId);
 
-    const isCameraAllowed = (meta ? meta.hasCamera === true : Boolean(peerDb?.has_video)) &&
-                           (peerDb ? peerDb.has_video === true : Boolean(meta?.hasCamera));
+    const isCameraAllowed = Boolean(meta?.hasCamera || peerDb?.has_video);
     const isCameraDisallowed = !isCameraAllowed;
 
-    const isScreenAllowed = (meta ? meta.isScreenSharing === true : Boolean(peerDb?.is_screen_sharing)) &&
-                            (peerDb ? peerDb.is_screen_sharing === true : Boolean(meta?.isScreenSharing));
+    const isScreenAllowed = Boolean(meta?.isScreenSharing || peerDb?.is_screen_sharing);
     const isScreenDisallowed = !isScreenAllowed;
 
     if (!peerMap || peerMap.size === 0 || (isCameraDisallowed && isScreenDisallowed)) {
@@ -303,9 +305,9 @@ export function useWebRTC({
         return;
       }
 
-      if (peerDb?.is_screen_sharing && !peerDb?.has_video) {
+      if (isScreenAllowed && !isCameraAllowed) {
         foundScreenStream = stream;
-      } else if (peerDb?.has_video && !peerDb?.is_screen_sharing) {
+      } else if (isCameraAllowed && !isScreenAllowed) {
         foundCamStream = stream;
       } else if (!foundCamStream) {
         foundCamStream = stream;
@@ -357,13 +359,16 @@ export function useWebRTC({
     });
   }, []);
 
-  // Synchronize remote stream states whenever peers database list updates
+  // Synchronize remote stream states and speaking states whenever peers database list updates
   useEffect(() => {
     if (!isMediaActive) return;
+    const speakingMap: Record<string, boolean> = {};
     peers.forEach((p) => {
+      if (p.is_speaking) speakingMap[p.id] = true;
       routeAudioTracksForPeer(p.id);
       routeVideoTracksForPeer(p.id);
     });
+    setRemoteSpeaking(speakingMap);
   }, [peers, isMediaActive, routeAudioTracksForPeer, routeVideoTracksForPeer]);
 
   // Clean up all connections when leaving media channels

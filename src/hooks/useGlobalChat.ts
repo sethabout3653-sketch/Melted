@@ -2,6 +2,9 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useWebSocketDatabase } from '../services/wsDatabaseClient';
 import { useDirectCallWebRTC } from '../services/useDirectCallWebRTC';
 import { useWebRTC } from '../services/useWebRTC';
+import { auth, db } from '../services/firebase';
+import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
+import { doc, getDocFromServer } from 'firebase/firestore';
 
 export interface ActiveCall {
   fromUserId?: string;
@@ -117,6 +120,29 @@ export function useGlobalChat({
     }
   }, [firebaseUserId, currentUser.id]);
 
+  // Firebase Auth & Connection Guard
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        try {
+          await signInAnonymously(auth);
+        } catch (err) {
+          console.warn('[Firebase] Anonymous sign-in failed:', err);
+        }
+      } else {
+        // Test connection as required by security skill
+        try {
+          await getDocFromServer(doc(db, 'test', 'connection'));
+        } catch (error: any) {
+          if (error?.message?.includes('offline')) {
+            console.error("Firebase is offline. Falling back to WebSocket.");
+          }
+        }
+      }
+    });
+    return () => unsub();
+  }, []);
+
   const chat = useWebSocketDatabase(currentUser);
   const { 
     messages, 
@@ -152,6 +178,7 @@ export function useGlobalChat({
   }, []);
 
   // Call & notification state
+  const [activeChannel, setActiveChannel] = useState<string>('text-general');
   const [incomingCall, setIncomingCall] = useState<ActiveCall | null>(null);
   const [outgoingCall, setOutgoingCall] = useState<ActiveCall | null>(null);
   const [activeDirectCall, setActiveDirectCall] = useState<any>(null);
@@ -481,17 +508,20 @@ export function useGlobalChat({
   const cameraStreamRef = useRef<MediaStream | null>(null);
   const screenStreamRef = useRef<MediaStream | null>(null);
 
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const isSpeakingRef = useRef(false);
+
   const activePeers = useMemo(() => {
-    if (!isInVideo) return [];
+    if (!isInVideo && activeChannel !== 'video-general') return [];
     return chat.users.filter(u => 
       (u.current_channel === 'video-general' || u.current_channel === 'voice-general') && 
       u.id !== currentUser.id
     );
-  }, [chat.users, currentUser.id, isInVideo]);
+  }, [chat.users, currentUser.id, isInVideo, activeChannel]);
 
   const rtc = useWebRTC({
     currentUserId: currentUser.id,
-    activeChannel: isInVideo ? 'video-general' : 'text-general',
+    activeChannel: (isInVideo || activeChannel === 'video-general') ? 'video-general' : 'text-general',
     localAudioStream,
     cameraStream,
     screenStream,
@@ -502,12 +532,103 @@ export function useGlobalChat({
     setMediaHandlers: chat.setMediaHandlers,
   });
 
-  // Sync isMuted to tracks
+  // Sync isMuted and isDeafened to tracks and server
   useEffect(() => {
     if (micStreamRef.current) {
       micStreamRef.current.getAudioTracks().forEach(t => t.enabled = !isMuted);
     }
-  }, [isMuted]);
+    if (isInVideo) {
+      chat.updateUser({ is_muted: isMuted });
+    }
+  }, [isMuted, isInVideo, chat]);
+
+  useEffect(() => {
+    if (isInVideo) {
+      chat.updateUser({ is_deafened: isDeafened });
+    }
+  }, [isDeafened, isInVideo, chat]);
+
+  // Real-time Voice Activity Detection (Speaking detection)
+  useEffect(() => {
+    if (!localAudioStream || isMuted || isDeafened || !isInVideo) {
+      if (isSpeakingRef.current) {
+        isSpeakingRef.current = false;
+        setIsSpeaking(false);
+        chat.updateUser({ is_speaking: false });
+      }
+      return;
+    }
+
+    let audioCtx: AudioContext | null = null;
+    let analyser: AnalyserNode | null = null;
+    let source: MediaStreamAudioSourceNode | null = null;
+    let animId: number | null = null;
+    let silenceTimer: any = null;
+
+    try {
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContextClass) return;
+      audioCtx = new AudioContextClass();
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.4;
+      source = audioCtx.createMediaStreamSource(localAudioStream);
+      source.connect(analyser);
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+      const checkVolume = () => {
+        if (!analyser) return;
+        analyser.getByteFrequencyData(dataArray);
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        const avg = sum / dataArray.length;
+        const nowSpeaking = avg > 14;
+
+        if (nowSpeaking) {
+          if (silenceTimer) {
+            clearTimeout(silenceTimer);
+            silenceTimer = null;
+          }
+          if (!isSpeakingRef.current) {
+            isSpeakingRef.current = true;
+            setIsSpeaking(true);
+            chat.updateUser({ is_speaking: true });
+          }
+        } else if (isSpeakingRef.current && !silenceTimer) {
+          silenceTimer = setTimeout(() => {
+            if (isSpeakingRef.current) {
+              isSpeakingRef.current = false;
+              setIsSpeaking(false);
+              chat.updateUser({ is_speaking: false });
+            }
+            silenceTimer = null;
+          }, 350);
+        }
+
+        animId = requestAnimationFrame(checkVolume);
+      };
+
+      checkVolume();
+    } catch (err) {
+      console.warn('[useGlobalChat] VAD setup warning:', err);
+    }
+
+    return () => {
+      if (animId) cancelAnimationFrame(animId);
+      if (silenceTimer) clearTimeout(silenceTimer);
+      if (source) { try { source.disconnect(); } catch {} }
+      if (analyser) { try { analyser.disconnect(); } catch {} }
+      if (audioCtx && audioCtx.state !== 'closed') { try { audioCtx.close(); } catch {} }
+      if (isSpeakingRef.current) {
+        isSpeakingRef.current = false;
+        setIsSpeaking(false);
+        chat.updateUser({ is_speaking: false });
+      }
+    };
+  }, [localAudioStream, isMuted, isDeafened, isInVideo, chat]);
 
   // Combine streams for activeVideoStream
   useEffect(() => {
@@ -518,26 +639,53 @@ export function useGlobalChat({
   }, [cameraStream, screenStream]);
 
   const joinVoiceChannel = useCallback(async (withVideo: boolean = false) => {
+    let audioStream: MediaStream | null = null;
+    let micGranted = false;
+
     try {
-      const audioStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true },
+      audioStream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
         video: false
       });
-      micStreamRef.current = audioStream;
-      setLocalAudioStream(audioStream);
-      setIsMuted(false);
-      setIsInVideo(true);
+      micGranted = true;
+      setMicPermissionStatus('granted');
+    } catch (micErr) {
+      console.warn('[useGlobalChat] Microphone not available or denied, generating fallback track:', micErr);
+      try {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtx) {
+          const ctx = new AudioCtx();
+          const osc = ctx.createOscillator();
+          const dst = ctx.createMediaStreamDestination();
+          const gain = ctx.createGain();
+          gain.gain.value = 0;
+          osc.connect(gain);
+          gain.connect(dst);
+          osc.start();
+          audioStream = dst.stream;
+        }
+      } catch (fallbackErr) {
+        console.warn('[useGlobalChat] Fallback audio context error:', fallbackErr);
+      }
+      setIsMuted(true);
+      setMicPermissionStatus('denied');
+    }
 
-      const nextChannel = 'video-general' as any;
-      const nextActivity = 'In General Voice';
-      
-      setCurrentUser(prev => ({ 
-        ...prev, 
-        current_channel: nextChannel,
-        activity: nextActivity
-      }));
+    micStreamRef.current = audioStream;
+    setLocalAudioStream(audioStream);
+    setIsInVideo(true);
 
-      if (withVideo) {
+    const nextChannel = 'video-general' as const;
+    const nextActivity = 'In General Voice';
+    
+    setCurrentUser(prev => ({ 
+      ...prev, 
+      current_channel: nextChannel,
+      activity: nextActivity
+    }));
+
+    if (withVideo) {
+      try {
         const videoStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60, max: 60 } },
           audio: false
@@ -545,16 +693,17 @@ export function useGlobalChat({
         cameraStreamRef.current = videoStream;
         setCameraStream(videoStream);
         setIsVideoEnabled(true);
+      } catch (camErr) {
+        console.warn('[useGlobalChat] Camera error:', camErr);
       }
-
-      chat.updateUser({
-        current_channel: nextChannel,
-        activity: nextActivity,
-        has_video: withVideo,
-      });
-    } catch (err) {
-      console.error('Failed to join voice:', err);
     }
+
+    chat.updateUser({
+      current_channel: nextChannel,
+      activity: nextActivity,
+      has_video: withVideo && Boolean(cameraStreamRef.current),
+      is_muted: !micGranted,
+    });
   }, [chat]);
 
   const stopVoiceChannel = useCallback(() => {
@@ -721,6 +870,8 @@ export function useGlobalChat({
     isInVideo,
     isVideoEnabled,
     isScreenSharing,
+    isSpeaking,
+    is_speaking: isSpeaking,
     isMuted,
     setIsMuted,
     isDeafened,
@@ -743,6 +894,8 @@ export function useGlobalChat({
     toggleCamera,
     toggleScreenShare,
     
+    activeChannel,
+    setActiveChannel,
     ...chat,
   };
 }

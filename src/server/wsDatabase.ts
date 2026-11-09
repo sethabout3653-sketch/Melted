@@ -20,6 +20,8 @@ export interface DbUser {
   is_screen_sharing: boolean;
   is_hand_raised?: boolean;
   activity?: string;
+  typing_channel?: string;
+  typing_at?: number;
   updated_at: number;
 }
 
@@ -273,6 +275,8 @@ export function initWebSocketDatabase(server: Server) {
                 has_video: msg.user.has_video !== undefined ? Boolean(msg.user.has_video) : Boolean(existingUser?.has_video),
                 is_screen_sharing: msg.user.is_screen_sharing !== undefined ? Boolean(msg.user.is_screen_sharing) : Boolean(existingUser?.is_screen_sharing),
                 activity: msg.user.activity ?? existingUser?.activity ?? '',
+                typing_channel: msg.user.typing_channel ?? existingUser?.typing_channel ?? undefined,
+                typing_at: msg.user.typing_at ?? existingUser?.typing_at ?? undefined,
                 updated_at: Date.now(),
               };
 
@@ -374,7 +378,8 @@ export function initWebSocketDatabase(server: Server) {
                 created_at: Number(row.created_at) || Date.now(),
               };
               globalWsDb.insertMessage(newMsg);
-              broadcastTable('messages', globalWsDb.messages);
+              // Broadcast just the new message for 0ms incremental sync
+              broadcastTable('messages', [newMsg]);
             }
             break;
           }
@@ -382,7 +387,7 @@ export function initWebSocketDatabase(server: Server) {
           case 'SQL_DELETE': {
             if (msg.table === 'messages' && msg.id) {
               globalWsDb.deleteMessage(msg.id);
-              broadcastTable('messages', globalWsDb.messages);
+              broadcastWss({ type: 'SQL_DELETE', table: 'messages', id: msg.id });
             }
             break;
           }
@@ -390,7 +395,7 @@ export function initWebSocketDatabase(server: Server) {
           case 'SQL_DELETE_CHANNEL': {
             if (msg.channel_id) {
               globalWsDb.deleteChannelMessages(msg.channel_id);
-              broadcastTable('messages', globalWsDb.messages);
+              broadcastWss({ type: 'SQL_DELETE_CHANNEL', table: 'messages', channel_id: msg.channel_id });
             }
             break;
           }
@@ -532,6 +537,28 @@ export function initWebSocketDatabase(server: Server) {
             break;
           }
 
+          case 'USER_OFFLINE':
+          case 'USER_DISCONNECT': {
+            const uId = msg.userId || boundUserId;
+            if (uId) {
+              const sockets = userSocketsMap.get(uId);
+              if (sockets) {
+                sockets.delete(ws);
+                if (sockets.size === 0) {
+                  userSocketsMap.delete(uId);
+                }
+              }
+              const user = globalWsDb.getUser(uId);
+              const oldChannel = user?.current_channel;
+              globalWsDb.deleteUser(uId);
+              broadcastTable('users', globalWsDb.getUsers());
+              if (oldChannel === 'video-general' || oldChannel === 'voice-general') {
+                broadcastMediaPresence('USER_LEFT_MEDIA', uId, oldChannel);
+              }
+            }
+            break;
+          }
+
           case 'PING': {
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
@@ -564,20 +591,13 @@ export function initWebSocketDatabase(server: Server) {
           sockets.delete(ws);
           if (sockets.size === 0) {
             userSocketsMap.delete(uId);
-
-            const timer = setTimeout(() => {
-              disconnectTimers.delete(uId);
-              if (!userSocketsMap.has(uId)) {
-                const user = globalWsDb.getUser(uId);
-                const oldChannel = user?.current_channel;
-                globalWsDb.deleteUser(uId);
-                if (oldChannel === 'video-general' || oldChannel === 'voice-general') {
-                  broadcastMediaPresence('USER_LEFT_MEDIA', uId, oldChannel);
-                }
-                broadcastTable('users', globalWsDb.getUsers());
-              }
-            }, 10000);
-            disconnectTimers.set(uId, timer);
+            const user = globalWsDb.getUser(uId);
+            const oldChannel = user?.current_channel;
+            globalWsDb.deleteUser(uId);
+            broadcastTable('users', globalWsDb.getUsers());
+            if (oldChannel === 'video-general' || oldChannel === 'voice-general') {
+              broadcastMediaPresence('USER_LEFT_MEDIA', uId, oldChannel);
+            }
           }
         }
       }

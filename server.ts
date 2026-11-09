@@ -23,6 +23,17 @@ initSethsrcEngine(app, __dirname);
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
+// Global CORS middleware for published & preview apps
+app.use('/api', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
 // Ensure uploads directory exists for persistent local file hosting
 const uploadsDir = path.resolve(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
@@ -148,6 +159,8 @@ app.post('/api/ws-db/register', (req, res) => {
       has_video: user.has_video !== undefined ? Boolean(user.has_video) : Boolean(existingUser?.has_video),
       is_screen_sharing: user.is_screen_sharing !== undefined ? Boolean(user.is_screen_sharing) : Boolean(existingUser?.is_screen_sharing),
       activity: user.activity ?? existingUser?.activity ?? '',
+      typing_channel: user.typing_channel ?? existingUser?.typing_channel ?? undefined,
+      typing_at: user.typing_at ?? existingUser?.typing_at ?? undefined,
       updated_at: Date.now(),
     };
     globalWsDb.upsertUser(userObj as any);
@@ -186,6 +199,29 @@ app.post('/api/ws-db/update-user', (req, res) => {
     res.json({ success: true, user: updated, users: globalWsDb.getUsers() });
   } catch (err: any) {
     res.status(500).json({ error: 'Update user failed', message: err?.message });
+  }
+});
+
+app.post('/api/ws-db/leave', (req, res) => {
+  try {
+    const { id } = req.body;
+    if (id) {
+      const user = globalWsDb.getUser(id);
+      const oldChannel = user?.current_channel;
+      globalWsDb.deleteUser(id);
+      broadcastTable('users', globalWsDb.getUsers());
+      if (oldChannel === 'video-general' || oldChannel === 'voice-general') {
+        broadcastWss({
+          type: 'USER_LEFT_MEDIA',
+          userId: id,
+          channel: oldChannel,
+          timestamp: Date.now(),
+        });
+      }
+    }
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Leave failed', message: err?.message });
   }
 });
 

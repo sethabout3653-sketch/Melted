@@ -66,7 +66,7 @@ export const DEFAULT_THEME_CONFIG: ThemeConfig = {
   accentGlow: 'rgba(37, 99, 235, 0.4)',
   radius: 'balanced',
   bgMode: 'solid',
-  bgSolidColor: '#090d16',
+  bgSolidColor: '#0a1128',
   bgGradientPreset: 'aurora',
   bgImageUrl: '',
   bgBlur: 0,

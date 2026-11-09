@@ -1,67 +1,62 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 
-interface FrostHubLoadingScreenProps {
-  isLoading?: boolean;
-}
-
-export const FrostHubLoadingScreen: React.FC<FrostHubLoadingScreenProps> = () => {
+export const FrostHubLoadingScreen: React.FC = () => {
   const [isFading, setIsFading] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const hasFinishedRef = useRef(false);
 
   useEffect(() => {
     // Lock scroll when mounting
     document.body.style.overflow = 'hidden';
     document.documentElement.style.overflow = 'hidden';
 
-    const startAudio = () => {
-      const video = videoRef.current;
-      if (!video || hasFinishedRef.current) return;
-      video.muted = false;
-      video.play().catch(() => undefined);
-    };
-
-    videoRef.current?.play().catch(() => undefined);
-    window.addEventListener('pointerdown', startAudio, { once: true });
-    window.addEventListener('keydown', startAudio, { once: true });
+    // Automatic transition after a short delay to simulate "power on"
+    const timer = setTimeout(() => {
+      setIsFading(true);
+    }, 1200);
 
     return () => {
-      window.removeEventListener('pointerdown', startAudio);
-      window.removeEventListener('keydown', startAudio);
+      clearTimeout(timer);
       // Unlock scroll when unmounting
       document.body.style.overflow = '';
       document.documentElement.style.overflow = '';
     };
   }, []);
 
-  const handleVideoEnd = () => {
-    hasFinishedRef.current = true;
-    setIsFading(true);
-  };
-
   return (
     <AnimatePresence>
       {!isFading && (
-        <motion.div
-          key="frosthub-loading-overlay"
-          initial={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.3, ease: "linear" }}
-          className="fixed inset-0 z-[9999] bg-black overflow-hidden select-none font-sans flex items-center justify-center cursor-default touch-none"
-        >
-            {/* The Video Intro */}
-            <video
-              ref={videoRef}
-              src="/assets/aistudio/video-1.mp4"
-              className="w-full h-full object-cover pointer-events-none"
-              autoPlay
-              playsInline
-              muted
-              onEnded={handleVideoEnd}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+        <div className="fixed inset-0 z-[9999] pointer-events-none overflow-hidden select-none">
+          {/* Top Cinematic Shutter */}
+          <motion.div
+            initial={{ y: 0 }}
+            exit={{ y: '-100%' }}
+            transition={{ 
+              duration: 1.1, 
+              ease: [0.65, 0, 0.35, 1] 
+            }}
+            className="absolute top-0 left-0 right-0 h-1/2 bg-[#070d1a] z-20 pointer-events-none"
+          />
+          
+          {/* Bottom Cinematic Shutter */}
+          <motion.div
+            initial={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ 
+              duration: 1.1, 
+              ease: [0.65, 0, 0.35, 1] 
+            }}
+            className="absolute bottom-0 left-0 right-0 h-1/2 bg-[#070d1a] z-20 pointer-events-none"
+          />
+
+          {/* Flash Effect during split */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 0.4, 0] }}
+            transition={{ delay: 0.1, duration: 0.4 }}
+            className="absolute inset-0 bg-white z-10 pointer-events-none"
+          />
+        </div>
+      )}
+    </AnimatePresence>
   );
 };

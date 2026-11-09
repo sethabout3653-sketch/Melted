@@ -75,7 +75,9 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
   };
 
   return (
-    <div 
+    <motion.div 
+      whileHover={cardHover}
+      transition={hoverTransition}
       className={`group relative bg-[#14141d] dark:bg-[#14141d] border border-[#222232] hover:border-[#00f0ff] hover:shadow-[0_0_20px_rgba(0,240,255,0.15)] rounded-2xl p-2 flex flex-col transition-all duration-300 ${
         variant === 'large' ? 'md:col-span-2 md:row-span-2' : ''
       }`}
@@ -164,6 +166,6 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
         </button>
       </div>
 
-    </div>
+    </motion.div>
   );
 });

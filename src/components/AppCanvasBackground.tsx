@@ -18,7 +18,7 @@ export const AppCanvasBackground: React.FC<AppCanvasBackgroundProps> = ({ themeC
     return (
       <div 
         className="fixed inset-0 pointer-events-none z-0 transition-colors duration-300"
-        style={{ backgroundColor: isDark ? bgSolidColor : undefined }}
+        style={{ backgroundColor: isDark ? '#000000' : '#ffffff' }}
       />
     );
   }

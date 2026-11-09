@@ -715,10 +715,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
   }, [users, currentUser.id]);
 
   const isUserSpeaking = useCallback((userId: string) => {
-    if (userId === currentUser.id) return globalChat.is_speaking;
+    if (userId === currentUser.id) return Boolean(globalChat.is_speaking || globalChat.isSpeaking);
     const peer = users.find((u: any) => u.id === userId);
-    return peer?.is_speaking || remoteSpeaking[userId];
-  }, [currentUser.id, globalChat.is_speaking, users, remoteSpeaking]);
+    return Boolean(peer?.is_speaking || remoteSpeaking[userId]);
+  }, [currentUser.id, globalChat.is_speaking, globalChat.isSpeaking, users, remoteSpeaking]);
 
   const renderUserActivity = useCallback((u: any) => {
     if (!u) return <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium truncate block">In #general</span>;
@@ -749,19 +749,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
     return <span className={`text-[11px] ${textColor} font-medium truncate block`}>{text}</span>;
   }, []);
 
-  const [activeChannel, setActiveChannel] = useState<string>(initialChannel || 'text-general');
+  const { activeChannel, setActiveChannel } = globalChat;
   const [showMicPermissionModal, setShowMicPermissionModal] = useState(false);
 
   useEffect(() => {
     if (initialChannel) {
       setActiveChannel(initialChannel);
     }
-  }, [initialChannel]);
+  }, [initialChannel, setActiveChannel]);
 
   const handleStopVoice = useCallback(() => {
     stopVoiceChannel();
     setActiveChannel('text-general');
-  }, [stopVoiceChannel]);
+  }, [stopVoiceChannel, setActiveChannel]);
 
   // Automatically join voice when opening General Voice channel if not already in video
   useEffect(() => {
@@ -772,22 +772,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
 
 
-  // Track message counts for DM channels to handle auto-closing deleted chats
-  const prevDmCountsRef = useRef<Record<string, number>>({});
 
-  useEffect(() => {
-    if (activeChannel.startsWith('dm-')) {
-      const dmMsgCount = messages.filter((m: any) => m.channel_id === activeChannel).length;
-      const prevCount = prevDmCountsRef.current[activeChannel];
-
-      // If this DM channel previously had messages (>0) and now has 0 messages, automatically revert to general chat
-      if (prevCount !== undefined && prevCount > 0 && dmMsgCount === 0) {
-        setActiveChannel('text-general');
-      }
-
-      prevDmCountsRef.current[activeChannel] = dmMsgCount;
-    }
-  }, [messages, activeChannel]);
 
   const [inputText, setInputText] = useState('');
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -796,63 +781,32 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
   const [editColor, setEditColor] = useState('');
   const [editAvatarUrl, setEditAvatarUrl] = useState('');
 
-  // Helper for 1-on-1 direct message channel ID
-  const getDmChannelId = useCallback((peerId: string) => `dm-${[currentUser.id, peerId].sort().join('-')}`, [currentUser.id]);
 
-  // Active DM peers list from messages
-  const dmPeers = useMemo(() => {
-    const peerMap = new Map<string, any>();
-    messages.forEach((m: any) => {
-      if (m.channel_id && m.channel_id.startsWith('dm-') && m.channel_id.includes(currentUser.id)) {
-        const parts = m.channel_id.replace('dm-', '').split('-');
-        const peerId = parts.find((p: string) => p !== currentUser.id);
-        if (peerId) {
-          const knownUser = users.find((u: any) => u.id === peerId);
-          if (knownUser) {
-            peerMap.set(peerId, { ...knownUser, lastMessage: m });
-          } else {
-            const fallbackName = m.sender_id === peerId ? m.sender_name : 'Player';
-            peerMap.set(peerId, {
-              id: peerId,
-              username: fallbackName,
-              avatar_color: m.avatar_color || '#0066ff',
-              avatar_url: m.sender_avatar_url || '',
-              lastMessage: m,
-            });
-          }
-        }
-      }
-    });
-    return Array.from(peerMap.values());
-  }, [messages, users, currentUser.id]);
-
-  // Current active DM peer if activeChannel is a dm-
-  const activeDmPeerId = useMemo(() => {
-    if (!activeChannel.startsWith('dm-')) return null;
-    const parts = activeChannel.replace('dm-', '').split('-');
-    return parts.find((p: string) => p !== currentUser.id) || null;
-  }, [activeChannel, currentUser.id]);
-
-  const activeDmPeer = useMemo(() => {
-    if (!activeDmPeerId) return null;
-    return users.find((u: any) => u.id === activeDmPeerId) || dmPeers.find((p: any) => p.id === activeDmPeerId) || {
-      id: activeDmPeerId,
-      username: 'Player',
-      avatar_color: '#0066ff',
-      avatar_url: '',
-    };
-  }, [activeDmPeerId, users, dmPeers]);
 
   // Filter messages for currently selected channel
   const activeChannelMessages = useMemo(() => {
     if (activeChannel === 'text-general') {
       return messages.filter((m: any) => !m.channel_id || m.channel_id === 'text-general' || m.channel_id === 'general');
     }
-    if (activeChannel.startsWith('dm-')) {
-      return messages.filter((m: any) => m.channel_id === activeChannel);
-    }
     return [];
   }, [messages, activeChannel]);
+
+  // Active Typing Users for currently selected channel (General or DM)
+  const typingUsers = useMemo(() => {
+    const now = Date.now();
+    return users.filter((u: any) => {
+      if (!u || !u.id || u.id === currentUser.id) return false;
+
+      // Direct channel typing match
+      const isChannelMatch = u.typing_channel === activeChannel;
+      const isTypingRecently = u.typing_at && (now - u.typing_at < 4000);
+
+      // Fallback match for legacy/general activity
+      const isFallbackMatch = u.current_channel === activeChannel && u.activity === 'Typing...' && u.updated_at && (now - u.updated_at < 4000);
+
+      return (isChannelMatch && isTypingRecently) || isFallbackMatch;
+    });
+  }, [users, currentUser.id, activeChannel]);
 
   const profileAvatarInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -1026,19 +980,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
   const handleChannelSelect = (channel: string) => {
     setActiveChannel(channel);
     setIsMobileChannelsOpen(false);
-    if (!isInVideo) {
-      let newActivity = 'In #general';
-      if (channel === 'video-general') newActivity = 'In General Voice';
-      else if (channel.startsWith('dm-')) newActivity = 'In Private Chat';
-      setCurrentUser((prev: any) => ({ ...prev, current_channel: channel as any, activity: newActivity }));
-      updateUser({ current_channel: channel as any, activity: newActivity });
-    }
-    if (channel === 'video-general' && !isInVideo) {
-      if (globalChat.micPermissionStatus === 'prompt') {
-        globalChat.requestMicrophonePermission();
-      } else {
+    if (channel === 'video-general') {
+      const newActivity = 'In General Voice';
+      setCurrentUser((prev: any) => ({ ...prev, current_channel: 'video-general', activity: newActivity }));
+      updateUser({ current_channel: 'video-general', activity: newActivity });
+      if (!isInVideo) {
         joinVoiceChannel(false);
       }
+    } else {
+      let newActivity = 'In #general';
+      if (channel.startsWith('dm-')) newActivity = 'In Private Chat';
+      setCurrentUser((prev: any) => ({ ...prev, current_channel: channel as any, activity: newActivity }));
+      updateUser({ current_channel: channel as any, activity: newActivity });
     }
   };
 
@@ -1147,7 +1100,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-    updateUser({ activity: 'Online' });
+    updateUser({ activity: 'Online', typing_channel: undefined, typing_at: 0 });
     if (!inputText.trim() && !pendingFile) return;
 
     let finalAttachment: { url: string; type: 'image' | 'video' | 'audio' | 'file' | 'gif'; name?: string } | undefined = undefined;
@@ -1321,60 +1274,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
               </motion.button>
             </div>
 
-            {/* Direct Messages (Private Chats) */}
-            <div className="space-y-2 pt-2 border-t border-slate-200/60 dark:border-slate-800/60">
-              <div className="px-2 text-[10px] font-black text-slate-400 dark:text-slate-500 tracking-[0.2em] uppercase flex items-center justify-between">
-                <span>Private Chats</span>
-                {dmPeers.length > 0 && (
-                  <span className="text-[10px] font-bold text-cyan-500 dark:text-cyan-300">
-                    {dmPeers.length}
-                  </span>
-                )}
-              </div>
 
-              {dmPeers.length === 0 ? (
-                <div className="px-3 py-2 text-[11px] text-slate-400 dark:text-slate-500 font-medium">
-                  Click the message icon on any member to start a private chat.
-                </div>
-              ) : (
-                <div className="space-y-1">
-                  {dmPeers.map((peer: any) => {
-                    const dmChan = getDmChannelId(peer.id);
-                    const isDmActive = activeChannel === dmChan;
-                    const peerMessages = messages.filter((m: any) => m.channel_id === dmChan);
-                    return (
-                      <motion.button
-                        key={peer.id}
-                        whileHover={{ x: 3 }}
-                        whileTap={{ scale: 0.98 }}
-                        onClick={() => handleChannelSelect(dmChan)}
-                        className={`w-full px-3 py-2 rounded-2xl flex items-center justify-between transition-all cursor-pointer border ${
-                          isDmActive
-                            ? 'bg-cyan-500 text-white font-black shadow-lg shadow-cyan-500/20 border-cyan-400'
-                            : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 border-transparent'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="relative shrink-0">
-                            {renderAvatar(peer, 'w-6 h-6 text-[10px]')}
-                            <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-sm bg-emerald-500 border border-white dark:border-slate-900" />
-                          </div>
-                          <span className="text-xs font-bold truncate">{peer.username}</span>
-                        </div>
-                        {peerMessages.length > 0 && (
-                          <span className={`text-[10px] px-1.5 py-0.2 rounded-lg font-bold ${
-                            isDmActive ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400'
-                          }`}>
-                            {peerMessages.length}
-                          </span>
-                        )}
-                      </motion.button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
+            
+            
+            
           </div>
         </div>
 
@@ -1438,25 +1341,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     <Menu className="w-5 h-5" />
                   </button>
 
-                  {activeChannel.startsWith('dm-') ? (
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="relative shrink-0">
-                        {renderAvatar(activeDmPeer, 'w-9 h-9 text-xs')}
-                        <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-sm bg-emerald-500 border-2 border-white dark:border-slate-900" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base truncate">{activeDmPeer?.username}</span>
-                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-black bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                            Private Chat
-                          </span>
-                        </div>
-                        <span className="text-[11px] text-slate-400 dark:text-slate-500 font-medium truncate block">
-                          {activeDmPeer?.activity || 'Active Now'}
-                        </span>
-                      </div>
-                    </div>
-                  ) : (
                     <>
                       <Hash className="w-5 h-5 text-slate-900 dark:text-white shrink-0" />
                       <span className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base truncate">general</span>
@@ -1470,26 +1354,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                         <span>{users.length} online</span>
                       </button>
                     </>
-                  )}
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {activeChannel.startsWith('dm-') && activeDmPeer && (
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          deleteChannelMessages(activeChannel);
-                          setActiveChannel('text-general');
-                        }}
-                        className="px-3 py-1.5 rounded-xl bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/50 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer border border-red-200 dark:border-red-800"
-                        title="Delete Chat for both participants"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                        <span className="hidden sm:inline">Delete Chat</span>
-                      </button>
-                    </div>
-                  )}
+
 
                   <div className="relative hidden sm:block">
                     <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
@@ -1519,18 +1387,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                 className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6"
               >
                 
-                {/* Empty State for DMs */}
-                {activeChannel.startsWith('dm-') && activeChannelMessages.length === 0 && (
-                  <div className="py-16 text-center space-y-3 max-w-sm mx-auto">
-                    <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center bg-blue-50 dark:bg-blue-900/30 text-cyan-500 dark:text-cyan-300 border border-blue-100 dark:border-blue-800 shadow-md">
-                      <MessageCircle className="w-8 h-8" />
-                    </div>
-                    <h3 className="font-extrabold text-slate-900 dark:text-white text-base">Direct Messages with {activeDmPeer?.username}</h3>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 leading-relaxed font-medium">
-                      This is the start of your 1-on-1 private chat. You can send messages, audio clips, and files.
-                    </p>
-                  </div>
-                )}
+
 
                 {/* Messages List */}
                 <motion.div 
@@ -1860,6 +1717,40 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
               )}
 
               <div className="p-4 pt-0 shrink-0">
+                {/* Active Typing Indicator Bar */}
+                <AnimatePresence>
+                  {typingUsers.length > 0 && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 4, height: 0 }}
+                      animate={{ opacity: 1, y: 0, height: 'auto' }}
+                      exit={{ opacity: 0, y: 4, height: 0 }}
+                      transition={{ duration: 0.15 }}
+                      className="px-2 pb-2 flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 overflow-hidden select-none"
+                    >
+                      {/* Animated Bouncing Dots */}
+                      <span className="flex items-center gap-1 shrink-0 px-1.5 py-1 rounded-full bg-cyan-500/10 dark:bg-cyan-500/20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 dark:text-cyan-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 dark:text-cyan-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 dark:text-cyan-400 animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </span>
+
+                      {/* Formatted Typing String - Shows names and count for clarity */}
+                      <span className="truncate">
+                        {typingUsers.length === 1 && (
+                          <span>
+                            <strong className="text-slate-900 dark:text-white font-bold">{typingUsers[0].username}</strong> is typing...
+                          </span>
+                        )}
+                        {typingUsers.length > 1 && (
+                          <span>
+                            <strong className="text-slate-900 dark:text-white font-bold">{typingUsers.length} people</strong> are typing: {typingUsers.map((u: any) => u.username).join(', ')}
+                          </span>
+                        )}
+                      </span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
                 <form onSubmit={handleSendMessage} className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus-within:border-cyan-400 dark:focus-within:border-cyan-400 rounded-2xl px-4 py-3 flex items-center gap-3 transition-colors shadow-lg">
                   <input
                     type="text"
@@ -1867,13 +1758,32 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     onChange={(e) => {
                       const value = e.target.value;
                       setInputText(value);
-                      updateUser({ activity: value.trim() ? 'Typing...' : 'Online' });
+
                       if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-                      if (value.trim()) {
-                        typingTimeoutRef.current = setTimeout(() => updateUser({ activity: 'Online' }), 1800);
+
+                      if (value.trim().length > 0) {
+                        updateUser({ 
+                          typing_channel: activeChannel, 
+                          typing_at: Date.now(), 
+                          activity: 'Typing...' 
+                        });
+
+                        typingTimeoutRef.current = setTimeout(() => {
+                          updateUser({ 
+                            typing_channel: undefined, 
+                            typing_at: 0, 
+                            activity: 'Online' 
+                          });
+                        }, 2200);
+                      } else {
+                        updateUser({ 
+                          typing_channel: undefined, 
+                          typing_at: 0, 
+                          activity: 'Online' 
+                        });
                       }
                     }}
-                    placeholder={activeChannel.startsWith('dm-') ? `Message @${activeDmPeer?.username || 'user'} privately...` : "Message #general..."}
+                    placeholder="Message #general..."
                     className="flex-1 bg-transparent text-base md:text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none py-2"
                   />
 
@@ -1960,19 +1870,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                       {renderUserActivity(u.activity || (u.current_channel === 'video-general' ? 'In General Voice' : 'In #general'))}
                     </div>
 
-                    {/* Desktop Direct Action Buttons */}
-                    {u.id !== currentUser.id && (
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          type="button"
-                          onClick={() => handleChannelSelect(getDmChannelId(u.id))}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-400 hover:bg-blue-50 dark:hover:bg-cyan-400/10 transition-all cursor-pointer"
-                          title={`Private chat with ${u.username}`}
-                        >
-                          <MessageCircle className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
+
                   </div>
                 ))}
               </div>
@@ -2025,22 +1923,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                           {renderUserActivity(u.activity || (u.current_channel === 'video-general' ? 'In General Voice' : 'In #general'))}
                         </div>
 
-                        {/* Mobile Direct Action Buttons */}
-                        {u.id !== currentUser.id && (
-                          <div className="flex items-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                handleChannelSelect(getDmChannelId(u.id));
-                                setIsMobileMembersOpen(false);
-                              }}
-                              className="p-2 rounded-xl text-zinc-400 hover:text-cyan-400 hover:bg-white/5 transition-all cursor-pointer"
-                              title={`Private chat with ${u.username}`}
-                            >
-                              <MessageCircle className="w-5 h-5" />
-                            </button>
-                          </div>
-                        )}
+
                       </div>
                     ))}
                   </div>
@@ -2529,19 +2412,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                         {renderUserActivity(u.activity || 'In #general')}
                       </div>
                       
-                      {/* Action buttons on hover */}
-                      <div className="hidden group-hover:flex items-center gap-1 shrink-0">
-                        <button 
-                          onClick={() => {
-                            const dmChan = getDmChannelId(u.id);
-                            handleChannelSelect(dmChan);
-                          }}
-                          className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all cursor-pointer"
-                          title="Send Private Message"
-                        >
-                          <MessageCircle className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
+
                     </div>
                   ))}
                 </div>
@@ -2624,19 +2495,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                             {renderUserActivity(u.activity || 'In #general')}
                           </div>
 
-                          <div className="flex items-center gap-1 shrink-0">
-                            <button 
-                              onClick={() => {
-                                const dmChan = getDmChannelId(u.id);
-                                handleChannelSelect(dmChan);
-                                setIsMobileMembersOpen(false);
-                              }}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all cursor-pointer"
-                              title="Send Private Message"
-                            >
-                              <MessageCircle className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+
                         </div>
                       ))}
                     </div>
@@ -2732,38 +2591,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                   </motion.button>
                 </div>
 
-                {/* Private Chats Section */}
-                {dmPeers.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="px-2 text-[10px] font-black text-slate-400 dark:text-slate-500 tracking-[0.2em] uppercase">
-                      Private Chats
-                    </div>
-                    <div className="space-y-1">
-                      {dmPeers.map((peer: any) => {
-                        const dmChan = getDmChannelId(peer.id);
-                        const isDmActive = activeChannel === dmChan;
-                        return (
-                          <motion.button
-                            key={peer.id}
-                            whileTap={{ scale: 0.98 }}
-                            onClick={() => handleChannelSelect(dmChan)}
-                            className={`w-full px-3 py-2 rounded-2xl flex items-center gap-2.5 transition-all cursor-pointer border ${
-                              isDmActive
-                                ? 'bg-cyan-500 text-white font-black shadow-lg shadow-cyan-500/20 border-cyan-400'
-                                : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800/80 border-transparent'
-                            }`}
-                          >
-                            <div className="relative shrink-0">
-                              {renderAvatar(peer, 'w-6 h-6 text-[10px]')}
-                              <div className="absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-sm bg-emerald-500 border border-white dark:border-slate-900" />
-                            </div>
-                            <span className="text-xs font-bold truncate">{peer.username}</span>
-                          </motion.button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+
               </div>
 
               {/* Mobile User Footer */}

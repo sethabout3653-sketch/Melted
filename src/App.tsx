@@ -143,9 +143,12 @@ export default function App() {
 
   useEffect(() => {
     if (currentTab === 'chat' && globalChat.activeNotification) {
-      globalChat.dismissNotification();
+      // Only dismiss if the user is actually looking at the channel the notification came from
+      if (globalChat.activeChannel === globalChat.activeNotification.channel_id) {
+        globalChat.dismissNotification();
+      }
     }
-  }, [currentTab, globalChat.activeNotification, globalChat.dismissNotification]);
+  }, [currentTab, globalChat.activeChannel, globalChat.activeNotification, globalChat.dismissNotification]);
 
   // Multi-Device Adaptation System (Mobile, Tablet, Desktop)
   const deviceInfo = useDeviceAdaptation();
@@ -199,6 +202,23 @@ export default function App() {
 
   // Keep user activity tracker perfectly synchronized with current tab, active game, active movie/show, and voice state
   useEffect(() => {
+    const inVoice = Boolean(globalChat.isInVideo || globalChat.activeChannel === 'video-general');
+
+    if (inVoice) {
+      if (activeGame) {
+        globalChat.updateUser({ activity: `Playing ${activeGame.name}`, current_channel: 'video-general' });
+      } else if (activeMedia) {
+        const isTV = activeMedia.mediaType === 'tv';
+        const mediaLabel = isTV && activeMedia.season && activeMedia.episode
+          ? `Watching ${activeMedia.title} (S${activeMedia.season} E${activeMedia.episode})`
+          : `Watching ${activeMedia.title}`;
+        globalChat.updateUser({ activity: mediaLabel, current_channel: 'video-general' });
+      } else {
+        globalChat.updateUser({ activity: 'In General Voice', current_channel: 'video-general' });
+      }
+      return;
+    }
+
     if (activeMedia) {
       const isTV = activeMedia.mediaType === 'tv';
       const mediaLabel = isTV && activeMedia.season && activeMedia.episode
@@ -206,9 +226,7 @@ export default function App() {
         : `Watching ${activeMedia.title}`;
       globalChat.updateUser({ activity: mediaLabel, current_channel: 'text-general' });
     } else if (activeGame) {
-      globalChat.updateUser({ activity: `Playing ${activeGame.name}` });
-    } else if (globalChat.isInVideo) {
-      globalChat.updateUser({ activity: 'In General Voice', current_channel: 'video-general' });
+      globalChat.updateUser({ activity: `Playing ${activeGame.name}`, current_channel: 'text-general' });
     } else if (currentTab === 'chat') {
       globalChat.updateUser({ activity: 'In Community Chat', current_channel: 'text-general' });
     } else if (currentTab === 'ai') {
@@ -220,7 +238,17 @@ export default function App() {
     } else {
       globalChat.updateUser({ activity: 'Browsing Games', current_channel: 'text-general' });
     }
-  }, [currentTab, activeGame, activeMedia, globalChat.isInVideo]);
+  }, [currentTab, activeGame, activeMedia, globalChat.isInVideo, globalChat.activeChannel]);
+
+  // Temporary maintenance trigger: clear all messages
+  useEffect(() => {
+    const hasCleared = localStorage.getItem('frosthub_maintenance_clear_1');
+    if (!hasCleared && globalChat.isConnected) {
+      console.log('[Maintenance] Triggering global message purge...');
+      (globalChat as any).clearAllMessages();
+      localStorage.setItem('frosthub_maintenance_clear_1', 'true');
+    }
+  }, [globalChat.isConnected]);
 
   const handleGoHome = () => {
     setSelectedCategory('All');

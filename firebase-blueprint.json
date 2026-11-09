@@ -1,0 +1,63 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Application user profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "username": { "type": "string", "maxLength": 64 },
+        "avatar_color": { "type": "string", "maxLength": 32 },
+        "avatar_url": { "type": "string", "maxLength": 512 },
+        "current_channel": { "type": "string", "maxLength": 64 },
+        "activity": { "type": "string", "maxLength": 128 },
+        "updated_at": { "type": "number" }
+      },
+      "required": ["id", "username"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Chat or direct message item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "channel_id": { "type": "string", "maxLength": 128 },
+        "sender_id": { "type": "string", "maxLength": 128 },
+        "sender_name": { "type": "string", "maxLength": 64 },
+        "avatar_color": { "type": "string", "maxLength": 32 },
+        "sender_avatar_url": { "type": "string", "maxLength": 512 },
+        "content": { "type": "string", "maxLength": 2048 },
+        "attachment_url": { "type": "string", "maxLength": 512 },
+        "attachment_type": { "type": "string", "maxLength": 64 },
+        "attachment_name": { "type": "string", "maxLength": 128 },
+        "timestamp": { "type": "string", "maxLength": 64 },
+        "created_at": { "type": "number" }
+      },
+      "required": ["id", "channel_id", "sender_id", "sender_name"]
+    },
+    "Deletion": {
+      "title": "Deletion",
+      "description": "Tombstone for deleted messages",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128 },
+        "deleted_at": { "type": "number" }
+      },
+      "required": ["id"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profiles collection"
+    },
+    "/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/Message" },
+      "description": "Global and private chat messages collection"
+    },
+    "/deletions/{messageId}": {
+      "schema": { "$ref": "#/entities/Deletion" },
+      "description": "Shared tombstones for permanent message deletion sync"
+    }
+  }
+}
