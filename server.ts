@@ -258,6 +258,7 @@ app.delete('/api/ws-db/message/:id', (req, res) => {
     const messageId = req.params.id;
     if (messageId) {
       globalWsDb.deleteMessage(messageId);
+      broadcastWss({ type: 'SQL_DELETE', table: 'messages', id: messageId });
       broadcastTable('messages', globalWsDb.messages);
     }
     res.json({ success: true, messages: globalWsDb.messages });
@@ -271,6 +272,7 @@ app.delete('/api/ws-db/channel-messages/:channelId', (req, res) => {
     const channelId = req.params.channelId;
     if (channelId) {
       globalWsDb.deleteChannelMessages(channelId);
+      broadcastWss({ type: 'SQL_DELETE_CHANNEL', table: 'messages', channel_id: channelId });
       broadcastTable('messages', globalWsDb.messages);
     }
     res.json({ success: true, messages: globalWsDb.messages });

@@ -67,30 +67,30 @@ function cleanData<T>(obj: T): T {
 
 function mergeMessages(existing: DbMessage[], incoming: DbMessage[], currentUserId?: string, outgoingQueueIds?: Set<string>, deletedIds?: Set<string>): DbMessage[] {
   const map = new Map<string, DbMessage>();
-  
-  // 1. Preserve existing messages first (unless tombstoned)
+
+  // Add existing messages if not tombstoned
   existing.forEach(m => {
     if (m && m.id && (!deletedIds || !deletedIds.has(m.id))) {
       map.set(m.id, m);
     }
   });
 
-  // 2. Apply incoming server updates (authoritative overlap)
-  incoming.forEach(m => { 
+  // Merge incoming messages if not tombstoned
+  incoming.forEach(m => {
     if (m && m.id && (!deletedIds || !deletedIds.has(m.id))) {
       map.set(m.id, m);
     }
   });
 
-  // 3. Ensure local unconfirmed messages are kept if still missing from map
-  if (outgoingQueueIds) {
+  // Preserve any outgoing queue items
+  if (outgoingQueueIds && outgoingQueueIds.size > 0) {
     existing.forEach(m => {
-      if (m && m.id && outgoingQueueIds.has(m.id) && !map.has(m.id) && (!deletedIds || !deletedIds.has(m.id))) {
+      if (m && m.id && outgoingQueueIds.has(m.id) && (!deletedIds || !deletedIds.has(m.id))) {
         map.set(m.id, m);
       }
     });
   }
-  
+
   return Array.from(map.values()).sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
 }
 
@@ -183,6 +183,12 @@ export function useWebSocketDatabase(currentUser: {
   })());
   const deletedIdsRef = useRef<Set<string>>((() => {
     try {
+      const CACHE_KEY = 'frosthub_del_v3';
+      if (localStorage.getItem('frosthub_del_ver') !== CACHE_KEY) {
+        localStorage.removeItem('frosthub_deleted_message_ids');
+        localStorage.setItem('frosthub_del_ver', CACHE_KEY);
+        return new Set();
+      }
       const saved = localStorage.getItem('frosthub_deleted_message_ids');
       return saved ? new Set(JSON.parse(saved)) : new Set();
     } catch { return new Set(); }
@@ -348,6 +354,10 @@ export function useWebSocketDatabase(currentUser: {
           setUsers(deduplicateUsers(data.users, currentUserRef.current.id));
         } else if (data.type === 'SYNC_MESSAGES' && Array.isArray(data.messages)) {
           setMessages(prev => mergeMessages(prev, data.messages, currentUserRef.current.id));
+        } else if (data.type === 'SYNC_DELETIONS' && data.deletedId) {
+          deletedIdsRef.current.add(data.deletedId);
+          try { localStorage.setItem('frosthub_deleted_message_ids', JSON.stringify(Array.from(deletedIdsRef.current))); } catch {}
+          setMessages(prev => prev.filter(m => m && m.id !== data.deletedId));
         }
       };
     } catch {}
@@ -382,6 +392,7 @@ export function useWebSocketDatabase(currentUser: {
             const unsynced = messages.filter(m => 
               m.sender_id === u.id && 
               !serverIds.has(m.id) && 
+              !deletedIdsRef.current.has(m.id) &&
               (now - (m.created_at || 0)) < freshThreshold
             );
             if (unsynced.length > 0) {
@@ -689,6 +700,7 @@ export function useWebSocketDatabase(currentUser: {
     setMessages((prev) => {
       const next = prev.filter((m) => m && m.id !== messageId);
       try { localStorage.setItem('frosthub_db_messages', JSON.stringify(next)); } catch {}
+      broadcastChannelRef.current?.postMessage({ type: 'SYNC_DELETIONS', deletedId: messageId });
       broadcastChannelRef.current?.postMessage({ type: 'SYNC_MESSAGES', messages: next });
       return next;
     });
