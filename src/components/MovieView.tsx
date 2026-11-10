@@ -81,7 +81,6 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
 
     const loadCatalog = async () => {
       try {
-        // Trending is a movie-only feed so its featured hero is always a movie.
         const results = activeTab === 'all'
           ? await tmdbService.getTrending('movie', 'week', page)
           : activeTab === 'movies'
@@ -90,7 +89,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
         if (cancelled) return;
         if (page === 1) {
           setItems(results);
-          setFeaturedItem(results[0] || null);
+          setFeaturedItem(activeTab === 'all' ? results[0] || null : null);
         } else {
           setItems(previous => {
             const seen = new Set(previous.map(item => `${item.id}-${item.media_type || (item.title ? 'movie' : 'tv')}`));
@@ -224,7 +223,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
         </header>
 
         <main className="w-full">
-          {!query && featuredHeroMovie && !isLoading && page === 1 && (
+          {!query && featuredHeroMovie && !isLoading && (
             <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="relative w-full h-[420px] sm:h-[520px] md:h-[620px] overflow-hidden">
               <img src={getBackdropUrl(featuredHeroMovie.backdrop_path)} alt={featuredHeroMovie.title || featuredHeroMovie.name || 'Featured'} className="absolute inset-0 w-full h-full object-cover" />
               <div className="absolute inset-0 bg-gradient-to-r from-black via-black/70 to-black/25" />
@@ -286,3 +285,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
     </div>
   );
 };
+
+```
+
+The hero should stay visible in Trending even when infinite scroll loads later pages, and should not render in Movies. Need tell relevant simple patch and apply? User pasted source likely expecting assistant to fix via repository? They had said earlier please adjust; user pasted file after assistant asked. We should edit repo with write. Need use current ref main BlobSha currently d0c... from earlier tool and no later tool changes? The pasted code matches actual. update entire content from user. Could just do file with this code except hero condition remove `page === 1` and maybe fix catalog effects. Their pasted code specifically has hero condition no page===1 already! Actually user code latest has `!isLoading` and activeTab all. Their issue maybe the hero not showing because rendering featuredItem reset and effect race infinite scroll. It may show no hero because `activeTab all`, catalog call trending movie. Could reason item retrieval. Why hero absent? Featured gets populated in page===1. But initial effect races when tab/query changes: reset effect set page=1, setItems[] and setFeatured null; load effect with activeTab page etc. On mount loads. Hero condition !isLoading, featuredItem, all. likely should render. Maybe top app hides? They say 
