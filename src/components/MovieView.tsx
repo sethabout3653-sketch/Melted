@@ -47,6 +47,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
     setPage(1);
     setHasMore(true);
     setItems([]);
+    setFeaturedItem(null);
   }, [activeTab, query]);
 
   useEffect(() => {
@@ -80,10 +81,11 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
 
     const loadCatalog = async () => {
       try {
+        // Trending is a movie-only feed so its featured hero is always a movie.
         const results = activeTab === 'all'
-          ? await tmdbService.getTrending('all', 'week', page)
+          ? await tmdbService.getTrending('movie', 'week', page)
           : activeTab === 'movies'
-            ? await tmdbService.getTrending('movie', 'week', page)
+            ? await tmdbService.getPopularMovies(page)
             : await tmdbService.getPopularTV(page);
         if (cancelled) return;
         if (page === 1) {
@@ -195,7 +197,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
 
   const totalSeasons = tvDetails?.number_of_seasons || selectedMedia?.number_of_seasons || 5;
   const episodeCount = tvDetails?.seasons?.find(item => item.season_number === season)?.episode_count || 24;
-  const featuredHeroMovie = !query && activeTab === 'movies' ? featuredItem : null;
+  const featuredHeroMovie = !query && activeTab === 'all' ? featuredItem : null;
   const tabs: { id: CatalogTab; label: string; Icon: typeof Film }[] = [
     { id: 'all', label: 'Trending', Icon: Sparkles },
     { id: 'movies', label: 'Movies', Icon: Film },
@@ -205,7 +207,6 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
   return (
     <div className="w-full min-h-screen bg-[#08090b] text-white flex flex-col font-sans pb-28">
       {!isPlayerOpen && <>
-        {/* Normal-flow header: it scrolls away instead of sticking over the content. */}
         <header className="relative z-30 bg-[#08090b] border-b border-white/10 px-4 sm:px-8 py-4">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
             <nav aria-label="Movie categories" className="flex items-center gap-2">
@@ -230,7 +231,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
               <div className="absolute inset-0 bg-gradient-to-t from-[#08090b] via-transparent to-black/20" />
               <div className="relative z-10 flex h-full items-end max-w-7xl mx-auto px-6 sm:px-10 pb-10 sm:pb-16">
                 <div className="max-w-3xl">
-                  <div className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-white/80"><Film className="w-4 h-4" /><span>Movies</span></div>
+                  <div className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-white/80"><Sparkles className="w-4 h-4" /><span>Trending</span></div>
                   <h1 className="text-4xl sm:text-6xl lg:text-[5rem] font-black uppercase tracking-[-0.06em] leading-[0.9] max-w-2xl">{featuredHeroMovie.title || featuredHeroMovie.name}</h1>
                   <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-white/80">
                     {featuredHeroMovie.vote_average !== undefined && <span className="inline-flex items-center gap-1 text-amber-400"><Star className="w-4 h-4 fill-current" />{featuredHeroMovie.vote_average.toFixed(1)}</span>}
@@ -249,13 +250,9 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
 
           <section className="max-w-7xl mx-auto px-4 sm:px-8 space-y-4 py-8">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2">
-                <Film className="w-5 h-5 text-cyan-400" />
-                {query ? `Search Results for “${query}”` : activeTab === 'all' || activeTab === 'movies' ? 'Trending' : 'Popular Series'}
-              </h2>
+              <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2"><Film className="w-5 h-5 text-cyan-400" />{query ? `Search Results for “${query}”` : activeTab === 'all' ? 'Trending' : activeTab === 'movies' ? 'Movies' : 'Popular Series'}</h2>
               <span className="text-xs text-white/50">{items.length} titles</span>
             </div>
-
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
               {items.map(item => (
                 <button key={`${item.id}-${item.media_type || (item.title ? 'movie' : 'tv')}`} type="button" onClick={() => void selectMedia(item)} className="group text-left bg-[#141519] rounded-xl overflow-hidden border border-white/10 hover:border-white/40 transition-colors">
@@ -270,7 +267,6 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
               {(isLoading || searchLoading) && Array.from({ length: 12 }, (_, index) => <div key={`loading-${index}`} className="h-64 rounded-xl bg-white/5" />)}
               {isMoreLoading && Array.from({ length: 6 }, (_, index) => <div key={`more-${index}`} className="h-64 rounded-xl bg-white/5" />)}
             </div>
-
             {items.length === 0 && !isLoading && !searchLoading && <div className="text-center py-16 text-white/50">No movies or TV shows found.</div>}
             <div ref={observerTarget} className="h-20 w-full flex items-center justify-center">{isMoreLoading && <div className="w-6 h-6 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />}</div>
           </section>
