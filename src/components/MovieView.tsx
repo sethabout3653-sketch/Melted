@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Film, Tv, Search, Play, X, Server, ChevronDown } from 'lucide-react';
-import { tmdbService, TMDBMedia, getPosterUrl } from '../services/tmdbService';
+import { Film, Tv, Search, Play, X, Server, ChevronDown, Star, Info } from 'lucide-react';
+import { tmdbService, TMDBMedia, getPosterUrl, getBackdropUrl } from '../services/tmdbService';
 
 interface MovieServer {
   id: string;
@@ -94,35 +94,64 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
 
   const totalSeasons = Math.max(1, tvDetails?.number_of_seasons || selectedMedia?.number_of_seasons || 5);
   const episodeCount = tvDetails?.seasons?.find(item => item.season_number === season)?.episode_count || 24;
+  const featuredMovie = items.find(item => item.media_type !== 'tv' && !item.first_air_date) || null;
+  const tabs: { id: CatalogTab; label: string }[] = [
+    { id: 'all', label: 'Trending' },
+    { id: 'movies', label: 'Movies' },
+    { id: 'tv', label: 'TV Shows' },
+  ];
 
   return (
-    <div className="w-full min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans pb-28">
+    <div className="w-full min-h-screen bg-[#08090b] text-white flex flex-col font-sans pb-20">
       {!selectedMedia && <>
-        <header className="sticky top-20 z-30 bg-white/90 dark:bg-slate-950/90 backdrop-blur-2xl border-b border-slate-200 dark:border-slate-800 px-4 sm:px-8 py-4">
+        <header className="sticky top-20 z-30 bg-[#08090b]/95 backdrop-blur-xl border-b border-white/10 px-4 sm:px-8 py-4">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
             <nav aria-label="Movie categories" className="flex items-center gap-2">
-              {([['all', 'Trending'], ['movies', 'Movies'], ['tv', 'TV Shows']] as const).map(([tab, label]) => (
-                <button key={tab} type="button" onClick={() => setActiveTab(tab)} className={`px-4 py-2 rounded-xl text-xs font-bold ${activeTab === tab ? 'bg-cyan-500 text-white' : 'bg-slate-100 dark:bg-slate-900'}`}>
-                  {tab === 'tv' ? <Tv className="inline w-3.5 h-3.5 mr-2" /> : <Film className="inline w-3.5 h-3.5 mr-2" />}{label}
+              {tabs.map(({ id, label }) => (
+                <button key={id} type="button" onClick={() => setActiveTab(id)} className={`px-5 py-2.5 rounded-full text-sm font-bold transition-colors ${activeTab === id ? 'bg-white text-black' : 'text-white/75 hover:text-white hover:bg-white/10'}`}>
+                  {label}
                 </button>
               ))}
             </nav>
-            <div className="relative w-full sm:w-96">
-              <Search className="w-4 h-4 text-slate-400 absolute left-4 top-1/2 -translate-y-1/2" />
-              <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search movies and TV shows..." className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl pl-11 pr-4 py-3 text-sm" />
+            <div className="relative w-full sm:w-80">
+              <Search className="w-4 h-4 text-white/60 absolute left-4 top-1/2 -translate-y-1/2" />
+              <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search movies and TV shows..." className="w-full bg-white/10 border border-white/15 rounded-full pl-11 pr-4 py-2.5 text-sm text-white placeholder:text-white/50 focus:outline-none focus:border-white/40" />
             </div>
           </div>
         </header>
-        <main className="max-w-7xl mx-auto px-4 sm:px-8 pt-8 pb-28 w-full">
-          <h2 className="text-xl font-black mb-5">{query ? `Search Results for “${query}”` : activeTab === 'all' ? 'Trending Titles' : activeTab === 'movies' ? 'Popular Movies' : 'Popular Series'}</h2>
-          {loading ? <div className="text-center py-16 text-slate-500">Loading titles…</div> : items.length === 0 ? <div className="text-center py-16 text-slate-500">No movies or TV shows found.</div> : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
-              {items.map(item => <button key={`${item.id}-${item.media_type || item.title || 'tv'}`} type="button" onClick={() => void selectMedia(item)} className="text-left bg-[#14141d] rounded-2xl overflow-hidden border border-[#222232] hover:border-cyan-400 transition-colors">
-                <div className="relative aspect-[2/3] bg-slate-900"><img src={getPosterUrl(item.poster_path)} alt={item.title || item.name || 'Title poster'} loading="lazy" className="w-full h-full object-cover" /><span className="absolute top-2 left-2 bg-black/80 text-cyan-300 text-[9px] font-bold px-2 py-1 rounded">{item.media_type === 'tv' || item.first_air_date ? 'TV' : 'MOVIE'}</span><span className="absolute inset-0 flex items-center justify-center bg-black/30"><Play className="w-8 h-8 text-cyan-300" /></span></div>
-                <div className="p-3"><h3 className="text-xs font-bold text-white truncate">{item.title || item.name}</h3><p className="text-[10px] text-slate-400 mt-1">{item.release_date?.slice(0, 4) || item.first_air_date?.slice(0, 4) || ''}</p></div>
-              </button>)}
-            </div>
+        <main className="w-full pb-20">
+          {!query && activeTab === 'movies' && featuredMovie && !loading && (
+            <section className="relative min-h-[520px] sm:min-h-[650px] flex items-end overflow-hidden">
+              <img src={getBackdropUrl(featuredMovie.backdrop_path)} alt="" className="absolute inset-0 w-full h-full object-cover object-center" />
+              <div className="absolute inset-0 bg-gradient-to-r from-black via-black/65 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#08090b] via-transparent to-black/20" />
+              <div className="relative z-10 max-w-7xl mx-auto w-full px-6 sm:px-10 pb-16 sm:pb-20 pt-24">
+                <div className="flex items-center gap-2 text-sm font-bold uppercase tracking-wider text-white/85 mb-4"><Film className="w-4 h-4" /><span>Movies</span></div>
+                <h1 className="text-4xl sm:text-6xl md:text-7xl font-black uppercase tracking-tight max-w-3xl leading-[0.95]">{featuredMovie.title || featuredMovie.name}</h1>
+                <div className="flex flex-wrap items-center gap-3 text-sm text-white/85 mt-5">
+                  {typeof featuredMovie.vote_average === 'number' && <span className="flex items-center gap-1 text-amber-400"><Star className="w-4 h-4 fill-current" />{featuredMovie.vote_average.toFixed(1)}</span>}
+                  {(featuredMovie.release_date || '').slice(0, 4) && <><span className="text-white/40">•</span><span>{featuredMovie.release_date?.slice(0, 4)}</span></>}
+                  <span className="text-white/40">•</span><span>Movie</span>
+                </div>
+                {featuredMovie.overview && <p className="max-w-2xl text-sm sm:text-base text-white/80 leading-7 mt-4 line-clamp-3">{featuredMovie.overview}</p>}
+                <div className="flex flex-wrap gap-3 mt-7">
+                  <button type="button" onClick={() => void selectMedia(featuredMovie)} className="inline-flex items-center gap-2 rounded-lg bg-white px-7 py-3 text-sm font-black uppercase tracking-wide text-black hover:bg-white/85"><Play className="w-4 h-4 fill-current" />Play</button>
+                  <button type="button" onClick={() => void selectMedia(featuredMovie)} className="inline-flex items-center gap-2 rounded-lg border border-white/30 bg-white/15 px-7 py-3 text-sm font-black uppercase tracking-wide text-white backdrop-blur hover:bg-white/25"><Info className="w-4 h-4" />Details</button>
+                </div>
+              </div>
+            </section>
           )}
+          <section className="max-w-7xl mx-auto px-4 sm:px-8 pt-8 sm:pt-10">
+            <h2 className="text-xl sm:text-2xl font-black mb-5">{query ? `Search Results for “${query}”` : activeTab === 'all' ? 'Trending Titles' : activeTab === 'movies' ? 'Popular Movies' : 'Popular Series'}</h2>
+            {loading ? <div className="text-center py-16 text-white/50">Loading titles…</div> : items.length === 0 ? <div className="text-center py-16 text-white/50">No movies or TV shows found.</div> : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
+                {items.map(item => <button key={`${item.id}-${item.media_type || item.title || 'tv'}`} type="button" onClick={() => void selectMedia(item)} className="group text-left bg-[#141519] rounded-xl overflow-hidden border border-white/10 hover:border-white/40 transition-colors">
+                  <div className="relative aspect-[2/3] bg-slate-900"><img src={getPosterUrl(item.poster_path)} alt={item.title || item.name || 'Title poster'} loading="lazy" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" /><span className="absolute top-2 left-2 bg-black/80 text-white text-[9px] font-bold px-2 py-1 rounded">{item.media_type === 'tv' || item.first_air_date ? 'TV' : 'MOVIE'}</span><span className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity"><Play className="w-8 h-8 text-white fill-current" /></span></div>
+                  <div className="p-3"><h3 className="text-xs font-bold text-white truncate">{item.title || item.name}</h3><p className="text-[10px] text-white/50 mt-1">{item.release_date?.slice(0, 4) || item.first_air_date?.slice(0, 4) || ''}</p></div>
+                </button>)}
+              </div>
+            )}
+          </section>
         </main>
       </>}
       {selectedMedia && createPortal(
