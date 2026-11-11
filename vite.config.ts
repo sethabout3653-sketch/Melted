@@ -28,7 +28,9 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      allowedHosts: ['sb-7bwx88dm7dok.vercel.run'],
+      // AI Studio previews use Google-hosted domains; Vercel remains supported.
+      // Keep this scoped instead of allowing every host (which weakens DNS-rebinding protection).
+      allowedHosts: ['.googleusercontent.com', '.run.app', 'sb-7bwx88dm7dok.vercel.run'],
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
