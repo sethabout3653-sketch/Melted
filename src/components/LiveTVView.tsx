@@ -3,7 +3,7 @@ import Hls from 'hls.js';
 import { Tv, Search, Volume2, VolumeX, Maximize2 } from 'lucide-react';
 import { TV_CHANNELS, TVChannel } from '../data/channels';
 
-const DEFAULT_CHANNEL_ID = 'afv-always-funny';
+const DEFAULT_CHANNEL_ID = 'cartoon-network';
 const DEFAULT_CHANNEL = TV_CHANNELS.find(channel => channel.id === DEFAULT_CHANNEL_ID) ?? TV_CHANNELS[0] ?? null;
 
 const EXTRA_CATEGORIES = [
@@ -235,8 +235,24 @@ export const LiveTVView: React.FC = () => {
         };
 
         const selectEnglishSubtitleTrack = () => {
-          hls.subtitleDisplay = false;
-          hls.subtitleTrack = -1;
+          if (hls.subtitleTracks && hls.subtitleTracks.length > 0) {
+            let bestTrackIndex = -1;
+            for (let i = 0; i < hls.subtitleTracks.length; i++) {
+              const lang = (hls.subtitleTracks[i].lang || '').toLowerCase();
+              const name = (hls.subtitleTracks[i].name || '').toLowerCase();
+              if (lang.startsWith('en') || name.includes('english') || name.includes('eng') || name.includes('cc')) {
+                bestTrackIndex = i;
+                break;
+              }
+            }
+            if (bestTrackIndex !== -1) {
+              hls.subtitleTrack = bestTrackIndex;
+              hls.subtitleDisplay = true;
+            } else {
+              hls.subtitleDisplay = false;
+              hls.subtitleTrack = -1;
+            }
+          }
         };
 
         hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, selectEnglishAudioTrack);

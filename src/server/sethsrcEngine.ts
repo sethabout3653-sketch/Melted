@@ -53,12 +53,11 @@ export function initSethsrcEngine(app: express.Express, baseDir: string) {
         }
       });
 
-      if (!upstreamResponse.ok && targetUrl.includes('tooneast')) {
-        const fallbackUrl = 'https://cdn4.skygo.mn/live/disk1/Cartoon_Network/HLSv3-FTA/Cartoon_Network.m3u8';
+      if (!upstreamResponse.ok && (targetUrl.includes('tooneast') || targetUrl.includes('cartoon'))) {
+        const fallbackUrl = 'https://turnerlive.warnermediacdn.com/hls/live/2023183/aseast/noslate/VIDEO_1_5128000.m3u8';
         upstreamResponse = await fetch(fallbackUrl, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            'Referer': 'https://skygo.mn/',
             'Accept': '*/*',
           }
         });

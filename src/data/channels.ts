@@ -187,10 +187,18 @@ const RAW_TV_CHANNELS: TVChannel[] = [
 {
   "id": "cartoon-network",
   "name": "Cartoon Network",
-  "url": "http://212.5.144.156:8080/cartoon/index.m3u8",
+  "url": "/api/proxy-stream?url=https%3A%2F%2Fturnerlive.warnermediacdn.com%2Fhls%2Flive%2F2023183%2Faseast%2Fnoslate%2FVIDEO_1_5128000.m3u8",
   "category": "Family & Kids",
   "logo": "https://upload.wikimedia.org/wikipedia/commons/8/80/Cartoon_Network_2010_logo.svg",
-  "description": "Cartoon Network Live Stream"
+  "description": "Cartoon Network US East 1080p Live Stream (Verified)"
+},
+{
+  "id": "adult-swim",
+  "name": "Adult Swim",
+  "url": "/api/proxy-stream?url=https%3A%2F%2Fturnerlive.warnermediacdn.com%2Fhls%2Flive%2F2023185%2Faswest%2Fnoslate%2FVIDEO_1_5128000.m3u8",
+  "category": "Entertainment",
+  "logo": "https://upload.wikimedia.org/wikipedia/commons/e/ee/Adult_Swim_logo.svg",
+  "description": "Adult Swim US West 1080p Live Stream (Verified)"
 },
 {
   "id": "pbs-kids",
@@ -3944,6 +3952,807 @@ const RAW_TV_CHANNELS: TVChannel[] = [
   "logo": "https://images.pluto.tv/channels/6ad7a97aa9b3de1ec8f609ad/colorLogoPNG_1793382889086.png",
   "description": "Whose Line Is It Anyway live on Pluto TV"
 },
+,
+{
+  "id": "kanali7-al-t0i",
+  "name": "Kanali 7 Ⓢ",
+  "url": "https://fe.tring.al/delta/105/out/u/1200_1.m3u8",
+  "category": "Albania",
+  "logo": "https://i.imgur.com/rL2v9pM.png",
+  "description": "Imported from Free-TV: Kanali 7 Ⓢ"
+},
+{
+  "id": "a2cnn-al-n9q",
+  "name": "A2 CNN Albania",
+  "url": "https://tv.a2news.com/live/smil:a2cnnweb.stream.smil/playlist.m3u8",
+  "category": "Albania",
+  "logo": "https://i.imgur.com/TgO3Lzi.png",
+  "description": "Imported from Free-TV: A2 CNN Albania"
+},
+{
+  "id": "abcnewsalbania-al-kgg",
+  "name": "ABC News Albania Ⓣ",
+  "url": "https://www.twitch.tv/abcnewsal",
+  "category": "Albania",
+  "logo": "https://i.imgur.com/aObcudw.png",
+  "description": "Imported from Free-TV: ABC News Albania Ⓣ"
+},
+{
+  "id": "albkanalemusictv-al-c89",
+  "name": "AlbKanale Music TV Ⓢ",
+  "url": "https://albportal.net/albkanalemusic.m3u8",
+  "category": "Albania",
+  "logo": "https://i.imgur.com/JdKxscs.png",
+  "description": "Imported from Free-TV: AlbKanale Music TV Ⓢ"
+},
+{
+  "id": "alpotv-al-afz",
+  "name": "Alpo TV",
+  "url": "https://5d00db0e0fcd5.streamlock.net/7236/7236/playlist.m3u8",
+  "category": "Albania",
+  "logo": "https://i.imgur.com/Pr4ixiA.png",
+  "description": "Imported from Free-TV: Alpo TV"
+},
+{
+  "id": "cna-al-f1b",
+  "name": "CNA",
+  "url": "https://live1.mediadesk.al/cnatvlive.m3u8",
+  "category": "Albania",
+  "logo": "https://i.imgur.com/X3ukD5t.png",
+  "description": "Imported from Free-TV: CNA"
+},
+{
+  "id": "euronewsalbania-al-d4q",
+  "name": "Euronews Albania Ⓨ",
+  "url": "https://www.youtube.com/@EuronewsAlbania/live",
+  "category": "Albania",
+  "logo": "https://i.imgur.com/Skf6vdi.png",
+  "description": "Imported from Free-TV: Euronews Albania Ⓨ"
+},
+{
+  "id": "news24-al-wv2",
+  "name": "News 24 Ⓢ",
+  "url": "https://tv.balkanweb.com/news24/livestream/playlist.m3u8",
+  "category": "Albania",
+  "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2d/News_24_%28Albania%29.svg/960px-News_24_%28Albania%29.svg.png",
+  "description": "Imported from Free-TV: News 24 Ⓢ"
+},
+{
+  "id": "oranews-al-q42",
+  "name": "Ora News",
+  "url": "https://live1.mediadesk.al/oranews.m3u8",
+  "category": "Albania",
+  "logo": "https://i.imgur.com/ILZY5bJ.png",
+  "description": "Imported from Free-TV: Ora News"
+},
+{
+  "id": "panoramatv-al-1to",
+  "name": "Panorama TV Ⓢ",
+  "url": "http://198.244.188.94/panorama/livestream/playlist.m3u8",
+  "category": "Albania",
+  "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/24/Panorama_logo.svg/500px-Panorama_logo.svg.png",
+  "description": "Imported from Free-TV: Panorama TV Ⓢ"
+},
+{
+  "id": "reporttv-al-vkh",
+  "name": "Report TV",
+  "url": "https://deb10stream.duckdns.org/hls/stream.m3u8",
+  "category": "Albania",
+  "logo": "https://i.imgur.com/yuRDJYY.png",
+  "description": "Imported from Free-TV: Report TV"
+},
+{
+  "id": "syri-al-k7g",
+  "name": "Syri",
+  "url": "https://stream.syritv.al/live/syritv/playlist.m3u8",
+  "category": "Albania",
+  "logo": "https://i.imgur.com/4zVyj1M.png",
+  "description": "Imported from Free-TV: Syri"
+},
+{
+  "id": "topnews-al-gw2",
+  "name": "Top News Ⓣ",
+  "url": "https://www.twitch.tv/topnewsal",
+  "category": "Albania",
+  "logo": "https://i.imgur.com/tBAXkOW.png",
+  "description": "Imported from Free-TV: Top News Ⓣ"
+},
+{
+  "id": "tropojatelevizion-al-0ph",
+  "name": "Tropoja",
+  "url": "https://live.prostream.al/al/smil:tropojatv.smil/playlist.m3u8",
+  "category": "Albania",
+  "logo": "https://i.imgur.com/D3hNOVS.png",
+  "description": "Imported from Free-TV: Tropoja"
+},
+{
+  "id": "tv7albania-al-dg9",
+  "name": "TV 7 Albania",
+  "url": "https://rpn3.bozztv.com/albaniatv/Med7-TV7Tirana/index.m3u8",
+  "category": "Albania",
+  "logo": "https://i.imgur.com/k9WqPLZ.png",
+  "description": "Imported from Free-TV: TV 7 Albania"
+},
+{
+  "id": "tvapollon-al-4ft",
+  "name": "TV Apollon Ⓢ",
+  "url": "https://live.apollon.tv/Apollon-Web/video.m3u8?token=tnt9u76reF0d1",
+  "category": "Albania",
+  "logo": "https://i.imgur.com/gUz2AjM.png",
+  "description": "Imported from Free-TV: TV Apollon Ⓢ"
+},
+{
+  "id": "vizionplus-al-zvi",
+  "name": "Vizion Plus",
+  "url": "https://tringliveviz.akamaized.net/delta/105/out/u/qwaszxerdfcvrtryuy.m3u8",
+  "category": "Albania",
+  "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/fc/Vizion_Plus.svg/500px-Vizion_Plus.svg.png",
+  "description": "Imported from Free-TV: Vizion Plus"
+},
+{
+  "id": "andorratv-ad-dsi",
+  "name": "Andorra TV",
+  "url": "https://livesg1.rtva.hiway.media/11a6d6f4-ee13-47c7-9c27-7313cf5424e2/manifest.m3u8",
+  "category": "Andorra",
+  "logo": "https://upload.wikimedia.org/wikipedia/commons/3/32/Logo_Andorra_Televisi%C3%B3.png",
+  "description": "Imported from Free-TV: Andorra TV"
+},
+{
+  "id": "todonoticias-ar-dy2",
+  "name": "TN Todo Noticias Ⓨ",
+  "url": "https://www.youtube.com/c/todonoticias/live",
+  "category": "Argentina",
+  "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/4f/TN_todo_noticias_logo.svg/250px-TN_todo_noticias_logo.svg.png",
+  "description": "Imported from Free-TV: TN Todo Noticias Ⓨ"
+},
+{
+  "id": "encuentro-ar-3a2",
+  "name": "Encuentro Ⓨ Ⓖ",
+  "url": "https://www.youtube.com/user/encuentro/live",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/IyP2UIx.png",
+  "description": "Imported from Free-TV: Encuentro Ⓨ Ⓖ"
+},
+{
+  "id": "pakapaka-ar-ex4",
+  "name": "Pakapaka Ⓨ Ⓖ",
+  "url": "https://www.youtube.com/user/CanalPakapaka/live",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/Q4zaCuM.png",
+  "description": "Imported from Free-TV: Pakapaka Ⓨ Ⓖ"
+},
+{
+  "id": "aunar-ar-hal",
+  "name": "Aunar",
+  "url": "https://5fb24b460df87.streamlock.net/live-cont.ar/mirador/playlist.m3u8",
+  "category": "Argentina",
+  "logo": "http://tvabierta.weebly.com/uploads/5/1/3/4/51344345/aunar.png",
+  "description": "Imported from Free-TV: Aunar"
+},
+{
+  "id": "cinear-ar-rlu",
+  "name": "Cine.AR",
+  "url": "https://5fb24b460df87.streamlock.net/live-cont.ar/cinear/playlist.m3u8",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/RPLyrIC.png",
+  "description": "Imported from Free-TV: Cine.AR"
+},
+{
+  "id": "tectv-ar-142",
+  "name": "Tec TV",
+  "url": "https://tv.initium.net.ar:3939/live/tectvmainlive.m3u8",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/EGCq1wc.png",
+  "description": "Imported from Free-TV: Tec TV"
+},
+{
+  "id": "tvpublica-ar-ly3",
+  "name": "Televisión Pública Ⓨ",
+  "url": "https://www.youtube.com/user/TVPublicaArgentina/live",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/4hYYpiu.png",
+  "description": "Imported from Free-TV: Televisión Pública Ⓨ"
+},
+{
+  "id": "deportv-ar-m6a",
+  "name": "DeporTV",
+  "url": "https://5fb24b460df87.streamlock.net/live-cont.ar/deportv/playlist.m3u8",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/iyYLNRt.png",
+  "description": "Imported from Free-TV: DeporTV"
+},
+{
+  "id": "canal26-ar-kpg",
+  "name": "Canal 26",
+  "url": "https://stream-gtlc.telecentro.net.ar/hls/canal26hls/main.m3u8",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/5pAaVih.png",
+  "description": "Imported from Free-TV: Canal 26"
+},
+{
+  "id": "cronicatv-ar-2fa",
+  "name": "Crónica TV Ⓨ",
+  "url": "https://www.youtube.com/c/cronicatv/live",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/k2Ku8Ib.png",
+  "description": "Imported from Free-TV: Crónica TV Ⓨ"
+},
+{
+  "id": "argentina12-ar-cba",
+  "name": "Argentina 12 Ⓨ",
+  "url": "https://www.youtube.com/c/IPNoticiasEnVivo/live",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/atGKPhi.png",
+  "description": "Imported from Free-TV: Argentina 12 Ⓨ"
+},
+{
+  "id": "eldestape-ar-ehw",
+  "name": "El Destape Ⓨ",
+  "url": "https://www.youtube.com/c/eldestapetv/live",
+  "category": "Argentina",
+  "logo": "https://yt3.ggpht.com/a-/AAuE7mAuXDwiY8UPwtAHrGXTXkAxBjdRqws2MJIN2A=s900-mo-c-c0xffffffff-rj-k-no",
+  "description": "Imported from Free-TV: El Destape Ⓨ"
+},
+{
+  "id": "c5n-ar-tk1",
+  "name": "C5N Ⓨ",
+  "url": "https://www.youtube.com/c/c5n/live",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/E3pamA5.png",
+  "description": "Imported from Free-TV: C5N Ⓨ"
+},
+{
+  "id": "lanacionplus-ar-gah",
+  "name": "LN+ Ⓨ",
+  "url": "https://www.youtube.com/c/LaNacionMas/live",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/vJYzGt1.png",
+  "description": "Imported from Free-TV: LN+ Ⓨ"
+},
+{
+  "id": "masperfil-ar-4av",
+  "name": "+Perfil",
+  "url": "https://unlimited1-us.dps.live/perfiltv/perfiltv.smil/perfiltv/livestream2/chunks.m3u8",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/3wZdPwN.png",
+  "description": "Imported from Free-TV: +Perfil"
+},
+{
+  "id": "telemax-ar-aq3",
+  "name": "Telemax",
+  "url": "https://stream-gtlc.telecentro.net.ar/hls/telemaxhls/main.m3u8",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/gfX0hdB.png",
+  "description": "Imported from Free-TV: Telemax"
+},
+{
+  "id": "nettv-ar-t7d",
+  "name": "Net TV",
+  "url": "https://unlimited1-us.dps.live/nettv/nettv.smil/playlist.m3u8",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/EWmshtx.png",
+  "description": "Imported from Free-TV: Net TV"
+},
+{
+  "id": "tvuniversidad-ar-vgi",
+  "name": "TV Universidad",
+  "url": "https://stratus.stream.cespi.unlp.edu.ar/hls/tvunlp.m3u8",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/tvLHiAT.png",
+  "description": "Imported from Free-TV: TV Universidad"
+},
+{
+  "id": "barricadatv-ar-edc",
+  "name": "Barricada TV",
+  "url": "https://www.youtube.com/channel/UC6YundoLrEuBJaPp_oEPWaA/live",
+  "category": "Argentina",
+  "logo": "https://www.barricadatv.org/?p=23082",
+  "description": "Imported from Free-TV: Barricada TV"
+},
+{
+  "id": "urbanateve-ar-19s",
+  "name": "Urbana Tevé",
+  "url": "https://www.youtube.com/channel/UCTnbbQUGmWEKeCq9wWoyN0g/live",
+  "category": "Argentina",
+  "logo": "https://yt3.ggpht.com/ytc/AKedOLQLeFMWMeoumi-o24ohLPXSEdNL5-oJ9W5oP5KnnA=s900-c-k-c0x00ffffff-no-rj",
+  "description": "Imported from Free-TV: Urbana Tevé"
+},
+{
+  "id": "comarcatv-ar-cry",
+  "name": "Comarca TV",
+  "url": "https://www.youtube.com/c/ComarcaTV/live",
+  "category": "Argentina",
+  "logo": "http://directostv.teleame.com/wp-content/uploads/2020/10/Comarca-TV-en-vivo-Online.png",
+  "description": "Imported from Free-TV: Comarca TV"
+},
+{
+  "id": "eltrece-ar-qea",
+  "name": "El Trece",
+  "url": "https://livetrx01.vodgc.net/eltrecetv/index.m3u8",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/ZK7AQFg.png",
+  "description": "Imported from Free-TV: El Trece"
+},
+{
+  "id": "elnueve-ar-ajs",
+  "name": "El Nueve",
+  "url": "http://45.226.28.9:8085/Live/18e292ea93b66c65c76707f07c489d61/local-canal9.playlist.m3u8",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/EtcVSm4.png",
+  "description": "Imported from Free-TV: El Nueve"
+},
+{
+  "id": "telefe-ar-pia",
+  "name": "Telefe",
+  "url": "http://45.134.141.161:2200/ARG/TELEFE_HD/index.m3u8",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/wrZfMXn.png",
+  "description": "Imported from Free-TV: Telefe"
+},
+{
+  "id": "americatv-ar-2cp",
+  "name": "América",
+  "url": "https://prepublish.f.qaotic.net/a07/americahls-100056/playlist_720p.m3u8",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/Jt7dOQm.png",
+  "description": "Imported from Free-TV: América"
+},
+{
+  "id": "a24-ar-7bt",
+  "name": "A24 Ⓨ",
+  "url": "https://www.youtube.com/c/A24com/live",
+  "category": "Argentina",
+  "logo": "https://i.imgur.com/OdhF7ym.png",
+  "description": "Imported from Free-TV: A24 Ⓨ"
+},
+{
+  "id": "armenia1-am-7r1",
+  "name": "Armenia 1",
+  "url": "https://ifl01eu-new.bozztv.com/am1abr/index.m3u8",
+  "category": "Armenia",
+  "logo": "https://i.imgur.com/HIwJ4lc.png",
+  "description": "Imported from Free-TV: Armenia 1"
+},
+{
+  "id": "kentrontv-am-syg",
+  "name": "Kentron TV Ⓢ",
+  "url": "http://stream.mcquack.net/39/index.m3u8",
+  "category": "Armenia",
+  "logo": "https://i.imgur.com/eCaxBFn.png",
+  "description": "Imported from Free-TV: Kentron TV Ⓢ"
+},
+{
+  "id": "armeniatv-am-ys9",
+  "name": "Armenia TV Ⓢ",
+  "url": "http://stream.mcquack.net/175/index.m3u8",
+  "category": "Armenia",
+  "logo": "https://i.imgur.com/UnoI5uM.png",
+  "description": "Imported from Free-TV: Armenia TV Ⓢ"
+},
+{
+  "id": "10sydney-au-w39",
+  "name": "10 HD",
+  "url": "https://i.mjh.nz/.r/10-nsw.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/ZjKvXPn.png",
+  "description": "Imported from Free-TV: 10 HD"
+},
+{
+  "id": "abctv-au-yge",
+  "name": "ABC",
+  "url": "https://c.mjh.nz/abc-nsw.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/5CVl5EF.png",
+  "description": "Imported from Free-TV: ABC"
+},
+{
+  "id": "sbstv-au-y0u",
+  "name": "SBS Ⓖ",
+  "url": "https://i.mjh.nz/.r/sbs-sbst.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/GBl1ynA.png",
+  "description": "Imported from Free-TV: SBS Ⓖ"
+},
+{
+  "id": "sevennetwork-au-nwo",
+  "name": "Seven",
+  "url": "https://i.mjh.nz/.r/seven-syd.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/6zwKJaa.png",
+  "description": "Imported from Free-TV: Seven"
+},
+{
+  "id": "ninenetwork-au-utu",
+  "name": "Nine",
+  "url": "https://i.mjh.nz/.r/channel-9-nsw.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/SMXwfr5.png",
+  "description": "Imported from Free-TV: Nine"
+},
+{
+  "id": "10peach-au-o5x",
+  "name": "10 Peach",
+  "url": "https://i.mjh.nz/.r/10peach-nsw.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/NlZLut8.png",
+  "description": "Imported from Free-TV: 10 Peach"
+},
+{
+  "id": "10bold-au-vpd",
+  "name": "10 Bold",
+  "url": "https://dce3793146fef017.mediapackage.us-west-2.amazonaws.com/out/v1/55cdf73af7894775ba6de8f57482b66a/CMAF_HLS/index.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/2cq3fY1.png",
+  "description": "Imported from Free-TV: 10 Bold"
+},
+{
+  "id": "10shake-au-k77",
+  "name": "10 Shake",
+  "url": "https://i.mjh.nz/.r/10shake-nsw.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/OXtIkOn.png",
+  "description": "Imported from Free-TV: 10 Shake"
+},
+{
+  "id": "tvsn-au-nha",
+  "name": "TVSN",
+  "url": "https://tvsnhlslivetest.akamaized.net/hls/live/2034711/EXPO-MSL4/master.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/p3QCBOo.png",
+  "description": "Imported from Free-TV: TVSN"
+},
+{
+  "id": "abckids-au-r2v",
+  "name": "ABC Kids",
+  "url": "https://c.mjh.nz/abc-kids.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/GWDRR1t.png",
+  "description": "Imported from Free-TV: ABC Kids"
+},
+{
+  "id": "abcme-au-2d1",
+  "name": "ABC Me",
+  "url": "https://c.mjh.nz/abc-me.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/gBh54wY.png",
+  "description": "Imported from Free-TV: ABC Me"
+},
+{
+  "id": "abcnews-au-c9h",
+  "name": "ABC News",
+  "url": "https://c.mjh.nz/abc-news.m3u8",
+  "category": "Australia",
+  "logo": "https://upload.wikimedia.org/wikipedia/en/thumb/d/df/ABC_News_Channel.svg/500px-ABC_News_Channel.svg.png",
+  "description": "Imported from Free-TV: ABC News"
+},
+{
+  "id": "m4tv-au-hjf",
+  "name": "M4TV",
+  "url": "https://5a32c05065c79.streamlock.net/live/stream/playlist.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/HZohlNk.png",
+  "description": "Imported from Free-TV: M4TV"
+},
+{
+  "id": "sbsviceland-au-t1t",
+  "name": "SBS Viceland Ⓖ",
+  "url": "https://i.mjh.nz/.r/sbs-2syd.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/WMKCkD0.png",
+  "description": "Imported from Free-TV: SBS Viceland Ⓖ"
+},
+{
+  "id": "sbsworldmovies-au-4o0",
+  "name": "SBS World Movies Ⓖ",
+  "url": "https://i.mjh.nz/.r/sbs-4syd.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/V6hhtCx.png",
+  "description": "Imported from Free-TV: SBS World Movies Ⓖ"
+},
+{
+  "id": "sbsfood-au-xdk",
+  "name": "SBS Food Ⓖ",
+  "url": "https://i.mjh.nz/.r/sbs-3syd.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/qN9p4h0.png",
+  "description": "Imported from Free-TV: SBS Food Ⓖ"
+},
+{
+  "id": "nitv-au-1ky",
+  "name": "NITV Ⓖ",
+  "url": "https://i.mjh.nz/.r/sbs-5nsw.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/YR7sXaN.png",
+  "description": "Imported from Free-TV: NITV Ⓖ"
+},
+{
+  "id": "7two-au-9c3",
+  "name": "7two",
+  "url": "https://i.mjh.nz/.r/7two-syd.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/6pyIg02.png",
+  "description": "Imported from Free-TV: 7two"
+},
+{
+  "id": "7mate-au-d69",
+  "name": "7mate",
+  "url": "https://i.mjh.nz/.r/7mate-syd.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/zpr12HP.png",
+  "description": "Imported from Free-TV: 7mate"
+},
+{
+  "id": "7flix-au-qho",
+  "name": "7flix",
+  "url": "https://i.mjh.nz/.r/7flix-syd.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/6iIYCyC.png",
+  "description": "Imported from Free-TV: 7flix"
+},
+{
+  "id": "racingcom-au-40q",
+  "name": "Racing.com",
+  "url": "https://racingvic-i.akamaized.net/hls/live/598695/racingvic/1500.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/pma0OCf.png",
+  "description": "Imported from Free-TV: Racing.com"
+},
+{
+  "id": "9gem-au-ygi",
+  "name": "9Gem Ⓖ",
+  "url": "https://i.mjh.nz/.r/gem-nsw.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/sWmE1kq.png",
+  "description": "Imported from Free-TV: 9Gem Ⓖ"
+},
+{
+  "id": "9go-au-0hm",
+  "name": "9Go! Ⓖ",
+  "url": "https://i.mjh.nz/.r/go-nsw.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/1CFGu5O.png",
+  "description": "Imported from Free-TV: 9Go! Ⓖ"
+},
+{
+  "id": "9life-au-sv5",
+  "name": "9Life Ⓖ",
+  "url": "https://i.mjh.nz/.r/life-nsw.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/ZCUiqlL.png",
+  "description": "Imported from Free-TV: 9Life Ⓖ"
+},
+{
+  "id": "9rush-au-g3a",
+  "name": "9Rush Ⓖ",
+  "url": "https://i.mjh.nz/.r/rush-nsw.m3u8",
+  "category": "Australia",
+  "logo": "https://upload.wikimedia.org/wikipedia/en/c/c2/Logo_of_9RUSH.png",
+  "description": "Imported from Free-TV: 9Rush Ⓖ"
+},
+{
+  "id": "c31melbourne-au-tb6",
+  "name": "C31 Melbourne",
+  "url": "https://d1k6kax80wecy5.cloudfront.net/RLnAKY/index.m3u8",
+  "category": "Australia",
+  "logo": "https://i.imgur.com/dXwkFei.png",
+  "description": "Imported from Free-TV: C31 Melbourne"
+},
+{
+  "id": "orfiii-at-zvg",
+  "name": "ORF III Ⓖ",
+  "url": "https://orf3.mdn.ors.at/orf/orf3/qxa/manifest.m3u8",
+  "category": "Austria",
+  "logo": "https://i.imgur.com/6BuiUE7.png",
+  "description": "Imported from Free-TV: ORF III Ⓖ"
+},
+{
+  "id": "servustvosterreich-at-1oc",
+  "name": "Servus TV Ⓖ",
+  "url": "https://rbmn-live.akamaized.net/hls/live/2002825/geoSTVATweb/master.m3u8",
+  "category": "Austria",
+  "logo": "https://i.imgur.com/zDWhSxq.png",
+  "description": "Imported from Free-TV: Servus TV Ⓖ"
+},
+{
+  "id": "oe24tv-at-asu",
+  "name": "oe24",
+  "url": "https://oe24.mdn.ors.at/live/eds/oe24tv_hd/hls_nodrm/oe24tv_hd-nodrm.m3u8",
+  "category": "Austria",
+  "logo": "https://i.imgur.com/8UTkcPn.png",
+  "description": "Imported from Free-TV: oe24"
+},
+{
+  "id": "w24-at-n88",
+  "name": "W24",
+  "url": "https://ms01.w24.at/W24/smil:liveevent.smil/playlist.m3u8",
+  "category": "Austria",
+  "logo": "https://i.imgur.com/PGb4wYw.png",
+  "description": "Imported from Free-TV: W24"
+},
+{
+  "id": "p3tv-at-xar",
+  "name": "P3TV",
+  "url": "http://p3-6.mov.at:1935/live/weekstream/playlist.m3u8",
+  "category": "Austria",
+  "logo": "https://i.imgur.com/1sPhZ57.png",
+  "description": "Imported from Free-TV: P3TV"
+},
+{
+  "id": "rtv-at-0zz",
+  "name": "RTV",
+  "url": "http://iptv.rtv-ooe.at/stream.m3u8",
+  "category": "Austria",
+  "logo": "https://i.imgur.com/oD7GQxT.png",
+  "description": "Imported from Free-TV: RTV"
+},
+{
+  "id": "tvtv-at-vy3",
+  "name": "RTS Ⓖ",
+  "url": "https://58b42f6c8c9bf.streamlock.net:8080/live/RTS2015/playlist.m3u8",
+  "category": "Austria",
+  "logo": "https://i.imgur.com/Bhv7lvy.png",
+  "description": "Imported from Free-TV: RTS Ⓖ"
+},
+{
+  "id": "tiroltv-at-p4c",
+  "name": "Tirol TV Ⓖ",
+  "url": "https://streaming14.huberwebmedia.at/LiveApp/streams/livestream.m3u8",
+  "category": "Austria",
+  "logo": "https://i.imgur.com/1E7Nflo.jpg",
+  "description": "Imported from Free-TV: Tirol TV Ⓖ"
+},
+{
+  "id": "r9-at-004",
+  "name": "R9",
+  "url": "https://ms01.w24.at/R9/smil:liveeventR9.smil/playlist.m3u8",
+  "category": "Austria",
+  "logo": "https://i.imgur.com/2fxVYsL.jpg",
+  "description": "Imported from Free-TV: R9"
+},
+{
+  "id": "azstartv-ca-w9s",
+  "name": "AzStarTV",
+  "url": "http://live.azstartv.com/azstar/smil:azstar.smil/playlist.m3u8",
+  "category": "Azerbaijan",
+  "logo": "https://i.imgur.com/di3XX5L.png",
+  "description": "Imported from Free-TV: AzStarTV"
+},
+{
+  "id": "aztv-az-0ez",
+  "name": "AZTV Ⓢ",
+  "url": "https://str.yodacdn.net/azertv/index.m3u8",
+  "category": "Azerbaijan",
+  "logo": "https://i.imgur.com/snBMMeH.png",
+  "description": "Imported from Free-TV: AZTV Ⓢ"
+},
+{
+  "id": "bakutv-az-971",
+  "name": "Baku TV",
+  "url": "https://rtmp.baku.tv/hls/bakutv.m3u8",
+  "category": "Azerbaijan",
+  "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3b/Baku_TV_%282018%29.png/500px-Baku_TV_%282018%29.png",
+  "description": "Imported from Free-TV: Baku TV"
+},
+{
+  "id": "cbcsport-az-ur0",
+  "name": "CBC Sport Ⓖ",
+  "url": "https://mn-nl.mncdn.com/cbcsports_live/cbcsports/playlist.m3u8",
+  "category": "Azerbaijan",
+  "logo": "https://upload.wikimedia.org/wikipedia/az/0/04/CBC_Sport_TV_loqo.png",
+  "description": "Imported from Free-TV: CBC Sport Ⓖ"
+},
+{
+  "id": "kanals-az-rz2",
+  "name": "Kanal S",
+  "url": "https://lives.atv.az:5443/KANAL-S/streams/kanals.m3u8",
+  "category": "Azerbaijan",
+  "logo": "https://i.imgur.com/W0JBoSQ.png",
+  "description": "Imported from Free-TV: Kanal S"
+},
+{
+  "id": "medeniyyettv-az-379",
+  "name": "Mədəniyyət TV Ⓢ",
+  "url": "https://str.yodacdn.net/medeniyyettele/index.m3u8",
+  "category": "Azerbaijan",
+  "logo": "https://upload.wikimedia.org/wikipedia/commons/f/fc/M%C9%99d%C9%99niyy%C9%99t_TV_logo.png",
+  "description": "Imported from Free-TV: Mədəniyyət TV Ⓢ"
+},
+{
+  "id": "xezerxeber-az-vv2",
+  "name": "Xəzər Xəbər",
+  "url": "https://www.xezerxeber.az/stream/index.m3u8",
+  "category": "Azerbaijan",
+  "logo": "https://i.imgur.com/AuB8bnq.png",
+  "description": "Imported from Free-TV: Xəzər Xəbər"
+},
+{
+  "id": "ictimaitv-az-0wt",
+  "name": "İctimai TV Ⓢ",
+  "url": "https://live.itv.az/itv.m3u8",
+  "category": "Azerbaijan",
+  "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/43/%C4%B0ctimai_TV_%282021%29.png/120px-%C4%B0ctimai_TV_%282021%29.png",
+  "description": "Imported from Free-TV: İctimai TV Ⓢ"
+},
+{
+  "id": "muztv-az-8nk",
+  "name": "Muz TV Ⓨ",
+  "url": "https://www.youtube.com/channel/UCgHYcHd2SuX0ees5q0OWicQ/live",
+  "category": "Azerbaijan",
+  "logo": "https://i.imgur.com/CjySP1V.png",
+  "description": "Imported from Free-TV: Muz TV Ⓨ"
+},
+{
+  "id": "realtv-az-nxv",
+  "name": "Real TV Ⓨ",
+  "url": "https://www.youtube.com/channel/UCjpoTfA8TXO6QfAWiAB67eA/live",
+  "category": "Azerbaijan",
+  "logo": "https://i.imgur.com/e2KFL0R.png",
+  "description": "Imported from Free-TV: Real TV Ⓨ"
+},
+{
+  "id": "mtvazerbaijan-az-o90",
+  "name": "MTV Azerbaijan Ⓢ Ⓨ",
+  "url": "https://www.youtube.com/@MTVAzerbaijan/live",
+  "category": "Azerbaijan",
+  "logo": "https://i.imgur.com/lSBMeBU.png",
+  "description": "Imported from Free-TV: MTV Azerbaijan Ⓢ Ⓨ"
+},
+{
+  "id": "----------------------wqb",
+  "name": "Первый Информацыйнный",
+  "url": "https://ngtrk.dc.beltelecom.by/ngtrk/smil:informacionnyy.smil/playlist.m3u8",
+  "category": "Belarus",
+  "logo": "https://smotret.tv/images/pervyj-informacionnyj.webp",
+  "description": "Imported from Free-TV: Первый Информацыйнный"
+},
+{
+  "id": "belarus1-by-k5g",
+  "name": "Беларусь 1",
+  "url": "https://edge55.dc.beltelecom.by/ngtrk/smil:belarus1.smil/playlist.m3u8",
+  "category": "Belarus",
+  "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/Belarus_1_logo.svg/960px-Belarus_1_logo.svg.png",
+  "description": "Imported from Free-TV: Беларусь 1"
+},
+{
+  "id": "belarus2-by-w0p",
+  "name": "Беларусь 2",
+  "url": "https://edge55.dc.beltelecom.by/ngtrk/smil:belarus2.smil/playlist.m3u8",
+  "category": "Belarus",
+  "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c0/Belarus_2_logo.svg/960px-Belarus_2_logo.svg.png",
+  "description": "Imported from Free-TV: Беларусь 2"
+},
+{
+  "id": "belarus3-by-cf4",
+  "name": "Беларусь 3",
+  "url": "https://edge55.dc.beltelecom.by/ngtrk/smil:belarus3.smil/playlist.m3u8",
+  "category": "Belarus",
+  "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/5c/Belarus_3_logo.svg/960px-Belarus_3_logo.svg.png",
+  "description": "Imported from Free-TV: Беларусь 3"
+},
+{
+  "id": "ont-by-39m",
+  "name": "ОНТ Ⓢ",
+  "url": "https://ngtrk.dc.beltelecom.by/ngtrk/smil:ont.smil/playlist.m3u8",
+  "category": "Belarus",
+  "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF_%D1%82%D0%B5%D0%BB%D0%B5%D0%BA%D0%B0%D0%BD%D0%B0%D0%BB%D0%B0_%C2%AB%D0%9E%D0%9D%D0%A2%C2%BB.svg/960px-%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF_%D1%82%D0%B5%D0%BB%D0%B5%D0%BA%D0%B0%D0%BD%D0%B0%D0%BB%D0%B0_%C2%AB%D0%9E%D0%9D%D0%A2%C2%BB.svg.png",
+  "description": "Imported from Free-TV: ОНТ Ⓢ"
+},
+{
+  "id": "belarus5-by-86d",
+  "name": "Беларусь 5",
+  "url": "https://edge55.dc.beltelecom.by/ngtrk/smil:belarus5.smil/playlist.m3u8",
+  "category": "Belarus",
+  "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/71/Belarus_5_logo.svg/960px-Belarus_5_logo.svg.png",
+  "description": "Imported from Free-TV: Беларусь 5"
+},
+{
+  "id": "stv-by-z4h",
+  "name": "СТВ",
+  "url": "https://ctv.dc.beltelecom.by/ctv/ctv.stream/playlist.m3u8",
+  "category": "Belarus",
+  "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/33/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF_%D0%B1%D0%B5%D0%BB%D0%BE%D1%80%D1%83%D1%81%D1%81%D0%BA%D0%BE%D0%B3%D0%BE_%D1%82%D0%B5%D0%BB%D0%B5%D0%BA%D0%B0%D0%BD%D0%B0%D0%BB%D0%B0_%C2%AB%D0%A1%D0%A2%D0%92%C2%BB.svg/500px-%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF_%D0%B1%D0%B5%D0%BB%D0%BE%D1%80%D1%83%D1%81%D1%81%D0%BA%D0%BE%D0%B3%D0%BE_%D1%82%D0%B5%D0%BB%D0%B5%D0%BA%D0%B0%D0%BD%D0%B0%D0%BB%D0%B0_%C2%AB%D0%A1%D0%A2%D0%92%C2%BB.svg.png",
+  "description": "Imported from Free-TV: СТВ"
+}
 ];
 
 const isSpanishChannel = (c: TVChannel) => {
