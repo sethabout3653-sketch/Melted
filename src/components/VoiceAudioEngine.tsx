@@ -4,25 +4,18 @@ import React, { useState, useEffect, useRef } from 'react';
 const SingleAudioTrackPlayer: React.FC<{ track: MediaStreamTrack; isDeafened: boolean; volume: number }> = ({ track, isDeafened, volume }) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
+  // 1. Attach track to element once; only re-run if track identity changes
   useEffect(() => {
     const el = audioRef.current;
     if (!el || !track) return;
 
-    // Connect track to element
     const stream = new MediaStream([track]);
-    if (el.srcObject !== stream) {
-      el.srcObject = stream;
-    }
-
-    el.muted = isDeafened;
-    el.volume = Math.max(0, Math.min(1, volume));
+    el.srcObject = stream;
 
     const tryPlay = () => {
       if (el && el.srcObject) {
-        el.play().then(() => {
-          // Success
-        }).catch((err) => {
-          console.warn('[SingleAudioTrackPlayer] Play failed, waiting for gesture:', err);
+        el.play().catch((err) => {
+          console.warn('[SingleAudioTrackPlayer] Play waiting for gesture:', err?.message);
         });
       }
     };
@@ -36,28 +29,37 @@ const SingleAudioTrackPlayer: React.FC<{ track: MediaStreamTrack; isDeafened: bo
     };
 
     track.addEventListener('unmute', onUnmute);
-    
-    // Watchdog to ensure audio stays playing (browsers sometimes pause background audio)
+
+    const onUserGesture = () => {
+      tryPlay();
+    };
+    const events = ['click', 'touchstart', 'keydown', 'mousedown', 'touchend'];
+    events.forEach((ev) => window.addEventListener(ev, onUserGesture, { once: true }));
+
+    // Watchdog to ensure audio stays playing
     const watchdog = setInterval(() => {
       if (el && el.paused && el.srcObject && track.readyState === 'live' && track.enabled) {
         tryPlay();
       }
     }, 2000);
 
-    const onUserGesture = () => {
-      tryPlay();
-    };
-
-    const events = ['click', 'touchstart', 'keydown', 'mousedown', 'touchend'];
-    events.forEach(ev => window.addEventListener(ev, onUserGesture, { once: true }));
-
     return () => {
       clearInterval(watchdog);
       track.removeEventListener('unmute', onUnmute);
-      events.forEach(ev => window.removeEventListener(ev, onUserGesture));
-      if (el) el.srcObject = null;
+      events.forEach((ev) => window.removeEventListener(ev, onUserGesture));
+      if (el) {
+        el.srcObject = null;
+      }
     };
-  }, [track, isDeafened, volume]);
+  }, [track]);
+
+  // 2. Independently update volume and mute without resetting track stream
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    el.muted = isDeafened;
+    el.volume = Math.max(0, Math.min(1, volume));
+  }, [isDeafened, volume]);
 
   return (
     <audio 

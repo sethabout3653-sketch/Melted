@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useDeferredValue } from 'react';
+import React, { useState, useEffect, useMemo, useDeferredValue, useCallback } from 'react';
 import { Navbar } from './components/Navbar';
 import { motion, AnimatePresence } from 'motion/react';
 import { CategoryFilter } from './components/CategoryFilter';
@@ -88,9 +88,17 @@ export default function App() {
   // Activate custom font & typography engine across app
   useFontConfig();
 
-  const toggleTheme = () => {
+  const toggleTheme = useCallback(() => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
-  };
+  }, []);
+
+  const handleOpenThemeSelector = useCallback(() => {
+    setIsThemeModalOpen(true);
+  }, []);
+
+  const handleCloseThemeModal = useCallback(() => {
+    setIsThemeModalOpen(false);
+  }, []);
 
   // Tab cloaking system
   const {
@@ -188,20 +196,20 @@ export default function App() {
     }
   }
 
-  const handleToggleFavorite = (id: number) => {
+  const handleToggleFavorite = useCallback((id: number) => {
     const updated = toggleFavoriteStorage(id);
     setFavorites(updated);
-  };
+  }, []);
 
-  const handlePlayGame = (game: GameItem) => {
+  const handlePlayGame = useCallback((game: GameItem) => {
     setActiveGame(game);
-  };
+  }, []);
 
-  const handleCloseGame = () => {
+  const handleCloseGame = useCallback(() => {
     setActiveGame(null);
-  };
+  }, []);
 
-  // Keep user activity tracker perfectly synchronized with current tab, active game, active movie/show, and voice state
+  // Keep user activity tracker synchronized with current tab, active game, active media, and voice state
   useEffect(() => {
     const inVoice = Boolean(globalChat.isInVideo || globalChat.activeChannel === 'video-general');
 
@@ -245,29 +253,42 @@ export default function App() {
   useEffect(() => {
     const hasCleared = localStorage.getItem('frosthub_maintenance_clear_1');
     if (!hasCleared && globalChat.isConnected) {
-      console.log('[Maintenance] Triggering global message purge...');
       (globalChat as any).clearAllMessages();
       localStorage.setItem('frosthub_maintenance_clear_1', 'true');
     }
   }, [globalChat.isConnected]);
 
-  const handleGoHome = () => {
+  const handleGoHome = useCallback(() => {
     setSelectedCategory('All');
     setSearchQuery('');
     setShowFavoritesOnly(false);
     setCurrentTab('games');
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  }, []);
 
-  const handleRandomGame = () => {
+  const handleRandomGame = useCallback(() => {
     const game = allGames[Math.floor(Math.random() * allGames.length)];
     if (game) handlePlayGame(game);
-  };
+  }, [allGames, handlePlayGame]);
 
-  const handleAboutBlank = (game: GameItem) => {
+  const handleAboutBlank = useCallback((game: GameItem) => {
     const url = getPlayableGameUrl(game);
     launchAboutBlank(url, game.name);
-  };
+  }, []);
+
+  const handleSelectCategory = useCallback((cat: GameCategory) => {
+    setSelectedCategory(cat);
+    if (cat === 'Favorites') setShowFavoritesOnly(true);
+    else setShowFavoritesOnly(false);
+  }, []);
+
+  const handleSortChange = useCallback((sort: 'popular' | 'alpha-asc' | 'alpha-desc' | 'random') => {
+    setSortBy(sort);
+  }, []);
+
+  const handleToggleFavoritesOnly = useCallback(() => {
+    setShowFavoritesOnly((prev) => !prev);
+  }, []);
 
   const filteredGames = useMemo(() => {
     let result = [...allGames];
@@ -329,6 +350,19 @@ export default function App() {
     };
   }, [currentTab, activeGame]);
 
+  const handleStartCall = useCallback((user: any) => {
+    globalChat.initiateCall(user.id, user.username || user.display_name || 'Online user', 'audio');
+  }, [globalChat]);
+
+  const handleStartVideoCall = useCallback((user: any) => {
+    globalChat.initiateCall(user.id, user.username || user.display_name || 'Online user', 'video');
+  }, [globalChat]);
+
+  const handleStartGroupCall = useCallback((selectedUsers: any[]) => {
+    const firstUser = selectedUsers[0];
+    if (firstUser) globalChat.initiateCall(firstUser.id, firstUser.username || firstUser.display_name || 'Group call', 'audio');
+  }, [globalChat]);
+
   return (
     <>
       <FrostHubLoadingScreen />
@@ -355,7 +389,7 @@ export default function App() {
         onRandomGame={handleRandomGame}
         favoritesCount={favorites.length}
         showFavoritesOnly={showFavoritesOnly}
-        onToggleFavoritesOnly={() => setShowFavoritesOnly(!showFavoritesOnly)}
+        onToggleFavoritesOnly={handleToggleFavoritesOnly}
         activePreset={activePreset}
         presets={presets}
         onSelectPreset={applyPreset}
@@ -367,13 +401,10 @@ export default function App() {
         onToggleTheme={toggleTheme}
         users={globalChat.users}
         currentUser={globalChat.currentUser}
-        onOpenThemeSelector={() => setIsThemeModalOpen(true)}
-        onStartCall={(user) => globalChat.initiateCall(user.id, user.username || user.display_name || 'Online user', 'audio')}
-        onStartVideoCall={(user) => globalChat.initiateCall(user.id, user.username || user.display_name || 'Online user', 'video')}
-        onStartGroupCall={(selectedUsers) => {
-          const firstUser = selectedUsers[0]
-          if (firstUser) globalChat.initiateCall(firstUser.id, firstUser.username || firstUser.display_name || 'Group call', 'audio')
-        }}
+        onOpenThemeSelector={handleOpenThemeSelector}
+        onStartCall={handleStartCall}
+        onStartVideoCall={handleStartVideoCall}
+        onStartGroupCall={handleStartGroupCall}
       />
 
       {/* Main Content Scrollable Area with Smooth Transitions */}
@@ -436,13 +467,9 @@ export default function App() {
             <div className="mb-6">
               <CategoryFilter
                 selectedCategory={selectedCategory}
-                onSelectCategory={(cat) => {
-                  setSelectedCategory(cat);
-                  if (cat === 'Favorites') setShowFavoritesOnly(true);
-                  else setShowFavoritesOnly(false);
-                }}
+                onSelectCategory={handleSelectCategory}
                 sortBy={sortBy}
-                onSortChange={setSortBy}
+                onSortChange={handleSortChange}
                 categoryCounts={categoryCounts}
               />
             </div>
@@ -722,7 +749,7 @@ export default function App() {
       {/* Theme & Style Selector Modal */}
       <ThemeSelectorModal
         isOpen={isThemeModalOpen}
-        onClose={() => setIsThemeModalOpen(false)}
+        onClose={handleCloseThemeModal}
         config={themeConfig}
         onUpdateConfig={updateThemeConfig}
         onResetTheme={resetTheme}

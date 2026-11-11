@@ -669,6 +669,124 @@ const LocalVideoPlayer: React.FC<{
   );
 };
 
+interface ChatInputFormProps {
+  onSendMessage: (text: string) => void;
+  pendingFile: any;
+  onOpenFileUpload: () => void;
+  isGiphyOpen: boolean;
+  onToggleGiphy: () => void;
+  activeChannel: string;
+  updateUser: (data: any) => void;
+}
+
+const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
+  onSendMessage,
+  pendingFile,
+  onOpenFileUpload,
+  isGiphyOpen,
+  onToggleGiphy,
+  activeChannel,
+  updateUser,
+}) => {
+  const [localText, setLocalText] = useState('');
+  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    updateUser({ activity: 'Online', typing_channel: undefined, typing_at: 0 });
+    if (!localText.trim() && !pendingFile) return;
+    onSendMessage(localText);
+    setLocalText('');
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setLocalText(value);
+
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+
+    if (value.trim().length > 0) {
+      updateUser({ 
+        typing_channel: activeChannel, 
+        typing_at: Date.now(), 
+        activity: 'Typing...' 
+      });
+
+      typingTimeoutRef.current = setTimeout(() => {
+        updateUser({ 
+          typing_channel: undefined, 
+          typing_at: 0, 
+          activity: 'Online' 
+        });
+      }, 2200);
+    } else {
+      updateUser({ 
+        typing_channel: undefined, 
+        typing_at: 0, 
+        activity: 'Online' 
+      });
+    }
+  };
+
+  const canSubmit = Boolean(localText.trim() || pendingFile);
+
+  return (
+    <form onSubmit={handleSubmit} className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus-within:border-cyan-400 dark:focus-within:border-cyan-400 rounded-2xl px-4 py-3 flex items-center gap-3 transition-colors shadow-lg">
+      <input
+        type="text"
+        value={localText}
+        onChange={handleInputChange}
+        placeholder="Message #general..."
+        className="flex-1 bg-transparent text-base md:text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none py-2"
+      />
+
+      {/* File Attachment Button */}
+      <motion.button
+        whileHover={{ scale: 1.1 }}
+        whileTap={{ scale: 0.9 }}
+        type="button"
+        onClick={onOpenFileUpload}
+        className="w-8 h-8 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer border border-transparent will-change-transform"
+        title="Upload File or Media"
+      >
+        <PlusCircle className="w-5 h-5" />
+      </motion.button>
+
+      {/* GIF Button */}
+      <motion.button
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        type="button"
+        onClick={onToggleGiphy}
+        className={`px-2.5 py-1 rounded-md text-xs font-bold transition-colors duration-150 cursor-pointer flex items-center justify-center border will-change-transform ${
+          isGiphyOpen 
+            ? 'bg-cyan-500 text-white shadow-sm border-cyan-300' 
+            : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
+        }`}
+        title="GIFs"
+      >
+        GIF
+      </motion.button>
+
+      {/* Send Button */}
+      <motion.button
+        whileHover={canSubmit ? { scale: 1.05 } : {}}
+        whileTap={canSubmit ? { scale: 0.95 } : {}}
+        type="submit"
+        disabled={!canSubmit}
+        className={`px-3.5 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer border will-change-transform ${
+          canSubmit
+            ? 'bg-cyan-500 text-white shadow-md shadow-cyan-500/30 border-cyan-300' 
+            : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 opacity-50 cursor-not-allowed border-transparent'
+        }`}
+      >
+        <Send className="w-4 h-4 fill-current" />
+      </motion.button>
+    </form>
+  );
+});
+
 export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }) => {
   const {
     currentUser,
@@ -775,8 +893,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
 
 
-  const [inputText, setInputText] = useState('');
-  const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editColor, setEditColor] = useState('');
@@ -1098,11 +1214,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
   };
 
   // Submit Message immediately with uploaded file
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+  const handleSendMessage = useCallback((textToSend: string) => {
     updateUser({ activity: 'Online', typing_channel: undefined, typing_at: 0 });
-    if (!inputText.trim() && !pendingFile) return;
+    if (!textToSend.trim() && !pendingFile) return;
 
     let finalAttachment: { url: string; type: 'image' | 'video' | 'audio' | 'file' | 'gif'; name?: string } | undefined = undefined;
 
@@ -1117,10 +1231,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
       }
     }
 
-    insertMessage(inputText, activeChannel, finalAttachment);
-    setInputText('');
+    insertMessage(textToSend, activeChannel, finalAttachment);
     setPendingFile(null);
-  };
+  }, [pendingFile, activeChannel, insertMessage, updateUser]);
 
   // Helper to reliably download image, video, audio, or any file attachment
   const downloadAttachment = useCallback((url: string, filename: string) => {
@@ -1752,85 +1865,15 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                   )}
                 </AnimatePresence>
 
-                <form onSubmit={handleSendMessage} className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus-within:border-cyan-400 dark:focus-within:border-cyan-400 rounded-2xl px-4 py-3 flex items-center gap-3 transition-colors shadow-lg">
-                  <input
-                    type="text"
-                    value={inputText}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      setInputText(value);
-
-                      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-
-                      if (value.trim().length > 0) {
-                        updateUser({ 
-                          typing_channel: activeChannel, 
-                          typing_at: Date.now(), 
-                          activity: 'Typing...' 
-                        });
-
-                        typingTimeoutRef.current = setTimeout(() => {
-                          updateUser({ 
-                            typing_channel: undefined, 
-                            typing_at: 0, 
-                            activity: 'Online' 
-                          });
-                        }, 2200);
-                      } else {
-                        updateUser({ 
-                          typing_channel: undefined, 
-                          typing_at: 0, 
-                          activity: 'Online' 
-                        });
-                      }
-                    }}
-                    placeholder="Message #general..."
-                    className="flex-1 bg-transparent text-base md:text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none py-2"
-                  />
-
-                  {/* File Attachment Button */}
-                  <motion.button
-                    whileHover={{ scale: 1.1 }}
-                    whileTap={{ scale: 0.9 }}
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-8 h-8 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer border border-transparent"
-                    title="Upload File or Media"
-                  >
-                    <PlusCircle className="w-5 h-5" />
-                  </motion.button>
-
-                  {/* GIF Button */}
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.95 }}
-                    type="button"
-                    onClick={() => setIsGiphyOpen(!isGiphyOpen)}
-                    className={`px-2.5 py-1 rounded-md text-xs font-bold transition-all cursor-pointer flex items-center justify-center border ${
-                      isGiphyOpen 
-                        ? 'bg-cyan-500 text-white shadow-sm border-cyan-300' 
-                        : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
-                    }`}
-                    title="GIFs"
-                  >
-                    GIF
-                  </motion.button>
-
-                  {/* Send Button */}
-                  <motion.button
-                    whileHover={(inputText.trim() || pendingFile) ? { scale: 1.05 } : {}}
-                    whileTap={(inputText.trim() || pendingFile) ? { scale: 0.95 } : {}}
-                    type="submit"
-                    disabled={!inputText.trim() && !pendingFile}
-                    className={`px-3.5 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer border ${
-                      (inputText.trim() || pendingFile)
-                        ? 'bg-cyan-500 text-white shadow-md shadow-cyan-500/30 border-cyan-300' 
-                        : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 opacity-50 cursor-not-allowed border-transparent'
-                    }`}
-                  >
-                    <Send className="w-4 h-4 fill-current" />
-                  </motion.button>
-                </form>
+                <ChatInputForm
+                  onSendMessage={handleSendMessage}
+                  pendingFile={pendingFile}
+                  onOpenFileUpload={() => fileInputRef.current?.click()}
+                  isGiphyOpen={isGiphyOpen}
+                  onToggleGiphy={() => setIsGiphyOpen(!isGiphyOpen)}
+                  activeChannel={activeChannel}
+                  updateUser={updateUser}
+                />
               </div>
 
 

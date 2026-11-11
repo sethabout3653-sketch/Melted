@@ -5,15 +5,37 @@ const RTC_CONFIG: RTCConfiguration = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: 'stun:stun.ekiga.net:3478' },
-    { urls: 'stun:stun.schlund.de:3478' },
-    { urls: 'stun:stun.voipbuster.com:3478' },
-    { urls: 'stun:stun.voipstunt.com:3478' },
+    {
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp',
+        'turns:openrelay.metered.ca:443?transport=tcp',
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
   ],
+  iceCandidatePoolSize: 10,
 };
+
+function createSilentStream(): MediaStream {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return new MediaStream();
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const dst = ctx.createMediaStreamDestination();
+    osc.connect(dst);
+    osc.start();
+    const track = dst.stream.getAudioTracks()[0];
+    if (track) track.enabled = false;
+    return dst.stream;
+  } catch {
+    return new MediaStream();
+  }
+}
 
 interface UseDirectCallWebRTCProps {
   currentUserId: string;
@@ -111,19 +133,17 @@ export function useDirectCallWebRTC({
               noiseSuppression: true,
               autoGainControl: true,
             },
-            video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' },
+            video: isVideo ? { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' } : false,
           });
         } catch {
           try {
             stream = await navigator.mediaDevices.getUserMedia({
               audio: true,
-              video: true,
-            });
-          } catch {
-            stream = await navigator.mediaDevices.getUserMedia({
-              audio: true,
               video: false,
             });
+          } catch {
+            // Web Audio silent fallback if user denies or lacks mic
+            stream = createSilentStream();
           }
         }
 
@@ -149,8 +169,18 @@ export function useDirectCallWebRTC({
 
         // Add local tracks to peer connection
         stream.getTracks().forEach((track) => {
-          pc.addTrack(track, stream);
+          try {
+            pc.addTrack(track, stream);
+          } catch {}
         });
+
+        // Ensure transceivers exist so SDP always contains audio and video media sections
+        if (!pc.getTransceivers().some((t) => t.receiver.track.kind === 'audio')) {
+          try { pc.addTransceiver('audio', { direction: 'sendrecv' }); } catch {}
+        }
+        if (!pc.getTransceivers().some((t) => t.receiver.track.kind === 'video')) {
+          try { pc.addTransceiver('video', { direction: isVideo ? 'sendrecv' : 'recvonly' }); } catch {}
+        }
 
         // Handle remote tracks
         pc.ontrack = (event) => {
@@ -181,6 +211,12 @@ export function useDirectCallWebRTC({
           }
         };
 
+        pc.oniceconnectionstatechange = () => {
+          if (pc.iceConnectionState === 'failed') {
+            try { pc.restartIce(); } catch {}
+          }
+        };
+
         pc.onconnectionstatechange = () => {
           if (!isMounted) return;
           const state = pc.connectionState;
@@ -198,12 +234,25 @@ export function useDirectCallWebRTC({
 
           try {
             if (signal.type === 'offer') {
+              if (currentPc.signalingState !== 'stable') {
+                if (isInitiator) {
+                  // Impolite peer ignores offer collision
+                  return;
+                }
+                // Polite peer rolls back local offer
+                try {
+                  await currentPc.setRemoteDescription({ type: 'rollback' });
+                } catch {}
+              }
+
               await currentPc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: signal.sdp }));
               
               // Flush any queued candidates
               while (pendingCandidatesRef.current.length > 0) {
                 const cand = pendingCandidatesRef.current.shift();
-                if (cand) await currentPc.addIceCandidate(new RTCIceCandidate(cand));
+                if (cand && (cand as any).candidate) {
+                  try { await currentPc.addIceCandidate(cand); } catch {}
+                }
               }
 
               const answer = await currentPc.createAnswer();
@@ -211,19 +260,26 @@ export function useDirectCallWebRTC({
               sendSignal(targetPeerId, { type: 'answer', sdp: answer.sdp });
 
             } else if (signal.type === 'answer') {
-              await currentPc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: signal.sdp }));
+              if (currentPc.signalingState === 'have-local-offer') {
+                await currentPc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: signal.sdp }));
 
-              // Flush queued candidates
-              while (pendingCandidatesRef.current.length > 0) {
-                const cand = pendingCandidatesRef.current.shift();
-                if (cand) await currentPc.addIceCandidate(new RTCIceCandidate(cand));
+                // Flush queued candidates
+                while (pendingCandidatesRef.current.length > 0) {
+                  const cand = pendingCandidatesRef.current.shift();
+                  if (cand && (cand as any).candidate) {
+                    try { await currentPc.addIceCandidate(cand); } catch {}
+                  }
+                }
               }
 
             } else if (signal.type === 'candidate' && signal.candidate) {
+              const cand = signal.candidate;
               if (currentPc.remoteDescription && currentPc.remoteDescription.type) {
-                await currentPc.addIceCandidate(new RTCIceCandidate(signal.candidate));
+                try {
+                  await currentPc.addIceCandidate(cand);
+                } catch {}
               } else {
-                pendingCandidatesRef.current.push(signal.candidate);
+                pendingCandidatesRef.current.push(cand);
               }
             }
           } catch (sigErr) {
@@ -267,7 +323,7 @@ export function useDirectCallWebRTC({
       setIsConnected(false);
       pendingCandidatesRef.current = [];
     };
-  }, [activeDirectCall, currentUserId, sendSignal, setDirectSignalHandler]);
+  }, [activeDirectCall, currentUserId, isMuted, sendSignal, setDirectSignalHandler]);
 
   return {
     localStream,

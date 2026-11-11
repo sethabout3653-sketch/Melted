@@ -36,7 +36,7 @@ const CATEGORIES: { id: GameCategory; label: string; icon: React.ReactNode }[] =
   { id: 'Favorites', label: 'Saved', icon: <Heart className="w-3.5 h-3.5" /> },
 ];
 
-export const CategoryFilter: React.FC<CategoryFilterProps> = ({
+export const CategoryFilter: React.FC<CategoryFilterProps> = React.memo(({
   selectedCategory,
   onSelectCategory,
   sortBy,
@@ -67,7 +67,7 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
               key={cat.id}
               type="button"
               onClick={() => onSelectCategory(cat.id)}
-              className={`flex items-center gap-2 transition-all cursor-pointer py-1.5 px-3.5 rounded-lg border text-xs font-bold font-heading whitespace-nowrap ${
+              className={`flex items-center gap-2 transition-colors duration-150 cursor-pointer py-1.5 px-3.5 rounded-lg border text-xs font-bold font-heading whitespace-nowrap ${
                 isSelected 
                   ? 'bg-[var(--brand-blue)] text-slate-950 border-[var(--brand-blue)] font-extrabold shadow-md shadow-[var(--brand-blue-glow)]' 
                   : 'bg-[#181822] hover:bg-[#20202e] text-slate-300 hover:text-white border-[#262638]'
@@ -91,7 +91,7 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
           <select
             value={sortBy}
             onChange={(e) => onSortChange(e.target.value as any)}
-            className="appearance-none bg-[#181822] hover:bg-[#20202e] text-white font-bold px-3 py-1.5 pr-8 rounded-lg border border-[#262638] focus:border-[var(--brand-blue)] focus:outline-none cursor-pointer text-xs shadow-sm transition-all"
+            className="appearance-none bg-[#181822] hover:bg-[#20202e] text-white font-bold px-3 py-1.5 pr-8 rounded-lg border border-[#262638] focus:border-[var(--brand-blue)] focus:outline-none cursor-pointer text-xs shadow-sm transition-colors duration-150"
           >
             <option value="popular" className="bg-[#181822] text-white">Popularity</option>
             <option value="alpha-asc" className="bg-[#181822] text-white">A-Z</option>
@@ -103,4 +103,5 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = ({
       </div>
     </div>
   );
-};
+});
+

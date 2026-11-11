@@ -7,7 +7,7 @@ export interface TVChannel {
   description?: string;
 }
 
-const RAW_TV_CHANNELS: TVChannel[] = [
+const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   {
     id: 'south-park-247',
     name: 'South Park 24/7',
@@ -144,14 +144,7 @@ const RAW_TV_CHANNELS: TVChannel[] = [
   "logo": "https://play-lh.googleusercontent.com/ergVDljVAJ6rn3BY7iWEtAJxe0HwoYyuwvhfzZitO0wTVaMEYOo0lvNDlKnYsMtpu-_sQwnVQyamh2uMIwlNDg",
   "description": "FOX 45 Baltimore live stream."
 },
-{
-  "id": "afv-always-funny",
-  "name": "AFV - Always Funny",
-  "url": "https://d24l3uppudokci.cloudfront.net/playlist.m3u8",
-  "category": "Comedy",
-  "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcREfL-tDHoqStqwHslISGhJAJkmvqnpYyfw2YmeLUdB_ZxQ33l_eeCLw4u9&s=10",
-  "description": "AFV Always Funny Videos - Hilarious bloopers, fails, and family home videos."
-},
+
 {
   "id": "roar-channel",
   "name": "ROAR",
@@ -197,7 +190,7 @@ const RAW_TV_CHANNELS: TVChannel[] = [
   "name": "Adult Swim",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fturnerlive.warnermediacdn.com%2Fhls%2Flive%2F2023185%2Faswest%2Fnoslate%2FVIDEO_1_5128000.m3u8",
   "category": "Entertainment",
-  "logo": "https://upload.wikimedia.org/wikipedia/commons/e/ee/Adult_Swim_logo.svg",
+  "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTewSE1yaixloq8Kfk-_R5fNghb7p2vbDd4Q464ZgITP3WFhujgHo6VLnA&s=10",
   "description": "Adult Swim US West 1080p Live Stream (Verified)"
 },
 {
@@ -3481,14 +3474,6 @@ const RAW_TV_CHANNELS: TVChannel[] = [
   "description": "The X-Files live on Pluto TV"
 },
 {
-  "id": "pluto-americas-funniest-home-videos-holiday-edition",
-  "name": "America's Funniest Home Videos",
-  "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-691cf0410a78a9ce61ad2121.m3u8",
-  "category": "Comedy",
-  "logo": "https://images.pluto.tv/channels/691cf0410a78a9ce61ad2121/colorLogoPNG_1767642885256.png",
-  "description": "America's Funniest Home Videos live on Pluto TV"
-},
-{
   "id": "pluto-el-rey-rebel",
   "name": "El Rey Rebel",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-691d1200c2185a44642f5e7c.m3u8",
@@ -4769,4 +4754,4 @@ const isSpanishChannel = (c: TVChannel) => {
   );
 };
 
-export const TV_CHANNELS: TVChannel[] = RAW_TV_CHANNELS.filter(c => !isSpanishChannel(c));
+export const TV_CHANNELS: TVChannel[] = RAW_TV_CHANNELS.filter((c): c is TVChannel => !!c && !isSpanishChannel(c));

@@ -6,14 +6,19 @@ const RTC_CONFIG: RTCConfiguration = {
     { urls: 'stun:stun.l.google.com:19302' },
     { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun2.l.google.com:19302' },
-    { urls: 'stun:stun3.l.google.com:19302' },
-    { urls: 'stun:stun4.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: 'stun:stun.ekiga.net:3478' },
-    { urls: 'stun:stun.schlund.de:3478' },
-    { urls: 'stun:stun.voipbuster.com:3478' },
-    { urls: 'stun:stun.voipstunt.com:3478' },
+    {
+      urls: [
+        'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:443',
+        'turn:openrelay.metered.ca:443?transport=tcp',
+        'turns:openrelay.metered.ca:443?transport=tcp',
+      ],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
+    },
   ],
+  iceCandidatePoolSize: 10,
 };
 
 // Optimizes Opus SDP to completely disable DTX (discontinuous transmission)
@@ -138,6 +143,7 @@ export function useWebRTC({
   const pendingCandidates = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const makingOfferRef = useRef<Map<string, boolean>>(new Map());
   const isNegotiatingRef = useRef<Map<string, boolean>>(new Map());
+  const renegotiateRef = useRef<(peerId: string) => void>(() => {});
 
   const peersRef = useRef(peers);
   peersRef.current = peers;
@@ -190,8 +196,8 @@ export function useWebRTC({
     let foundScreenAudioStream: MediaStream | null = null;
 
     peerAudioMap.forEach(({ track, stream }) => {
-      // Check for live and enabled state
-      if (track.readyState !== 'live' || !track.enabled || track.muted) return;
+      // Check for valid and enabled track state
+      if (track.readyState === 'ended' || !track.enabled) return;
 
       const isExplicitScreenAudio = meta?.screenAudioTrackId && track.id === meta.screenAudioTrackId;
       const isExplicitMic = meta?.micAudioTrackId && track.id === meta.micAudioTrackId;
@@ -283,7 +289,7 @@ export function useWebRTC({
     let foundScreenStream: MediaStream | null = null;
 
     peerMap.forEach(({ track, stream }) => {
-      if (track.readyState !== 'live' || !track.enabled || track.muted) return;
+      if (track.readyState === 'ended' || !track.enabled) return;
 
       const isExplicitScreen = meta?.screenTrackId && track.id === meta.screenTrackId;
       const isExplicitCam = meta?.camTrackId && track.id === meta.camTrackId;
@@ -324,7 +330,7 @@ export function useWebRTC({
         return copy;
       }
       
-      const hasLiveCamTrack = Boolean(foundCamStream && foundCamStream.getVideoTracks().some((t) => t.readyState === 'live' && t.enabled && !t.muted));
+      const hasLiveCamTrack = Boolean(foundCamStream && foundCamStream.getVideoTracks().some((t) => t.readyState !== 'ended' && t.enabled));
       if (hasLiveCamTrack && foundCamStream) {
         if (prev[peerId] === foundCamStream) return prev;
         return { ...prev, [peerId]: foundCamStream };
@@ -345,7 +351,7 @@ export function useWebRTC({
         return copy;
       }
 
-      const hasLiveScreenTrack = Boolean(foundScreenStream && foundScreenStream.getVideoTracks().some((t) => t.readyState === 'live' && t.enabled && !t.muted));
+      const hasLiveScreenTrack = Boolean(foundScreenStream && foundScreenStream.getVideoTracks().some((t) => t.readyState !== 'ended' && t.enabled));
       if (hasLiveScreenTrack && foundScreenStream) {
         if (prev[peerId] === foundScreenStream) return prev;
         return { ...prev, [peerId]: foundScreenStream };
@@ -456,6 +462,14 @@ export function useWebRTC({
       } catch {}
     }
 
+    // Ensure audio and video transceivers exist so SDP always negotiates media channels
+    if (!pc.getTransceivers().some((t) => t.receiver.track.kind === 'audio')) {
+      try { pc.addTransceiver('audio', { direction: 'sendrecv' }); } catch {}
+    }
+    if (!pc.getTransceivers().some((t) => t.receiver.track.kind === 'video')) {
+      try { pc.addTransceiver('video', { direction: 'sendrecv' }); } catch {}
+    }
+
     pc.onicecandidate = (event) => {
       if (event.candidate) {
         sendRtcSignal(peerId, { type: 'candidate', candidate: event.candidate });
@@ -464,13 +478,19 @@ export function useWebRTC({
 
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'failed') {
-        try { pc.restartIce(); } catch {}
+        try {
+          pc.restartIce();
+          renegotiateRef.current(peerId);
+        } catch {}
       }
     };
 
     pc.oniceconnectionstatechange = () => {
-      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
-        try { pc.restartIce(); } catch {}
+      if (pc.iceConnectionState === 'failed') {
+        try {
+          pc.restartIce();
+          renegotiateRef.current(peerId);
+        } catch {}
       }
     };
 
@@ -533,6 +553,7 @@ export function useWebRTC({
 
   // Renegotiate with a specific peer cleanly
   const renegotiateWithPeer = useCallback(async (peerId: string) => {
+    renegotiateRef.current = renegotiateWithPeer;
     const bundle = getOrCreatePeerBundle(peerId);
     const pc = bundle.pc;
 
@@ -560,7 +581,10 @@ export function useWebRTC({
       if (pc.signalingState !== 'stable') return;
 
       makingOfferRef.current.set(peerId, true);
-      const offer = await pc.createOffer();
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: true,
+        offerToReceiveVideo: true,
+      });
       if (pc.signalingState !== 'stable') return;
 
       const optimizedSdp = optimizeAudioSdp(offer.sdp || '');
@@ -776,8 +800,15 @@ export function useWebRTC({
           const isMakingOffer = Boolean(makingOfferRef.current.get(fromUserId));
           const offerCollision = isMakingOffer || pc.signalingState !== 'stable';
 
-          if (offerCollision && !isPolite) {
-            return;
+          if (offerCollision) {
+            if (!isPolite) {
+              return;
+            }
+            try {
+              await pc.setRemoteDescription({ type: 'rollback' });
+            } catch (rbErr) {
+              console.warn('[useWebRTC] Rollback notice:', rbErr);
+            }
           }
 
           const optimizedOffer = {
@@ -811,7 +842,11 @@ export function useWebRTC({
           // Flush queued candidates
           const queued = pendingCandidates.current.get(fromUserId) || [];
           for (const c of queued) {
-            try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {}
+            try {
+              if (c && (c as any).candidate) {
+                await pc.addIceCandidate(c);
+              }
+            } catch {}
           }
           pendingCandidates.current.delete(fromUserId);
 
@@ -839,7 +874,11 @@ export function useWebRTC({
             await pc.setRemoteDescription(new RTCSessionDescription(optimizedAnswer));
             const queued = pendingCandidates.current.get(fromUserId) || [];
             for (const c of queued) {
-              try { await pc.addIceCandidate(new RTCIceCandidate(c)); } catch {}
+              try {
+                if (c && (c as any).candidate) {
+                  await pc.addIceCandidate(c);
+                }
+              } catch {}
             }
             pendingCandidates.current.delete(fromUserId);
 
@@ -847,17 +886,28 @@ export function useWebRTC({
             routeVideoTracksForPeer(fromUserId);
           }
         } else if (signal.type === 'candidate') {
+          const cand = signal.candidate;
+          if (!cand || !cand.candidate) {
+            try {
+              if (pc.remoteDescription) {
+                await pc.addIceCandidate(null as any);
+              }
+            } catch {}
+            return;
+          }
           if (pc.remoteDescription && pc.remoteDescription.type) {
             try {
-              await pc.addIceCandidate(new RTCIceCandidate(signal.candidate));
-            } catch {}
+              await pc.addIceCandidate(cand);
+            } catch (cErr) {
+              console.warn('[useWebRTC] addIceCandidate failed:', cErr);
+            }
           } else {
             let queued = pendingCandidates.current.get(fromUserId);
             if (!queued) {
               queued = [];
               pendingCandidates.current.set(fromUserId, queued);
             }
-            queued.push(signal.candidate);
+            queued.push(cand);
           }
         }
       } catch (err) {
@@ -874,7 +924,7 @@ export function useWebRTC({
       if (peer.id === currentUserId) return;
 
       const existingBundle = peerBundles.current.get(peer.id);
-      if (!existingBundle || existingBundle.pc.connectionState === 'closed') {
+      if (!existingBundle || existingBundle.pc.connectionState === 'closed' || existingBundle.pc.connectionState === 'failed') {
         const isInitiator = currentUserId < peer.id;
         if (isInitiator) {
           renegotiateWithPeer(peer.id);

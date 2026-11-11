@@ -49,18 +49,19 @@
     backface-visibility: hidden;
   }
 
-  /* 120 FPS GPU Hardware Acceleration & Smooth Motion Performance */
+  /* Locked 60 FPS GPU-Composited Animation Rules */
   .gpu-accelerated,
-  img,
-  iframe,
-  video,
-  canvas,
+  .motion-safe-gpu,
   button,
-  .group {
+  video,
+  iframe,
+  canvas {
     transform: translateZ(0);
-    will-change: transform;
+    will-change: transform, opacity;
     backface-visibility: hidden;
   }
+
+
 
   /* Render containment for zero-lag smooth 60-120fps scrolling */
   .custom-scrollbar,
@@ -68,6 +69,7 @@
   .overflow-x-auto {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
+    transform: translate3d(0, 0, 0);
   }
 
   ::-webkit-scrollbar {

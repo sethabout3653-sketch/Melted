@@ -44,14 +44,18 @@ export function initSethsrcEngine(app: express.Express, baseDir: string) {
       const parsedUrl = new URL(targetUrl);
       const customReferer = (req.query.referer as string) || parsedUrl.origin;
 
-      let upstreamResponse = await fetch(targetUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-          'Referer': customReferer,
-          'Origin': customReferer,
-          'Accept': '*/*',
-        }
-      });
+      const headers: Record<string, string> = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Referer': customReferer,
+        'Origin': customReferer,
+        'Accept': '*/*',
+      };
+      if (targetUrl.includes('pluto.tv')) {
+        headers['plutotv-device-dnt'] = '1';
+        headers['plutotv-device-model'] = 'web';
+      }
+
+      let upstreamResponse = await fetch(targetUrl, { headers });
 
       if (!upstreamResponse.ok && (targetUrl.includes('tooneast') || targetUrl.includes('cartoon'))) {
         const fallbackUrl = 'https://turnerlive.warnermediacdn.com/hls/live/2023183/aseast/noslate/VIDEO_1_5128000.m3u8';

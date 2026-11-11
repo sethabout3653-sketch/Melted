@@ -569,6 +569,14 @@ export function useWebSocketDatabase(currentUser: {
             try { localStorage.setItem('frosthub_deleted_message_ids', JSON.stringify(Array.from(deletedIdsRef.current))); } catch {}
           } else if (msg.type === 'RTC_SIGNAL' || msg.type === 'USER_CALL' || msg.type === 'CALL_ANSWERED' || msg.type === 'CALL_ENDED' || msg.type === 'DIRECT_RTC_SIGNAL' || msg.type === 'CALL_SYNC' || msg.type === 'VOICEMAIL_NOTIFICATION') {
              if (msg.targetUserId === currentUserRef.current.id && msg.fromUserId !== currentUserRef.current.id) {
+               if (msg.sigId) {
+                 if (processedRtcSignalsRef.current.has(msg.sigId)) return;
+                 processedRtcSignalsRef.current.add(msg.sigId);
+                 if (processedRtcSignalsRef.current.size > 200) {
+                   const [first] = processedRtcSignalsRef.current;
+                   processedRtcSignalsRef.current.delete(first);
+                 }
+               }
                if (msg.type === 'RTC_SIGNAL' && onRtcSignalRef.current) onRtcSignalRef.current(msg.fromUserId, msg.signal);
                else if (msg.type === 'USER_CALL' && onUserCallRef.current) onUserCallRef.current(msg.fromUserId, msg.fromUserName, msg.callType);
                else if (msg.type === 'CALL_ANSWERED' && onCallAnsweredRef.current) onCallAnsweredRef.current(msg.fromUserId, msg.fromUserName, msg.callType);
@@ -846,13 +854,22 @@ export function useWebSocketDatabase(currentUser: {
 
   const sendRtcSignal = useCallback((targetUserId: string, signal: any) => {
     const fromUserId = currentUserRef.current.id;
-    safeSend({ type: 'RTC_SIGNAL', fromUserId, targetUserId, signal });
+    const sigId = `sig-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const payload = { type: 'RTC_SIGNAL', fromUserId, targetUserId, signal, sigId };
+
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      try {
+        wsRef.current.send(JSON.stringify(payload));
+        return;
+      } catch {}
+    }
+
     fetch('/api/ws-db/signal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fromUserId, targetUserId, type: 'RTC_SIGNAL', signal }),
+      body: JSON.stringify(payload),
     }).catch(() => {});
-  }, [safeSend]);
+  }, []);
 
   const callUser = useCallback((targetUserId: string, callType: 'audio' | 'video') => {
     const u = currentUserRef.current;
@@ -886,13 +903,22 @@ export function useWebSocketDatabase(currentUser: {
 
   const sendDirectRtcSignal = useCallback((targetUserId: string, signal: any) => {
     const fromUserId = currentUserRef.current.id;
-    safeSend({ type: 'DIRECT_RTC_SIGNAL', fromUserId, targetUserId, signal });
+    const sigId = `dsig-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const payload = { type: 'DIRECT_RTC_SIGNAL', fromUserId, targetUserId, signal, sigId };
+
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      try {
+        wsRef.current.send(JSON.stringify(payload));
+        return;
+      } catch {}
+    }
+
     fetch('/api/ws-db/signal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fromUserId, targetUserId, type: 'DIRECT_RTC_SIGNAL', signal }),
+      body: JSON.stringify(payload),
     }).catch(() => {});
-  }, [safeSend]);
+  }, []);
 
   const sendVoicemailNotification = useCallback((targetUserId: string, voicemail: any) => {
     const u = currentUserRef.current;

@@ -78,7 +78,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
     <motion.div 
       whileHover={cardHover}
       transition={hoverTransition}
-      className={`group relative bg-[#14141d] dark:bg-[#14141d] border border-[#222232] hover:border-[var(--brand-blue)] hover:shadow-[0_0_20px_var(--brand-blue-glow)] rounded-2xl p-2 flex flex-col transition-all duration-300 ${
+      className={`group relative bg-[#14141d] dark:bg-[#14141d] border border-[#222232] hover:border-[var(--brand-blue)] hover:shadow-[0_0_20px_var(--brand-blue-glow)] rounded-2xl p-2 flex flex-col will-change-transform transition-colors duration-150 ${
         variant === 'large' ? 'md:col-span-2 md:row-span-2' : ''
       }`}
     >
@@ -109,9 +109,9 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
             loading="lazy"
             onLoad={() => setImageLoaded(true)}
             onError={handleImageError}
-            className={`w-full h-full object-cover transition-all duration-500 ease-out group-hover:scale-105 ${
+            className={`w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105 ${
               imageLoaded ? 'opacity-100' : 'opacity-0'
-            }`}
+            } transition-opacity duration-200`}
           />
         )}
 
@@ -122,7 +122,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
             e.stopPropagation();
             onToggleFavorite(game.id);
           }}
-          className={`absolute top-2 right-2 p-2 rounded-xl backdrop-blur-md transition-all cursor-pointer z-10 border shadow-md ${
+          className={`absolute top-2 right-2 p-2 rounded-xl backdrop-blur-md transition-colors duration-150 cursor-pointer z-10 border shadow-md ${
             isFavorite 
               ? 'bg-[var(--brand-blue)] border-[var(--brand-blue)] text-[#090d16]' 
               : 'bg-[#090d16]/70 border-[#222232] text-slate-400 hover:text-white'
@@ -133,7 +133,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
         </button>
 
         {/* Hover Play Overlay */}
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
           <div className="bg-[var(--brand-blue)] text-[#090d16] px-3.5 py-1.5 rounded-xl shadow-lg font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transform scale-90 group-hover:scale-100 transition-transform duration-200">
             <Play className="w-3.5 h-3.5 fill-current" />
             <span>Play</span>

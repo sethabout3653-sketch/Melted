@@ -74,6 +74,188 @@ function preprocessLaTeX(text: string): string {
 const SYSTEM_INSTRUCTION =
   "You are FrostHub AI. Keep all answers short, direct, and concise (1 to 3 sentences maximum). For overview questions like 'what is ___ about' or 'what is the ___ all about', give a clear high-level answer with just a little tiny bit of explanation. Never give unsolicited multi-step lecture breakdowns, long essays, or repetitive summary lists. State formulas or facts directly. USE PROFESSIONAL LATEX FOR ALL MATH FORMULAS. CRITICAL: Use $...$ for inline math and $$...$$ for block math. ALWAYS use \\dfrac for fractions to make them clear and vertically stacked. NEVER include any follow-up questions or offers such as 'Would you like...', 'Do you want...', 'Let me know', 'Can I help with...', etc. NONE of that. Answer and stop.";
 
+interface AIMessageBubbleProps {
+  msg: Message;
+  idx: number;
+  isCopied: boolean;
+  isStepExpanded: boolean;
+  onCopy: (id: string, text: string) => void;
+  onToggleStep: (msgId: string) => void;
+}
+
+const AIMessageBubble: React.FC<AIMessageBubbleProps> = React.memo(({
+  msg,
+  idx,
+  isCopied,
+  isStepExpanded,
+  onCopy,
+  onToggleStep,
+}) => {
+  return (
+    <motion.div
+      variants={entryVariants}
+      initial="hidden"
+      animate="visible"
+      custom={idx}
+      className={`flex gap-3 w-full will-change-transform ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+    >
+      {msg.sender === 'ai' && (
+        <div 
+          style={{ backgroundColor: 'var(--brand-blue)' }}
+          className="w-10 h-10 rounded-2xl text-white flex items-center justify-center shrink-0 shadow-lg glow-subtle-blue"
+        >
+          <Bot className="w-6 h-6" />
+        </div>
+      )}
+
+      <div 
+        style={msg.sender === 'user' ? { backgroundColor: 'var(--brand-blue)' } : {}}
+        className={`group relative rounded-[2rem] p-6 text-[15px] leading-relaxed max-w-[85%] sm:max-w-[75%] ${
+          msg.sender === 'user'
+            ? 'text-white rounded-tr-md shadow-xl'
+            : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-tl-md border border-slate-100 dark:border-slate-800 shadow-md'
+        }`}
+      >
+        {msg.sender === 'ai' ? (
+          <div className="prose prose-sm dark:prose-invert max-w-none font-[family-name:var(--app-font-family)] prose-p:leading-relaxed prose-pre:bg-slate-50 dark:prose-pre:bg-slate-800/50 prose-pre:border prose-pre:border-slate-100 dark:prose-pre:border-slate-700/50 [&_.katex-display]:my-4 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex]:text-[1.1em]">
+            <ReactMarkdown
+              remarkPlugins={[remarkMath]}
+              rehypePlugins={[rehypeKatex]}
+            >
+              {preprocessLaTeX(msg.text)}
+            </ReactMarkdown>
+          </div>
+        ) : (
+          <div className="whitespace-pre-wrap font-[family-name:var(--app-font-family)]">{msg.text}</div>
+        )}
+
+        {msg.sources && msg.sources.length > 0 && (
+          <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mr-1">
+              <Globe className="w-3.5 h-3.5 text-[var(--brand-blue)]" />
+              Verified Sources
+            </span>
+            {msg.sources.map((src, i) => (
+              <a
+                key={i}
+                href={src.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300 transition-colors duration-150 border border-slate-100 dark:border-slate-700/50 hover:border-slate-200 dark:hover:border-slate-600 shadow-sm"
+                title={src.url}
+              >
+                <span className="max-w-[130px] sm:max-w-[180px] truncate">{src.title}</span>
+                <ExternalLink className="w-2.5 h-2.5 opacity-50" />
+              </a>
+            ))}
+          </div>
+        )}
+
+        {msg.steps && msg.steps.length > 0 && (
+          <div className="mt-2.5">
+            <button
+              type="button"
+              onClick={() => onToggleStep(msg.id)}
+              className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer"
+            >
+              <ChevronRight className={`w-3.5 h-3.5 transition-transform ${isStepExpanded ? 'rotate-90' : ''}`} />
+              <span>
+                {isStepExpanded ? 'Hide thinking' : `View ${msg.steps.length} reasoning steps`}
+              </span>
+            </button>
+
+            {isStepExpanded && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                className="mt-2 pl-3 border-l-2 border-slate-200 dark:border-slate-700 space-y-1.5 py-1"
+              >
+                {msg.steps.map((st, sIdx) => (
+                  <div key={sIdx} className="text-[11px] flex items-start gap-2 text-slate-600 dark:text-slate-300">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold text-slate-800 dark:text-slate-100">{st.title}: </span>
+                      <span className="text-slate-500 dark:text-slate-400">{st.detail}</span>
+                    </div>
+                  </div>
+                ))}
+              </motion.div>
+            )}
+          </div>
+        )}
+
+        <div className={`mt-2 flex items-center justify-between text-[10px] ${
+          msg.sender === 'user' ? 'text-white/80' : 'text-slate-400'
+        }`}>
+          <span>{msg.timestamp}</span>
+          {msg.sender === 'ai' && (
+            <button
+              type="button"
+              onClick={() => onCopy(msg.id, msg.text)}
+              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-[var(--brand-blue)] flex items-center gap-1 cursor-pointer ml-3"
+              title="Copy response"
+            >
+              {isCopied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+              <span>{isCopied ? 'Copied' : 'Copy'}</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {msg.sender === 'user' && (
+        <div className="w-9 h-9 rounded-2xl bg-slate-900 dark:bg-slate-800 text-white flex items-center justify-center shrink-0 shadow-sm">
+          <User className="w-5 h-5" />
+        </div>
+      )}
+    </motion.div>
+  );
+});
+
+interface AIInputBoxProps {
+  onSend: (text: string) => void;
+  isLoading: boolean;
+}
+
+const AIInputBox: React.FC<AIInputBoxProps> = React.memo(({ onSend, isLoading }) => {
+  const [text, setText] = useState('');
+
+  const handleTriggerSend = () => {
+    if (!text.trim() || isLoading) return;
+    onSend(text.trim());
+    setText('');
+  };
+
+  return (
+    <div className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-2 shadow-xl shadow-slate-200/50 dark:shadow-none flex items-center gap-2 shrink-0">
+      <textarea
+        rows={1}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleTriggerSend();
+          }
+        }}
+        placeholder="Ask anything..."
+        className="flex-1 bg-transparent px-3 py-3 text-base md:text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none resize-none"
+      />
+      <motion.button
+        type="button"
+        whileHover={{ scale: 1.05 }}
+        whileTap={{ scale: 0.95 }}
+        onClick={handleTriggerSend}
+        disabled={!text.trim() || isLoading}
+        style={{ backgroundColor: 'var(--brand-blue)' }}
+        className="px-5 py-3 rounded-xl disabled:opacity-40 text-white font-bold text-sm shadow-md transition-colors duration-150 cursor-pointer flex items-center gap-2 shrink-0 will-change-transform"
+      >
+        <Send className="w-4 h-4" />
+        <span className="hidden sm:inline">Send</span>
+      </motion.button>
+    </div>
+  );
+});
+
 export const AIAssistantView: React.FC = () => {
   const [messages, setMessages] = useState<Message[]>([
     {
@@ -83,11 +265,11 @@ export const AIAssistantView: React.FC = () => {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
-  const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [activeSteps, setActiveSteps] = useState<ThinkingStep[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedStepsMap, setExpandedStepsMap] = useState<Record<string, boolean>>({});
+
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const assistantScrollRef = useRef<HTMLDivElement>(null);
@@ -191,12 +373,12 @@ export const AIAssistantView: React.FC = () => {
     throw new Error("API error. Please check your key.");
   };
 
-  const toggleStepExpansion = (msgId: string) => {
+  const toggleStepExpansion = React.useCallback((msgId: string) => {
     setExpandedStepsMap((prev) => ({ ...prev, [msgId]: !prev[msgId] }));
-  };
+  }, []);
 
-  const handleSend = async (customPrompt?: string) => {
-    const textToSend = customPrompt || input.trim();
+  const handleSend = async (promptText?: string) => {
+    const textToSend = promptText?.trim();
     if (!textToSend || isLoading) return;
     if (abortControllerRef.current) abortControllerRef.current.abort();
     const abortController = new AbortController();
@@ -209,7 +391,6 @@ export const AIAssistantView: React.FC = () => {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
     setMessages((prev) => [...prev, userMsg]);
-    if (!customPrompt) setInput('');
     setIsLoading(true);
     setActiveSteps([]);
     const history = messages.filter((m) => m.id !== 'welcome-1').map((m) => ({
@@ -344,11 +525,11 @@ export const AIAssistantView: React.FC = () => {
     setActiveSteps([]);
   };
 
-  const handleCopy = (id: string, text: string) => {
+  const handleCopy = React.useCallback((id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000);
-  };
+  }, []);
 
   const latestStep = activeSteps[activeSteps.length - 1];
 
@@ -361,7 +542,7 @@ export const AIAssistantView: React.FC = () => {
           whileTap={{ scale: 0.95 }}
           onClick={handleNewSession}
           style={{ backgroundColor: 'var(--brand-blue)' }}
-          className="px-5 py-2.5 rounded-2xl text-white hover:opacity-95 transition-all cursor-pointer text-xs font-bold flex items-center gap-2.5 shadow-lg glow-subtle-blue shrink-0"
+          className="px-5 py-2.5 rounded-2xl text-white hover:opacity-95 transition-all cursor-pointer text-xs font-bold flex items-center gap-2.5 shadow-lg glow-subtle-blue shrink-0 will-change-transform"
           title="Reset conversation"
         >
           <RefreshCw className="w-4 h-4" />
@@ -378,123 +559,15 @@ export const AIAssistantView: React.FC = () => {
       >
         <AnimatePresence mode="popLayout">
           {messages.map((msg, idx) => (
-            <motion.div
+            <AIMessageBubble
               key={msg.id}
-              variants={entryVariants}
-              initial="hidden"
-              animate="visible"
-              custom={idx}
-              className={`flex gap-3 w-full ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-            >
-              {msg.sender === 'ai' && (
-                <div 
-                  style={{ backgroundColor: 'var(--brand-blue)' }}
-                  className="w-10 h-10 rounded-2xl text-white flex items-center justify-center shrink-0 shadow-lg glow-subtle-blue"
-                >
-                  <Bot className="w-6 h-6" />
-                </div>
-              )}
-
-              <div 
-                style={msg.sender === 'user' ? { backgroundColor: 'var(--brand-blue)' } : {}}
-                className={`group relative rounded-[2rem] p-6 text-[15px] leading-relaxed max-w-[85%] sm:max-w-[75%] ${
-                  msg.sender === 'user'
-                    ? 'text-white rounded-tr-md shadow-xl'
-                    : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-tl-md border border-slate-100 dark:border-slate-800 shadow-md'
-                }`}
-              >
-                {msg.sender === 'ai' ? (
-                  <div className="prose prose-sm dark:prose-invert max-w-none font-[family-name:var(--app-font-family)] prose-p:leading-relaxed prose-pre:bg-slate-50 dark:prose-pre:bg-slate-800/50 prose-pre:border prose-pre:border-slate-100 dark:prose-pre:border-slate-700/50 [&_.katex-display]:my-4 [&_.katex-display]:overflow-x-auto [&_.katex-display]:overflow-y-hidden [&_.katex]:text-[1.1em]">
-                    <ReactMarkdown
-                      remarkPlugins={[remarkMath]}
-                      rehypePlugins={[rehypeKatex]}
-                    >
-                      {preprocessLaTeX(msg.text)}
-                    </ReactMarkdown>
-                  </div>
-                ) : (
-                  <div className="whitespace-pre-wrap font-[family-name:var(--app-font-family)]">{msg.text}</div>
-                )}
-
-                {msg.sources && msg.sources.length > 0 && (
-                  <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/80 flex flex-wrap items-center gap-2">
-                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mr-1">
-                      <Globe className="w-3.5 h-3.5 text-[var(--brand-blue)]" />
-                      Verified Sources
-                    </span>
-                    {msg.sources.map((src, i) => (
-                      <a
-                        key={i}
-                        href={src.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 text-[11px] font-semibold text-slate-600 dark:text-slate-300 transition-all border border-slate-100 dark:border-slate-700/50 hover:border-slate-200 dark:hover:border-slate-600 shadow-sm"
-                        title={src.url}
-                      >
-                        <span className="max-w-[130px] sm:max-w-[180px] truncate">{src.title}</span>
-                        <ExternalLink className="w-2.5 h-2.5 opacity-50" />
-                      </a>
-                    ))}
-                  </div>
-                )}
-
-                {msg.steps && msg.steps.length > 0 && (
-                  <div className="mt-2.5">
-                    <button
-                      type="button"
-                      onClick={() => toggleStepExpansion(msg.id)}
-                      className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer"
-                    >
-                      <ChevronRight className={`w-3.5 h-3.5 transition-transform ${expandedStepsMap[msg.id] ? 'rotate-90' : ''}`} />
-                      <span>
-                        {expandedStepsMap[msg.id] ? 'Hide thinking' : `View ${msg.steps.length} reasoning steps`}
-                      </span>
-                    </button>
-
-                    {expandedStepsMap[msg.id] && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        className="mt-2 pl-3 border-l-2 border-slate-200 dark:border-slate-700 space-y-1.5 py-1"
-                      >
-                        {msg.steps.map((st, sIdx) => (
-                          <div key={sIdx} className="text-[11px] flex items-start gap-2 text-slate-600 dark:text-slate-300">
-                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0 mt-0.5" />
-                            <div>
-                              <span className="font-bold text-slate-800 dark:text-slate-100">{st.title}: </span>
-                              <span className="text-slate-500 dark:text-slate-400">{st.detail}</span>
-                            </div>
-                          </div>
-                        ))}
-                      </motion.div>
-                    )}
-                  </div>
-                )}
-
-                <div className={`mt-2 flex items-center justify-between text-[10px] ${
-                  msg.sender === 'user' ? 'text-white/80' : 'text-slate-400'
-                }`}>
-                  <span>{msg.timestamp}</span>
-                  {msg.sender === 'ai' && (
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(msg.id, msg.text)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-[var(--brand-blue)] flex items-center gap-1 cursor-pointer ml-3"
-                      title="Copy response"
-                    >
-                      {copiedId === msg.id ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedId === msg.id ? 'Copied' : 'Copy'}</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {msg.sender === 'user' && (
-                <div className="w-9 h-9 rounded-2xl bg-slate-900 dark:bg-slate-800 text-white flex items-center justify-center shrink-0 shadow-sm">
-                  <User className="w-5 h-5" />
-                </div>
-              )}
-            </motion.div>
+              msg={msg}
+              idx={idx}
+              isCopied={copiedId === msg.id}
+              isStepExpanded={Boolean(expandedStepsMap[msg.id])}
+              onCopy={handleCopy}
+              onToggleStep={toggleStepExpansion}
+            />
           ))}
         </AnimatePresence>
 
@@ -502,7 +575,7 @@ export const AIAssistantView: React.FC = () => {
           <motion.div 
             initial={{ opacity: 0, y: 8 }} 
             animate={{ opacity: 1, y: 0 }} 
-            className="flex gap-3 w-full"
+            className="flex gap-3 w-full will-change-transform"
           >
             <div 
               style={{ backgroundColor: 'var(--brand-blue)' }}
@@ -552,7 +625,7 @@ export const AIAssistantView: React.FC = () => {
                 whileTap={{ scale: 0.98 }}
                 type="button"
                 onClick={() => handleSend(qp.prompt)}
-                className="p-3.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-2xl text-left transition-all cursor-pointer group shadow-sm flex flex-col justify-between"
+                className="p-3.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-2xl text-left transition-colors duration-150 cursor-pointer group shadow-sm flex flex-col justify-between will-change-transform"
               >
                 <Icon style={{ color: 'var(--brand-blue)' }} className="w-4 h-4 mb-1 group-hover:scale-110 transition-transform" />
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block truncate">{qp.label}</span>
@@ -562,33 +635,7 @@ export const AIAssistantView: React.FC = () => {
         </div>
       )}
 
-      <div className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-2 shadow-xl shadow-slate-200/50 dark:shadow-none flex items-center gap-2 shrink-0">
-        <textarea
-          rows={1}
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              handleSend();
-            }
-          }}
-          placeholder="Ask anything..."
-          className="flex-1 bg-transparent px-3 py-3 text-base md:text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none resize-none"
-        />
-        <motion.button
-          type="button"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-          onClick={() => handleSend()}
-          disabled={!input.trim() || isLoading}
-          style={{ backgroundColor: 'var(--brand-blue)' }}
-          className="px-5 py-3 rounded-xl disabled:opacity-40 text-white font-bold text-sm shadow-md transition-all cursor-pointer flex items-center gap-2 shrink-0"
-        >
-          <Send className="w-4 h-4" />
-          <span className="hidden sm:inline">Send</span>
-        </motion.button>
-      </div>
+      <AIInputBox onSend={handleSend} isLoading={isLoading} />
     </div>
   );
 };

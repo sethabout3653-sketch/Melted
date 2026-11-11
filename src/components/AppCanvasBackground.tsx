@@ -6,7 +6,7 @@ interface AppCanvasBackgroundProps {
   isDark: boolean;
 }
 
-export const AppCanvasBackground: React.FC<AppCanvasBackgroundProps> = ({ themeConfig, isDark }) => {
+export const AppCanvasBackground: React.FC<AppCanvasBackgroundProps> = React.memo(({ themeConfig, isDark }) => {
   // If not dark mode and bgMode is default solid, allow clean light background
   if (!isDark && themeConfig.bgMode === 'solid' && themeConfig.bgSolidColor === '#090d16') {
     return null;
@@ -55,4 +55,5 @@ export const AppCanvasBackground: React.FC<AppCanvasBackgroundProps> = ({ themeC
   }
 
   return null;
-};
+});
+

@@ -3,8 +3,6 @@ import Hls from 'hls.js';
 import { Tv, Search, Volume2, VolumeX, Maximize2 } from 'lucide-react';
 import { TV_CHANNELS, TVChannel } from '../data/channels';
 
-const DEFAULT_CHANNEL_ID = 'cartoon-network';
-const DEFAULT_CHANNEL = TV_CHANNELS.find(channel => channel.id === DEFAULT_CHANNEL_ID) ?? TV_CHANNELS[0] ?? null;
 
 const EXTRA_CATEGORIES = [
   'All', 'Comedy', 'Entertainment', 'Series', 'Movies', 'Sports', 'News', 'Family & Kids', 'Lifestyle', 'Reality'
@@ -59,7 +57,7 @@ const ChannelLogo: React.FC<{ logo?: string; name: string }> = ({ logo, name }) 
 };
 
 export const LiveTVView: React.FC = () => {
-  const [selectedChannel, setSelectedChannel] = useState<TVChannel | null>(DEFAULT_CHANNEL);
+  const [selectedChannel, setSelectedChannel] = useState<TVChannel | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
@@ -479,7 +477,21 @@ export const LiveTVView: React.FC = () => {
           {selectedChannel ? (
             <div
               ref={containerRef}
-              className="w-full h-full max-w-5xl mx-auto relative group flex items-center justify-center bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-800/80"
+              className="w-full h-full max-w-5xl mx-auto relative group flex items-center justify-center bg-black rounded-2xl overflow-hidden shadow-2xl border border-slate-800/80 cursor-default"
+              onMouseMove={(e) => {
+                const container = e.currentTarget as HTMLElement;
+                container.style.cursor = 'default';
+                const controls = container.querySelector('.hide-in-fullscreen') as HTMLElement;
+                if (controls) controls.style.opacity = '1';
+                
+                clearTimeout((container as any).hideTimer);
+                (container as any).hideTimer = setTimeout(() => {
+                  if (document.fullscreenElement) {
+                    container.style.cursor = 'none';
+                    if (controls) controls.style.opacity = '0';
+                  }
+                }, 2000);
+              }}
             >
               <video
                 ref={videoRef}
@@ -490,7 +502,7 @@ export const LiveTVView: React.FC = () => {
                 controls={false}
               />
 
-              <div className="absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10 flex items-center justify-between gap-4">
+              <div className="absolute inset-x-0 bottom-0 p-5 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10 flex items-center justify-between gap-4 hide-in-fullscreen transition-opacity duration-500">
                 <div className="flex items-center gap-2">
                   <button onClick={toggleMute} className="p-2 text-white hover:text-blue-400 hover:bg-white/10 rounded-lg transition-colors" title={isMuted ? 'Unmute' : 'Mute'}>
                     {isMuted ? <VolumeX className="w-5 h-5 text-red-400" /> : <Volume2 className="w-5 h-5" />}

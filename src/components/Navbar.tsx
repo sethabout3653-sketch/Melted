@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { 
   Search, 
   Shuffle, 
@@ -47,7 +47,63 @@ interface NavbarProps {
   onStartGroupCall?: (users: any[]) => void;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({
+interface NavSearchInputProps {
+  searchQuery: string;
+  onSearchChange: (q: string) => void;
+  onTabChange: (tab: 'games' | 'chat' | 'ai' | 'movies' | 'tv') => void;
+  currentTab: string;
+}
+
+const NavSearchInput: React.FC<NavSearchInputProps> = React.memo(({
+  searchQuery,
+  onSearchChange,
+  onTabChange,
+  currentTab,
+}) => {
+  const [localVal, setLocalVal] = useState(searchQuery);
+
+  useEffect(() => {
+    setLocalVal(searchQuery);
+  }, [searchQuery]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setLocalVal(val);
+    if (currentTab !== 'games') onTabChange('games');
+    React.startTransition(() => {
+      onSearchChange(val);
+    });
+  };
+
+  const handleClear = () => {
+    setLocalVal('');
+    onSearchChange('');
+  };
+
+  return (
+    <div className="relative group">
+      <Search className="w-4 h-4 text-[var(--brand-blue)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors" />
+      <input
+        type="text"
+        value={localVal}
+        onChange={handleChange}
+        placeholder="Search titles..."
+        className="w-full bg-[#181824] hover:bg-[#1e1e2d] focus:bg-[#13131c] text-sm text-white placeholder-slate-400 rounded-xl pl-10 pr-10 py-2.5 border border-[#2a2a3c] focus:border-[var(--brand-blue)] focus:ring-1 focus:ring-[var(--brand-blue)] transition-colors duration-150 focus:outline-none shadow-inner"
+      />
+      {localVal && (
+        <button
+          type="button"
+          onClick={handleClear}
+          className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      )}
+    </div>
+  );
+});
+
+export const Navbar: React.FC<NavbarProps> = React.memo(({
   currentTab,
   onTabChange,
   searchQuery,
@@ -66,7 +122,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   onStartVideoCall,
   onStartGroupCall,
 }) => {
-  const searchInputRef = useRef<HTMLInputElement>(null);
   const [isCallMenuOpen, setIsCallMenuOpen] = useState(false);
   const [callMode, setCallMode] = useState<'audio' | 'video' | 'group'>('audio');
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
@@ -93,29 +148,12 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Zone 2: Central Search Bar */}
         <div className="flex-1 max-w-xl mx-1 sm:mx-4">
-          <div className="relative group">
-            <Search className="w-4 h-4 text-[var(--brand-blue)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => {
-                if (currentTab !== 'games') onTabChange('games');
-                onSearchChange(e.target.value);
-              }}
-              placeholder="Search titles..."
-              className="w-full bg-[#181824] hover:bg-[#1e1e2d] focus:bg-[#13131c] text-sm text-white placeholder-slate-400 rounded-xl pl-10 pr-10 py-2.5 border border-[#2a2a3c] focus:border-[var(--brand-blue)] focus:ring-1 focus:ring-[var(--brand-blue)] transition-all focus:outline-none shadow-inner"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => onSearchChange('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-white transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
+          <NavSearchInput
+            searchQuery={searchQuery}
+            onSearchChange={onSearchChange}
+            onTabChange={onTabChange}
+            currentTab={currentTab}
+          />
         </div>
 
         {/* Zone 3: Navigation Links & Actions */}
@@ -249,4 +287,5 @@ export const Navbar: React.FC<NavbarProps> = ({
       </div>
     </header>
   );
-};
+});
+
