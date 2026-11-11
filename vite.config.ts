@@ -28,6 +28,8 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
+      host: '0.0.0.0',
+      port: 3000,
       // AI Studio previews use Google-hosted domains; Vercel remains supported.
       // Keep this scoped instead of allowing every host (which weakens DNS-rebinding protection).
       allowedHosts: ['.googleusercontent.com', '.run.app', 'sb-7bwx88dm7dok.vercel.run'],

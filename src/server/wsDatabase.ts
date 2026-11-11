@@ -99,7 +99,8 @@ export class WebSocketDatabase {
     const now = Date.now();
     const active: DbUser[] = [];
     this.users.forEach((u) => {
-      if (now - (u.updated_at || 0) < 60000) {
+      // 5 minutes TTL to prevent users from disappearing during idle or game sessions
+      if (now - (u.updated_at || 0) < 300000) {
         active.push(u);
       }
     });
@@ -245,6 +246,12 @@ export function initWebSocketDatabase(server: Server) {
     ws.on('message', (raw) => {
       try {
         const msg = JSON.parse(raw.toString());
+        if (boundUserId) {
+          const u = globalWsDb.getUser(boundUserId);
+          if (u) {
+            u.updated_at = Date.now();
+          }
+        }
 
         switch (msg.type) {
           case 'REGISTER_USER': {
@@ -560,6 +567,12 @@ export function initWebSocketDatabase(server: Server) {
           }
 
           case 'PING': {
+            if (boundUserId) {
+              const u = globalWsDb.getUser(boundUserId);
+              if (u) {
+                u.updated_at = Date.now();
+              }
+            }
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
             }
