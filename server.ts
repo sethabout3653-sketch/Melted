@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
 import http from 'http';
+import https from 'https';
 import { Readable } from 'stream';
 import { initWebSocketDatabase, globalWsDb, broadcastTable, broadcastWss, sendToUserSockets } from './src/server/wsDatabase';
 import Groq from 'groq-sdk';
@@ -112,6 +113,84 @@ app.get('/api/download', async (req, res) => {
   } catch (err: any) {
     console.error('Download endpoint error:', err);
     res.status(500).send('Failed to download file');
+  }
+});
+
+const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+
+async function fetchImageBuffer(imageUrl: string, redirectsRemaining = 5): Promise<{ buffer: Buffer; contentType: string } | null> {
+  if (redirectsRemaining <= 0) return null;
+  return new Promise((resolve) => {
+    try {
+      const parsedUrl = new URL(imageUrl);
+      const isHttps = parsedUrl.protocol === 'https:';
+      const lib = isHttps ? https : http;
+      const options: any = {
+        hostname: parsedUrl.hostname,
+        port: parsedUrl.port || (isHttps ? 443 : 80),
+        path: parsedUrl.pathname + parsedUrl.search,
+        method: 'GET',
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+          'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        },
+      };
+
+      if (isHttps) {
+        options.agent = httpsAgent;
+      }
+
+      const req = lib.request(options, (res: http.IncomingMessage) => {
+        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          const redirectUrl = new URL(res.headers.location, imageUrl).toString();
+          return fetchImageBuffer(redirectUrl, redirectsRemaining - 1).then(resolve);
+        }
+
+        if (res.statusCode && res.statusCode >= 400) {
+          return resolve(null);
+        }
+
+        const chunks: Buffer[] = [];
+        res.on('data', (chunk: Buffer | Uint8Array | string) => chunks.push(Buffer.from(chunk as any)));
+        res.on('end', () => {
+          const buffer = Buffer.concat(chunks);
+          const contentType = (res.headers['content-type'] as string) || 'image/png';
+          resolve({ buffer, contentType });
+        });
+        res.on('error', () => resolve(null));
+      });
+
+      req.on('error', () => resolve(null));
+      req.setTimeout(8000, () => {
+        req.destroy();
+        resolve(null);
+      });
+      req.end();
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+// Image Reverse Proxy (Bypasses CORS, Hotlinking blocks, and SSL Cert Mismatches)
+app.get('/api/proxy-image', async (req, res) => {
+  try {
+    const imageUrl = (req.query.url as string) || '';
+    if (!imageUrl) {
+      return res.status(400).send('Missing url parameter');
+    }
+
+    const result = await fetchImageBuffer(imageUrl);
+    if (!result) {
+      return res.status(404).send('Failed to fetch image');
+    }
+
+    res.setHeader('Content-Type', result.contentType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.send(result.buffer);
+  } catch (err: any) {
+    res.status(500).send('Failed to proxy image');
   }
 });
 

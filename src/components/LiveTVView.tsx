@@ -7,17 +7,32 @@ const DEFAULT_CHANNEL_ID = 'afv-always-funny';
 const DEFAULT_CHANNEL = TV_CHANNELS.find(channel => channel.id === DEFAULT_CHANNEL_ID) ?? TV_CHANNELS[0] ?? null;
 
 const EXTRA_CATEGORIES = [
-  'All', 'Family', 'Kids', 'Reality', 'Lifestyle', 'Series', 'Movies', 'Sports', 'Entertainment', 'Comedy', 'News'
+  'All', 'Comedy', 'Entertainment', 'Series', 'Movies', 'Sports', 'News', 'Family & Kids', 'Lifestyle', 'Reality'
 ];
 
+const getDisplayCategory = (cat: string) => (cat === 'Family' || cat === 'Kids' || cat === 'Family & Kids') ? 'Family & Kids' : cat;
+
 const ChannelLogo: React.FC<{ logo?: string; name: string }> = ({ logo, name }) => {
+  const [imgSrc, setImgSrc] = useState<string | undefined>(logo);
+  const [triedProxy, setTriedProxy] = useState(false);
   const [hasError, setHasError] = useState(false);
 
   useEffect(() => {
+    setImgSrc(logo);
+    setTriedProxy(false);
     setHasError(false);
   }, [logo]);
 
-  if (!logo || hasError) {
+  const handleError = () => {
+    if (logo && logo.startsWith('http') && !triedProxy) {
+      setTriedProxy(true);
+      setImgSrc(`/api/proxy-image?url=${encodeURIComponent(logo)}`);
+    } else {
+      setHasError(true);
+    }
+  };
+
+  if (!imgSrc || hasError) {
     const initials = name
       .split(' ')
       .map(w => w[0])
@@ -34,11 +49,11 @@ const ChannelLogo: React.FC<{ logo?: string; name: string }> = ({ logo, name }) 
 
   return (
     <img
-      src={logo}
+      src={imgSrc}
       alt={name}
       className="w-full h-full object-contain filter brightness-95 group-hover:brightness-105"
       loading="lazy"
-      onError={() => setHasError(true)}
+      onError={handleError}
     />
   );
 };
@@ -57,20 +72,41 @@ export const LiveTVView: React.FC = () => {
   const hlsRef = useRef<Hls | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const categories = Array.from(new Set([...EXTRA_CATEGORIES, ...TV_CHANNELS.map(c => c.category)]));
+  const categories = Array.from(new Set([...EXTRA_CATEGORIES, ...TV_CHANNELS.map(c => getDisplayCategory(c.category))]));
+
+  const handleCategoryWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    if (e.deltaY !== 0) {
+      e.currentTarget.scrollLeft += e.deltaY;
+    }
+  };
+
+  // Truly random shuffle order generated on load for "All" category
+  const randomSeedMapRef = useRef<Record<string, number>>({});
+
+  if (Object.keys(randomSeedMapRef.current).length === 0) {
+    const map: Record<string, number> = {};
+    TV_CHANNELS.forEach(c => {
+      map[c.id] = Math.random();
+    });
+    randomSeedMapRef.current = map;
+  }
 
   const filteredChannels = TV_CHANNELS.filter(channel => {
     const matchesSearch = channel.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = selectedCategory === 'All' || channel.category === selectedCategory;
+    const channelCat = getDisplayCategory(channel.category);
+    const matchesCategory = selectedCategory === 'All' || channelCat === selectedCategory;
     return matchesSearch && matchesCategory;
   }).sort((a, b) => {
-    const priority = ['Family', 'Kids'];
-    const aIdx = priority.indexOf(a.category);
-    const bIdx = priority.indexOf(b.category);
-    if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-    if (aIdx !== -1) return -1;
-    if (bIdx !== -1) return 1;
-    return 0;
+    if (selectedCategory === 'All' && !searchQuery) {
+      if (a.id === 'afv-always-funny') return -1;
+      if (b.id === 'afv-always-funny') return 1;
+      // Truly random shuffle for 'All' category
+      const randA = randomSeedMapRef.current[a.id] ?? 0;
+      const randB = randomSeedMapRef.current[b.id] ?? 0;
+      return randA - randB;
+    }
+    // Specific categories are sorted alphabetically A-Z
+    return a.name.localeCompare(b.name);
   });
 
   useEffect(() => {
@@ -96,11 +132,12 @@ export const LiveTVView: React.FC = () => {
           lowLatencyMode: true,
           liveSyncDurationCount: 3,
           liveMaxLatencyDurationCount: 6,
-          maxBufferLength: 8,
-          maxMaxBufferLength: 16,
-          backBufferLength: 4,
+          maxBufferLength: 20,
+          maxMaxBufferLength: 40,
+          backBufferLength: 6,
           autoStartLoad: true,
           capLevelToPlayerSize: false,
+          startLevel: -1,
           enableCEA708Captions: true,
           enableWebVTT: true,
           subtitleDisplay: false,
@@ -111,6 +148,48 @@ export const LiveTVView: React.FC = () => {
         hlsRef.current = hls;
         hls.loadSource(url);
         hls.attachMedia(video);
+
+        const selectHighestQuality1080p = () => {
+          if (hls.levels && hls.levels.length > 0) {
+            let highest1080Idx = -1;
+            let maxResIdx = -1;
+            let maxHeight = 0;
+            let maxBitrateIdx = -1;
+            let maxBitrate = 0;
+
+            for (let i = 0; i < hls.levels.length; i++) {
+              const lvl = hls.levels[i];
+              const h = lvl.height || 0;
+              const bitrate = lvl.bitrate || 0;
+
+              if (h >= 1080) {
+                highest1080Idx = i;
+              }
+              if (h > maxHeight) {
+                maxHeight = h;
+                maxResIdx = i;
+              }
+              if (bitrate > maxBitrate) {
+                maxBitrate = bitrate;
+                maxBitrateIdx = i;
+              }
+            }
+
+            // Always automatically select 1080p level, or highest available resolution / bitrate
+            const targetIdx = highest1080Idx !== -1
+              ? highest1080Idx
+              : maxResIdx !== -1 && maxHeight > 0
+              ? maxResIdx
+              : maxBitrateIdx !== -1
+              ? maxBitrateIdx
+              : hls.levels.length - 1;
+
+            if (targetIdx !== -1 && targetIdx < hls.levels.length) {
+              hls.currentLevel = targetIdx;
+              hls.loadLevel = targetIdx;
+            }
+          }
+        };
 
         const selectEnglishAudioTrack = () => {
           if (hls.audioTracks && hls.audioTracks.length > 0) {
@@ -162,13 +241,18 @@ export const LiveTVView: React.FC = () => {
 
         hls.on(Hls.Events.AUDIO_TRACKS_UPDATED, selectEnglishAudioTrack);
         hls.on(Hls.Events.AUDIO_TRACK_SWITCHING, selectEnglishAudioTrack);
-        hls.on(Hls.Events.LEVEL_LOADED, selectEnglishAudioTrack);
+        hls.on(Hls.Events.LEVEL_LOADED, () => {
+          selectEnglishAudioTrack();
+          selectHighestQuality1080p();
+        });
+        hls.on(Hls.Events.LEVELS_UPDATED, selectHighestQuality1080p);
         hls.on(Hls.Events.SUBTITLE_TRACKS_UPDATED, selectEnglishSubtitleTrack);
 
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           if (isCancelled) return;
           selectEnglishAudioTrack();
           selectEnglishSubtitleTrack();
+          selectHighestQuality1080p();
           video.play().then(() => {
             setIsPlaying(true);
             setIsLoading(false);
@@ -383,7 +467,8 @@ export const LiveTVView: React.FC = () => {
             >
               <video
                 ref={videoRef}
-                className="w-full h-full object-contain"
+                className="w-full h-full object-contain filter contrast-[1.02]"
+                style={{ imageRendering: '-webkit-optimize-contrast' }}
                 playsInline
                 autoPlay
                 controls={false}
@@ -402,7 +487,7 @@ export const LiveTVView: React.FC = () => {
                     value={volume}
                     onChange={handleVolumeChange}
                     aria-label="Volume"
-                    className="w-20 sm:w-28 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-blue-400"
+                    className="w-20 sm:w-28 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-[var(--brand-blue)]"
                   />
                 </div>
 
@@ -466,40 +551,60 @@ export const LiveTVView: React.FC = () => {
               </label>
             </div>
 
-            <div className="p-4 border-b border-slate-800/60">
-              <div className="flex flex-wrap gap-2 max-h-36 overflow-y-auto overscroll-contain pr-1 custom-scrollbar" role="group" aria-label="Channel categories">
-                {categories.map(cat => (
-                  <button
-                    key={cat}
-                    onClick={() => setSelectedCategory(cat)}
-                    aria-pressed={selectedCategory === cat}
-                    className={`px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${selectedCategory === cat ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'}`}
-                  >
-                    {cat}
-                  </button>
-                ))}
+            <div className="p-3 border-b border-slate-800/60">
+              <div 
+                onWheel={handleCategoryWheel}
+                className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-1 touch-pan-x cursor-grab active:cursor-grabbing select-none" 
+                role="group" 
+                aria-label="Channel categories"
+              >
+                {categories.map(cat => {
+                  const isSelected = selectedCategory === cat;
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setSelectedCategory(cat)}
+                      aria-pressed={isSelected}
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all border cursor-pointer ${
+                        isSelected 
+                          ? 'bg-[var(--brand-blue)] text-slate-950 border-[var(--brand-blue)] font-extrabold shadow-md shadow-[var(--brand-blue-glow)]' 
+                          : 'bg-[#181822] hover:bg-[#20202e] text-slate-400 hover:text-white border-[#262638]'
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2">
               {filteredChannels.map(channel => {
                 const isSelected = selectedChannel?.id === channel.id;
                 return (
                   <button
                     key={channel.id}
+                    type="button"
                     onClick={() => setSelectedChannel(channel)}
-                    className={`w-full flex items-center gap-4 p-4 rounded-xl transition-colors border text-left group ${isSelected ? 'bg-blue-500/10 border-blue-500/30 text-white font-medium' : 'border-transparent text-slate-300 hover:bg-slate-800/50 hover:text-white'}`}
+                    className={`w-full flex items-center gap-3 p-2.5 rounded-xl transition-all border text-left group cursor-pointer ${
+                      isSelected 
+                        ? 'bg-[var(--brand-blue)]/10 border-[var(--brand-blue)] text-white font-semibold shadow-sm' 
+                        : 'border-[#1f1f2e] bg-[#12151e] text-slate-300 hover:bg-[#1a1e2b] hover:border-slate-700 hover:text-white'
+                    }`}
                   >
-                    <div className="w-20 h-14 rounded-md bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden shrink-0 p-1">
+                    <div className="w-16 h-11 rounded-lg bg-black/60 border border-slate-800 flex items-center justify-center overflow-hidden shrink-0 p-1">
                       <ChannelLogo logo={channel.logo} name={channel.name} />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-sm truncate text-slate-200 font-medium group-hover:text-blue-400 transition-colors">
+                      <div className={`text-xs truncate font-bold transition-colors ${isSelected ? 'text-[var(--brand-blue)]' : 'text-slate-200 group-hover:text-white'}`}>
                         {channel.name}
                       </div>
-                      <div className="text-xs text-slate-500 font-normal">{channel.category}</div>
+                      <div className="text-[10px] text-slate-500 font-medium">{getDisplayCategory(channel.category)}</div>
                     </div>
-                    {isSelected && <div className="w-3 h-3 rounded-full bg-blue-400 shrink-0" />}
+                    {isSelected && (
+                      <div className="w-2.5 h-2.5 rounded-full bg-[var(--brand-blue)] shrink-0 shadow-[0_0_8px_var(--brand-blue-glow)]" />
+                    )}
                   </button>
                 );
               })}

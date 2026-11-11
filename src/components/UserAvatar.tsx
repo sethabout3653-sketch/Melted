@@ -12,7 +12,7 @@ interface UserAvatarProps {
 
 export const UserAvatar: React.FC<UserAvatarProps> = ({
   username = 'Player',
-  avatarColor = '#0066ff',
+  avatarColor = 'var(--brand-blue)',
   avatarUrl,
   className = '',
   sizeClass = 'w-9 h-9 text-xs',
@@ -52,7 +52,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   return (
     <div 
       className={`${sizeClass} rounded-2xl font-extrabold flex items-center justify-center shrink-0 shadow-sm text-black select-none ${className}`}
-      style={{ backgroundColor: avatarColor || '#0066ff' }}
+      style={{ backgroundColor: avatarColor || 'var(--brand-blue)' }}
       title={username}
     >
       {initials}

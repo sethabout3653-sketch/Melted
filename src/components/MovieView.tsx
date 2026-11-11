@@ -210,7 +210,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
             <nav aria-label="Movie categories" className="flex items-center gap-2">
               {tabs.map(({ id, label, Icon }) => (
-                <button key={id} type="button" onClick={() => { setActiveTab(id); setQuery(''); }} className={`px-5 py-2.5 rounded-full text-sm font-bold transition-colors ${activeTab === id ? 'bg-white text-black' : 'text-white/75 hover:text-white hover:bg-white/10'}`}>
+                <button key={id} type="button" onClick={() => { setActiveTab(id); setQuery(''); }} className={`px-5 py-2.5 rounded-full text-sm font-bold transition-colors ${activeTab === id ? 'bg-[var(--brand-blue)] text-white' : 'text-white/75 hover:text-white hover:bg-white/10'}`}>
                   <Icon className="inline w-4 h-4 mr-2" />{label}
                 </button>
               ))}
@@ -226,11 +226,10 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
           {!query && featuredHeroMovie && !isLoading && (
             <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="relative w-full h-[420px] sm:h-[520px] md:h-[620px] overflow-hidden">
               <img src={getBackdropUrl(featuredHeroMovie.backdrop_path)} alt={featuredHeroMovie.title || featuredHeroMovie.name || 'Featured'} className="absolute inset-0 w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-r from-black via-black/70 to-black/25" />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#08090b] via-transparent to-black/20" />
+              <div className="absolute inset-0 bg-gradient-to-r from-[var(--brand-blue)] via-black/70 to-black/25" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#08090b] via-transparent to-[var(--brand-blue)]/20" />
               <div className="relative z-10 flex h-full items-end max-w-7xl mx-auto px-6 sm:px-10 pb-10 sm:pb-16">
                 <div className="max-w-3xl">
-                  <div className="mb-4 flex items-center gap-2 text-xs font-black uppercase tracking-[0.2em] text-white/80"><Sparkles className="w-4 h-4" /><span>Trending</span></div>
                   <h1 className="text-4xl sm:text-6xl lg:text-[5rem] font-black uppercase tracking-[-0.06em] leading-[0.9] max-w-2xl">{featuredHeroMovie.title || featuredHeroMovie.name}</h1>
                   <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-white/80">
                     {featuredHeroMovie.vote_average !== undefined && <span className="inline-flex items-center gap-1 text-amber-400"><Star className="w-4 h-4 fill-current" />{featuredHeroMovie.vote_average.toFixed(1)}</span>}
@@ -239,8 +238,8 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
                   </div>
                   {featuredHeroMovie.overview && <p className="mt-5 max-w-xl text-sm sm:text-base text-white/75 leading-7 line-clamp-3">{featuredHeroMovie.overview}</p>}
                   <div className="mt-8 flex flex-wrap gap-3">
-                    <button type="button" onClick={() => void selectMedia(featuredHeroMovie)} className="inline-flex items-center gap-2 rounded-lg bg-white px-7 py-3 text-sm font-black uppercase tracking-wide text-black hover:bg-white/90"><Play className="w-4 h-4 fill-current" />Play</button>
-                    <button type="button" onClick={() => void selectMedia(featuredHeroMovie)} className="inline-flex items-center gap-2 rounded-lg border border-white/25 bg-white/10 px-7 py-3 text-sm font-black uppercase tracking-wide text-white hover:bg-white/15"><Info className="w-4 h-4" />Details</button>
+                    <button type="button" onClick={() => void selectMedia(featuredHeroMovie)} className="inline-flex items-center gap-2 rounded-lg bg-[var(--brand-blue)] px-7 py-3 text-sm font-black uppercase tracking-wide text-white hover:bg-[var(--brand-blue-hover)]"><Play className="w-4 h-4 fill-current" />Play</button>
+                    <button type="button" onClick={() => void selectMedia(featuredHeroMovie)} className="inline-flex items-center gap-2 rounded-lg border border-[var(--brand-blue)] bg-white/10 px-7 py-3 text-sm font-black uppercase tracking-wide text-white hover:bg-[var(--brand-blue)]/20"><Info className="w-4 h-4" />Details</button>
                   </div>
                 </div>
               </div>
@@ -249,7 +248,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
 
           <section className="max-w-7xl mx-auto px-4 sm:px-8 space-y-4 py-8">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2"><Film className="w-5 h-5 text-cyan-400" />{query ? `Search Results for “${query}”` : activeTab === 'all' ? 'Trending' : activeTab === 'movies' ? 'Movies' : 'Popular Series'}</h2>
+              <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2"><Film className="w-5 h-5 text-[var(--brand-blue)]" />{query ? `Search Results for “${query}”` : activeTab === 'all' ? 'Trending' : activeTab === 'movies' ? 'Movies' : 'Popular Series'}</h2>
               <span className="text-xs text-white/50">{items.length} titles</span>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-5">
@@ -258,7 +257,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
                   <div className="relative aspect-[2/3] bg-slate-900">
                     <img src={getPosterUrl(item.poster_path)} alt={item.title || item.name || 'Title poster'} loading="lazy" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
                     <span className="absolute top-2 left-2 bg-black/80 text-white text-[9px] font-bold px-2 py-1 rounded">{item.media_type === 'tv' || item.first_air_date ? 'TV' : 'MOVIE'}</span>
-                    <span className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity"><Play className="w-8 h-8 text-white fill-current" /></span>
+                    <span className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity"><Play className="w-8 h-8 text-[var(--brand-blue)] fill-current" /></span>
                   </div>
                   <div className="p-3"><h3 className="text-xs font-bold text-white truncate">{item.title || item.name}</h3><p className="text-[10px] text-white/50 mt-1">{item.release_date?.slice(0, 4) || item.first_air_date?.slice(0, 4) || ''}</p></div>
                 </button>
@@ -267,7 +266,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
               {isMoreLoading && Array.from({ length: 6 }, (_, index) => <div key={`more-${index}`} className="h-64 rounded-xl bg-white/5" />)}
             </div>
             {items.length === 0 && !isLoading && !searchLoading && <div className="text-center py-16 text-white/50">No movies or TV shows found.</div>}
-            <div ref={observerTarget} className="h-20 w-full flex items-center justify-center">{isMoreLoading && <div className="w-6 h-6 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />}</div>
+            <div ref={observerTarget} className="h-20 w-full flex items-center justify-center">{isMoreLoading && <div className="w-6 h-6 border-2 border-[var(--brand-blue)] border-t-transparent rounded-full animate-spin" />}</div>
           </section>
         </main>
       </>}
@@ -276,16 +275,12 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
         <div className="fixed inset-0 z-[999999] bg-black flex flex-col h-[100dvh] w-[100dvw] overflow-hidden select-none">
           <div className="relative flex-1 bg-black w-full h-full"><iframe key={`${selectedMedia.id}-${season}-${episode}-${serverIndex}`} src={playerUrl} title={selectedMedia.title || selectedMedia.name || 'Media player'} className="w-full h-full border-0" allowFullScreen allow="autoplay; encrypted-media; picture-in-picture" /></div>
           <div className="absolute top-0 inset-x-0 z-30 px-4 py-3 bg-[#090d16]/95 backdrop-blur-xl border-b border-white/10 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3 min-w-0"><button type="button" onClick={() => setSelectedMedia(null)} aria-label="Close player" className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center"><X className="w-5 h-5" /></button><div className="min-w-0"><h1 className="text-sm font-bold text-white truncate">{selectedMedia.title || selectedMedia.name}</h1>{(selectedMedia.media_type === 'tv' || !!selectedMedia.first_air_date) && <p className="text-[10px] text-cyan-300 font-bold">Season {season} · Episode {episode}</p>}</div></div>
-            {(selectedMedia.media_type === 'tv' || !!selectedMedia.first_air_date) && <div className="flex items-center gap-2"><label className="text-xs text-white">Season <select value={season} onChange={event => { setSeason(Number(event.target.value)); setEpisode(1); }} className="bg-slate-900 text-cyan-300 rounded p-1">{Array.from({ length: Math.max(1, totalSeasons) }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label><label className="text-xs text-white">Episode <select value={episode} onChange={event => setEpisode(Number(event.target.value))} className="bg-slate-900 text-cyan-300 rounded p-1">{Array.from({ length: Math.max(1, episodeCount) }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label></div>}
-            <div className="relative"><button type="button" onClick={() => setServerMenuOpen(open => !open)} className="px-3 py-2 rounded-xl bg-white/10 text-white text-xs font-bold flex items-center gap-2"><Server className="w-4 h-4 text-cyan-300" /><span>{activeServer.name}</span><ChevronDown className="w-3.5 h-3.5" /></button><AnimatePresence>{serverMenuOpen && <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="absolute right-0 mt-2 w-52 bg-[#14141d] border border-white/15 rounded-xl p-1.5 z-30"><div className="text-[10px] font-bold uppercase text-slate-400 px-2 py-1">Streaming Source</div>{MOVIE_SERVERS.map((server, index) => <button key={server.id} type="button" onClick={() => { setServerIndex(index); setServerMenuOpen(false); }} className={`w-full text-left text-xs p-2 rounded-lg ${serverIndex === index ? 'bg-cyan-400 text-slate-950 font-extrabold' : 'text-white hover:bg-white/10'}`}>{server.name}</button>)}</motion.div>}</AnimatePresence></div>
+            <div className="flex items-center gap-3 min-w-0"><button type="button" onClick={() => setSelectedMedia(null)} aria-label="Close player" className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center"><X className="w-5 h-5" /></button><div className="min-w-0"><h1 className="text-sm font-bold text-white truncate">{selectedMedia.title || selectedMedia.name}</h1>{(selectedMedia.media_type === 'tv' || !!selectedMedia.first_air_date) && <p className="text-[10px] text-[var(--brand-blue)] font-bold">Season {season} · Episode {episode}</p>}</div></div>
+            {(selectedMedia.media_type === 'tv' || !!selectedMedia.first_air_date) && <div className="flex items-center gap-2"><label className="text-xs text-white">Season <select value={season} onChange={event => { setSeason(Number(event.target.value)); setEpisode(1); }} className="bg-slate-900 text-[var(--brand-blue)] rounded p-1">{Array.from({ length: Math.max(1, totalSeasons) }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label><label className="text-xs text-white">Episode <select value={episode} onChange={event => setEpisode(Number(event.target.value))} className="bg-slate-900 text-[var(--brand-blue)] rounded p-1">{Array.from({ length: Math.max(1, episodeCount) }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label></div>}
+            <div className="relative"><button type="button" onClick={() => setServerMenuOpen(open => !open)} className="px-3 py-2 rounded-xl bg-white/10 text-white text-xs font-bold flex items-center gap-2"><Server className="w-4 h-4 text-[var(--brand-blue)]" /><span>{activeServer.name}</span><ChevronDown className="w-3.5 h-3.5" /></button><AnimatePresence>{serverMenuOpen && <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="absolute right-0 mt-2 w-52 bg-[#14141d] border border-white/15 rounded-xl p-1.5 z-30"><div className="text-[10px] font-bold uppercase text-slate-400 px-2 py-1">Streaming Source</div>{MOVIE_SERVERS.map((server, index) => <button key={server.id} type="button" onClick={() => { setServerIndex(index); setServerMenuOpen(false); }} className={`w-full text-left text-xs p-2 rounded-lg ${serverIndex === index ? 'bg-[var(--brand-blue)] text-slate-950 font-extrabold' : 'text-white hover:bg-white/10'}`}>{server.name}</button>)}</motion.div>}</AnimatePresence></div>
           </div>
         </div>, document.body
       )}
     </div>
   );
 };
-
-```
-
-The hero should stay visible in Trending even when infinite scroll loads later pages, and should not render in Movies. Need tell relevant simple patch and apply? User pasted source likely expecting assistant to fix via repository? They had said earlier please adjust; user pasted file after assistant asked. We should edit repo with write. Need use current ref main BlobSha currently d0c... from earlier tool and no later tool changes? The pasted code matches actual. update entire content from user. Could just do file with this code except hero condition remove `page === 1` and maybe fix catalog effects. Their pasted code specifically has hero condition no page===1 already! Actually user code latest has `!isLoading` and activeTab all. Their issue maybe the hero not showing because rendering featuredItem reset and effect race infinite scroll. It may show no hero because `activeTab all`, catalog call trending movie. Could reason item retrieval. Why hero absent? Featured gets populated in page===1. But initial effect races when tab/query changes: reset effect set page=1, setItems[] and setFeatured null; load effect with activeTab page etc. On mount loads. Hero condition !isLoading, featuredItem, all. likely should render. Maybe top app hides? They say 

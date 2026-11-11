@@ -40,7 +40,7 @@ export const DeviceAdaptationBar: React.FC<DeviceAdaptationBarProps> = ({
             onClick={() => onTabChange('games')}
             className={`flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl transition-all border ${
               currentTab === 'games' && !showFavoritesOnly
-                ? 'text-[var(--vibrant-cyan)] font-bold border-[var(--vibrant-cyan)]/20 bg-[var(--vibrant-cyan)]/5'
+                ? 'text-[var(--brand-blue)] font-bold border-[var(--brand-blue)]/20 bg-[var(--brand-blue)]/5'
                 : 'text-zinc-400 hover:text-white border-transparent'
             }`}
           >
@@ -53,7 +53,7 @@ export const DeviceAdaptationBar: React.FC<DeviceAdaptationBarProps> = ({
             onClick={() => onTabChange('chat')}
             className={`flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl relative transition-all border ${
               currentTab === 'chat'
-                ? 'text-[var(--vibrant-cyan)] font-bold border-[var(--vibrant-cyan)]/20 bg-[var(--vibrant-cyan)]/5'
+                ? 'text-[var(--brand-blue)] font-bold border-[var(--brand-blue)]/20 bg-[var(--brand-blue)]/5'
                 : 'text-zinc-400 hover:text-white border-transparent'
             }`}
           >
@@ -61,7 +61,7 @@ export const DeviceAdaptationBar: React.FC<DeviceAdaptationBarProps> = ({
               <MessageSquare className="w-5 h-5" />
               {onlineCount > 0 && (
                 <span className={`absolute -top-1 -right-2 px-1 py-0.2 rounded-sm text-[9px] font-black border border-white/20 ${
-                  isConnected ? 'bg-cyan-500 text-white' : 'bg-red-500 text-white'
+                  isConnected ? 'bg-[var(--brand-blue)] text-white' : 'bg-red-500 text-white'
                 }`}>
                   {onlineCount}
                 </span>
@@ -78,14 +78,14 @@ export const DeviceAdaptationBar: React.FC<DeviceAdaptationBarProps> = ({
             }}
             className={`flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl transition-all border ${
               showFavoritesOnly
-                ? 'text-[var(--vibrant-cyan)] font-bold border-[var(--vibrant-cyan)]/20 bg-[var(--vibrant-cyan)]/5'
+                ? 'text-[var(--brand-blue)] font-bold border-[var(--brand-blue)]/20 bg-[var(--brand-blue)]/5'
                 : 'text-zinc-400 hover:text-white border-transparent'
             }`}
           >
             <div className="relative">
-              <Heart className={`w-5 h-5 ${showFavoritesOnly ? 'fill-[var(--vibrant-cyan)]' : ''}`} />
+              <Heart className={`w-5 h-5 ${showFavoritesOnly ? 'fill-[var(--brand-blue)]' : ''}`} />
               {favoritesCount > 0 && (
-                <span className="absolute -top-1 -right-2 px-1 py-0.2 rounded-sm bg-cyan-500/30 text-cyan-300 text-[9px] font-black border border-cyan-400/30">
+                <span className="absolute -top-1 -right-2 px-1 py-0.2 rounded-sm bg-[var(--brand-blue)]/30 text-[var(--brand-blue)] text-[9px] font-black border border-[var(--brand-blue)]/30">
                   {favoritesCount}
                 </span>
               )}
@@ -99,7 +99,7 @@ export const DeviceAdaptationBar: React.FC<DeviceAdaptationBarProps> = ({
               if (currentTab !== 'games') onTabChange('games');
               onRandomGame();
             }}
-            className="flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl text-zinc-400 hover:text-[var(--vibrant-cyan)] transition-all border border-transparent hover:border-white/10"
+            className="flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl text-zinc-400 hover:text-[var(--brand-blue)] transition-all border border-transparent hover:border-white/10"
           >
             <Shuffle className="w-5 h-5" />
             <span className="text-[10px] tracking-tight">Surprise</span>

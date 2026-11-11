@@ -27,6 +27,10 @@
     --app-font-heading-weight: 700;
   }
 
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     font-family: var(--app-font-family);
     background-color: var(--bg-white);
@@ -39,17 +43,31 @@
     letter-spacing: -0.015em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    -webkit-overflow-scrolling: touch;
+    text-rendering: optimizeSpeed;
     transform: translateZ(0);
+    backface-visibility: hidden;
   }
 
   /* 120 FPS GPU Hardware Acceleration & Smooth Motion Performance */
   .gpu-accelerated,
+  img,
   iframe,
   video,
-  canvas {
+  canvas,
+  button,
+  .group {
     transform: translateZ(0);
     will-change: transform;
     backface-visibility: hidden;
+  }
+
+  /* Render containment for zero-lag smooth 60-120fps scrolling */
+  .custom-scrollbar,
+  .overflow-y-auto,
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
 
   ::-webkit-scrollbar {
@@ -201,6 +219,49 @@ body.font-modern-clean .font-heading {
 
 .glow-subtle-blue {
   box-shadow: 0 4px 20px -2px var(--brand-blue-glow) !important;
+}
+
+/* Global utility class overrides to transform ALL cyan/blue UI elements into the user's custom accent color */
+.bg-cyan-100, .bg-cyan-200, .bg-cyan-300, .bg-cyan-400, .bg-cyan-500, .bg-cyan-600, .bg-cyan-700,
+.bg-blue-100, .bg-blue-200, .bg-blue-300, .bg-blue-400, .bg-blue-500, .bg-blue-600, .bg-blue-700 {
+  background-color: var(--brand-blue) !important;
+}
+.bg-cyan-500\/10, .bg-cyan-400\/10, .bg-cyan-300\/10,
+.bg-blue-500\/10, .bg-blue-400\/10, .bg-blue-300\/10 {
+  background-color: color-mix(in srgb, var(--brand-blue) 15%, transparent) !important;
+}
+.text-cyan-100, .text-cyan-200, .text-cyan-300, .text-cyan-400, .text-cyan-500, .text-cyan-600,
+.text-blue-100, .text-blue-200, .text-blue-300, .text-blue-400, .text-blue-500, .text-blue-600 {
+  color: var(--brand-blue) !important;
+}
+.border-cyan-100, .border-cyan-200, .border-cyan-300, .border-cyan-400, .border-cyan-500, .border-cyan-600,
+.border-blue-100, .border-blue-200, .border-blue-300, .border-blue-400, .border-blue-500, .border-blue-600 {
+  border-color: var(--brand-blue) !important;
+}
+.accent-cyan-400, .accent-cyan-500, .accent-blue-400, .accent-blue-500 {
+  accent-color: var(--brand-blue) !important;
+}
+.ring-cyan-500:focus, .ring-cyan-400:focus,
+.ring-blue-500:focus, .ring-blue-400:focus {
+  --tw-ring-color: var(--brand-blue) !important;
+}
+.shadow-cyan-500\/10, .shadow-blue-500\/10 {
+  box-shadow: 0 4px 6px -1px var(--brand-blue-glow) !important;
+}
+.shadow-cyan-500\/20, .shadow-blue-500\/20 {
+  box-shadow: 0 10px 15px -3px var(--brand-blue-glow) !important;
+}
+.shadow-cyan-500\/30, .shadow-blue-500\/30 {
+  box-shadow: 0 10px 15px -3px var(--brand-blue-glow) !important;
+}
+.hover\:border-cyan-400:hover {
+  border-color: var(--brand-blue) !important;
+}
+.hover\:text-cyan-500:hover {
+  color: var(--brand-blue) !important;
+}
+.hover\:bg-cyan-400:hover {
+  background-color: var(--brand-blue-hover) !important;
 }
 
 /* Mobile focus zoom prevention: iOS zooms if font-size < 16px */

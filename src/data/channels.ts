@@ -7,11 +7,19 @@ export interface TVChannel {
   description?: string;
 }
 
-export const TV_CHANNELS: TVChannel[] = [
+const RAW_TV_CHANNELS: TVChannel[] = [
+  {
+    id: 'south-park-247',
+    name: 'South Park 24/7',
+    url: '/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-62bdb1c5e25122000798ac79.m3u8',
+    category: 'Comedy',
+    logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR1G-YkPtGWvbSaaGT1lkzAMxWkumByCtQpcIoE2K07DYWSmBppJavat24z&s=10',
+    description: 'Official 24/7 South Park continuous channel (Pluto TV).'
+  },
   {
     id: 'pbs-mpt-baltimore', name: 'MPT',
     url: 'https://2-fss-2.streamhoster.com/pl_138/amlst:201814-1291584/playlist.m3u8',
-    category: 'Lifestyle', logo: 'https://images.iptv-org.github.io/epg/logos/PBS.us.png', description: 'Maryland Public Television (WMPB) live stream.'
+    category: 'Lifestyle', logo: 'https://yt3.googleusercontent.com/lIPxOIsrzPb61G88m_XBJz1U7fNAKJmKfxS7ql0iniY2A8gu0Mxtx1XXRf9TvLgw7F63id7w6Q=s900-c-k-c0x00ffffff-no-rj', description: 'Maryland Public Television (WMPB) live stream.'
   },
   {
     id: 'qvc-2-live', name: 'QVC 2',
@@ -177,12 +185,12 @@ export const TV_CHANNELS: TVChannel[] = [
   "description": "Top comedy series, sketches, and stand-up routines."
 },
 {
-  "id": "cartoon-network-en",
+  "id": "cartoon-network",
   "name": "Cartoon Network",
-  "url": "https://cdn4.skygo.mn/live/disk1/Cartoon_Network/HLSv3-FTA/Cartoon_Network.m3u8",
-  "category": "Kids",
+  "url": "http://212.5.144.156:8080/cartoon/index.m3u8",
+  "category": "Family & Kids",
   "logo": "https://upload.wikimedia.org/wikipedia/commons/8/80/Cartoon_Network_2010_logo.svg",
-  "description": "Cartoon Network Live English Broadcast"
+  "description": "Cartoon Network Live Stream"
 },
 {
   "id": "pbs-kids",
@@ -3740,8 +3748,8 @@ export const TV_CHANNELS: TVChannel[] = [
   "id": "pluto-dora-tv-ptv2",
   "name": "Dora TV",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-6a70da97a4bf6cded4fdaf53.m3u8",
-  "category": "Family",
-  "logo": "https://static.wikia.nocookie.net/pluto-tv/images/2/25/Dora_TV_on_Pluto_TV.webp/revision/latest/scale-to-width-down/1227?cb=20250804154117",
+  "category": "Family & Kids",
+  "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTsbSm7ePeErR0V7xEvOEN4ZaB523iiKQdDnPkHU6GhFg&s=10",
   "description": "Dora TV live on Pluto TV"
 },
 {
@@ -3937,3 +3945,19 @@ export const TV_CHANNELS: TVChannel[] = [
   "description": "Whose Line Is It Anyway live on Pluto TV"
 },
 ];
+
+const isSpanishChannel = (c: TVChannel) => {
+  const text = `${c.id} ${c.name} ${c.description || ''} ${c.category || ''}`.toLowerCase();
+  return (
+    text.includes('español') ||
+    text.includes('espanol') ||
+    text.includes('spanish') ||
+    text.includes('latino') ||
+    text.includes('castellano') ||
+    text.includes('en espanol') ||
+    text.includes('en español') ||
+    text.includes('iconos latinos')
+  );
+};
+
+export const TV_CHANNELS: TVChannel[] = RAW_TV_CHANNELS.filter(c => !isSpanishChannel(c));

@@ -252,8 +252,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 onClick={() => onToggleFavorite(game.id)}
                 className={`p-2 rounded-xl border transition-all cursor-pointer ${
                   isFavorite
-                    ? 'bg-cyan-500 text-white border-cyan-500 shadow-md shadow-cyan-500/20'
-                    : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-cyan-500 dark:hover:text-cyan-300 border-slate-200 dark:border-slate-700 hover:border-blue-200 dark:hover:border-blue-700'
+                    ? 'bg-[var(--brand-blue)] text-white border-[var(--brand-blue)] shadow-md shadow-[var(--brand-blue-glow)]'
+                    : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-[var(--brand-blue)] dark:hover:text-[var(--brand-blue)] border-slate-200 dark:border-slate-700 hover:border-blue-200 dark:hover:border-blue-700'
                 }`}
                 title={isFavorite ? 'Saved to Favorites' : 'Add to Favorites'}
               >
@@ -267,7 +267,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={() => launchAboutBlank(playableUrl, game.name)}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-cyan-500 dark:hover:text-cyan-300 hover:border-blue-200 dark:hover:border-blue-700 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-[var(--brand-blue)] dark:hover:text-[var(--brand-blue)] hover:border-blue-200 dark:hover:border-blue-700 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
                   title="Open stealth tab (about:blank cloak)"
                 >
                   <EyeOff className="w-3.5 h-3.5" />
@@ -281,7 +281,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 whileHover={{ scale: 1.08, rotate: 180 }}
                 whileTap={{ scale: 0.92 }}
                 onClick={reloadGame}
-                className="p-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-cyan-500 dark:hover:text-cyan-300 rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
+                className="p-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-[var(--brand-blue)] dark:hover:text-[var(--brand-blue)] rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
                 title="Reload game"
               >
                 <RotateCw className="w-4 h-4" />
@@ -293,7 +293,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 whileHover={{ scale: 1.08 }}
                 whileTap={{ scale: 0.92 }}
                 onClick={toggleFullscreen}
-                className="p-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-cyan-500 dark:hover:text-cyan-300 rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
+                className="p-2 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-[var(--brand-blue)] dark:hover:text-[var(--brand-blue)] rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
                 title="Enter Fullscreen"
               >
                 <Maximize2 className="w-4 h-4" />
@@ -305,7 +305,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 whileHover={{ scale: 1.08 }}
                 whileTap={{ scale: 0.92 }}
                 onClick={onClose}
-                className="p-2 bg-cyan-500 hover:bg-red-500 text-white font-bold rounded-xl transition-all cursor-pointer ml-1 border border-cyan-400 hover:border-red-500 shadow-lg shadow-cyan-500/20"
+                className="p-2 bg-[var(--brand-blue)] hover:bg-red-500 text-white font-bold rounded-xl transition-all cursor-pointer ml-1 border border-[var(--brand-blue)] hover:border-red-500 shadow-lg shadow-[var(--brand-blue-glow)]"
                 title="Close game (Esc)"
               >
                 <X className="w-4 h-4 stroke-[3]" />
@@ -335,17 +335,17 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             <div className="absolute top-3 right-3 z-30 opacity-0 hover:opacity-100 transition-opacity duration-200 flex items-center gap-2">
               <button
                 onClick={reloadGame}
-                className="p-2 rounded-xl bg-black/75 hover:bg-black text-white hover:text-[var(--vibrant-cyan)] backdrop-blur-md border border-white/20 transition-all cursor-pointer shadow-xl"
+                className="p-2 rounded-xl bg-black/75 hover:bg-black text-white hover:text-[var(--brand-blue)] backdrop-blur-md border border-white/20 transition-all cursor-pointer shadow-xl"
                 title="Reload Game"
               >
                 <RotateCw className="w-4 h-4" />
               </button>
               <button
                 onClick={toggleFullscreen}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/75 hover:bg-black text-white hover:text-[var(--vibrant-cyan)] backdrop-blur-md border border-white/20 transition-all cursor-pointer shadow-xl text-xs font-semibold"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-black/75 hover:bg-black text-white hover:text-[var(--brand-blue)] backdrop-blur-md border border-white/20 transition-all cursor-pointer shadow-xl text-xs font-semibold"
                 title="Exit Fullscreen (Esc)"
               >
-                <Minimize2 className="w-4 h-4 text-[var(--vibrant-cyan)]" />
+                <Minimize2 className="w-4 h-4 text-[var(--brand-blue)]" />
                 <span>Exit Fullscreen</span>
               </button>
             </div>
@@ -355,7 +355,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           {isLoading && !hasError && (
             <div className="absolute inset-0 bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-10 select-none animate-in fade-in duration-200">
               <div className="relative mb-4">
-                <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-900/40 border border-blue-100 dark:border-blue-800 flex items-center justify-center text-cyan-500 dark:text-cyan-300 shadow-xl shadow-cyan-500/10">
+                <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-900/40 border border-blue-100 dark:border-blue-800 flex items-center justify-center text-[var(--brand-blue)] dark:text-[var(--brand-blue)] shadow-xl shadow-[var(--brand-blue-glow)]">
                   <Zap className="w-7 h-7 fill-current" />
                 </div>
               </div>
@@ -440,7 +440,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 {playableUrl && (
                   <button
                     onClick={() => launchAboutBlank(playableUrl, game.name)}
-                    className="px-4 py-2 bg-cyan-500 hover:bg-cyan-400 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-lg shadow-cyan-500/20"
+                    className="px-4 py-2 bg-[var(--brand-blue)] hover:bg-[var(--brand-blue-hover)] text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-lg shadow-[var(--brand-blue-glow)]"
                   >
                     Open Stealth Window
                   </button>

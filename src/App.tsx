@@ -7,6 +7,7 @@ import { GamePlayer } from './components/GamePlayer';
 import { ChatView } from './components/ChatView';
 import { AIAssistantView } from './components/AIAssistantView';
 import { FrostHubLoadingScreen } from './components/FrostHubLoadingScreen';
+import { FrostHubLogo } from './components/FrostHubLogo';
 import { InAppNotificationToast } from './components/InAppNotificationToast';
 import { VoiceAudioEngine } from './components/VoiceAudioEngine';
 import { PhoneCallOverlay } from './components/PhoneCallOverlay';
@@ -514,13 +515,13 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE * 2)}
-                  className="inline-flex items-center gap-3 px-8 py-3.5 bg-[#181824] hover:bg-[#202030] text-white font-bold text-xs uppercase tracking-wider rounded-xl border border-[#2a2a3e] hover:border-[#00f0ff]/40 transition-all cursor-pointer font-heading shadow-md"
+                  className="inline-flex items-center gap-3 px-8 py-3.5 bg-[#181824] hover:bg-[#202030] text-white font-bold text-xs uppercase tracking-wider rounded-xl border border-[#2a2a3e] hover:border-[var(--brand-blue)]/40 transition-all cursor-pointer font-heading shadow-md"
                 >
                   <span>Discover More</span>
-                  <span className="text-[10px] bg-[#090d16] px-2 py-0.5 rounded-md text-[#00f0ff] font-extrabold">
+                  <span className="text-[10px] bg-[#090d16] px-2 py-0.5 rounded-md text-[var(--brand-blue)] font-extrabold">
                     {visibleCount} / {filteredGames.length}
                   </span>
-                  <ArrowRight className="w-4 h-4 text-[#00f0ff]" />
+                  <ArrowRight className="w-4 h-4 text-[var(--brand-blue)]" />
                 </button>
               </div>
             )}
@@ -536,11 +537,7 @@ export default function App() {
                     onClick={handleGoHome}
                     className="flex items-center gap-2 group cursor-pointer focus:outline-none"
                   >
-                    <img 
-                      src="/assets/aistudio/Screenshot_2026-11-04_190053-removebg-preview_82d6e6a3.png" 
-                      alt="FrostHub" 
-                      className="h-10 w-auto object-contain brightness-110 drop-shadow-[0_0_8px_rgba(0,240,255,0.2)]"
-                    />
+                    <FrostHubLogo size="sm" />
                   </button>
 
                   <div className="text-slate-500 font-medium text-[11px]">
@@ -634,6 +631,7 @@ export default function App() {
           <Tv className={`${currentTab === 'tv' ? 'w-6 h-6' : 'w-5.5 h-5.5'}`} />
           <span className="text-[10px] font-black uppercase tracking-tighter">TV</span>
         </button>
+
 
         <button
           type="button"

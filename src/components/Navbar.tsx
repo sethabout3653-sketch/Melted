@@ -12,6 +12,7 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { motion } from 'motion/react';
+import { FrostHubLogo } from './FrostHubLogo';
 import { CloakPreset } from '../hooks/useCloak';
 import { GameCategory } from '../types/game';
 import { containerVariants, slideInVariants } from '../utils/animations';
@@ -86,18 +87,14 @@ export const Navbar: React.FC<NavbarProps> = ({
             }}
             className="flex items-center group cursor-pointer focus:outline-none select-none"
           >
-            <img 
-              src="/assets/aistudio/Screenshot_2026-11-04_190053-removebg-preview_82d6e6a3.png" 
-              alt="FrostHub" 
-              className="h-10 sm:h-12 w-auto object-contain brightness-110 drop-shadow-[0_0_10px_rgba(0,240,255,0.25)] transition-transform group-hover:scale-105"
-            />
+            <FrostHubLogo size="md" className="transition-transform group-hover:scale-105" />
           </button>
         </div>
 
         {/* Zone 2: Central Search Bar */}
         <div className="flex-1 max-w-xl mx-1 sm:mx-4">
           <div className="relative group">
-            <Search className="w-4 h-4 text-[#00f0ff] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors" />
+            <Search className="w-4 h-4 text-[var(--brand-blue)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none transition-colors" />
             <input
               ref={searchInputRef}
               type="text"
@@ -107,7 +104,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 onSearchChange(e.target.value);
               }}
               placeholder="Search titles..."
-              className="w-full bg-[#181824] hover:bg-[#1e1e2d] focus:bg-[#13131c] text-sm text-white placeholder-slate-400 rounded-xl pl-10 pr-10 py-2.5 border border-[#2a2a3c] focus:border-[#00f0ff] focus:ring-1 focus:ring-[#00f0ff] transition-all focus:outline-none shadow-inner"
+              className="w-full bg-[#181824] hover:bg-[#1e1e2d] focus:bg-[#13131c] text-sm text-white placeholder-slate-400 rounded-xl pl-10 pr-10 py-2.5 border border-[#2a2a3c] focus:border-[var(--brand-blue)] focus:ring-1 focus:ring-[var(--brand-blue)] transition-all focus:outline-none shadow-inner"
             />
             {searchQuery && (
               <button
@@ -140,13 +137,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                   onClick={() => onTabChange(tab.id as any)}
                   className={`text-xs font-extrabold uppercase tracking-wider transition-all px-3 py-2 rounded-lg border ${
                     isActive 
-                      ? 'text-[#00f0ff] bg-[#00f0ff]/10 border-[#00f0ff]/30 shadow-sm' 
+                      ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10 border-[var(--brand-blue)]/30 shadow-sm' 
                       : 'text-slate-300 hover:text-white border-transparent hover:bg-[#1a1a26]'
                   }`}
                 >
                   {tab.label}
                   {tab.id === 'chat' && onlineCount > 0 && (
-                    <span className="ml-1.5 bg-[#00f0ff] text-slate-950 text-[9px] font-black px-1.5 py-0.2 rounded-md">
+                    <span className="ml-1.5 bg-[var(--brand-blue)] text-slate-950 text-[9px] font-black px-1.5 py-0.2 rounded-md">
                       {onlineCount}
                     </span>
                   )}
@@ -162,7 +159,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <button
                   type="button"
                   onClick={() => setIsCallMenuOpen((open) => !open)}
-                  className={`flex items-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold transition-all ${isCallMenuOpen ? 'bg-[#00f0ff]/15 text-[#00f0ff]' : 'text-slate-400 hover:bg-[#1a1a26] hover:text-[#00f0ff]'}`}
+                  className={`flex items-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold transition-all ${isCallMenuOpen ? 'bg-[var(--brand-blue)]/15 text-[var(--brand-blue)]' : 'text-slate-400 hover:bg-[#1a1a26] hover:text-[var(--brand-blue)]'}`}
                   title="Call someone online"
                   aria-expanded={isCallMenuOpen}
                   aria-haspopup="menu"
@@ -175,7 +172,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                   <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-xl border border-[#2a2a3c] bg-[#12121b] p-2 shadow-2xl" role="menu">
                     <div className="mb-2 grid grid-cols-3 gap-1 rounded-lg bg-white/5 p-1">
                       {([['audio', Phone, 'Voice'], ['video', Video, 'Video'], ['group', Users, 'Group']] as const).map(([mode, Icon, label]) => (
-                        <button key={mode} type="button" onClick={() => setCallMode(mode)} className={`flex flex-col items-center gap-1 rounded-md px-1 py-1.5 text-[10px] font-semibold ${callMode === mode ? 'bg-[#00f0ff]/15 text-[#00f0ff]' : 'text-slate-400 hover:text-white'}`}>
+                        <button key={mode} type="button" onClick={() => setCallMode(mode)} className={`flex flex-col items-center gap-1 rounded-md px-1 py-1.5 text-[10px] font-semibold ${callMode === mode ? 'bg-[var(--brand-blue)]/15 text-[var(--brand-blue)]' : 'text-slate-400 hover:text-white'}`}>
                           <Icon className="h-3.5 w-3.5" />{label}
                         </button>
                       ))}
@@ -200,11 +197,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                       >
                         <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
                         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">{user.username || user.display_name || 'Online user'}</span>
-                        {callMode === 'group' ? (selectedGroupIds.includes(user.id) ? <Check className="h-3.5 w-3.5 text-[#00f0ff]" /> : <span className="h-4 w-4 rounded border border-white/30" />) : callMode === 'video' ? <Video className="h-3.5 w-3.5 text-[#00f0ff]" /> : <Phone className="h-3.5 w-3.5 text-[#00f0ff]" />}
+                        {callMode === 'group' ? (selectedGroupIds.includes(user.id) ? <Check className="h-3.5 w-3.5 text-[var(--brand-blue)]" /> : <span className="h-4 w-4 rounded border border-white/30" />) : callMode === 'video' ? <Video className="h-3.5 w-3.5 text-[var(--brand-blue)]" /> : <Phone className="h-3.5 w-3.5 text-[var(--brand-blue)]" />}
                       </button>
                     ))}
                     {callMode === 'group' && (
-                      <button type="button" disabled={selectedGroupUsers.length === 0} onClick={() => { onStartGroupCall?.(selectedGroupUsers); setSelectedGroupIds([]); setIsCallMenuOpen(false); }} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-[#00f0ff] px-3 py-2 text-xs font-black text-slate-950 transition hover:bg-[#7ff8ff] disabled:cursor-not-allowed disabled:opacity-40">
+                      <button type="button" disabled={selectedGroupUsers.length === 0} onClick={() => { onStartGroupCall?.(selectedGroupUsers); setSelectedGroupIds([]); setIsCallMenuOpen(false); }} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--brand-blue)] px-3 py-2 text-xs font-black text-slate-950 transition hover:bg-[var(--brand-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40">
                         <Users className="h-3.5 w-3.5" /> Group Call ({selectedGroupUsers.length})
                       </button>
                     )}
@@ -216,7 +213,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <button
               type="button"
               onClick={onRandomGame}
-              className="p-2 text-slate-400 hover:text-[#00f0ff] hover:bg-[#1a1a26] rounded-lg transition-all cursor-pointer"
+              className="p-2 text-slate-400 hover:text-[var(--brand-blue)] hover:bg-[#1a1a26] rounded-lg transition-all cursor-pointer"
               title="Surprise / Shuffle"
             >
               <Shuffle className="w-4 h-4" />
@@ -239,7 +236,7 @@ export const Navbar: React.FC<NavbarProps> = ({
               <button
                 type="button"
                 onClick={onOpenThemeSelector}
-                className="p-2 rounded-lg text-slate-400 hover:text-[#00f0ff] hover:bg-[#1a1a26] transition-all cursor-pointer"
+                className="p-2 rounded-lg text-slate-400 hover:text-[var(--brand-blue)] hover:bg-[#1a1a26] transition-all cursor-pointer"
                 title="Theme Customizer"
               >
                 <Palette className="w-4 h-4" />

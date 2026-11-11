@@ -78,7 +78,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
     <motion.div 
       whileHover={cardHover}
       transition={hoverTransition}
-      className={`group relative bg-[#14141d] dark:bg-[#14141d] border border-[#222232] hover:border-[#00f0ff] hover:shadow-[0_0_20px_rgba(0,240,255,0.15)] rounded-2xl p-2 flex flex-col transition-all duration-300 ${
+      className={`group relative bg-[#14141d] dark:bg-[#14141d] border border-[#222232] hover:border-[var(--brand-blue)] hover:shadow-[0_0_20px_var(--brand-blue-glow)] rounded-2xl p-2 flex flex-col transition-all duration-300 ${
         variant === 'large' ? 'md:col-span-2 md:row-span-2' : ''
       }`}
     >
@@ -93,7 +93,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
 
         {imageError || !currentCover ? (
           <div className="absolute inset-0 bg-[#0f0f18] flex flex-col items-center justify-center p-3 text-center select-none">
-            <div className="w-10 h-10 rounded-xl bg-[#1a1a26] border border-[#2a2a3c] flex items-center justify-center text-[#00f0ff] mb-2 shadow-sm">
+            <div className="w-10 h-10 rounded-xl bg-[#1a1a26] border border-[#2a2a3c] flex items-center justify-center text-[var(--brand-blue)] mb-2 shadow-sm">
               <Gamepad2 className="w-5 h-5" />
             </div>
             <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider px-2 line-clamp-1">
@@ -124,7 +124,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
           }}
           className={`absolute top-2 right-2 p-2 rounded-xl backdrop-blur-md transition-all cursor-pointer z-10 border shadow-md ${
             isFavorite 
-              ? 'bg-[#00f0ff] border-[#00f0ff] text-[#090d16]' 
+              ? 'bg-[var(--brand-blue)] border-[var(--brand-blue)] text-[#090d16]' 
               : 'bg-[#090d16]/70 border-[#222232] text-slate-400 hover:text-white'
           }`}
           title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
@@ -134,7 +134,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
 
         {/* Hover Play Overlay */}
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
-          <div className="bg-[#00f0ff] text-[#090d16] px-3.5 py-1.5 rounded-xl shadow-lg font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transform scale-90 group-hover:scale-100 transition-transform duration-200">
+          <div className="bg-[var(--brand-blue)] text-[#090d16] px-3.5 py-1.5 rounded-xl shadow-lg font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transform scale-90 group-hover:scale-100 transition-transform duration-200">
             <Play className="w-3.5 h-3.5 fill-current" />
             <span>Play</span>
           </div>
@@ -145,7 +145,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
       <div className="p-2.5 space-y-1">
         <h3 
           onClick={() => onPlay(game)}
-          className="font-bold text-white text-xs sm:text-sm hover:text-[#00f0ff] transition-colors leading-tight line-clamp-1 cursor-pointer font-heading tracking-tight"
+          className="font-bold text-white text-xs sm:text-sm hover:text-[var(--brand-blue)] transition-colors leading-tight line-clamp-1 cursor-pointer font-heading tracking-tight"
           title={game.name}
         >
           {game.name}
@@ -160,7 +160,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
         <button
           type="button"
           onClick={() => onAboutBlank(game)}
-          className="flex-1 py-1.5 rounded-lg bg-[#1e1e2d] hover:bg-[#28283a] text-slate-300 hover:text-[#00f0ff] border border-[#2a2a3e] hover:border-[#00f0ff]/40 text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+          className="flex-1 py-1.5 rounded-lg bg-[#1e1e2d] hover:bg-[#28283a] text-slate-300 hover:text-[var(--brand-blue)] border border-[#2a2a3e] hover:border-[var(--brand-blue)]/40 text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
         >
           Stealth Launch
         </button>

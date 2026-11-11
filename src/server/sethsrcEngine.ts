@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { exec } from 'child_process';
 import { Readable } from 'stream';
+import { TV_CHANNELS } from '../data/channels';
 
 export function initSethsrcEngine(app: express.Express, baseDir: string) {
   const hlsOutputDir = path.resolve(baseDir, 'hls_output');
@@ -43,7 +44,7 @@ export function initSethsrcEngine(app: express.Express, baseDir: string) {
       const parsedUrl = new URL(targetUrl);
       const customReferer = (req.query.referer as string) || parsedUrl.origin;
 
-      const upstreamResponse = await fetch(targetUrl, {
+      let upstreamResponse = await fetch(targetUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
           'Referer': customReferer,
@@ -51,6 +52,17 @@ export function initSethsrcEngine(app: express.Express, baseDir: string) {
           'Accept': '*/*',
         }
       });
+
+      if (!upstreamResponse.ok && targetUrl.includes('tooneast')) {
+        const fallbackUrl = 'https://cdn4.skygo.mn/live/disk1/Cartoon_Network/HLSv3-FTA/Cartoon_Network.m3u8';
+        upstreamResponse = await fetch(fallbackUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+            'Referer': 'https://skygo.mn/',
+            'Accept': '*/*',
+          }
+        });
+      }
 
       if (!upstreamResponse.ok) {
         return res.status(upstreamResponse.status).send(`Upstream returned status ${upstreamResponse.status}`);
@@ -244,14 +256,14 @@ export function initSethsrcEngine(app: express.Express, baseDir: string) {
     #container { position: relative; width: 100%; height: 100%; display: flex; flex-direction: column; background: #000; }
     #player-frame, #hls-video { width: 100%; height: 100%; border: none; background: #000; object-fit: contain; }
     #top-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between; padding: 12px 18px; background: linear-gradient(180deg, rgba(7,9,14,0.95) 0%, rgba(7,9,14,0) 100%); pointer-events: auto; }
-    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(0, 240, 255, 0.15); border: 1px solid rgba(0, 240, 255, 0.4); border-radius: 8px; color: #00f0ff; font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
-    .badge-dot { width: 6px; height: 6px; background: #00f0ff; border-radius: 2px; }
+    .badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; background: rgba(0, 240, 255, 0.15); border: 1px solid rgba(0, 240, 255, 0.4); border-radius: 8px; color: var(--brand-blue, #00f0ff); font-weight: 800; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .badge-dot { width: 6px; height: 6px; background: var(--brand-blue, #00f0ff); border-radius: 2px; }
     .source-selector { display: flex; align-items: center; gap: 6px; background: rgba(24, 24, 36, 0.9); padding: 4px 8px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.15); }
     .source-btn { background: transparent; border: none; color: #94a3b8; font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 6px; cursor: pointer; transition: all 0.2s ease; }
     .source-btn:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
-    .source-btn.active { color: #07090e; background: #00f0ff; font-weight: 800; }
+    .source-btn.active { color: #07090e; background: var(--brand-blue, #00f0ff); font-weight: 800; }
     #loading-indicator { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #07090e; z-index: 10; pointer-events: none; transition: opacity 0.3s ease; }
-    .spinner { width: 36px; height: 36px; border: 3px solid rgba(0, 240, 255, 0.2); border-top-color: #00f0ff; border-radius: 4px; animation: spin 0.8s linear infinite; margin-bottom: 12px; }
+    .spinner { width: 36px; height: 36px; border: 3px solid rgba(0, 240, 255, 0.2); border-top-color: var(--brand-blue, #00f0ff); border-radius: 4px; animation: spin 0.8s linear infinite; margin-bottom: 12px; }
     @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
   </style>
 </head>
@@ -264,7 +276,7 @@ export function initSethsrcEngine(app: express.Express, baseDir: string) {
           <span>Sethsrc</span>
         </div>
         <span style="font-size: 12px; font-weight: 600; color: #cbd5e1; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-          ${title} ${isTV ? `<span style="color:#00f0ff; font-weight:800;">S${season}:E${episode}</span>` : ''}
+          ${title} ${isTV ? `<span style="color:var(--brand-blue, #00f0ff); font-weight:800;">S${season}:E${episode}</span>` : ''}
         </span>
       </div>
       <div class="source-selector" id="source-list"></div>
@@ -272,7 +284,7 @@ export function initSethsrcEngine(app: express.Express, baseDir: string) {
 
     <div id="loading-indicator">
       <div class="spinner"></div>
-      <div style="font-size: 12px; color: #00f0ff; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;">Connecting to Sethsrc Engine...</div>
+      <div style="font-size: 12px; color: var(--brand-blue, #00f0ff); font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;">Connecting to Sethsrc Engine...</div>
     </div>
 
     <div id="player-wrapper" style="width: 100%; height: 100%; position: relative;">
@@ -385,8 +397,92 @@ export function initSethsrcEngine(app: express.Express, baseDir: string) {
     res.send(html);
   });
 
+  // 8. Dynamic M3U Playlist Export for LG TV / VLC / IPTV Players (/api/playlist.m3u)
+  app.get(['/api/playlist.m3u', '/api/playlist.m3u8'], (req, res) => {
+    const host = req.get('host') || 'localhost:3000';
+    const protocol = req.protocol === 'https' || req.get('x-forwarded-proto') === 'https' ? 'https' : 'http';
+    const baseUrl = `${protocol}://${host}`;
+
+    let m3u = '#EXTM3U\n';
+    for (const channel of TV_CHANNELS) {
+      let streamUrl = channel.url;
+      if (streamUrl.startsWith('/')) {
+        streamUrl = `${baseUrl}${streamUrl}`;
+      }
+      const displayCat = (channel.category === 'Family' || channel.category === 'Kids' || channel.category === 'Family & Kids') ? 'Family & Kids' : channel.category;
+      const logoAttr = channel.logo ? ` tvg-logo="${channel.logo}"` : '';
+      const groupAttr = displayCat ? ` group-title="${displayCat}"` : '';
+      m3u += `#EXTINF:-1 tvg-id="${channel.id}" tvg-name="${channel.name}"${logoAttr}${groupAttr},${channel.name}\n`;
+      m3u += `${streamUrl}\n`;
+    }
+
+    res.setHeader('Content-Type', 'application/x-mpegURL; charset=utf-8');
+    res.setHeader('Content-Disposition', 'inline; filename="livetv_playlist.m3u"');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.send(m3u);
+  });
+
+  // 9. Stream Validator / Frame-rate & Health Check API (/api/validate-streams)
+  app.get('/api/validate-streams', async (req, res) => {
+    const channelId = req.query.channel as string;
+    const channelsToCheck = channelId
+      ? TV_CHANNELS.filter(c => c.id === channelId)
+      : TV_CHANNELS.slice(0, 20);
+
+    const results = await Promise.all(
+      channelsToCheck.map(async (c) => {
+        try {
+          const testUrl = c.url.startsWith('/')
+            ? `http://localhost:${process.env.PORT || 3000}${c.url}`
+            : c.url;
+
+          const controller = new AbortController();
+          const timeout = setTimeout(() => controller.abort(), 4000);
+
+          const resp = await fetch(testUrl, {
+            headers: { 'User-Agent': 'Mozilla/5.0' },
+            signal: controller.signal
+          });
+          clearTimeout(timeout);
+
+          const isOnline = resp.ok;
+          let has60fps = false;
+          if (isOnline) {
+            const body = await resp.text();
+            has60fps = body.includes('FRAME-RATE=60') || body.includes('FRAME-RATE=59.94') || body.includes('60fps');
+          }
+
+          return {
+            id: c.id,
+            name: c.name,
+            status: isOnline ? 'online' : 'error',
+            httpCode: resp.status,
+            native60fps: has60fps,
+            category: c.category
+          };
+        } catch (e: any) {
+          return {
+            id: c.id,
+            name: c.name,
+            status: 'unreachable',
+            error: e.name === 'AbortError' ? 'timeout' : e.message,
+            category: c.category
+          };
+        }
+      })
+    );
+
+    res.json({
+      timestamp: new Date().toISOString(),
+      checkedCount: results.length,
+      onlineCount: results.filter(r => r.status === 'online').length,
+      channels: results
+    });
+  });
+
   console.log('🚀 Sethsrc Streaming & Transcoding Engine initialized successfully');
   console.log(`📺 Sethsrc Stream directory: /stream`);
   console.log(`🎬 Sethsrc Movie Embed: /embed/movie/:id`);
   console.log(`📺 Sethsrc TV Embed: /embed/tv/:id/:season/:episode`);
+  console.log(`📑 Sethsrc Live M3U Playlist: /api/playlist.m3u`);
 }

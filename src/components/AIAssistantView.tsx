@@ -529,9 +529,9 @@ export const AIAssistantView: React.FC = () => {
                 </div>
               ) : (
                 <div className="flex gap-1 items-center px-2 py-1">
-                  <div className="w-1.5 h-1.5 rounded-sm bg-cyan-400 opacity-60" />
-                  <div className="w-1.5 h-1.5 rounded-sm bg-cyan-400 opacity-60" />
-                  <div className="w-1.5 h-1.5 rounded-sm bg-cyan-400 opacity-60" />
+                  <div className="w-1.5 h-1.5 rounded-sm bg-[var(--brand-blue)] opacity-60" />
+                  <div className="w-1.5 h-1.5 rounded-sm bg-[var(--brand-blue)] opacity-60" />
+                  <div className="w-1.5 h-1.5 rounded-sm bg-[var(--brand-blue)] opacity-60" />
                 </div>
               )}
             </div>

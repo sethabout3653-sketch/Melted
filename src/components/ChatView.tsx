@@ -37,6 +37,7 @@ import {
 import { UserAvatar } from './UserAvatar';
 import { processAvatarImage, persistAvatarUrl } from '../utils/avatarUtils';
 import { FontSettingsSection } from './FontSettingsSection';
+import { FrostHubLogo } from './FrostHubLogo';
 
 interface ChatViewProps {
   globalChat: any;
@@ -168,7 +169,7 @@ const AudioAttachmentPlayer: React.FC<{
             value={currentTime}
             onChange={handleSeek}
             disabled={!duration}
-            className="w-full h-1.5 bg-[#1f1f2e] rounded-lg appearance-none cursor-pointer accent-cyan-400 transition-all"
+            className="w-full h-1.5 bg-[#1f1f2e] rounded-lg appearance-none cursor-pointer accent-[var(--brand-blue)] transition-all"
           />
           <div className="flex items-center justify-between text-[10px] text-zinc-400 font-mono">
             <span>{formatTime(currentTime)}</span>
@@ -1204,14 +1205,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
         <div className="p-6 space-y-6 flex-1 min-h-0 overflow-y-auto">
           
           {/* Header Branding */}
-          <div className="flex items-center justify-center py-2 pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0 w-full">
-            <motion.img 
-              src="/assets/aistudio/Screenshot_2026-11-04_190449-removebg-preview_511312fb.png" 
-              alt="FrostHub Community" 
+          <div className="flex items-center justify-center py-4 pb-6 border-b border-slate-200 dark:border-slate-800 shrink-0 w-full">
+            <motion.div 
               whileHover={{ scale: 1.05 }}
               transition={{ type: "spring", stiffness: 400, damping: 10 }}
-              className="h-24 sm:h-28 max-w-full w-auto object-contain cursor-pointer drop-shadow-[0_0_12px_rgba(0,240,255,0.25)]"
-            />
+              className="cursor-pointer"
+            >
+              <FrostHubLogo variant="community" size="lg" />
+            </motion.div>
           </div>
 
           {/* CHANNELS SECTION */}
@@ -2529,13 +2530,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
             >
               <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
                 <div className="flex items-center">
-                  <motion.img 
-                    src="/assets/aistudio/Screenshot_2026-11-04_190449-removebg-preview_511312fb.png" 
-                    alt="FrostHub Community" 
+                  <motion.div 
                     whileHover={{ scale: 1.05 }}
                     transition={{ type: "spring", stiffness: 400, damping: 10 }}
-                    className="h-20 max-w-full w-auto object-contain cursor-pointer drop-shadow-[0_0_10px_rgba(0,240,255,0.25)]"
-                  />
+                    className="cursor-pointer"
+                  >
+                    <FrostHubLogo variant="community" size="md" />
+                  </motion.div>
                 </div>
                 <button
                   type="button"
