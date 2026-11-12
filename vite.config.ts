@@ -11,6 +11,14 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const groqKey = env.GROQ_API_KEY || process.env.GROQ_API_KEY || '';
   const geminiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+  const allowedHosts = [
+    'localhost',
+    '127.0.0.1',
+    '.googleusercontent.com',
+    '.aistudio.google.com',
+    '.run.app',
+    'sb-7bwx88dm7dok.vercel.run',
+  ];
 
   return {
     define: {
@@ -30,11 +38,16 @@ export default defineConfig(({ mode }) => {
     server: {
       host: '0.0.0.0',
       port: 3000,
-      // AI Studio previews use Google-hosted domains; Vercel remains supported.
-      // Keep this scoped instead of allowing every host (which weakens DNS-rebinding protection).
-      allowedHosts: ['.googleusercontent.com', '.run.app', 'sb-7bwx88dm7dok.vercel.run'],
+      strictPort: true,
+      allowedHosts,
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
+    },
+    preview: {
+      host: '0.0.0.0',
+      port: 4173,
+      strictPort: true,
+      allowedHosts,
     },
   };
 });
