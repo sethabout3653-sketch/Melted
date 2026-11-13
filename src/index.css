@@ -266,10 +266,19 @@ body.font-modern-clean .font-heading {
   background-color: var(--brand-blue-hover) !important;
 }
 
-/* Mobile focus zoom prevention: iOS zooms if font-size < 16px */
+/* Mobile focus zoom prevention: iOS zooms only on inputs/selects/textareas with font-size < 16px */
 @media screen and (max-width: 768px) {
-  input, textarea, select, .text-sm, .text-xs {
+  input, textarea, select {
     font-size: 16px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

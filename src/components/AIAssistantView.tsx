@@ -192,7 +192,7 @@ const AIMessageBubble: React.FC<AIMessageBubbleProps> = React.memo(({
             <button
               type="button"
               onClick={() => onCopy(msg.id, msg.text)}
-              className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:text-[var(--brand-blue)] flex items-center gap-1 cursor-pointer ml-3"
+              className="opacity-75 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity p-1 hover:text-[var(--brand-blue)] flex items-center gap-1 cursor-pointer ml-3"
               title="Copy response"
             >
               {isCopied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}

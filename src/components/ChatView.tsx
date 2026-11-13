@@ -426,7 +426,7 @@ const RemoteVideoPlayer: React.FC<{
         <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-slate-900 z-10 transition-opacity duration-200">
           <div className="relative flex items-center justify-center">
             <div className={`transition-all ${isSpeaking ? 'ring-4 ring-amber-500 rounded-2xl shadow-[0_0_30px_#f59e0b]' : ''}`}>
-              {renderAvatar(user, 'w-28 h-28 text-3xl')}
+              {renderAvatar(user, 'w-20 h-20 sm:w-28 sm:h-28 text-2xl sm:text-3xl')}
             </div>
           </div>
         </div>
@@ -647,7 +647,7 @@ const LocalVideoPlayer: React.FC<{
         <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-slate-900 z-10 transition-opacity duration-200">
           <div className="relative flex items-center justify-center">
             <div className={`transition-all ${isSpeaking ? 'ring-4 ring-amber-500 rounded-2xl shadow-[0_0_30px_#f59e0b]' : ''}`}>
-              {renderAvatar(user, 'w-28 h-28 text-3xl')}
+              {renderAvatar(user, 'w-20 h-20 sm:w-28 sm:h-28 text-2xl sm:text-3xl')}
             </div>
           </div>
         </div>
@@ -732,13 +732,13 @@ const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
   const canSubmit = Boolean(localText.trim() || pendingFile);
 
   return (
-    <form onSubmit={handleSubmit} className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus-within:border-cyan-400 dark:focus-within:border-cyan-400 rounded-2xl px-4 py-3 flex items-center gap-3 transition-colors shadow-lg">
+    <form onSubmit={handleSubmit} className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 focus-within:border-cyan-400 dark:focus-within:border-cyan-400 rounded-2xl px-2.5 sm:px-4 py-2 sm:py-3 flex items-center gap-1.5 sm:gap-3 transition-colors shadow-lg">
       <input
         type="text"
         value={localText}
         onChange={handleInputChange}
-        placeholder="Message #general..."
-        className="flex-1 bg-transparent text-base md:text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none py-2"
+        placeholder={activeChannel.startsWith('dm-') ? 'Message private chat...' : 'Message #general...'}
+        className="flex-1 min-w-0 bg-transparent text-base md:text-sm text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none py-1.5 sm:py-2"
       />
 
       {/* File Attachment Button */}
@@ -747,7 +747,7 @@ const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
         whileTap={{ scale: 0.9 }}
         type="button"
         onClick={onOpenFileUpload}
-        className="w-8 h-8 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer border border-transparent will-change-transform"
+        className="w-8 h-8 shrink-0 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer border border-transparent will-change-transform"
         title="Upload File or Media"
       >
         <PlusCircle className="w-5 h-5" />
@@ -759,7 +759,7 @@ const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
         whileTap={{ scale: 0.95 }}
         type="button"
         onClick={onToggleGiphy}
-        className={`px-2.5 py-1 rounded-md text-xs font-bold transition-colors duration-150 cursor-pointer flex items-center justify-center border will-change-transform ${
+        className={`shrink-0 px-2 sm:px-2.5 py-1 rounded-md text-xs font-bold transition-colors duration-150 cursor-pointer flex items-center justify-center border will-change-transform ${
           isGiphyOpen 
             ? 'bg-cyan-500 text-white shadow-sm border-cyan-300' 
             : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
@@ -775,7 +775,7 @@ const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
         whileTap={canSubmit ? { scale: 0.95 } : {}}
         type="submit"
         disabled={!canSubmit}
-        className={`px-3.5 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer border will-change-transform ${
+        className={`shrink-0 px-2.5 sm:px-3.5 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer border will-change-transform ${
           canSubmit
             ? 'bg-cyan-500 text-white shadow-md shadow-cyan-500/30 border-cyan-300' 
             : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 opacity-50 cursor-not-allowed border-transparent'
@@ -900,13 +900,28 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
 
 
-  // Filter messages for currently selected channel
+  const [messageSearch, setMessageSearch] = useState('');
+  const [isMobileSearchOpen, setIsMobileSearchOpen] = useState(false);
+
+  // Filter messages for currently selected channel and active search query
   const activeChannelMessages = useMemo(() => {
+    let channelMessages: any[] = [];
     if (activeChannel === 'text-general') {
-      return messages.filter((m: any) => !m.channel_id || m.channel_id === 'text-general' || m.channel_id === 'general');
+      channelMessages = messages.filter((m: any) => !m.channel_id || m.channel_id === 'text-general' || m.channel_id === 'general');
+    } else if (activeChannel.startsWith('dm-')) {
+      channelMessages = messages.filter((m: any) => m.channel_id === activeChannel);
     }
-    return [];
-  }, [messages, activeChannel]);
+
+    const q = messageSearch.trim().toLowerCase();
+    if (!q) return channelMessages;
+
+    return channelMessages.filter((m: any) => {
+      const content = (m.content || '').toLowerCase();
+      const sender = (m.sender_name || '').toLowerCase();
+      const attachmentName = (m.attachment_name || '').toLowerCase();
+      return content.includes(q) || sender.includes(q) || attachmentName.includes(q);
+    });
+  }, [messages, activeChannel, messageSearch]);
 
   // Active Typing Users for currently selected channel (General or DM)
   const typingUsers = useMemo(() => {
@@ -1302,7 +1317,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
   };
 
   return (
-    <div className="flex flex-1 min-h-0 h-full w-full bg-white/90 dark:bg-slate-950/80 text-slate-900 dark:text-slate-100 font-sans antialiased overflow-hidden select-none transition-colors max-h-[100dvh]">
+    <div className="flex flex-1 min-h-0 h-full w-full bg-white/90 dark:bg-slate-950/80 text-slate-900 dark:text-slate-100 font-sans antialiased overflow-hidden select-none transition-colors">
       
       {/* Hidden Global File Input */}
       <input 
@@ -1313,8 +1328,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
         accept="*"
       />
 
-      {/* LEFT NAVIGATION SIDEBAR - Desktop view */}
-      <aside className="hidden md:flex w-72 bg-slate-50 dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 flex-col justify-between shrink-0 overflow-hidden">
+      {/* LEFT NAVIGATION SIDEBAR - Desktop & Tablet view */}
+      <aside className="hidden md:flex w-60 lg:w-72 bg-slate-50 dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 flex-col justify-between shrink-0 overflow-hidden">
         <div className="p-6 space-y-6 flex-1 min-h-0 overflow-y-auto">
           
           {/* Header Branding */}
@@ -1443,65 +1458,126 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
             <div className="flex-1 min-h-0 flex flex-col min-w-0 relative overflow-hidden">
               
               {/* Top Header */}
-              <header className="h-20 px-8 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white/80 dark:bg-slate-950/80 backdrop-blur-md shrink-0 gap-6">
+              <header className="h-14 sm:h-16 md:h-20 px-3 sm:px-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white/80 dark:bg-slate-950/80 backdrop-blur-md shrink-0 gap-2 sm:gap-4">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   {/* Mobile Channels button */}
                   <button
                     type="button"
                     onClick={() => setIsMobileChannelsOpen(true)}
-                    className="md:hidden p-2 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                    className="md:hidden p-2 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
                     title="Open Channels"
                   >
                     <Menu className="w-5 h-5" />
                   </button>
 
+                  {activeChannel.startsWith('dm-') ? (
                     <>
-                      <Hash className="w-5 h-5 text-slate-900 dark:text-white shrink-0" />
-                      <span className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base truncate">general</span>
-                      <button
-                        type="button"
-                        onClick={() => setIsMobileMembersOpen(true)}
-                        className="px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-cyan-500 dark:text-cyan-300 border border-blue-100 dark:border-blue-800 flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
-                        title="View Online Members"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-sm bg-cyan-400" />
-                        <span>{users.length} online</span>
-                      </button>
+                      <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 text-emerald-500 shrink-0" />
+                      <span className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base truncate">Private Chat</span>
                     </>
+                  ) : (
+                    <>
+                      <Hash className="w-4 h-4 sm:w-5 sm:h-5 text-slate-900 dark:text-white shrink-0" />
+                      <span className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base truncate">general</span>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileMembersOpen(true)}
+                    className="px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-cyan-500 dark:text-cyan-300 border border-blue-100 dark:border-blue-800 flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+                    title="View Online Members"
+                  >
+                    <span className="w-1.5 h-1.5 rounded-sm bg-cyan-400" />
+                    <span>{users.length} online</span>
+                  </button>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                  {/* Mobile Search Toggle */}
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileSearchOpen((prev) => !prev)}
+                    className={`sm:hidden p-2 rounded-xl transition-colors cursor-pointer ${
+                      isMobileSearchOpen || messageSearch
+                        ? 'text-cyan-500 bg-cyan-50 dark:bg-cyan-500/10'
+                        : 'text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                    title="Search Messages"
+                  >
+                    <Search className="w-4 h-4" />
+                  </button>
 
-
+                  {/* Desktop/Tablet Search Input */}
                   <div className="relative hidden sm:block">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
                     <input 
-                      type="text" 
+                      type="text"
+                      value={messageSearch}
+                      onChange={(e) => setMessageSearch(e.target.value)}
                       placeholder="Search messages"
-                      className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-base md:text-xs text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-9 pr-3 py-2 w-36 sm:w-48 focus:outline-none focus:border-cyan-400 transition-all"
+                      className="bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-base md:text-xs text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-9 pr-7 py-2 w-36 md:w-44 lg:w-52 focus:outline-none focus:border-cyan-400 transition-all"
                     />
+                    {messageSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setMessageSearch('')}
+                        className="absolute right-2 top-2 p-0.5 text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
+                        title="Clear search"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
 
                   {/* Mobile / Tablet Members drawer toggle button */}
                   <button
                     type="button"
                     onClick={() => setIsMobileMembersOpen(true)}
-                    className="lg:hidden p-2 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+                    className="lg:hidden p-2 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer flex items-center gap-1 text-xs font-bold"
                     title="View Members"
                   >
                     <Users className="w-4 h-4" />
-                    <span className="hidden xs:inline text-[11px] text-slate-400">{users.length}</span>
+                    <span className="hidden sm:inline text-[11px] text-slate-400">{users.length}</span>
                   </button>
                 </div>
               </header>
 
+              {/* Mobile Expandable Search Bar */}
+              {isMobileSearchOpen && (
+                <div className="sm:hidden px-3 py-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/90 shrink-0">
+                  <div className="relative">
+                    <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={messageSearch}
+                      onChange={(e) => setMessageSearch(e.target.value)}
+                      placeholder="Search messages..."
+                      autoFocus
+                      className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-base text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-9 pr-8 py-2 focus:outline-none focus:border-cyan-400"
+                    />
+                    {messageSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setMessageSearch('')}
+                        className="absolute right-2.5 top-2.5 p-0.5 text-slate-400 hover:text-slate-700 dark:hover:text-white"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Chat Scroll Area (Messages) */}
               <div 
                 ref={chatScrollRef}
-                className="flex-1 min-h-0 overflow-y-auto p-6 space-y-6"
+                className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 md:p-6 space-y-4 sm:space-y-6"
               >
-                
-
+                {messageSearch.trim() && activeChannelMessages.length === 0 && (
+                  <div className="py-12 text-center text-xs font-medium text-slate-400 dark:text-slate-500">
+                    No messages matching &ldquo;{messageSearch}&rdquo;
+                  </div>
+                )}
 
                 {/* Messages List */}
                 <motion.div 
@@ -1523,17 +1599,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                           variants={entryVariants}
                           custom={idx}
                           layout
-                          className="flex items-start gap-3.5 group hover:bg-slate-50 dark:hover:bg-slate-900/40 -mx-4 px-4 py-1.5 rounded-xl transition-colors"
+                          className="flex items-start gap-2.5 sm:gap-3.5 group hover:bg-slate-50 dark:hover:bg-slate-900/40 -mx-2 sm:-mx-4 px-2 sm:px-4 py-1.5 rounded-xl transition-colors"
                         >
                           <div className="shrink-0">
-                            {renderAvatar({ username: displayUsername, avatar_color: displayAvatarColor, avatar_url: displayAvatarUrl }, 'w-10 h-10 text-xs')}
+                            {renderAvatar({ username: displayUsername, avatar_color: displayAvatarColor, avatar_url: displayAvatarUrl }, 'w-8 h-8 sm:w-10 sm:h-10 text-xs')}
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-baseline gap-2">
-                              <span className="font-extrabold text-slate-900 dark:text-white text-sm hover:underline cursor-pointer">
+                            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                              <span className="font-extrabold text-slate-900 dark:text-white text-sm hover:underline cursor-pointer truncate max-w-full">
                                 {displayUsername}
                               </span>
-                              <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                              <span className="text-[10px] text-slate-400 dark:text-slate-500 shrink-0">
                                 {msg.timestamp}
                               </span>
                             </div>
@@ -1550,7 +1626,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
                             if (category === 'audio') {
                               return (
-                                <div className="mt-2">
+                                <div className="mt-2 max-w-full">
                                   <AudioAttachmentPlayer
                                     url={msg.attachment_url}
                                     name={msg.attachment_name}
@@ -1562,9 +1638,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
                             if (category === 'video') {
                               return (
-                                <div className="mt-2 space-y-2 max-w-lg">
+                                <div className="mt-2 space-y-2 max-w-full sm:max-w-lg">
                                   {msg.attachment_name && (
-                                    <p className="text-xs font-semibold text-white truncate">
+                                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">
                                       {msg.attachment_name}
                                     </p>
                                   )}
@@ -1573,13 +1649,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                                     controls
                                     playsInline
                                     preload="metadata"
-                                    className="max-h-80 w-auto rounded-xl bg-black border border-white/10"
+                                    className="max-h-60 sm:max-h-80 max-w-full w-auto rounded-xl bg-black border border-slate-200 dark:border-white/10"
                                   />
                                   <div>
                                     <button
                                       type="button"
                                       onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'video.mp4')}
-                                      className="inline-flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white bg-[#1a1a24] hover:bg-[#252534] px-3 py-1.5 rounded-lg border border-white/10 transition-colors cursor-pointer"
+                                      className="inline-flex items-center gap-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:text-slate-950 dark:hover:text-white bg-slate-100 dark:bg-[#1a1a24] hover:bg-slate-200 dark:hover:bg-[#252534] px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 transition-colors cursor-pointer"
                                     >
                                       <Download className="w-3.5 h-3.5" />
                                       <span>Download</span>
@@ -1591,22 +1667,22 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
                             if (category === 'image') {
                               return (
-                                <div className="mt-2 space-y-2 inline-block max-w-md">
-                                  {msg.attachment_name && (
-                                    <p className="text-xs font-semibold text-white truncate">
+                                <div className="mt-2 space-y-2 block max-w-full sm:max-w-md">
+                                  {msg.attachment_name && msg.attachment_name !== 'gif.gif' && (
+                                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 truncate">
                                       {msg.attachment_name}
                                     </p>
                                   )}
                                   <img
                                     src={msg.attachment_url}
-                                    alt=""
-                                    className="max-h-80 w-auto object-contain rounded-xl border border-white/10 bg-black/20"
+                                    alt={msg.attachment_name || 'Attachment'}
+                                    className="max-h-60 sm:max-h-80 max-w-full w-auto object-contain rounded-xl border border-slate-200 dark:border-white/10 bg-black/5 dark:bg-black/20"
                                   />
                                   <div>
                                     <button
                                       type="button"
                                       onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'image.png')}
-                                      className="inline-flex items-center gap-1.5 text-xs text-zinc-300 hover:text-white bg-[#1a1a24] hover:bg-[#252534] px-3 py-1.5 rounded-lg border border-white/10 transition-colors cursor-pointer"
+                                      className="inline-flex items-center gap-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:text-slate-950 dark:hover:text-white bg-slate-100 dark:bg-[#1a1a24] hover:bg-slate-200 dark:hover:bg-[#252534] px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 transition-colors cursor-pointer"
                                     >
                                       <Download className="w-3.5 h-3.5" />
                                       <span>Download</span>
@@ -1617,8 +1693,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                             }
 
                             return (
-                              <div className="mt-2 p-3 bg-[#121218] border border-[#22222e] rounded-xl max-w-sm flex items-center justify-between gap-3">
-                                <span className="text-xs font-semibold text-white truncate max-w-[200px]">
+                              <div className="mt-2 p-2.5 sm:p-3 bg-slate-100 dark:bg-[#121218] border border-slate-200 dark:border-[#22222e] rounded-xl w-full max-w-full sm:max-w-sm flex items-center justify-between gap-3">
+                                <span className="text-xs font-semibold text-slate-900 dark:text-white truncate min-w-0 flex-1">
                                   {msg.attachment_name || 'Attachment'}
                                 </span>
                                 <button
@@ -1635,11 +1711,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
                         </div>
                         {msg.sender_id === currentUser.id && (
-                          <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                             <button
                               type="button"
                               onClick={() => deleteMessage(msg.id)}
-                              className="p-1.5 text-slate-400 hover:text-red-500 transition-colors"
+                              className="p-1.5 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
                               title="Delete message"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -1656,27 +1732,27 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
               {/* Attachment Preview Before Sending */}
               {pendingFile && (
-                <div className="shrink-0 mx-4 mb-2 p-3 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl relative shadow-lg">
-                  <div className="flex items-start gap-3">
+                <div className="shrink-0 mx-2.5 sm:mx-4 mb-2 p-2.5 sm:p-3 bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl relative shadow-lg">
+                  <div className="flex flex-wrap sm:flex-nowrap items-start gap-2.5 sm:gap-3">
                     {/* If Image: Show actual image preview */}
                     {pendingFile.type === 'image' && pendingFile.previewUrl && (
-                      <div className="relative">
+                      <div className="relative max-w-full">
                         <img 
                           src={pendingFile.previewUrl} 
                           alt="Attachment preview" 
-                          className="max-h-40 max-w-xs rounded-xl object-contain bg-black/40 border border-white/10" 
+                          className="max-h-36 sm:max-h-40 max-w-full sm:max-w-xs rounded-xl object-contain bg-black/40 border border-white/10" 
                         />
                       </div>
                     )}
 
                     {/* If Video: Show actual video player */}
                     {pendingFile.type === 'video' && pendingFile.previewUrl && (
-                      <div className="relative">
+                      <div className="relative max-w-full">
                         <video 
                           src={pendingFile.previewUrl} 
                           controls 
                           playsInline 
-                          className="max-h-40 max-w-xs rounded-xl bg-black border border-white/10" 
+                          className="max-h-36 sm:max-h-40 max-w-full sm:max-w-xs rounded-xl bg-black border border-white/10" 
                         />
                       </div>
                     )}
@@ -1694,10 +1770,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
                     {/* If File/Other: Clean file info */}
                     {pendingFile.type === 'file' && (
-                      <div className="flex items-center gap-2.5 p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                      <div className="flex-1 min-w-0 flex items-center gap-2.5 p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
                         <FileText className="w-6 h-6 text-cyan-400 shrink-0" />
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-slate-900 dark:text-white truncate max-w-xs">{pendingFile.filename}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">{pendingFile.filename}</p>
                           <p className="text-[11px] text-slate-500 dark:text-slate-400">{(pendingFile.size / 1024).toFixed(1)} KB</p>
                         </div>
                       </div>
@@ -1705,7 +1781,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
                     {/* Upload progress & info */}
                     {pendingFile.isUploading && (
-                      <div className="flex-1 min-w-0 self-center">
+                      <div className="flex-1 min-w-[140px] self-center">
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">
                             <span>Uploading...</span>
@@ -1725,7 +1801,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     <button 
                       type="button"
                       onClick={cancelPendingFile}
-                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                      className="ml-auto p-1.5 rounded-lg text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
                       title="Remove attachment"
                     >
                       <X className="w-4 h-4" />
@@ -1736,7 +1812,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
               {/* GIPHY POPOVER MODAL */}
               {isGiphyOpen && (
-                <div className="absolute bottom-20 left-4 right-4 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-4 max-w-xl mx-auto flex flex-col space-y-3 backdrop-blur-xl">
+                <div className="absolute bottom-16 sm:bottom-20 left-2 right-2 sm:left-4 sm:right-4 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-3 sm:p-4 max-w-xl mx-auto max-h-[min(68dvh,28rem)] flex flex-col space-y-2.5 sm:space-y-3 backdrop-blur-xl">
                   
                   {/* Modal Header */}
                   <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
@@ -1797,13 +1873,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                   </div>
 
                   {/* Native GIF Grid */}
-                  <div className="max-h-80 overflow-y-auto pr-1 bg-slate-50 dark:bg-slate-950 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
+                  <div className="flex-1 min-h-0 overflow-y-auto pr-1 bg-slate-50 dark:bg-slate-950 p-2 rounded-xl border border-slate-100 dark:border-slate-800">
                     {isGifsLoading ? (
                       <div className="py-12 flex items-center justify-center text-xs text-slate-400">
                         Loading GIFs...
                       </div>
                     ) : gifs.length > 0 ? (
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                         {gifs.map((gif) => (
                           <button
                             key={gif.id}
@@ -1830,7 +1906,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                 </div>
               )}
 
-              <div className="p-4 pt-0 shrink-0">
+              <div className="px-2.5 sm:px-4 pb-2.5 sm:pb-4 pt-0 shrink-0">
                 {/* Active Typing Indicator Bar */}
                 <AnimatePresence>
                   {typingUsers.length > 0 && (
@@ -1925,20 +2001,20 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
             {/* Mobile / Tablet Members Drawer Overlay */}
             {isMobileMembersOpen && (
-              <div className="fixed inset-0 z-50 lg:hidden flex justify-end animate-in fade-in duration-200">
+              <div className="fixed inset-0 z-[250] lg:hidden flex justify-end animate-in fade-in duration-200">
                 <div 
-                  className="fixed inset-0 bg-black/75 backdrop-blur-sm"
+                  className="fixed inset-0 bg-black/60 backdrop-blur-sm"
                   onClick={() => setIsMobileMembersOpen(false)}
                 />
-                <aside className="relative w-72 max-w-[85vw] h-full bg-[#08080a] border-l border-[#1a1a20] p-4 flex flex-col z-10 shadow-2xl animate-in slide-in-from-right duration-200">
-                  <div className="shrink-0 pb-3 flex items-center justify-between border-b border-[#14141a]">
-                    <div className="text-xs font-bold text-zinc-500 tracking-wider">
+                <aside className="relative w-72 max-w-[85vw] h-full bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 p-4 flex flex-col z-10 shadow-2xl animate-in slide-in-from-right duration-200">
+                  <div className="shrink-0 pb-3 flex items-center justify-between border-b border-slate-100 dark:border-slate-800">
+                    <div className="text-xs font-bold text-slate-400 dark:text-slate-500 tracking-wider">
                       <span>ONLINE — {users.length}</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => setIsMobileMembersOpen(false)}
-                      className="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer"
+                      className="p-1.5 rounded-lg text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                     >
                       <X className="w-4 h-4" />
                     </button>
@@ -1946,28 +2022,26 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
                   <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pt-3 pr-1">
                     {users.map((u: any) => (
-                      <div key={u.id} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-white/[0.04] transition-colors">
+                      <div key={u.id} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors">
                         <div className="relative shrink-0">
                           {renderAvatar(u, 'w-9 h-9 text-xs')}
-                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-sm bg-cyan-400 border-2 border-[#08080a]" />
+                          <div className="absolute bottom-0 right-0 w-2.5 h-2.5 rounded-sm bg-cyan-400 border-2 border-white dark:border-slate-900" />
                         </div>
 
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <span className="font-extrabold text-white text-xs truncate">
+                            <span className="font-extrabold text-slate-900 dark:text-white text-xs truncate">
                               {u.username}
                             </span>
                             {u.is_hand_raised && <Hand className="w-3 h-3 text-amber-500 shrink-0" />}
                             {u.id === currentUser.id && (
-                              <span className="text-[10px] text-zinc-500 font-medium shrink-0">
+                              <span className="text-[10px] text-slate-400 dark:text-slate-500 font-medium shrink-0">
                                 (you)
                               </span>
                             )}
                           </div>
                           {renderUserActivity(u.activity || (u.current_channel === 'video-general' ? 'In General Voice' : 'In #general'))}
                         </div>
-
-
                       </div>
                     ))}
                   </div>
@@ -1986,13 +2060,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
             <div className="flex-1 min-h-0 flex flex-col bg-slate-50 dark:bg-slate-950 relative overflow-hidden transition-colors">
               
               {/* Top Header */}
-              <div className="px-4 sm:px-6 py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between shrink-0 gap-2 transition-colors">
+              <div className="px-3 sm:px-6 py-2.5 sm:py-3.5 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between shrink-0 gap-2 transition-colors">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   {/* Mobile Channels button */}
                   <button
                     type="button"
                     onClick={() => setIsMobileChannelsOpen(true)}
-                    className="md:hidden p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                    className="md:hidden p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
                     title="Open Channels"
                   >
                     <Menu className="w-5 h-5" />
@@ -2011,10 +2085,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                   <button
                     onClick={toggleScreenShare}
-                    className={`px-3 sm:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 sm:gap-2 border transition-all cursor-pointer ${
+                    className={`px-2.5 sm:px-4 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 sm:gap-2 border transition-all cursor-pointer ${
                       isScreenSharing ? 'bg-cyan-500 border-cyan-500 text-white shadow-md shadow-cyan-500/30' : 'bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'
                     }`}
                   >
@@ -2026,18 +2100,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                   <button
                     type="button"
                     onClick={() => setIsMobileMembersOpen(true)}
-                    className="lg:hidden p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer flex items-center gap-1.5 text-xs font-bold"
+                    className="lg:hidden p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer flex items-center gap-1 text-xs font-bold"
                     title="View Members"
                   >
                     <Users className="w-4 h-4" />
-                    <span className="hidden xs:inline text-[11px] text-slate-500 dark:text-slate-400">{voiceUsers.length + (isInVideo ? 1 : 0)}</span>
+                    <span className="hidden sm:inline text-[11px] text-slate-500 dark:text-slate-400">{voiceUsers.length + (isInVideo ? 1 : 0)}</span>
                   </button>
                 </div>
               </div>
 
               {/* Screen Share Error Alert */}
               {screenShareError && (
-                <div className="mx-4 sm:mx-6 mt-3 p-3 bg-amber-500/15 border border-amber-500/30 rounded-2xl flex items-center justify-between text-xs text-amber-200 shrink-0">
+                <div className="mx-3 sm:mx-6 mt-3 p-3 bg-amber-500/15 border border-amber-500/30 rounded-2xl flex items-center justify-between text-xs text-amber-200 shrink-0">
                   <div className="flex items-center gap-2">
                     <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
                     <span>{screenShareError}</span>
@@ -2052,10 +2126,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
               )}
 
               {/* Voice / Video Stage Grid */}
-              <div className="flex-1 min-h-0 p-6 pb-28 flex items-center justify-center overflow-hidden">
+              <div className="flex-1 min-h-0 p-3 sm:p-6 pb-24 sm:pb-28 flex flex-col items-center justify-start sm:justify-center overflow-y-auto">
                 
                 {isInVideo ? (
-                  <div className="flex flex-wrap items-center justify-center gap-6 w-full max-w-6xl max-h-full overflow-y-auto p-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-wrap items-center justify-center gap-3 sm:gap-6 w-full max-w-6xl my-auto p-1 sm:p-2">
                     
                     {/* Local Camera Tile & Local Avatar Tile */}
                     {(() => {
@@ -2069,9 +2143,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                       return (
                         <>
                           {isLocalCameraActive && (
-                            <div className={`relative rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                            <div className={`relative mx-auto rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
                               isLocalDisplayingVideo && localIsVertical 
-                                ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
+                                ? 'aspect-[9/16] w-full max-w-[260px] sm:max-w-[320px] max-h-[520px]' 
                                 : 'aspect-video w-full max-w-[500px]'
                             } ${
                               isUserSpeaking(currentUser.id) ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-slate-200 dark:border-slate-800'
@@ -2112,23 +2186,23 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                               )}
 
                               {/* Bottom-Left Overlay */}
-                              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
-                                <div className="text-sm font-extrabold text-white">
+                              <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                                <div className="text-xs sm:text-sm font-extrabold text-white truncate">
                                   {currentUser.username} {isLocalDisplayingVideo ? '(You - Camera)' : '(You)'}
                                 </div>
-                                {isMuted && <MicOff className="w-4 h-4 text-red-400" />}
+                                {isMuted && <MicOff className="w-4 h-4 text-red-400 shrink-0" />}
                               </div>
                             </div>
                           )}
 
                           {/* Avatar Tile (shown when camera is completely off) */}
                           {!isLocalCameraActive && (
-                            <div className={`relative rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-xl aspect-video w-full max-w-[500px] ${
+                            <div className={`relative mx-auto rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-xl aspect-video w-full max-w-[500px] ${
                               isUserSpeaking(currentUser.id) ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-slate-200 dark:border-slate-800'
                             }`}>
                               <div className="relative flex items-center justify-center">
                                 <div className={`transition-all ${isUserSpeaking(currentUser.id) ? 'ring-4 ring-amber-500 rounded-2xl shadow-[0_0_30px_#f59e0b]' : ''}`}>
-                                  {renderAvatar(currentUser, 'w-28 h-28 text-3xl')}
+                                  {renderAvatar(currentUser, 'w-20 h-20 sm:w-28 sm:h-28 text-2xl sm:text-3xl')}
                                 </div>
                               </div>
 
@@ -2206,9 +2280,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                         <React.Fragment key={u.id}>
                           {/* Dedicated Remote Camera Tile (when camera is on) */}
                           {hasCamera && (
-                            <div className={`relative rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                            <div className={`relative mx-auto rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
                               isPeerDisplayingVideo && isPeerCameraVertical 
-                                ? 'aspect-[9/16] w-full max-w-[280px] sm:max-w-[320px] max-h-[520px]' 
+                                ? 'aspect-[9/16] w-full max-w-[260px] sm:max-w-[320px] max-h-[520px]' 
                                 : 'aspect-video w-full max-w-[500px]'
                             } ${
                               isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-slate-200 dark:border-slate-800'
@@ -2250,18 +2324,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                                 </div>
                               )}
 
-                              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
-                                <div className="text-sm font-extrabold text-white">
+                              <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                                <div className="text-xs sm:text-sm font-extrabold text-white truncate">
                                   {u.username} {isPeerDisplayingVideo ? '(Camera)' : ''}
                                 </div>
-                                {u.is_muted && <MicOff className="w-4 h-4 text-zinc-400" />}
+                                {u.is_muted && <MicOff className="w-4 h-4 text-zinc-400 shrink-0" />}
                               </div>
                             </div>
                           )}
 
                           {/* Dedicated Remote Screen Share Tile (when screen share is on) */}
                           {hasScreen && (
-                            <div className="relative rounded-3xl overflow-hidden bg-slate-900 dark:bg-slate-900 border border-cyan-400/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
+                            <div className="relative mx-auto rounded-3xl overflow-hidden bg-slate-900 dark:bg-slate-900 border border-cyan-400/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
                               <RemoteVideoPlayer 
                                 stream={scrStream} 
                                 username={`${u.username}'s Screen`}
@@ -2269,10 +2343,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                                 onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [`${u.id}-screen`]: vert }))}
                                 isScreen={true}
                               />
-                              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
-                                <div className="text-sm font-extrabold text-white flex items-center gap-2">
-                                  <Monitor className="w-4 h-4 text-cyan-300" />
-                                  <span>{u.username}&apos;s Screen</span>
+                              <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                                <div className="text-xs sm:text-sm font-extrabold text-white flex items-center gap-2 truncate">
+                                  <Monitor className="w-4 h-4 text-cyan-300 shrink-0" />
+                                  <span className="truncate">{u.username}&apos;s Screen</span>
                                 </div>
                               </div>
                             </div>
@@ -2280,12 +2354,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
                           {/* Dedicated Remote Avatar Tile (shown when camera is off so peer is ALWAYS visible, even during screen share) */}
                           {!hasCamera && (
-                            <div className={`relative rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-xl aspect-video w-full max-w-[500px] ${
+                            <div className={`relative mx-auto rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-xl aspect-video w-full max-w-[500px] ${
                               isPeerSpeaking ? 'border-amber-500 shadow-[0_0_25px_rgba(245,158,11,0.3)]' : 'border-slate-200 dark:border-slate-800'
                             }`}>
                               <div className="relative flex items-center justify-center">
                                 <div className={`transition-all ${isPeerSpeaking ? 'ring-4 ring-amber-500 rounded-2xl shadow-[0_0_30px_#f59e0b]' : ''}`}>
-                                  {renderAvatar(u, 'w-28 h-28 text-3xl')}
+                                  {renderAvatar(u, 'w-20 h-20 sm:w-28 sm:h-28 text-2xl sm:text-3xl')}
                                 </div>
                               </div>
 
@@ -2296,11 +2370,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                                   <span>Hand Raised</span>
                                 </div>
                               )}
-                              <div className="absolute inset-x-0 bottom-0 p-4 bg-gradient-to-t from-slate-950/80 via-slate-950/30 to-transparent flex items-end justify-between z-20 pointer-events-none">
-                                <div className="text-sm font-extrabold text-white">
+                              <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4 bg-gradient-to-t from-slate-950/80 via-slate-950/30 to-transparent flex items-end justify-between z-20 pointer-events-none">
+                                <div className="text-xs sm:text-sm font-extrabold text-white truncate">
                                   {u.username}
                                 </div>
-                                {u.is_muted && <MicOff className="w-4 h-4 text-slate-300" />}
+                                {u.is_muted && <MicOff className="w-4 h-4 text-slate-300 shrink-0" />}
                               </div>
                             </div>
                           )}
@@ -2311,11 +2385,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                   </div>
                 ) : (
                   /* Connecting State while auto-joining */
-                  <div className="text-center space-y-4 max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-8 rounded-3xl shadow-xl">
+                  <div className="my-auto text-center space-y-4 max-w-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 sm:p-8 mx-2 rounded-3xl shadow-xl">
                     <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-900/30 border border-blue-100 dark:border-blue-800 text-cyan-500 dark:text-cyan-300 flex items-center justify-center mx-auto shadow-sm">
                       <Mic className="w-8 h-8" />
                     </div>
-                    <h3 className="text-xl font-black text-slate-900 dark:text-white font-heading">Connecting to General Voice...</h3>
+                    <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white font-heading">Connecting to General Voice...</h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400">Please allow microphone access when prompted.</p>
                   </div>
                 )}
@@ -2324,12 +2398,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
               {/* Floating Bottom In-Call Control Bar - Adapts to Mobile, Console, and Desktop */}
               {isInVideo && (
-                <div className="absolute bottom-4 sm:bottom-6 inset-x-0 flex items-center justify-center gap-2 sm:gap-4 z-30 px-3 pointer-events-auto">
-                  <div className="flex items-center gap-2.5 sm:gap-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-2.5 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl transition-colors">
+                <div className="absolute bottom-3 sm:bottom-6 inset-x-0 flex items-center justify-center z-30 px-2 sm:px-3 pointer-events-auto">
+                  <div className="flex items-center gap-1.5 sm:gap-4 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md p-2 sm:p-2.5 rounded-2xl sm:rounded-3xl border border-slate-200 dark:border-slate-800 shadow-2xl transition-colors max-w-[calc(100vw-1rem)]">
                     {/* Mic Button */}
                     <button 
                       onClick={toggleMute}
-                      className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
+                      className={`w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer shrink-0 ${
                         isMuted ? 'bg-red-600 text-white shadow-red-600/30' : 'bg-cyan-500 text-white shadow-cyan-500/30'
                       }`}
                       title={isMuted ? 'Unmute Mic' : 'Mute Mic'}
@@ -2340,7 +2414,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     {/* Camera Toggle Button */}
                     <button 
                       onClick={() => toggleCamera()}
-                      className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
+                      className={`w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer shrink-0 ${
                         isVideoEnabled 
                           ? 'bg-cyan-500 text-white shadow-cyan-500/30 hover:bg-cyan-400' 
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-cyan-500 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
@@ -2353,7 +2427,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     {/* Screen Share Button */}
                     <button 
                       onClick={toggleScreenShare}
-                      className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
+                      className={`w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer shrink-0 ${
                         isScreenSharing 
                           ? 'bg-cyan-500 text-white shadow-cyan-500/30 hover:bg-cyan-400' 
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-cyan-500 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
@@ -2366,7 +2440,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     {/* Raise Hand Button */}
                     <button 
                       onClick={toggleHandRaise}
-                      className={`w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer ${
+                      className={`w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex items-center justify-center transition-all shadow-lg cursor-pointer shrink-0 ${
                         currentUser.is_hand_raised 
                           ? 'bg-amber-500 text-white shadow-amber-600/30 hover:bg-amber-400' 
                           : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-amber-500 dark:hover:text-amber-400 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
@@ -2379,7 +2453,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     {/* Disconnect Button */}
                     <button 
                       onClick={handleStopVoice}
-                      className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-red-600 text-white flex items-center justify-center shadow-lg shadow-red-600/30 hover:bg-red-700 transition-all cursor-pointer"
+                      className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-red-600 text-white flex items-center justify-center shadow-lg shadow-red-600/30 hover:bg-red-700 transition-all cursor-pointer shrink-0"
                       title="Disconnect"
                     >
                       <PhoneOff className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -2466,7 +2540,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
             {/* Mobile / Tablet Members Drawer Overlay for Voice Channel */}
             {isMobileMembersOpen && (
-              <div className="fixed inset-0 z-50 lg:hidden flex justify-end animate-in fade-in duration-200">
+              <div className="fixed inset-0 z-[250] lg:hidden flex justify-end animate-in fade-in duration-200">
                 <div 
                   className="fixed inset-0 bg-black/60 backdrop-blur-sm"
                   onClick={() => setIsMobileMembersOpen(false)}
@@ -2639,18 +2713,25 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
               </div>
 
               {/* Mobile User Footer */}
-              <div className="mt-auto pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3 min-w-0">
+              <div className="mt-auto pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileChannelsOpen(false);
+                    setIsProfileModalOpen(true);
+                  }}
+                  className="flex items-center gap-3 min-w-0 flex-1 text-left p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                >
                   {renderAvatar(currentUser, 'w-9 h-9 text-xs')}
                   <div className="min-w-0">
                     <div className="font-black text-slate-900 dark:text-white text-xs truncate">{currentUser.username}</div>
-                    <div className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Active</div>
+                    <div className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Edit Profile</div>
                   </div>
-                </div>
+                </button>
                 <button
                   type="button"
                   onClick={toggleMute}
-                  className={`p-2 rounded-xl border ${isMuted ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-transparent'}`}
+                  className={`p-2 rounded-xl border shrink-0 cursor-pointer ${isMuted ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-transparent'}`}
                 >
                   {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                 </button>
@@ -2662,8 +2743,8 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
       {/* PROFILE EDIT MODAL */}
       {isProfileModalOpen && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-150">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-6 sm:p-7 rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar shadow-2xl space-y-6">
+        <div className="fixed inset-0 z-[260] flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-in fade-in duration-150">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-5 sm:p-7 rounded-3xl w-full max-w-lg max-h-[90dvh] overflow-y-auto custom-scrollbar shadow-2xl space-y-6">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
               <h3 className="text-lg font-black text-slate-900 dark:text-white font-heading">
                 User Profile Settings
@@ -2733,7 +2814,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 placeholder="Enter username..."
-                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-sm text-slate-900 dark:text-white rounded-2xl px-4 py-3 focus:outline-none focus:border-cyan-400 transition-colors font-bold"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-base md:text-sm text-slate-900 dark:text-white rounded-2xl px-4 py-3 focus:outline-none focus:border-cyan-400 transition-colors font-bold"
               />
             </div>
 
@@ -2742,7 +2823,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
               <label className="text-xs font-black uppercase tracking-widest text-slate-400 dark:text-slate-500">
                 Avatar Theme Accent
               </label>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {['var(--vibrant-cyan)', '#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#8b5cf6', '#ef4444'].map((color) => (
                   <button
                     key={color}

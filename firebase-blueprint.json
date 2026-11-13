@@ -1,20 +1,5 @@
 {
   "entities": {
-    "User": {
-      "title": "User",
-      "description": "Application user profile",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string", "maxLength": 128 },
-        "username": { "type": "string", "maxLength": 64 },
-        "avatar_color": { "type": "string", "maxLength": 32 },
-        "avatar_url": { "type": "string", "maxLength": 512 },
-        "current_channel": { "type": "string", "maxLength": 64 },
-        "activity": { "type": "string", "maxLength": 128 },
-        "updated_at": { "type": "number" }
-      },
-      "required": ["id", "username"]
-    },
     "Message": {
       "title": "Message",
       "description": "Chat or direct message item",
@@ -25,9 +10,9 @@
         "sender_id": { "type": "string", "maxLength": 128 },
         "sender_name": { "type": "string", "maxLength": 64 },
         "avatar_color": { "type": "string", "maxLength": 32 },
-        "sender_avatar_url": { "type": "string", "maxLength": 512 },
+        "sender_avatar_url": { "type": "string", "maxLength": 131072 },
         "content": { "type": "string", "maxLength": 2048 },
-        "attachment_url": { "type": "string", "maxLength": 512 },
+        "attachment_url": { "type": "string", "maxLength": 524288 },
         "attachment_type": { "type": "string", "maxLength": 64 },
         "attachment_name": { "type": "string", "maxLength": 128 },
         "timestamp": { "type": "string", "maxLength": 64 },
@@ -47,13 +32,9 @@
     }
   },
   "firestore": {
-    "/users/{userId}": {
-      "schema": { "$ref": "#/entities/User" },
-      "description": "User profiles collection"
-    },
     "/messages/{messageId}": {
       "schema": { "$ref": "#/entities/Message" },
-      "description": "Global and private chat messages collection"
+      "description": "Global and private chat messages collection (Firebase persists chat only)"
     },
     "/deletions/{messageId}": {
       "schema": { "$ref": "#/entities/Deletion" },
@@ -61,3 +42,4 @@
     }
   }
 }
+

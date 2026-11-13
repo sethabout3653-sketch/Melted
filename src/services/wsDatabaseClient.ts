@@ -1,20 +1,68 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { DbUser, DbMessage } from '../server/wsDatabase';
 import { db, auth } from './firebase';
-import { 
-  collection, 
-  doc, 
-  setDoc, 
-  deleteDoc, 
-  onSnapshot, 
-  query, 
-  where, 
-  orderBy, 
-  limit, 
-  serverTimestamp, 
+import {
+  collection,
+  doc,
+  setDoc,
+  deleteDoc,
+  onSnapshot,
+  query,
+  where,
+  orderBy,
+  limit,
   getDocs,
-  writeBatch
+  getDocFromServer,
+  writeBatch,
 } from 'firebase/firestore';
+
+enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+    tenantId?: string | null;
+    providerInfo?: {
+      providerId?: string | null;
+      email?: string | null;
+    }[];
+  };
+}
+
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid,
+      email: auth.currentUser?.email,
+      emailVerified: auth.currentUser?.emailVerified,
+      isAnonymous: auth.currentUser?.isAnonymous,
+      tenantId: auth.currentUser?.tenantId,
+      providerInfo:
+        auth.currentUser?.providerData?.map((provider) => ({
+          providerId: provider.providerId,
+          email: provider.email,
+        })) || [],
+    },
+    operationType,
+    path,
+  };
+  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  throw new Error(JSON.stringify(errInfo));
+}
 
 export interface RtcSignalPayload {
   fromUserId: string;
@@ -48,12 +96,11 @@ function deduplicateUsers(users: DbUser[], currentUserId?: string): DbUser[] {
 
 /**
  * Recursively removes all undefined values from an object to ensure Firebase compatibility.
- * Firebase Firestore throws errors if it encounters undefined.
  */
 function cleanData<T>(obj: T): T {
   if (obj === null || typeof obj !== 'object') return obj;
   const result: any = Array.isArray(obj) ? [] : {};
-  Object.keys(obj as any).forEach(key => {
+  Object.keys(obj as any).forEach((key) => {
     const value = (obj as any)[key];
     if (value === undefined) return;
     if (value !== null && typeof value === 'object') {
@@ -65,31 +112,24 @@ function cleanData<T>(obj: T): T {
   return result as T;
 }
 
-function mergeMessages(existing: DbMessage[], incoming: DbMessage[], currentUserId?: string, outgoingQueueIds?: Set<string>, deletedIds?: Set<string>): DbMessage[] {
+function mergeMessages(
+  existing: DbMessage[],
+  incoming: DbMessage[],
+  deletedIds?: Set<string>
+): DbMessage[] {
   const map = new Map<string, DbMessage>();
 
-  // Add existing messages if not tombstoned
-  existing.forEach(m => {
+  existing.forEach((m) => {
     if (m && m.id && (!deletedIds || !deletedIds.has(m.id))) {
       map.set(m.id, m);
     }
   });
 
-  // Merge incoming messages if not tombstoned
-  incoming.forEach(m => {
+  incoming.forEach((m) => {
     if (m && m.id && (!deletedIds || !deletedIds.has(m.id))) {
       map.set(m.id, m);
     }
   });
-
-  // Preserve any outgoing queue items
-  if (outgoingQueueIds && outgoingQueueIds.size > 0) {
-    existing.forEach(m => {
-      if (m && m.id && outgoingQueueIds.has(m.id) && (!deletedIds || !deletedIds.has(m.id))) {
-        map.set(m.id, m);
-      }
-    });
-  }
 
   return Array.from(map.values()).sort((a, b) => (a.created_at || 0) - (b.created_at || 0));
 }
@@ -108,7 +148,10 @@ export function resolveWebSocketUrl(): string {
         return `${proto}//${clean}/ws-db`;
       }
 
-      const storedWs = localStorage.getItem('frosthub_ws_url') || localStorage.getItem('frosthub_server_url') || localStorage.getItem('frosthub_backend_url');
+      const storedWs =
+        localStorage.getItem('frosthub_ws_url') ||
+        localStorage.getItem('frosthub_server_url') ||
+        localStorage.getItem('frosthub_backend_url');
       if (storedWs) {
         if (storedWs.startsWith('ws://') || storedWs.startsWith('wss://')) {
           return storedWs.endsWith('/ws-db') ? storedWs : `${storedWs.replace(/\/$/, '')}/ws-db`;
@@ -142,31 +185,17 @@ export function resolveWebSocketUrl(): string {
   }
 }
 
-export function useWebSocketDatabase(currentUser: { 
-  id: string; 
-  username: string; 
-  avatar_color: string; 
-  avatar_url?: string; 
+export function useWebSocketDatabase(currentUser: {
+  id: string;
+  username: string;
+  avatar_color: string;
+  avatar_url?: string;
   current_channel?: string;
   activity?: string;
 }) {
   const [users, setUsers] = useState<DbUser[]>([]);
-  const [messages, setMessages] = useState<DbMessage[]>(() => {
-    try {
-      const CACHE_VERSION = 'frosthub_msg_v4';
-      if (localStorage.getItem('frosthub_cache_v') !== CACHE_VERSION) {
-        localStorage.removeItem('frosthub_db_messages');
-        localStorage.setItem('frosthub_cache_v', CACHE_VERSION);
-        return [];
-      }
-      const saved = localStorage.getItem('frosthub_db_messages');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch {}
-    return [];
-  });
+  // Chat messages live in Firebase Firestore and are relayed live via WebSockets (no localStorage message store)
+  const [messages, setMessages] = useState<DbMessage[]>([]);
   const [isWsConnected, setIsWsConnected] = useState(false);
   const [isHttpSyncActive, setIsHttpSyncActive] = useState(false);
   const [isFirebaseActive, setIsFirebaseActive] = useState(false);
@@ -175,24 +204,8 @@ export function useWebSocketDatabase(currentUser: {
   const reconnectTimeoutRef = useRef<any>(null);
   const pingIntervalRef = useRef<any>(null);
   const httpSyncIntervalRef = useRef<any>(null);
-  const outgoingQueueRef = useRef<string[]>((() => {
-    try {
-      const saved = localStorage.getItem('frosthub_chat_queue');
-      return saved ? JSON.parse(saved) : [];
-    } catch { return []; }
-  })());
-  const deletedIdsRef = useRef<Set<string>>((() => {
-    try {
-      const CACHE_KEY = 'frosthub_del_v3';
-      if (localStorage.getItem('frosthub_del_ver') !== CACHE_KEY) {
-        localStorage.removeItem('frosthub_deleted_message_ids');
-        localStorage.setItem('frosthub_del_ver', CACHE_KEY);
-        return new Set();
-      }
-      const saved = localStorage.getItem('frosthub_deleted_message_ids');
-      return saved ? new Set(JSON.parse(saved)) : new Set();
-    } catch { return new Set(); }
-  })());
+  const outgoingQueueRef = useRef<string[]>([]);
+  const deletedIdsRef = useRef<Set<string>>(new Set());
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
   const processedRtcSignalsRef = useRef<Set<string>>(new Set());
 
@@ -224,57 +237,74 @@ export function useWebSocketDatabase(currentUser: {
     });
   }, [currentUser.id, currentUser.username, currentUser.avatar_color, currentUser.avatar_url]);
 
-  // --- Firebase Listeners (Only for text-general message persistence and deletions) ---
+  // --- Firebase Listeners (ONLY saves & syncs persisted chat messages and deletions) ---
   useEffect(() => {
     let unsubscribeMessages: (() => void) | null = null;
     let unsubscribeDeletions: (() => void) | null = null;
+    let cancelled = false;
+
+    const testConnection = async () => {
+      try {
+        await getDocFromServer(doc(db, 'test', 'connection'));
+      } catch (error) {
+        if (error instanceof Error && error.message.includes('the client is offline')) {
+          console.error('Please check your Firebase configuration.');
+        }
+      }
+    };
 
     const setupFirebase = async () => {
       try {
+        await testConnection();
+        if (cancelled) return;
         setIsFirebaseActive(true);
 
-        // 1. Messages (Authoritative snapshot for text-general hydration + incremental updates)
-        const msgQuery = query(collection(db, 'messages'), orderBy('created_at', 'desc'), limit(100));
-        unsubscribeMessages = onSnapshot(msgQuery, (snapshot) => {
-          setMessages(prev => {
+        // 1. Messages (Authoritative chat persistence across all channels)
+        const msgQuery = query(collection(db, 'messages'), orderBy('created_at', 'desc'), limit(200));
+        unsubscribeMessages = onSnapshot(
+          msgQuery,
+          (snapshot) => {
             const incoming: DbMessage[] = [];
-            snapshot.forEach(doc => incoming.push(doc.data() as DbMessage));
-            
-            // Handle explicit deletions from docChanges for 0ms reactivity
-            snapshot.docChanges().forEach(change => {
+            snapshot.forEach((msgDoc) => incoming.push(msgDoc.data() as DbMessage));
+
+            snapshot.docChanges().forEach((change) => {
               if (change.type === 'removed') {
                 deletedIdsRef.current.add(change.doc.id);
-                try {
-                  localStorage.setItem('frosthub_deleted_message_ids', JSON.stringify(Array.from(deletedIdsRef.current)));
-                } catch {}
               }
             });
 
-            return mergeMessages(prev, incoming.reverse(), currentUserRef.current.id, undefined, deletedIdsRef.current);
-          });
-        }, (err) => {
-          console.warn('[Firebase] Messages sync blocked or quota exceeded:', err);
-        });
+            setMessages((prev) => mergeMessages(prev, incoming.reverse(), deletedIdsRef.current));
+          },
+          (err) => {
+            setIsFirebaseActive(false);
+            handleFirestoreError(err, OperationType.GET, 'messages');
+          }
+        );
 
         // 2. Shared Tombstones (Permanent Deletion Sync)
-        unsubscribeDeletions = onSnapshot(collection(db, 'deletions'), (snapshot) => {
-          snapshot.docChanges().forEach(change => {
-            if (change.type === 'added') {
-              const deletionId = change.doc.id;
-              if (!deletedIdsRef.current.has(deletionId)) {
-                deletedIdsRef.current.add(deletionId);
-                try {
-                  localStorage.setItem('frosthub_deleted_message_ids', JSON.stringify(Array.from(deletedIdsRef.current)));
-                } catch {}
-                // Trigger local update to remove message from state if it exists
-                setMessages(prev => prev.filter(m => m.id !== deletionId));
+        unsubscribeDeletions = onSnapshot(
+          collection(db, 'deletions'),
+          (snapshot) => {
+            const newlyDeleted: string[] = [];
+            snapshot.docChanges().forEach((change) => {
+              if (change.type === 'added') {
+                const deletionId = change.doc.id;
+                if (!deletedIdsRef.current.has(deletionId)) {
+                  deletedIdsRef.current.add(deletionId);
+                  newlyDeleted.push(deletionId);
+                }
               }
+            });
+            if (newlyDeleted.length > 0) {
+              setMessages((prev) => prev.filter((m) => !deletedIdsRef.current.has(m.id)));
             }
-          });
-        });
-
+          },
+          (err) => {
+            handleFirestoreError(err, OperationType.GET, 'deletions');
+          }
+        );
       } catch (err) {
-        console.warn('[Firebase] Initialization failed, falling back to WebSocket:', err);
+        console.warn('[Firebase] Initialization failed, WebSocket relay continues:', err);
         setIsFirebaseActive(false);
       }
     };
@@ -282,6 +312,7 @@ export function useWebSocketDatabase(currentUser: {
     setupFirebase();
 
     return () => {
+      cancelled = true;
       if (unsubscribeMessages) unsubscribeMessages();
       if (unsubscribeDeletions) unsubscribeDeletions();
     };
@@ -318,13 +349,13 @@ export function useWebSocketDatabase(currentUser: {
   const setCallSyncHandler = useCallback((fn: (fromUserId: string, data: any) => void) => {
     onCallSyncRef.current = fn;
   }, []);
-  const setMediaHandlers = useCallback((
-    onJoined: (userId: string, channel: string) => void,
-    onLeft: (userId: string, channel: string) => void
-  ) => {
-    onUserJoinedMediaRef.current = onJoined;
-    onUserLeftMediaRef.current = onLeft;
-  }, []);
+  const setMediaHandlers = useCallback(
+    (onJoined: (userId: string, channel: string) => void, onLeft: (userId: string, channel: string) => void) => {
+      onUserJoinedMediaRef.current = onJoined;
+      onUserLeftMediaRef.current = onLeft;
+    },
+    []
+  );
 
   const safeSend = useCallback((payload: any) => {
     const raw = typeof payload === 'string' ? payload : JSON.stringify(payload);
@@ -334,11 +365,10 @@ export function useWebSocketDatabase(currentUser: {
       } catch (err) {
         console.warn('[wsDatabaseClient] Send failed, queueing:', err);
         outgoingQueueRef.current.push(raw);
-        localStorage.setItem('frosthub_chat_queue', JSON.stringify(outgoingQueueRef.current));
       }
     } else {
       outgoingQueueRef.current.push(raw);
-      localStorage.setItem('frosthub_chat_queue', JSON.stringify(outgoingQueueRef.current));
+      if (outgoingQueueRef.current.length > 50) outgoingQueueRef.current.shift();
     }
   }, []);
 
@@ -353,23 +383,22 @@ export function useWebSocketDatabase(currentUser: {
         if (data.type === 'SYNC_USERS' && Array.isArray(data.users)) {
           setUsers(deduplicateUsers(data.users, currentUserRef.current.id));
         } else if (data.type === 'SYNC_MESSAGES' && Array.isArray(data.messages)) {
-          setMessages(prev => mergeMessages(prev, data.messages, currentUserRef.current.id));
+          setMessages((prev) => mergeMessages(prev, data.messages, deletedIdsRef.current));
         } else if (data.type === 'SYNC_DELETIONS' && data.deletedId) {
           deletedIdsRef.current.add(data.deletedId);
-          try { localStorage.setItem('frosthub_deleted_message_ids', JSON.stringify(Array.from(deletedIdsRef.current))); } catch {}
-          setMessages(prev => prev.filter(m => m && m.id !== data.deletedId));
+          setMessages((prev) => prev.filter((m) => m && m.id !== data.deletedId));
+        } else if (data.type === 'DB_CLEAR_MESSAGES') {
+          setMessages([]);
+          deletedIdsRef.current.clear();
         }
       };
     } catch {}
-    return () => { if (broadcastChannelRef.current) broadcastChannelRef.current.close(); };
+    return () => {
+      if (broadcastChannelRef.current) broadcastChannelRef.current.close();
+    };
   }, []);
 
-  // Save messages to local cache for instant cold rendering
-  useEffect(() => {
-    try { localStorage.setItem('frosthub_db_messages', JSON.stringify(messages)); } catch {}
-  }, [messages]);
-
-  // HTTP Fallback Polling Loop
+  // HTTP Fallback Polling Loop (ONLY for users presence & RTC signals — never touches chat messages)
   const fetchHttpSync = useCallback(async () => {
     try {
       const u = currentUserRef.current;
@@ -384,36 +413,6 @@ export function useWebSocketDatabase(currentUser: {
             const hasMe = serverUsers.some((user: DbUser) => user.id === me.id);
             const nextUsers = hasMe ? serverUsers : [me, ...serverUsers];
             setUsers(deduplicateUsers(nextUsers, me.id));
-          }
-          if (Array.isArray(data.messages)) {
-            const serverIds = new Set(data.messages.map((m: any) => m.id));
-            const now = Date.now();
-            const freshThreshold = 2 * 60 * 60 * 1000;
-            const unsynced = messages.filter(m => 
-              m.sender_id === u.id && 
-              !serverIds.has(m.id) && 
-              !deletedIdsRef.current.has(m.id) &&
-              (now - (m.created_at || 0)) < freshThreshold
-            );
-            if (unsynced.length > 0) {
-              unsynced.forEach(msg => {
-                fetch('/api/ws-db/message', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ row: msg }),
-                }).catch(() => {});
-              });
-            }
-            setMessages(prev => {
-              const pendingIds = new Set<string>();
-              outgoingQueueRef.current.forEach(raw => {
-                try {
-                  const p = JSON.parse(raw);
-                  if (p.type === 'SQL_INSERT' && p.row?.id) pendingIds.add(p.row.id);
-                } catch {}
-              });
-              return mergeMessages(prev, data.messages, u.id, pendingIds, deletedIdsRef.current);
-            });
           }
         }
       }
@@ -438,19 +437,23 @@ export function useWebSocketDatabase(currentUser: {
                   processedRtcSignalsRef.current.delete(first);
                 }
                 if (s.type === 'RTC_SIGNAL' && onRtcSignalRef.current) onRtcSignalRef.current(s.fromUserId, s.signal);
-                else if (s.type === 'USER_CALL' && onUserCallRef.current) onUserCallRef.current(s.fromUserId, s.fromUserName || 'Player', s.callType || 'audio');
-                else if (s.type === 'CALL_ANSWERED' && onCallAnsweredRef.current) onCallAnsweredRef.current(s.fromUserId, s.fromUserName || 'Player', s.callType || 'audio');
+                else if (s.type === 'USER_CALL' && onUserCallRef.current)
+                  onUserCallRef.current(s.fromUserId, s.fromUserName || 'Player', s.callType || 'audio');
+                else if (s.type === 'CALL_ANSWERED' && onCallAnsweredRef.current)
+                  onCallAnsweredRef.current(s.fromUserId, s.fromUserName || 'Player', s.callType || 'audio');
                 else if (s.type === 'CALL_ENDED' && onCallEndedRef.current) onCallEndedRef.current(s.fromUserId);
-                else if (s.type === 'DIRECT_RTC_SIGNAL' && onDirectRtcSignalRef.current) onDirectRtcSignalRef.current(s.fromUserId, s.signal);
-                else if (s.type === 'VOICEMAIL_NOTIFICATION' && onVoicemailNotificationRef.current) onVoicemailNotificationRef.current(s.fromUserId, s.fromUserName || 'Player', s.voicemail);
+                else if (s.type === 'DIRECT_RTC_SIGNAL' && onDirectRtcSignalRef.current)
+                  onDirectRtcSignalRef.current(s.fromUserId, s.signal);
+                else if (s.type === 'VOICEMAIL_NOTIFICATION' && onVoicemailNotificationRef.current)
+                  onVoicemailNotificationRef.current(s.fromUserId, s.fromUserName || 'Player', s.voicemail);
                 else if (s.type === 'CALL_SYNC' && onCallSyncRef.current) onCallSyncRef.current(s.fromUserId, s);
               }
             }
           });
         }
       }
-    } catch (err) {}
-  }, [messages]);
+    } catch {}
+  }, []);
 
   // Immediate presence disconnect when window/tab is closed
   useEffect(() => {
@@ -472,7 +475,7 @@ export function useWebSocketDatabase(currentUser: {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: payload,
-            keepalive: true
+            keepalive: true,
           }).catch(() => {});
         }
       } catch {}
@@ -491,17 +494,26 @@ export function useWebSocketDatabase(currentUser: {
     if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
     pingIntervalRef.current = setInterval(() => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        try { wsRef.current.send(JSON.stringify({ type: 'PING', timestamp: Date.now() })); } catch {}
+        try {
+          wsRef.current.send(JSON.stringify({ type: 'PING', timestamp: Date.now() }));
+        } catch {}
       }
     }, 12000);
   }, []);
 
   const stopHeartbeat = useCallback(() => {
-    if (pingIntervalRef.current) { clearInterval(pingIntervalRef.current); pingIntervalRef.current = null; }
+    if (pingIntervalRef.current) {
+      clearInterval(pingIntervalRef.current);
+      pingIntervalRef.current = null;
+    }
   }, []);
 
   const connect = useCallback(() => {
-    if (wsRef.current && (wsRef.current.readyState === WebSocket.CONNECTING || wsRef.current.readyState === WebSocket.OPEN)) return;
+    if (
+      wsRef.current &&
+      (wsRef.current.readyState === WebSocket.CONNECTING || wsRef.current.readyState === WebSocket.OPEN)
+    )
+      return;
     try {
       const wsUrl = resolveWebSocketUrl();
       const ws = new WebSocket(wsUrl);
@@ -509,18 +521,19 @@ export function useWebSocketDatabase(currentUser: {
       ws.onopen = () => {
         setIsWsConnected(true);
         startHeartbeat();
-        ws.send(JSON.stringify({
-          type: 'REGISTER_USER',
-          user: activeUserStateRef.current,
-        }));
+        ws.send(
+          JSON.stringify({
+            type: 'REGISTER_USER',
+            user: activeUserStateRef.current,
+          })
+        );
         while (outgoingQueueRef.current.length > 0) {
           const item = outgoingQueueRef.current.shift();
           if (item) {
-            try { 
-              ws.send(item); 
-              localStorage.setItem('frosthub_chat_queue', JSON.stringify(outgoingQueueRef.current));
+            try {
+              ws.send(item);
             } catch {
-              if (item) outgoingQueueRef.current.unshift(item);
+              outgoingQueueRef.current.unshift(item);
               break;
             }
           }
@@ -529,7 +542,10 @@ export function useWebSocketDatabase(currentUser: {
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
-          if (msg.type === 'PING') { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() })); return; }
+          if (msg.type === 'PING') {
+            if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
+            return;
+          }
           if (msg.type === 'PONG') return;
           if (msg.type === 'DB_INIT') {
             if (Array.isArray(msg.tables?.users)) {
@@ -539,9 +555,6 @@ export function useWebSocketDatabase(currentUser: {
               const nextUsers = hasMe ? serverUsers : [me, ...serverUsers];
               setUsers(deduplicateUsers(nextUsers, me.id));
             }
-            if (Array.isArray(msg.tables?.messages)) {
-              setMessages(prev => mergeMessages(prev, msg.tables.messages, currentUserRef.current.id, undefined, deletedIdsRef.current));
-            }
           } else if (msg.type === 'DB_SYNC') {
             if (msg.table === 'users' && Array.isArray(msg.data)) {
               const serverUsers = msg.data;
@@ -549,308 +562,324 @@ export function useWebSocketDatabase(currentUser: {
               const hasMe = serverUsers.some((user: DbUser) => user.id === me.id);
               const nextUsers = hasMe ? serverUsers : [me, ...serverUsers];
               setUsers(deduplicateUsers(nextUsers, me.id));
-            } else if (msg.table === 'messages' && Array.isArray(msg.data)) setMessages(prev => mergeMessages(prev, msg.data, currentUserRef.current.id, undefined, deletedIdsRef.current));
+            } else if (msg.table === 'messages' && Array.isArray(msg.data)) {
+              // Real-time live relay via WebSocket
+              setMessages((prev) => mergeMessages(prev, msg.data, deletedIdsRef.current));
+            }
           } else if (msg.type === 'DB_CLEAR_MESSAGES') {
             setMessages([]);
-            localStorage.removeItem('frosthub_db_messages');
-            localStorage.removeItem('frosthub_chat_queue');
           } else if (msg.type === 'SQL_DELETE' && msg.table === 'messages' && msg.id) {
             deletedIdsRef.current.add(msg.id);
-            try { localStorage.setItem('frosthub_deleted_message_ids', JSON.stringify(Array.from(deletedIdsRef.current))); } catch {}
-            setMessages(prev => prev.filter(m => m.id !== msg.id));
+            setMessages((prev) => prev.filter((m) => m.id !== msg.id));
           } else if (msg.type === 'SQL_DELETE_CHANNEL' && msg.table === 'messages' && msg.channel_id) {
-            setMessages(prev => prev.filter(m => {
-              if (m && m.channel_id === msg.channel_id) {
-                deletedIdsRef.current.add(m.id);
-                return false;
+            setMessages((prev) =>
+              prev.filter((m) => {
+                if (m && m.channel_id === msg.channel_id) {
+                  deletedIdsRef.current.add(m.id);
+                  return false;
+                }
+                return true;
+              })
+            );
+          } else if (
+            msg.type === 'RTC_SIGNAL' ||
+            msg.type === 'USER_CALL' ||
+            msg.type === 'CALL_ANSWERED' ||
+            msg.type === 'CALL_ENDED' ||
+            msg.type === 'DIRECT_RTC_SIGNAL' ||
+            msg.type === 'CALL_SYNC' ||
+            msg.type === 'VOICEMAIL_NOTIFICATION'
+          ) {
+            if (msg.targetUserId === currentUserRef.current.id && msg.fromUserId !== currentUserRef.current.id) {
+              if (msg.sigId) {
+                if (processedRtcSignalsRef.current.has(msg.sigId)) return;
+                processedRtcSignalsRef.current.add(msg.sigId);
+                if (processedRtcSignalsRef.current.size > 200) {
+                  const [first] = processedRtcSignalsRef.current;
+                  processedRtcSignalsRef.current.delete(first);
+                }
               }
-              return true;
-            }));
-            try { localStorage.setItem('frosthub_deleted_message_ids', JSON.stringify(Array.from(deletedIdsRef.current))); } catch {}
-          } else if (msg.type === 'RTC_SIGNAL' || msg.type === 'USER_CALL' || msg.type === 'CALL_ANSWERED' || msg.type === 'CALL_ENDED' || msg.type === 'DIRECT_RTC_SIGNAL' || msg.type === 'CALL_SYNC' || msg.type === 'VOICEMAIL_NOTIFICATION') {
-             if (msg.targetUserId === currentUserRef.current.id && msg.fromUserId !== currentUserRef.current.id) {
-               if (msg.sigId) {
-                 if (processedRtcSignalsRef.current.has(msg.sigId)) return;
-                 processedRtcSignalsRef.current.add(msg.sigId);
-                 if (processedRtcSignalsRef.current.size > 200) {
-                   const [first] = processedRtcSignalsRef.current;
-                   processedRtcSignalsRef.current.delete(first);
-                 }
-               }
-               if (msg.type === 'RTC_SIGNAL' && onRtcSignalRef.current) onRtcSignalRef.current(msg.fromUserId, msg.signal);
-               else if (msg.type === 'USER_CALL' && onUserCallRef.current) onUserCallRef.current(msg.fromUserId, msg.fromUserName, msg.callType);
-               else if (msg.type === 'CALL_ANSWERED' && onCallAnsweredRef.current) onCallAnsweredRef.current(msg.fromUserId, msg.fromUserName, msg.callType);
-               else if (msg.type === 'CALL_ENDED' && onCallEndedRef.current) onCallEndedRef.current(msg.fromUserId);
-               else if (msg.type === 'DIRECT_RTC_SIGNAL' && onDirectRtcSignalRef.current) onDirectRtcSignalRef.current(msg.fromUserId, msg.signal);
-               else if (msg.type === 'CALL_SYNC' && onCallSyncRef.current) onCallSyncRef.current(msg.fromUserId, msg);
-               else if (msg.type === 'VOICEMAIL_NOTIFICATION' && onVoicemailNotificationRef.current) onVoicemailNotificationRef.current(msg.fromUserId, msg.fromUserName, msg.voicemail);
-             }
-          } else if (msg.type === 'USER_JOINED_MEDIA') { if (onUserJoinedMediaRef.current) onUserJoinedMediaRef.current(msg.userId, msg.channel); }
-          else if (msg.type === 'USER_LEFT_MEDIA') { if (onUserLeftMediaRef.current) onUserLeftMediaRef.current(msg.userId, msg.channel); }
-          else if (msg.type === 'USER_MEDIA_UPDATE') { if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify({ type: 'GET_USERS' })); }
+              if (msg.type === 'RTC_SIGNAL' && onRtcSignalRef.current) onRtcSignalRef.current(msg.fromUserId, msg.signal);
+              else if (msg.type === 'USER_CALL' && onUserCallRef.current)
+                onUserCallRef.current(msg.fromUserId, msg.fromUserName, msg.callType);
+              else if (msg.type === 'CALL_ANSWERED' && onCallAnsweredRef.current)
+                onCallAnsweredRef.current(msg.fromUserId, msg.fromUserName, msg.callType);
+              else if (msg.type === 'CALL_ENDED' && onCallEndedRef.current) onCallEndedRef.current(msg.fromUserId);
+              else if (msg.type === 'DIRECT_RTC_SIGNAL' && onDirectRtcSignalRef.current)
+                onDirectRtcSignalRef.current(msg.fromUserId, msg.signal);
+              else if (msg.type === 'CALL_SYNC' && onCallSyncRef.current) onCallSyncRef.current(msg.fromUserId, msg);
+              else if (msg.type === 'VOICEMAIL_NOTIFICATION' && onVoicemailNotificationRef.current)
+                onVoicemailNotificationRef.current(msg.fromUserId, msg.fromUserName, msg.voicemail);
+            }
+          } else if (msg.type === 'USER_JOINED_MEDIA') {
+            if (onUserJoinedMediaRef.current) onUserJoinedMediaRef.current(msg.userId, msg.channel);
+          } else if (msg.type === 'USER_LEFT_MEDIA') {
+            if (onUserLeftMediaRef.current) onUserLeftMediaRef.current(msg.userId, msg.channel);
+          } else if (msg.type === 'USER_MEDIA_UPDATE') {
+            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+              wsRef.current.send(JSON.stringify({ type: 'GET_USERS' }));
+            }
+          }
         } catch {}
       };
-      ws.onclose = () => { setIsWsConnected(false); stopHeartbeat(); wsRef.current = null; if (!reconnectTimeoutRef.current) reconnectTimeoutRef.current = setTimeout(() => { reconnectTimeoutRef.current = null; connect(); }, 2500); };
-      ws.onerror = () => { try { ws.close(); } catch {} };
-    } catch { if (!reconnectTimeoutRef.current) reconnectTimeoutRef.current = setTimeout(() => { reconnectTimeoutRef.current = null; connect(); }, 2500); }
+      ws.onclose = () => {
+        setIsWsConnected(false);
+        stopHeartbeat();
+        wsRef.current = null;
+        if (!reconnectTimeoutRef.current) {
+          reconnectTimeoutRef.current = setTimeout(() => {
+            reconnectTimeoutRef.current = null;
+            connect();
+          }, 2500);
+        }
+      };
+      ws.onerror = () => {
+        try {
+          ws.close();
+        } catch {}
+      };
+    } catch {
+      if (!reconnectTimeoutRef.current) {
+        reconnectTimeoutRef.current = setTimeout(() => {
+          reconnectTimeoutRef.current = null;
+          connect();
+        }, 2500);
+      }
+    }
   }, [startHeartbeat, stopHeartbeat]);
 
   useEffect(() => {
     fetchHttpSync();
     connect();
-    httpSyncIntervalRef.current = setInterval(fetchHttpSync, 2500);
-    const handleOnline = () => { fetchHttpSync(); if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) connect(); };
+    httpSyncIntervalRef.current = setInterval(fetchHttpSync, 4000);
+    const handleOnline = () => {
+      fetchHttpSync();
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) connect();
+    };
     window.addEventListener('online', handleOnline);
     return () => {
       window.removeEventListener('online', handleOnline);
       stopHeartbeat();
       if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (httpSyncIntervalRef.current) clearInterval(httpSyncIntervalRef.current);
-      if (wsRef.current) { try { wsRef.current.close(); } catch {} }
+      if (wsRef.current) {
+        try {
+          wsRef.current.close();
+        } catch {}
+      }
     };
   }, [connect, stopHeartbeat, fetchHttpSync]);
 
-  // --- Hybrid Mutators ---
+  // --- Mutators (Users & Signaling -> WebSockets ONLY; Chat Messages -> WebSocket live relay + Firebase persistence ONLY) ---
 
-  const updateUser = useCallback(async (set: Partial<DbUser>) => {
-    const u = currentUserRef.current;
-    Object.assign(currentUserRef.current, set);
-    Object.assign(activeUserStateRef.current, set);
-    activeUserStateRef.current.updated_at = Date.now();
+  const updateUser = useCallback(
+    async (set: Partial<DbUser>) => {
+      const u = currentUserRef.current;
+      Object.assign(currentUserRef.current, set);
+      Object.assign(activeUserStateRef.current, set);
+      activeUserStateRef.current.updated_at = Date.now();
 
-    // 1. Firebase (Only for non-voice/non-call profile updates)
-    const isVoiceOrMedia = 'has_video' in set || 'is_screen_sharing' in set || 'is_speaking' in set || 'is_muted' in set || 'is_deafened' in set || set.current_channel === 'video-general' || set.current_channel === 'voice-general';
-    if (isFirebaseActive && !isVoiceOrMedia) {
-      try {
-        await setDoc(doc(db, 'users', u.id), cleanData(activeUserStateRef.current), { merge: true });
-      } catch (err) {
-        console.warn('[Firebase] User update failed:', err);
+      // Local State
+      setUsers((prev) => {
+        const next = prev.map((user) => (user.id === u.id ? { ...user, ...set, updated_at: Date.now() } : user));
+        const sorted = deduplicateUsers(next, u.id);
+        broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: sorted });
+        return sorted;
+      });
+
+      // WebSocket / REST presence relay (NEVER stored in Firebase)
+      safeSend({ type: 'SQL_UPDATE', table: 'users', id: u.id, set });
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        fetch('/api/ws-db/update-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: u.id, set }),
+        }).catch(() => {});
       }
-    }
+    },
+    [safeSend]
+  );
 
-    // 2. Local State
-    setUsers((prev) => {
-      const next = prev.map((user) => (user.id === u.id ? { ...user, ...set, updated_at: Date.now() } : user));
-      const sorted = deduplicateUsers(next, u.id);
-      broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: sorted });
-      return sorted;
-    });
+  const insertMessage = useCallback(
+    async (
+      content: string,
+      channelId: string = 'text-general',
+      attachment?: { url: string; type: string; name?: string }
+    ) => {
+      if (!content.trim() && !attachment) return;
+      const u = currentUserRef.current;
+      const newMsg: DbMessage = {
+        id: 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+        channel_id: channelId,
+        sender_id: u.id,
+        sender_name: u.username,
+        avatar_color: u.avatar_color,
+        sender_avatar_url: u.avatar_url || '',
+        content: content.trim(),
+        attachment_url: attachment?.url,
+        attachment_type: attachment?.type,
+        attachment_name: attachment?.name,
+        timestamp: 'Today at ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        created_at: Date.now(),
+      };
 
-    // 3. WebSocket / REST (Relay & Fallback)
-    safeSend({ type: 'SQL_UPDATE', table: 'users', id: u.id, set });
-    fetch('/api/ws-db/update-user', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: u.id, set }),
-    }).catch(() => {});
-  }, [isFirebaseActive, safeSend]);
+      // 1. Optimistic local state
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === newMsg.id)) return prev;
+        const next = [...prev, newMsg];
+        broadcastChannelRef.current?.postMessage({ type: 'SYNC_MESSAGES', messages: [newMsg] });
+        return next;
+      });
 
-  const insertMessage = useCallback(async (content: string, channelId: string = 'text-general', attachment?: { url: string; type: string; name?: string }) => {
-    if (!content.trim() && !attachment) return;
-    const u = currentUserRef.current;
-    const newMsg: DbMessage = {
-      id: 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
-      channel_id: channelId,
-      sender_id: u.id,
-      sender_name: u.username,
-      avatar_color: u.avatar_color,
-      sender_avatar_url: u.avatar_url || '',
-      content: content.trim(),
-      attachment_url: attachment?.url,
-      attachment_type: attachment?.type,
-      attachment_name: attachment?.name,
-      timestamp: 'Today at ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      created_at: Date.now(),
-    };
+      // 2. WebSocket real-time relay (NOT saved to WS disk)
+      safeSend({ type: 'SQL_INSERT', table: 'messages', row: newMsg });
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        fetch('/api/ws-db/message', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ row: newMsg }),
+        }).catch(() => {});
+      }
 
-    // 1. Firebase (Primary)
-    if (isFirebaseActive) {
+      // 3. Firebase ONLY saves chat messages
       try {
         await setDoc(doc(db, 'messages', newMsg.id), cleanData(newMsg));
       } catch (err) {
-        console.warn('[Firebase] Message insert failed:', err);
+        handleFirestoreError(err, OperationType.CREATE, `messages/${newMsg.id}`);
       }
-    }
+    },
+    [safeSend]
+  );
 
-    // 1. Local State (OPTIMISTIC 0ms)
-    setMessages((prev) => {
-      if (prev.some((m) => m.id === newMsg.id)) return prev;
-      const next = [...prev, newMsg];
-      try { localStorage.setItem('frosthub_db_messages', JSON.stringify(next)); } catch {}
-      broadcastChannelRef.current?.postMessage({ type: 'SYNC_MESSAGES', messages: next });
-      return next;
-    });
+  const deleteMessage = useCallback(
+    async (messageId: string) => {
+      deletedIdsRef.current.add(messageId);
 
-    // 2. WebSocket / REST (REAL-TIME RELAY)
-    safeSend({ type: 'SQL_INSERT', table: 'messages', row: newMsg });
-    fetch('/api/ws-db/message', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ row: newMsg }),
-    }).catch(() => {});
-
-    // 3. Firebase (BACKGROUND PERSISTENCE)
-    // Only persist general chat messages to Firebase, not voice/video channel activity
-    if (isFirebaseActive && channelId === 'text-general') {
-      setDoc(doc(db, 'messages', newMsg.id), cleanData(newMsg)).catch(err => {
-        console.warn('[Firebase] Background message insert failed:', err);
+      // 1. Optimistic local state
+      setMessages((prev) => {
+        const next = prev.filter((m) => m && m.id !== messageId);
+        broadcastChannelRef.current?.postMessage({ type: 'SYNC_DELETIONS', deletedId: messageId });
+        return next;
       });
-    }
-  }, [isFirebaseActive, safeSend]);
 
-  const deleteMessage = useCallback(async (messageId: string) => {
-    deletedIdsRef.current.add(messageId);
-    try {
-      localStorage.setItem('frosthub_deleted_message_ids', JSON.stringify(Array.from(deletedIdsRef.current)));
-    } catch {}
+      // 2. WebSocket live deletion relay
+      safeSend({ type: 'SQL_DELETE', table: 'messages', id: messageId });
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        fetch(`/api/ws-db/message/${encodeURIComponent(messageId)}`, { method: 'DELETE' }).catch(() => {});
+      }
 
-    // 1. Local State (OPTIMISTIC)
-    setMessages((prev) => {
-      const next = prev.filter((m) => m && m.id !== messageId);
-      try { localStorage.setItem('frosthub_db_messages', JSON.stringify(next)); } catch {}
-      broadcastChannelRef.current?.postMessage({ type: 'SYNC_DELETIONS', deletedId: messageId });
-      broadcastChannelRef.current?.postMessage({ type: 'SYNC_MESSAGES', messages: next });
-      return next;
-    });
-
-    // 2. WebSocket / REST
-    safeSend({ type: 'SQL_DELETE', table: 'messages', id: messageId });
-    fetch(`/api/ws-db/message/${encodeURIComponent(messageId)}`, { method: 'DELETE' }).catch(() => {});
-
-    // 3. Firebase (BACKGROUND)
-    if (isFirebaseActive) {
-      deleteDoc(doc(db, 'messages', messageId)).catch(err => {
-        console.warn('[Firebase] Background message delete failed:', err);
-      });
-      // Add permanent tombstone for shared sync
-      setDoc(doc(db, 'deletions', messageId), { id: messageId, deleted_at: Date.now() }).catch(() => {});
-    }
-  }, [isFirebaseActive, safeSend]);
-
-  const deleteChannelMessages = useCallback(async (channelId: string) => {
-    // 1. Local State (OPTIMISTIC)
-    setMessages((prev) => {
-      const next = prev.filter((m) => {
-        if (m && m.channel_id === channelId) {
-          deletedIdsRef.current.add(m.id);
-          return false;
-        }
-        return true;
-      });
+      // 3. Firebase persistent delete + tombstone
       try {
-        localStorage.setItem('frosthub_deleted_message_ids', JSON.stringify(Array.from(deletedIdsRef.current)));
-        localStorage.setItem('frosthub_db_messages', JSON.stringify(next));
-      } catch {}
-      broadcastChannelRef.current?.postMessage({ type: 'SYNC_MESSAGES', messages: next });
-      return next;
-    });
+        await deleteDoc(doc(db, 'messages', messageId));
+        await setDoc(doc(db, 'deletions', messageId), { id: messageId, deleted_at: Date.now() });
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `messages/${messageId}`);
+      }
+    },
+    [safeSend]
+  );
 
-    // 2. WebSocket / REST (REAL-TIME)
-    safeSend({ type: 'SQL_DELETE_CHANNEL', table: 'messages', channel_id: channelId });
-    fetch(`/api/ws-db/channel-messages/${encodeURIComponent(channelId)}`, { method: 'DELETE' }).catch(() => {});
+  const deleteChannelMessages = useCallback(
+    async (channelId: string) => {
+      // 1. Optimistic local state
+      setMessages((prev) =>
+        prev.filter((m) => {
+          if (m && m.channel_id === channelId) {
+            deletedIdsRef.current.add(m.id);
+            return false;
+          }
+          return true;
+        })
+      );
 
-    // 3. Firebase (BACKGROUND)
-    if (isFirebaseActive) {
-      (async () => {
-        try {
-          const q = query(collection(db, 'messages'), where('channel_id', '==', channelId));
-          const snap = await getDocs(q);
-          const batch = writeBatch(db);
-          snap.forEach(msgDoc => {
-            deletedIdsRef.current.add(msgDoc.id);
-            batch.delete(msgDoc.ref);
-            // Add tombstone for each deleted message in the channel
-            batch.set(doc(db, 'deletions', msgDoc.id), { id: msgDoc.id, deleted_at: Date.now() });
-          });
-          await batch.commit();
-          try {
-            localStorage.setItem('frosthub_deleted_message_ids', JSON.stringify(Array.from(deletedIdsRef.current)));
-          } catch {}
-        } catch (err) {
-          console.warn('[Firebase] Background channel delete failed:', err);
-        }
-      })();
-    }
-  }, [isFirebaseActive, safeSend]);
+      // 2. WebSocket live relay
+      safeSend({ type: 'SQL_DELETE_CHANNEL', table: 'messages', channel_id: channelId });
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        fetch(`/api/ws-db/channel-messages/${encodeURIComponent(channelId)}`, { method: 'DELETE' }).catch(() => {});
+      }
+
+      // 3. Firebase persistent channel delete
+      try {
+        const q = query(collection(db, 'messages'), where('channel_id', '==', channelId));
+        const snap = await getDocs(q);
+        const batch = writeBatch(db);
+        snap.forEach((msgDoc) => {
+          deletedIdsRef.current.add(msgDoc.id);
+          batch.delete(msgDoc.ref);
+          batch.set(doc(db, 'deletions', msgDoc.id), { id: msgDoc.id, deleted_at: Date.now() });
+        });
+        await batch.commit();
+      } catch (err) {
+        handleFirestoreError(err, OperationType.DELETE, `messages?channel_id=${channelId}`);
+      }
+    },
+    [safeSend]
+  );
 
   const clearAllMessages = useCallback(async () => {
-    // 1. Local State (Clear everything)
     setMessages([]);
     deletedIdsRef.current.clear();
-    try {
-      localStorage.removeItem('frosthub_db_messages');
-      localStorage.removeItem('frosthub_deleted_message_ids');
-    } catch {}
     broadcastChannelRef.current?.postMessage({ type: 'DB_CLEAR_MESSAGES' });
 
-    // 2. WebSocket / REST
     safeSend({ type: 'SQL_DELETE_ALL' });
-    fetch('/api/ws-db/messages/all', { method: 'DELETE' }).catch(() => {});
-
-    // 3. Firebase Purge (Aggressive)
-    if (isFirebaseActive) {
-      try {
-        // Clear messages
-        const msgSnap = await getDocs(collection(db, 'messages'));
-        const msgBatch = writeBatch(db);
-        msgSnap.forEach(d => msgBatch.delete(d.ref));
-        await msgBatch.commit();
-
-        // Clear tombstones
-        const delSnap = await getDocs(collection(db, 'deletions'));
-        const delBatch = writeBatch(db);
-        delSnap.forEach(d => delBatch.delete(d.ref));
-        await delBatch.commit();
-        
-        console.log('Firebase purge complete');
-      } catch (err) {
-        console.warn('[Firebase] Global clear failed:', err);
-      }
-    }
-  }, [isFirebaseActive, safeSend]);
-
-  const registerUser = useCallback((user: { 
-    id: string; 
-    username: string; 
-    avatar_color: string; 
-    avatar_url?: string; 
-    current_channel?: string;
-    activity?: string;
-  }) => {
-    const activeChannel = (user as any).current_channel || activeUserStateRef.current.current_channel || 'text-general';
-    const dbUser: DbUser = {
-      ...activeUserStateRef.current,
-      id: user.id,
-      username: user.username,
-      avatar_color: user.avatar_color || '#0066ff',
-      avatar_url: user.avatar_url || '',
-      current_channel: activeChannel as any,
-      activity: user.activity || activeUserStateRef.current.activity || '',
-      updated_at: Date.now(),
-    };
-    Object.assign(activeUserStateRef.current, dbUser);
-
-    // 1. Firebase (Primary)
-    if (isFirebaseActive) {
-      setDoc(doc(db, 'users', dbUser.id), cleanData(dbUser), { merge: true }).catch(() => {});
+    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      fetch('/api/ws-db/messages/all', { method: 'DELETE' }).catch(() => {});
     }
 
-    // 2. WebSocket / REST
-    safeSend({ type: 'REGISTER_USER', user: dbUser });
-    fetch('/api/ws-db/register', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user: dbUser }),
-    }).catch(() => {});
+    try {
+      const msgSnap = await getDocs(collection(db, 'messages'));
+      const msgBatch = writeBatch(db);
+      msgSnap.forEach((d) => msgBatch.delete(d.ref));
+      await msgBatch.commit();
 
-    // 3. Local State
-    setUsers((prev) => {
-      const filtered = prev.filter((x) => x && x.id !== user.id);
-      const next = deduplicateUsers([dbUser, ...filtered], user.id);
-      broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: next });
-      return next;
-    });
-  }, [isFirebaseActive, safeSend]);
+      const delSnap = await getDocs(collection(db, 'deletions'));
+      const delBatch = writeBatch(db);
+      delSnap.forEach((d) => delBatch.delete(d.ref));
+      await delBatch.commit();
+    } catch (err) {
+      handleFirestoreError(err, OperationType.DELETE, 'messages');
+    }
+  }, [safeSend]);
+
+  const registerUser = useCallback(
+    (user: {
+      id: string;
+      username: string;
+      avatar_color: string;
+      avatar_url?: string;
+      current_channel?: string;
+      activity?: string;
+    }) => {
+      const activeChannel = (user as any).current_channel || activeUserStateRef.current.current_channel || 'text-general';
+      const dbUser: DbUser = {
+        ...activeUserStateRef.current,
+        id: user.id,
+        username: user.username,
+        avatar_color: user.avatar_color || '#0066ff',
+        avatar_url: user.avatar_url || '',
+        current_channel: activeChannel as any,
+        activity: user.activity || activeUserStateRef.current.activity || '',
+        updated_at: Date.now(),
+      };
+      Object.assign(activeUserStateRef.current, dbUser);
+
+      // WebSocket / REST ONLY (Firebase does not store user presence)
+      safeSend({ type: 'REGISTER_USER', user: dbUser });
+      fetch('/api/ws-db/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user: dbUser }),
+      }).catch(() => {});
+
+      setUsers((prev) => {
+        const filtered = prev.filter((x) => x && x.id !== user.id);
+        const next = deduplicateUsers([dbUser, ...filtered], user.id);
+        broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: next });
+        return next;
+      });
+    },
+    [safeSend]
+  );
 
   const sendRtcSignal = useCallback((targetUserId: string, signal: any) => {
     const fromUserId = currentUserRef.current.id;
@@ -871,35 +900,50 @@ export function useWebSocketDatabase(currentUser: {
     }).catch(() => {});
   }, []);
 
-  const callUser = useCallback((targetUserId: string, callType: 'audio' | 'video') => {
-    const u = currentUserRef.current;
-    safeSend({ type: 'USER_CALL', fromUserId: u.id, fromUserName: u.username, targetUserId, callType });
-    fetch('/api/ws-db/signal', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fromUserId: u.id, fromUserName: u.username, targetUserId, type: 'USER_CALL', callType }),
-    }).catch(() => {});
-  }, [safeSend]);
+  const callUser = useCallback(
+    (targetUserId: string, callType: 'audio' | 'video') => {
+      const u = currentUserRef.current;
+      safeSend({ type: 'USER_CALL', fromUserId: u.id, fromUserName: u.username, targetUserId, callType });
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        fetch('/api/ws-db/signal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fromUserId: u.id, fromUserName: u.username, targetUserId, type: 'USER_CALL', callType }),
+        }).catch(() => {});
+      }
+    },
+    [safeSend]
+  );
 
-  const answerCall = useCallback((targetUserId: string, callType: 'audio' | 'video' = 'audio') => {
-    const u = currentUserRef.current;
-    safeSend({ type: 'CALL_ANSWERED', fromUserId: u.id, fromUserName: u.username, targetUserId, callType });
-    fetch('/api/ws-db/signal', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fromUserId: u.id, fromUserName: u.username, targetUserId, type: 'CALL_ANSWERED', callType }),
-    }).catch(() => {});
-  }, [safeSend]);
+  const answerCall = useCallback(
+    (targetUserId: string, callType: 'audio' | 'video' = 'audio') => {
+      const u = currentUserRef.current;
+      safeSend({ type: 'CALL_ANSWERED', fromUserId: u.id, fromUserName: u.username, targetUserId, callType });
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        fetch('/api/ws-db/signal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fromUserId: u.id, fromUserName: u.username, targetUserId, type: 'CALL_ANSWERED', callType }),
+        }).catch(() => {});
+      }
+    },
+    [safeSend]
+  );
 
-  const endCallSignal = useCallback((targetUserId: string) => {
-    const u = currentUserRef.current;
-    safeSend({ type: 'CALL_ENDED', fromUserId: u.id, targetUserId });
-    fetch('/api/ws-db/signal', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fromUserId: u.id, targetUserId, type: 'CALL_ENDED' }),
-    }).catch(() => {});
-  }, [safeSend]);
+  const endCallSignal = useCallback(
+    (targetUserId: string) => {
+      const u = currentUserRef.current;
+      safeSend({ type: 'CALL_ENDED', fromUserId: u.id, targetUserId });
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        fetch('/api/ws-db/signal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fromUserId: u.id, targetUserId, type: 'CALL_ENDED' }),
+        }).catch(() => {});
+      }
+    },
+    [safeSend]
+  );
 
   const sendDirectRtcSignal = useCallback((targetUserId: string, signal: any) => {
     const fromUserId = currentUserRef.current.id;
@@ -920,26 +964,42 @@ export function useWebSocketDatabase(currentUser: {
     }).catch(() => {});
   }, []);
 
-  const sendVoicemailNotification = useCallback((targetUserId: string, voicemail: any) => {
-    const u = currentUserRef.current;
-    safeSend({ type: 'VOICEMAIL_NOTIFICATION', fromUserId: u.id, fromUserName: u.username, targetUserId, voicemail });
-    fetch('/api/ws-db/signal', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ fromUserId: u.id, fromUserName: u.username, targetUserId, type: 'VOICEMAIL_NOTIFICATION', voicemail }),
-    }).catch(() => {});
-  }, [safeSend]);
+  const sendVoicemailNotification = useCallback(
+    (targetUserId: string, voicemail: any) => {
+      const u = currentUserRef.current;
+      safeSend({ type: 'VOICEMAIL_NOTIFICATION', fromUserId: u.id, fromUserName: u.username, targetUserId, voicemail });
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        fetch('/api/ws-db/signal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fromUserId: u.id,
+            fromUserName: u.username,
+            targetUserId,
+            type: 'VOICEMAIL_NOTIFICATION',
+            voicemail,
+          }),
+        }).catch(() => {});
+      }
+    },
+    [safeSend]
+  );
 
-  const sendCallSync = useCallback((targetUserId: string, data: { hold?: boolean; muted?: boolean; video?: boolean }) => {
-    const fromUserId = currentUserRef.current.id;
-    const payload = { type: 'CALL_SYNC', fromUserId, targetUserId, ...data };
-    safeSend(payload);
-    fetch('/api/ws-db/signal', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }).catch(() => {});
-  }, [safeSend]);
+  const sendCallSync = useCallback(
+    (targetUserId: string, data: { hold?: boolean; muted?: boolean; video?: boolean }) => {
+      const fromUserId = currentUserRef.current.id;
+      const payload = { type: 'CALL_SYNC', fromUserId, targetUserId, ...data };
+      safeSend(payload);
+      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+        fetch('/api/ws-db/signal', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).catch(() => {});
+      }
+    },
+    [safeSend]
+  );
 
   return {
     users,
@@ -970,3 +1030,4 @@ export function useWebSocketDatabase(currentUser: {
     ws: wsRef.current,
   };
 }
+

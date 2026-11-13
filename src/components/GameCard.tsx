@@ -156,7 +156,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
       </div>
 
       {/* Action Footer */}
-      <div className="mt-auto px-2.5 pb-2 pt-0.5 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="mt-auto px-2.5 pb-2 pt-0.5 flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
         <button
           type="button"
           onClick={() => onAboutBlank(game)}

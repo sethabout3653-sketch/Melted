@@ -72,7 +72,7 @@ export function useGlobalChat({
   const [currentUser, setCurrentUser] = useState(() => {
     // Clean up old/stale/corrupted localStorage keys while keeping valid ones
     try {
-      const validKeys = ['frosthub_chat_user_id', 'frosthub_chat_username', 'frosthub_chat_usercolor', 'frosthub_chat_avatar_url', 'frosthub_db_messages'];
+      const validKeys = ['frosthub_chat_user_id', 'frosthub_chat_username', 'frosthub_chat_usercolor', 'frosthub_chat_avatar_url'];
       const allKeys = Object.keys(localStorage);
       allKeys.forEach((key) => {
         if (key.startsWith('frosted_') || (key.startsWith('frosthub_') && !validKeys.includes(key))) {

@@ -1,11 +1,5 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 export interface DbUser {
   id: string;
@@ -52,48 +46,15 @@ export interface PendingSignal {
   timestamp: number;
 }
 
-// Authoritative in-memory state with local JSON persistence
+// Ephemeral in-memory WebSocket state (presence, voice/video rooms, typing & WebRTC signaling; chat history lives in Firebase)
 export class WebSocketDatabase {
   public users: Map<string, DbUser> = new Map();
-  public messages: DbMessage[] = [];
   public pendingSignals: Map<string, PendingSignal[]> = new Map(); // targetUserId -> signals
-  private dbFilePath: string;
 
   public channels = [
     { id: 'text-general', name: 'general', type: 'text' },
     { id: 'video-general', name: 'general', type: 'video' },
   ];
-
-  constructor() {
-    this.dbFilePath = path.resolve(__dirname, '..', '..', 'ws_db_store.json');
-    this.loadStore();
-  }
-
-  private loadStore() {
-    try {
-      if (fs.existsSync(this.dbFilePath)) {
-        const raw = fs.readFileSync(this.dbFilePath, 'utf-8');
-        const data = JSON.parse(raw);
-        if (Array.isArray(data.messages)) {
-          this.messages = data.messages;
-        }
-      }
-    } catch (err) {
-      console.warn('[WebSocket DB] Notice loading store:', err);
-    }
-  }
-
-  private saveStore() {
-    try {
-      const data = {
-        messages: this.messages,
-        updated_at: Date.now(),
-      };
-      fs.writeFileSync(this.dbFilePath, JSON.stringify(data, null, 2), 'utf-8');
-    } catch (err) {
-      console.warn('[WebSocket DB] Notice saving store:', err);
-    }
-  }
 
   public getUsers(): DbUser[] {
     const now = Date.now();
@@ -130,31 +91,6 @@ export class WebSocketDatabase {
       updated_at: Date.now(),
     };
     this.users.set(user.id, updated);
-  }
-
-  public insertMessage(msg: DbMessage): void {
-    const existingIndex = this.messages.findIndex((m) => m.id === msg.id);
-    if (existingIndex >= 0) {
-      this.messages[existingIndex] = msg;
-    } else {
-      this.messages.push(msg);
-    }
-    this.saveStore();
-  }
-
-  public deleteMessage(id: string): void {
-    this.messages = this.messages.filter((m) => m.id !== id);
-    this.saveStore();
-  }
-
-  public deleteChannelMessages(channelId: string): void {
-    this.messages = this.messages.filter((m) => m.channel_id !== channelId);
-    this.saveStore();
-  }
-
-  public deleteAllMessages(): void {
-    this.messages = [];
-    this.saveStore();
   }
 
   public addPendingSignal(signal: PendingSignal): void {
@@ -237,7 +173,6 @@ export function initWebSocketDatabase(server: Server) {
         type: 'DB_INIT',
         tables: {
           users: globalWsDb.getUsers(),
-          messages: globalWsDb.messages,
           channels: globalWsDb.channels,
         },
       }));
@@ -384,8 +319,7 @@ export function initWebSocketDatabase(server: Server) {
                 timestamp: row.timestamp || ('Today at ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
                 created_at: Number(row.created_at) || Date.now(),
               };
-              globalWsDb.insertMessage(newMsg);
-              // Broadcast just the new message for 0ms incremental sync
+              // Real-time relay only (Firebase persists chat history)
               broadcastTable('messages', [newMsg]);
             }
             break;
@@ -393,7 +327,6 @@ export function initWebSocketDatabase(server: Server) {
 
           case 'SQL_DELETE': {
             if (msg.table === 'messages' && msg.id) {
-              globalWsDb.deleteMessage(msg.id);
               broadcastWss({ type: 'SQL_DELETE', table: 'messages', id: msg.id });
             }
             break;
@@ -401,14 +334,12 @@ export function initWebSocketDatabase(server: Server) {
 
           case 'SQL_DELETE_CHANNEL': {
             if (msg.channel_id) {
-              globalWsDb.deleteChannelMessages(msg.channel_id);
               broadcastWss({ type: 'SQL_DELETE_CHANNEL', table: 'messages', channel_id: msg.channel_id });
             }
             break;
           }
 
           case 'SQL_DELETE_ALL': {
-            globalWsDb.deleteAllMessages();
             broadcastWss({ type: 'DB_CLEAR_MESSAGES' });
             break;
           }

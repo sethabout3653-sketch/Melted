@@ -91,10 +91,10 @@ export async function processAvatarImage(file: File, maxSize = 256): Promise<str
 export function persistAvatarUrl(avatarUrl: string): boolean {
   try {
     if (!avatarUrl) {
-      localStorage.removeItem('frosted_chat_avatar_url');
+      localStorage.removeItem('frosthub_chat_avatar_url');
       return true;
     }
-    localStorage.setItem('frosted_chat_avatar_url', avatarUrl);
+    localStorage.setItem('frosthub_chat_avatar_url', avatarUrl);
     return true;
   } catch (err) {
     console.warn('[Avatar Persistence] localStorage save warning:', err);

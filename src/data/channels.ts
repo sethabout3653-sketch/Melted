@@ -1,3 +1,7 @@
+import freeTvChannels from './freeTvChannels.json';
+import rokuChannels from './rokuChannels.json';
+import samsungChannels from './samsungChannels.json';
+
 export interface TVChannel {
   id: string;
   name: string;
@@ -158,7 +162,7 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   "name": "Comedy Dynamics",
   "url": "https://d3a5mry3t5fzw9.cloudfront.net/playlist.m3u8",
   "category": "Comedy",
-  "logo": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 160 80\" width=\"160\" height=\"80\"><rect width=\"160\" height=\"80\" rx=\"8\" fill=\"%230c1726\"/><path d=\"M40 24a8 8 0 0 1 16 0v16a8 8 0 0 1-16 0z\" fill=\"%2338bdf8\"/><path d=\"M34 38a14 14 0 0 0 28 0h-4a10 10 0 0 1-20 0z\" fill=\"%2338bdf8\"/><text x=\"70\" y=\"38\" fill=\"%23ffffff\" font-family=\"system-ui,sans-serif\" font-weight=\"900\" font-size=\"16\" letter-spacing=\"1\">COMEDY</text><text x=\"70\" y=\"54\" fill=\"%2338bdf8\" font-family=\"system-ui,sans-serif\" font-weight=\"700\" font-size=\"12\" letter-spacing=\"2\">DYNAMICS</text></svg>",
+  "logo": "https://tvpnlogopus.samsungcloud.tv/platform/image/sourcelogo/vc/00/02/34/USBD7000145C_20241210T013825SQUARE.png",
   "description": "Stand-up comedy specials and routines from world-class comedians."
 },
 {
@@ -166,7 +170,7 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   "name": "Dry Bar Comedy",
   "url": "https://drybar-drybarcomedy-1-us.samsung.wurl.tv/playlist.m3u8",
   "category": "Comedy",
-  "logo": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 160 80\" width=\"160\" height=\"80\"><rect width=\"160\" height=\"80\" rx=\"8\" fill=\"%2318181b\"/><circle cx=\"36\" cy=\"40\" r=\"20\" fill=\"%23f59e0b\"/><text x=\"36\" y=\"47\" text-anchor=\"middle\" fill=\"%23000000\" font-family=\"system-ui,sans-serif\" font-weight=\"900\" font-size=\"20\">D</text><text x=\"68\" y=\"36\" fill=\"%23f59e0b\" font-family=\"system-ui,sans-serif\" font-weight=\"900\" font-size=\"17\" letter-spacing=\"1\">DRY BAR</text><text x=\"68\" y=\"53\" fill=\"%23e4e4e7\" font-family=\"system-ui,sans-serif\" font-weight=\"900\" font-size=\"13\" letter-spacing=\"2\">COMEDY</text></svg>",
+  "logo": "https://tvpnlogopus.samsungcloud.tv/platform/image/sourcelogo/vc/00/02/34/USAJ30000039U_20240520T215832SQUARE.png",
   "description": "Clean stand-up comedy specials from hilarious touring comics."
 },
 {
@@ -174,16 +178,24 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   "name": "CBC Comedy",
   "url": "https://amagi-streams.akamaized.net/hls/live/2110963/cbccomedy/master.m3u8",
   "category": "Comedy",
-  "logo": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 160 80\" width=\"160\" height=\"80\"><rect width=\"160\" height=\"80\" rx=\"8\" fill=\"%231c0a0a\"/><circle cx=\"36\" cy=\"40\" r=\"14\" fill=\"%23dc2626\"/><circle cx=\"36\" cy=\"40\" r=\"8\" fill=\"%23ffffff\"/><circle cx=\"36\" cy=\"40\" r=\"4\" fill=\"%23dc2626\"/><text x=\"64\" y=\"37\" fill=\"%23ffffff\" font-family=\"system-ui,sans-serif\" font-weight=\"900\" font-size=\"20\" letter-spacing=\"1\">CBC</text><text x=\"64\" y=\"54\" fill=\"%23ef4444\" font-family=\"system-ui,sans-serif\" font-weight=\"700\" font-size=\"13\" letter-spacing=\"1.5\">COMEDY</text></svg>",
+  "logo": "https://tvpnlogopus.samsungcloud.tv/platform/image/sourcelogo/vc/00/02/34/CABD1200043OK_20260609T034602SQUARE.png",
   "description": "Top comedy series, sketches, and stand-up routines."
 },
   {
     "id": "cartoon-network",
     "name": "Cartoon Network",
-    "url": "/api/proxy-stream?url=http%3A%2F%2F212.5.144.156%3A8080%2Fcartoon%2Findex.m3u8",
+    "url": "/api/proxy-stream?url=https%3A%2F%2Fturnerlive.warnermediacdn.com%2Fhls%2Flive%2F2023160%2Ftooneast%2Fnoslate%2FVIDEO_1_5128000.m3u8",
     "category": "Family & Kids",
     "logo": "https://upload.wikimedia.org/wikipedia/commons/8/80/Cartoon_Network_2010_logo.svg",
-    "description": "Cartoon Network Live Stream"
+    "description": "Cartoon Network Live English Stream (Turner 1080p)"
+  },
+  {
+    "id": "adult-swim",
+    "name": "Adult Swim",
+    "url": "/api/proxy-stream?url=https%3A%2F%2Fturnerlive.warnermediacdn.com%2Fhls%2Flive%2F2023185%2Faswest%2Fnoslate%2FVIDEO_1_5128000.m3u8",
+    "category": "Comedy",
+    "logo": "https://upload.wikimedia.org/wikipedia/commons/e/e4/Adult_Swim_2003_logo.svg",
+    "description": "Adult Swim Live 24/7 Animation and Comedy"
   },
 {
   "id": "pbs-kids",
@@ -3734,7 +3746,7 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   "name": "Dora TV",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-6a70da97a4bf6cded4fdaf53.m3u8",
   "category": "Family & Kids",
-  "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTsbSm7ePeErR0V7xEvOEN4ZaB523iiKQdDnPkHU6GhFg&s=10",
+  "logo": "https://images.pluto.tv/channels/6a70da97a4bf6cded4fdaf53/colorLogoPNG.png",
   "description": "Dora TV live on Pluto TV"
 },
 {
@@ -3929,7 +3941,6 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   "logo": "https://images.pluto.tv/channels/6ad7a97aa9b3de1ec8f609ad/colorLogoPNG_1793382889086.png",
   "description": "Whose Line Is It Anyway live on Pluto TV"
 },
-,
 {
   "id": "kanali7-al-t0i",
   "name": "Kanali 7 Ⓢ",
@@ -4729,21 +4740,237 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   "category": "Belarus",
   "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/33/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF_%D0%B1%D0%B5%D0%BB%D0%BE%D1%80%D1%83%D1%81%D1%81%D0%BA%D0%BE%D0%B3%D0%BE_%D1%82%D0%B5%D0%BB%D0%B5%D0%BA%D0%B0%D0%BD%D0%B0%D0%BB%D0%B0_%C2%AB%D0%A1%D0%A2%D0%92%C2%BB.svg/500px-%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF_%D0%B1%D0%B5%D0%BB%D0%BE%D1%80%D1%83%D1%81%D1%81%D0%BA%D0%BE%D0%B3%D0%BE_%D1%82%D0%B5%D0%BB%D0%B5%D0%BA%D0%B0%D0%BD%D0%B0%D0%BB%D0%B0_%C2%AB%D0%A1%D0%A2%D0%92%C2%BB.svg.png",
   "description": "Imported from Free-TV: СТВ"
-}
+},
+...(freeTvChannels as TVChannel[]),
+...(rokuChannels as TVChannel[]),
+...(samsungChannels as TVChannel[])
 ];
 
-const isSpanishChannel = (c: TVChannel) => {
+const ENGLISH_FREE_TV_CATEGORIES = new Set([
+  'UK',
+  'USA',
+  'Canada',
+  'Australia',
+  'Ireland',
+  'New Zealand',
+  'Trinidad',
+  'Malta',
+  'Nigeria',
+  'Kenya',
+  'Documentaries (EN)',
+  'VOD Movies (EN)',
+  'Music (EN)',
+]);
+
+const NON_ENGLISH_KEYWORDS = [
+  'español',
+  'espanol',
+  'spanish',
+  'latino',
+  'castellano',
+  'en espanol',
+  'en español',
+  'iconos latinos',
+  'français',
+  'francais',
+  'french',
+  'arabic',
+  'العربية',
+  'русский',
+  'russian',
+  'italiano',
+  'português',
+  'portuguese',
+  'hindi',
+  'urdu',
+  'bengali',
+  'punjabi',
+  'tamil',
+  'telugu',
+  'turkish',
+  'türkçe',
+  'telemundo',
+  'univision',
+  'azteca',
+  'estrella',
+  'canela.tv',
+  'novelísima',
+  'novelisima',
+  'todo novelas',
+  'venevision',
+  'venevisión',
+  'cinepolis',
+  'cinépolis',
+  'cine navideño',
+  'crímenes',
+  'crimenes',
+  'películas',
+  'peliculas',
+  'pasión',
+  'pasion',
+  'clásico',
+  'clasico',
+  'acción',
+  'accion',
+  'sureño',
+  'lamúsica',
+  'lamusica',
+  'filmex',
+  'emoción',
+  'emocion',
+  'sangre fría',
+  'única tv',
+  'sala de emergencias',
+  'más adrenalina',
+  'noovo',
+  'ici rdi',
+  'ici télé',
+  'télé-québec',
+  'tva ',
+  'bbc alba',
+  's4c',
+  'tg4',
+  'peer tv south tyrol',
+  'el señor de los cielos',
+  'cheaters en español',
+  'cine en español',
+  'el reino infantil',
+  'pitufo tv',
+];
+
+const NON_LATIN_SCRIPT_REGEX = /[\u0400-\u04FF\u0600-\u06FF\u0900-\u097F\u3040-\u30FF\u4E00-\u9FFF\uAC00-\uD7AF]/;
+
+const isEnglishChannel = (c: TVChannel) => {
+  const nameLower = c.name.toLowerCase();
+  if (NON_LATIN_SCRIPT_REGEX.test(c.name)) {
+    return false;
+  }
+
+  const desc = (c.description || '').toLowerCase();
+  const cat = (c.category || '').trim();
+  if (desc.startsWith('imported from free-tv:') && !ENGLISH_FREE_TV_CATEGORIES.has(cat)) {
+    return false;
+  }
+
+  if (nameLower.includes('english') || nameLower.includes('(en)')) {
+    return true;
+  }
+
   const text = `${c.id} ${c.name} ${c.description || ''} ${c.category || ''}`.toLowerCase();
-  return (
-    text.includes('español') ||
-    text.includes('espanol') ||
-    text.includes('spanish') ||
-    text.includes('latino') ||
-    text.includes('castellano') ||
-    text.includes('en espanol') ||
-    text.includes('en español') ||
-    text.includes('iconos latinos')
-  );
+  return !NON_ENGLISH_KEYWORDS.some((kw) => text.includes(kw));
 };
 
-export const TV_CHANNELS: TVChannel[] = RAW_TV_CHANNELS.filter((c): c is TVChannel => !!c && !isSpanishChannel(c));
+const CHANNEL_NAME_ALIASES: Record<string, string> = {
+  'nick': 'nickelodeon',
+  'nick pluto': 'nickelodeon',
+  'nick pluto tv': 'nickelodeon',
+  'nickelodeon pluto': 'nickelodeon',
+  'nickelodeon pluto tv': 'nickelodeon',
+  'nick jr pluto': 'nick jr',
+  'nick jr pluto tv': 'nick jr',
+  'bet pluto': 'bet',
+  'mtv pluto': 'mtv',
+  'comedy central pluto': 'comedy central',
+  'spike pluto': 'spike',
+  'logo pluto': 'logo',
+  'newsmax2': 'newsmax 2',
+  'lego kids': 'lego channel',
+  'lego': 'lego channel',
+  'ninja kidz': 'ninja kidz',
+  'ninja kidz tv': 'ninja kidz',
+  'always funny': 'always funny videos',
+  'mr bean animated': 'mr bean animated',
+  'bloomberg': 'bloomberg tv',
+  'bloomberg television': 'bloomberg tv',
+  'bloomberg tv plus': 'bloomberg tv',
+  'bloomberg tv us': 'bloomberg tv',
+  'stingray naturescape': 'naturescape',
+  'reuters tv': 'reuters',
+  'reuters now': 'reuters',
+  'cbn news channel': 'cbn news',
+  'accuweather now': 'accuweather',
+  'fox weather': 'fox weather',
+  'cbs news 24 7': 'cbs news',
+};
+
+function getCanonicalChannelKey(channel: TVChannel): string {
+  let key = channel.name
+    .replace(/[\u24B6-\u24E9]/g, '') // Strip circled badge characters like Ⓢ, Ⓖ, Ⓨ
+    .toLowerCase()
+    .replace(/[’'`]/g, '')
+    .replace(/\+/g, ' plus ')
+    .replace(/&/g, ' and ')
+    .replace(/\s*\([^)]*\)\s*/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+  if (CHANNEL_NAME_ALIASES[key]) {
+    return CHANNEL_NAME_ALIASES[key];
+  }
+
+  key = key
+    .replace(/\bpluto tv\b/g, (match, offset) => (offset === 0 ? match : ''))
+    .replace(/\bon pluto\b/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Strip leading "the " for cross-platform matching (e.g. "The LEGO Channel" vs "LEGO Channel")
+  key = key.replace(/^the\s+/, '');
+
+  // Strip trailing generic suffixes that platforms append inconsistently
+  key = key
+    .replace(/\s+(channel|tv|live|network)$/, (suffix) => {
+      // Keep short base tokens intact when removing suffix would leave < 2 words or collide with generic words
+      const without = key.slice(0, key.length - suffix.length).trim();
+      const keepSuffixFor = new Set([
+        'cnn', 'bbc', 'fox', 'cbs', 'nbc', 'abc', 'nhk', 'cgtn', 'dw', 'pop',
+        'nfl', 'nba', 'mlb', 'nhl', 'ufc', 'wwe', 'qvc', 'hsn', 'mtv', 'bet',
+        'nick', 'dora', 'anime', 'news', 'sports', 'comedy', 'horror', 'drama',
+        'action', 'music', 'food', 'kids', 'family', 'science', 'history',
+        'nature', 'crime', 'westerns', 'cinema', 'movies', 'game', 'games',
+        'cartoon', 'red bull', 'pokemon', 'lego', 'baby shark', 'nick jr',
+      ]);
+      if (!without || keepSuffixFor.has(without)) {
+        return suffix;
+      }
+      return '';
+    })
+    .trim();
+
+  return CHANNEL_NAME_ALIASES[key] || key;
+}
+
+function deduplicateChannels(channels: TVChannel[]): TVChannel[] {
+  const seenKeys = new Map<string, TVChannel>();
+  const seenUrls = new Set<string>();
+  const result: TVChannel[] = [];
+
+  for (const ch of channels) {
+    const cleanUrl = (ch.url || '').trim();
+    if (!cleanUrl) continue;
+
+    // Exact URL duplicate check (strip proxy wrapper for comparison)
+    const rawUrl = cleanUrl.startsWith('/api/proxy-stream?url=')
+      ? decodeURIComponent(cleanUrl.slice('/api/proxy-stream?url='.length))
+      : cleanUrl;
+
+    if (seenUrls.has(rawUrl)) continue;
+
+    const key = getCanonicalChannelKey(ch);
+    if (key && seenKeys.has(key)) {
+      continue;
+    }
+
+    seenUrls.add(rawUrl);
+    if (key) {
+      seenKeys.set(key, ch);
+    }
+    result.push(ch);
+  }
+
+  return result;
+}
+
+export const TV_CHANNELS: TVChannel[] = deduplicateChannels(
+  RAW_TV_CHANNELS.filter((c): c is TVChannel => !!c && isEnglishChannel(c))
+);

@@ -249,15 +249,6 @@ export default function App() {
     }
   }, [currentTab, activeGame, activeMedia, globalChat.isInVideo, globalChat.activeChannel]);
 
-  // Temporary maintenance trigger: clear all messages
-  useEffect(() => {
-    const hasCleared = localStorage.getItem('frosthub_maintenance_clear_1');
-    if (!hasCleared && globalChat.isConnected) {
-      (globalChat as any).clearAllMessages();
-      localStorage.setItem('frosthub_maintenance_clear_1', 'true');
-    }
-  }, [globalChat.isConnected]);
-
   const handleGoHome = useCallback(() => {
     setSelectedCategory('All');
     setSearchQuery('');
@@ -317,17 +308,23 @@ export default function App() {
   const categoryCounts = useMemo(() => {
     const counts: Record<GameCategory, number> = {
       'All': allGames.length,
-      'Featured': allGames.filter(g => g.featured).length,
-      'Action & Shooters': allGames.filter(g => g.category === 'Action & Shooters').length,
-      'Driving & Racing': allGames.filter(g => g.category === 'Driving & Racing').length,
-      'Skill & Platformer': allGames.filter(g => g.category === 'Skill & Platformer').length,
-      'Retro & Arcade': allGames.filter(g => g.category === 'Retro & Arcade').length,
-      'Horror & Mystery': allGames.filter(g => g.category === 'Horror & Mystery').length,
-      'Sports & Physics': allGames.filter(g => g.category === 'Sports & Physics').length,
-      'Puzzle & Casual': allGames.filter(g => g.category === 'Puzzle & Casual').length,
-      'Emulators & Ports': allGames.filter(g => g.category === 'Emulators & Ports').length,
-      'Favorites': favorites.length
+      'Featured': 0,
+      'Action & Shooters': 0,
+      'Driving & Racing': 0,
+      'Skill & Platformer': 0,
+      'Retro & Arcade': 0,
+      'Horror & Mystery': 0,
+      'Sports & Physics': 0,
+      'Puzzle & Casual': 0,
+      'Emulators & Ports': 0,
+      'Favorites': favorites.length,
     };
+    for (const g of allGames) {
+      if (g.featured) counts['Featured']++;
+      if (g.category && counts[g.category] !== undefined && g.category !== 'All' && g.category !== 'Featured' && g.category !== 'Favorites') {
+        counts[g.category]++;
+      }
+    }
     return counts;
   }, [allGames, favorites]);
 
@@ -416,7 +413,7 @@ export default function App() {
             initial="initial"
             animate="animate"
             exit="exit"
-            className="flex-1 flex flex-col min-h-0 h-full w-full pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0"
+            className="flex-1 flex flex-col min-h-0 h-full w-full pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0"
           >
             <ChatView globalChat={globalChat} initialChannel={targetChatChannel} />
           </motion.div>
@@ -427,7 +424,7 @@ export default function App() {
             initial="initial"
             animate="animate"
             exit="exit"
-            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-hidden pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-0"
+            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-hidden pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0"
           >
             <AIAssistantView />
           </motion.div>
@@ -438,7 +435,7 @@ export default function App() {
             initial="initial"
             animate="animate"
             exit="exit"
-            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-y-auto"
+            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-y-auto pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0"
           >
             <MovieView onActiveMediaChange={setActiveMedia} />
           </motion.div>
@@ -449,9 +446,9 @@ export default function App() {
             initial="initial"
             animate="animate"
             exit="exit"
-            className="flex-1 flex flex-col min-h-0 h-full w-full"
+            className="flex-1 flex flex-col min-h-0 h-full w-full pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0"
           >
-            <LiveTVView />
+            <LiveTVView searchQuery={searchQuery} onSearchChange={setSearchQuery} />
           </motion.div>
         ) : (
           <motion.main
@@ -462,7 +459,7 @@ export default function App() {
             exit="exit"
             className="flex-1 w-full overflow-y-auto"
           >
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 pb-24 md:pb-16">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 pb-24 lg:pb-16">
             {/* Categories & Sorting - Directly at top below header */}
             <div className="mb-6">
               <CategoryFilter
@@ -613,78 +610,77 @@ export default function App() {
         }}
       />
 
-      {/* Sleek Responsive Mobile Navigation Bar */}
-      <nav aria-label="Mobile Navigation" className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/98 dark:bg-slate-950/98 backdrop-blur-2xl border-t border-slate-200 dark:border-slate-800 px-1 py-4 pb-[max(1.25rem,env(safe-area-inset-bottom))] flex items-center justify-around shadow-[0_-10px_40px_rgba(0,0,0,0.12)] transition-colors">
+      {/* Sleek Responsive Mobile & Tablet Navigation Bar */}
+      <nav aria-label="Mobile Navigation" className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-[#0d0d12]/95 backdrop-blur-xl border-t border-slate-200 dark:border-[#1e1e2d] px-1 py-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex items-center justify-around shadow-[0_-10px_40px_rgba(0,0,0,0.2)] transition-colors">
         <button
           type="button"
           onClick={() => setCurrentTab('games')}
-          className={`flex flex-col items-center gap-2 transition-all cursor-pointer flex-1 py-1 ${
-            currentTab === 'games' ? 'text-cyan-500 dark:text-cyan-300 scale-110' : 'text-slate-400 dark:text-slate-500'
+          className={`flex flex-col items-center justify-center gap-1 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
+            currentTab === 'games' ? 'text-[var(--brand-blue)]' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
           }`}
         >
-          <Gamepad2 className={`${currentTab === 'games' ? 'w-6 h-6' : 'w-5.5 h-5.5'}`} />
-          <span className="text-[10px] font-black uppercase tracking-tighter">Games</span>
+          <Gamepad2 className="w-5 h-5" />
+          <span className="text-[10px] font-bold uppercase tracking-tight">Games</span>
         </button>
 
         <button
           type="button"
           onClick={() => setCurrentTab('movies')}
-          className={`flex flex-col items-center gap-2 transition-all cursor-pointer flex-1 py-1 ${
-            currentTab === 'movies' ? 'text-cyan-500 dark:text-cyan-300 scale-110' : 'text-slate-400 dark:text-slate-500'
+          className={`flex flex-col items-center justify-center gap-1 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
+            currentTab === 'movies' ? 'text-[var(--brand-blue)]' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
           }`}
         >
-          <Film className={`${currentTab === 'movies' ? 'w-6 h-6' : 'w-5.5 h-5.5'}`} />
-          <span className="text-[10px] font-black uppercase tracking-tighter">Movies</span>
+          <Film className="w-5 h-5" />
+          <span className="text-[10px] font-bold uppercase tracking-tight">Movies</span>
         </button>
 
         <button
           type="button"
           onClick={() => setCurrentTab('ai')}
-          className={`flex flex-col items-center gap-2 transition-all cursor-pointer flex-1 py-1 ${
-            currentTab === 'ai' ? 'text-cyan-500 dark:text-cyan-300 scale-110' : 'text-slate-400 dark:text-slate-500'
+          className={`flex flex-col items-center justify-center gap-1 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
+            currentTab === 'ai' ? 'text-[var(--brand-blue)]' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
           }`}
         >
-          <Sparkles className={`${currentTab === 'ai' ? 'w-6 h-6' : 'w-5.5 h-5.5'}`} />
-          <span className="text-[10px] font-black uppercase tracking-tighter">AI</span>
+          <Sparkles className="w-5 h-5" />
+          <span className="text-[10px] font-bold uppercase tracking-tight">AI</span>
         </button>
 
         <button
           type="button"
           onClick={() => setCurrentTab('tv')}
-          className={`flex flex-col items-center gap-2 transition-all cursor-pointer flex-1 py-1 ${
-            currentTab === 'tv' ? 'text-cyan-500 dark:text-cyan-300 scale-110' : 'text-slate-400 dark:text-slate-500'
+          className={`flex flex-col items-center justify-center gap-1 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
+            currentTab === 'tv' ? 'text-[var(--brand-blue)]' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
           }`}
         >
-          <Tv className={`${currentTab === 'tv' ? 'w-6 h-6' : 'w-5.5 h-5.5'}`} />
-          <span className="text-[10px] font-black uppercase tracking-tighter">TV</span>
+          <Tv className="w-5 h-5" />
+          <span className="text-[10px] font-bold uppercase tracking-tight">Live TV</span>
         </button>
-
 
         <button
           type="button"
           onClick={() => setCurrentTab('chat')}
-          className={`flex flex-col items-center gap-2 transition-all relative cursor-pointer flex-1 py-1 ${
-            currentTab === 'chat' ? 'text-cyan-500 dark:text-cyan-300 scale-110' : 'text-slate-400 dark:text-slate-500'
+          className={`flex flex-col items-center justify-center gap-1 min-h-[44px] transition-colors relative cursor-pointer flex-1 py-1 rounded-xl ${
+            currentTab === 'chat' ? 'text-[var(--brand-blue)]' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
           }`}
         >
           <div className="relative">
-            <MessageSquare className={`${currentTab === 'chat' ? 'w-6 h-6' : 'w-5.5 h-5.5'}`} />
+            <MessageSquare className="w-5 h-5" />
             {globalChat.users.length > 0 && (
-              <span className="absolute -top-2 -right-2.5 bg-cyan-500 text-white text-[9px] font-black w-4.5 h-4.5 rounded-sm flex items-center justify-center border-2 border-white dark:border-slate-900">
+              <span className="absolute -top-1.5 -right-2.5 bg-[var(--brand-blue)] text-slate-950 text-[9px] font-black min-w-[16px] h-4 px-1 rounded flex items-center justify-center tabular-nums">
                 {globalChat.users.length}
               </span>
             )}
           </div>
-          <span className="text-[10px] font-black uppercase tracking-tighter">Social</span>
+          <span className="text-[10px] font-bold uppercase tracking-tight">Social</span>
         </button>
 
         <button
           type="button"
           onClick={() => setIsThemeModalOpen(true)}
-          className="flex flex-col items-center gap-2 text-slate-400 dark:text-slate-500 transition-all cursor-pointer flex-1 py-1"
+          className="flex flex-col items-center justify-center gap-1 min-h-[44px] text-slate-400 dark:text-slate-500 hover:text-slate-200 transition-colors cursor-pointer flex-1 py-1 rounded-xl"
         >
-          <Palette className="w-5.5 h-5.5" />
-          <span className="text-[10px] font-black uppercase tracking-tighter">Style</span>
+          <Palette className="w-5 h-5" />
+          <span className="text-[10px] font-bold uppercase tracking-tight">Style</span>
         </button>
       </nav>
 

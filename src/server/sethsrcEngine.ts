@@ -33,162 +33,324 @@ export function initSethsrcEngine(app: express.Express, baseDir: string) {
     }
   }));
 
+  // Short-TTL redirect target cache to eliminate extra redirect hops on every live manifest poll
+  const redirectCache = new Map<string, { resolvedUrl: string; expiresAt: number }>();
+
+  const NON_ENGLISH_CODES = new Set([
+    'es', 'spa', 'fr', 'fra', 'fre', 'de', 'deu', 'ger', 'it', 'ita',
+    'pt', 'por', 'ru', 'rus', 'ar', 'ara', 'zh', 'zho', 'chi', 'hi', 'hin',
+    'ja', 'jpn', 'ko', 'kor', 'nl', 'nld', 'dut', 'pl', 'pol', 'tr', 'tur',
+    'vi', 'vie', 'sv', 'swe', 'no', 'nor', 'da', 'dan', 'fi', 'fin',
+    'el', 'ell', 'gre', 'he', 'heb', 'th', 'tha', 'id', 'ind', 'uk', 'ukr',
+    'ro', 'ron', 'rum', 'cs', 'ces', 'cze', 'hu', 'hun'
+  ]);
+  const NON_ENGLISH_NAME_REGEX =
+    /\b(spanish|español|espanol|castellano|french|français|francais|german|deutsch|italian|italiano|portuguese|português|portugues|russian|arabic|chinese|mandarin|cantonese|hindi|japanese|korean|dutch|polish|turkish|vietnamese|ukrainian)\b/i;
+
+  const isNonEnglishAudio = (line: string) => {
+    if (!line.startsWith('#EXT-X-MEDIA:') || !line.includes('TYPE=AUDIO')) return false;
+    const langMatch = line.match(/LANGUAGE="([^"]+)"/i);
+    const nameMatch = line.match(/NAME="([^"]+)"/i);
+    const lang = (langMatch ? langMatch[1] : '').toLowerCase().trim();
+    const name = (nameMatch ? nameMatch[1] : '').toLowerCase().trim();
+    if (lang) {
+      const baseLang = lang.split(/[-_]/)[0];
+      if (baseLang === 'en' || baseLang === 'eng') return false;
+      if (NON_ENGLISH_CODES.has(lang) || NON_ENGLISH_CODES.has(baseLang)) return true;
+    }
+    if (name && NON_ENGLISH_NAME_REGEX.test(name)) {
+      return true;
+    }
+    return false;
+  };
+
   // 2. Stream Router / Reverse Proxy (/api/proxy-stream)
+  app.options('/api/proxy-stream', (_req, res) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', '*');
+    res.sendStatus(200);
+  });
+
   app.get('/api/proxy-stream', async (req, res) => {
     const targetUrl = req.query.url as string;
     if (!targetUrl) {
       return res.status(400).send('Missing target URL');
     }
 
-    try {
-      const parsedUrl = new URL(targetUrl);
-      const customReferer = (req.query.referer as string) || parsedUrl.origin;
+    const clientAbort = new AbortController();
+    res.on('close', () => {
+      if (!res.writableEnded) {
+        clientAbort.abort();
+      }
+    });
 
-      const headers: Record<string, string> = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-        'Referer': customReferer,
-        'Origin': customReferer,
-        'Accept': '*/*',
-      };
-      if (targetUrl.includes('pluto.tv')) {
-        headers['plutotv-device-dnt'] = '1';
-        headers['plutotv-device-model'] = 'web';
+    try {
+      const explicitReferer = typeof req.query.referer === 'string' && req.query.referer.trim()
+        ? req.query.referer.trim()
+        : '';
+
+      let actualTargetUrl = targetUrl;
+      const pluMatch = targetUrl.match(/plu-([a-f0-9]+)/i);
+      if (pluMatch && pluMatch[1]) {
+        actualTargetUrl = `https://cf-stitcher-orion.pluto.tv/stitch/hls/channel/${pluMatch[1]}/master.m3u8?deviceType=web&deviceMake=web&deviceModel=web&deviceId=web&appVersion=web&serverSideAds=false`;
       }
 
-      let upstreamResponse = await fetch(targetUrl, { headers });
+      const cachedRedirect = redirectCache.get(targetUrl);
+      const initialFetchUrl =
+        cachedRedirect && cachedRedirect.expiresAt > Date.now()
+          ? cachedRedirect.resolvedUrl
+          : actualTargetUrl;
 
-      if (!upstreamResponse.ok && (targetUrl.includes('tooneast') || targetUrl.includes('cartoon'))) {
-        const fallbackUrl = 'https://turnerlive.warnermediacdn.com/hls/live/2023183/aseast/noslate/VIDEO_1_5128000.m3u8';
-        upstreamResponse = await fetch(fallbackUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
-            'Accept': '*/*',
+      const buildHeaders = (withOriginReferer?: string): Record<string, string> => {
+        const h: Record<string, string> = {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+          'Accept': '*/*',
+        };
+        if (typeof req.headers.range === 'string') {
+          h['Range'] = req.headers.range;
+        }
+        if (withOriginReferer) {
+          h['Referer'] = withOriginReferer;
+          try {
+            h['Origin'] = new URL(withOriginReferer).origin;
+          } catch {
+            h['Origin'] = withOriginReferer;
           }
+        }
+        if (targetUrl.includes('pluto.tv')) {
+          h['plutotv-device-dnt'] = '1';
+          h['plutotv-device-model'] = 'web';
+        }
+        return h;
+      };
+
+      const fetchWithTimeout = async (urlToFetch: string, withRef?: string) => {
+        const timeoutSignal = AbortSignal.timeout(10000);
+        const signal = typeof (AbortSignal as any).any === 'function'
+          ? (AbortSignal as any).any([clientAbort.signal, timeoutSignal])
+          : timeoutSignal;
+        return fetch(urlToFetch, {
+          headers: buildHeaders(withRef),
+          redirect: 'follow',
+          signal,
         });
+      };
+
+      let upstreamResponse: Response;
+      try {
+        upstreamResponse = await fetchWithTimeout(initialFetchUrl, explicitReferer || undefined);
+        if (!upstreamResponse.ok && initialFetchUrl !== targetUrl) {
+          redirectCache.delete(targetUrl);
+          upstreamResponse = await fetchWithTimeout(targetUrl, explicitReferer || undefined);
+        }
+      } catch (err1) {
+        try {
+          upstreamResponse = await fetchWithTimeout(targetUrl, explicitReferer || undefined);
+        } catch (err2) {
+          return res.status(502).send('Upstream stream fetch failed');
+        }
+      }
+
+      if (!upstreamResponse.ok && (targetUrl.includes('tooneast') || targetUrl.toLowerCase().includes('cartoon'))) {
+        try {
+          upstreamResponse = await fetchWithTimeout('https://turnerlive.warnermediacdn.com/hls/live/2023160/tooneast/noslate/VIDEO_1_5128000.m3u8');
+          if (!upstreamResponse.ok) {
+            upstreamResponse = await fetchWithTimeout('https://cdn4.skygo.mn/live/disk1/Cartoon_Network/HLSv3-FTA/Cartoon_Network.m3u8');
+          }
+        } catch {}
+      }
+      if (!upstreamResponse.ok && (targetUrl.toLowerCase().includes('adult') || targetUrl.includes('aswest'))) {
+        try {
+          upstreamResponse = await fetchWithTimeout('https://turnerlive.warnermediacdn.com/hls/live/2023185/aswest/noslate/VIDEO_1_5128000.m3u8');
+        } catch {}
       }
 
       if (!upstreamResponse.ok) {
         return res.status(upstreamResponse.status).send(`Upstream returned status ${upstreamResponse.status}`);
       }
 
-      const effectiveUrl = upstreamResponse.url || targetUrl;
-      const lowerUrl = effectiveUrl.toLowerCase();
+      const effectiveUrl = upstreamResponse.url || initialFetchUrl;
+      if (effectiveUrl !== targetUrl && (effectiveUrl.includes('.m3u8') || effectiveUrl.includes('playlist'))) {
+        if (redirectCache.size > 1500) {
+          const oldestKey = redirectCache.keys().next().value;
+          if (oldestKey) redirectCache.delete(oldestKey);
+        }
+        redirectCache.set(targetUrl, { resolvedUrl: effectiveUrl, expiresAt: Date.now() + 45000 });
+      }
+
+      const lowerUrl = effectiveUrl.toLowerCase().split('?')[0];
       const rawContentType = (upstreamResponse.headers.get('content-type') || '').toLowerCase();
 
-      // Check if this is a binary media fragment, audio, or encryption key
-      const isMediaOrKey = lowerUrl.includes('.ts') ||
-                           lowerUrl.includes('.key') ||
-                           lowerUrl.includes('.m4s') ||
-                           lowerUrl.includes('.mp4') ||
-                           lowerUrl.includes('.aac');
+      const isMediaOrKey =
+        lowerUrl.endsWith('.ts') ||
+        lowerUrl.endsWith('.m4s') ||
+        lowerUrl.endsWith('.mp4') ||
+        lowerUrl.endsWith('.m4v') ||
+        lowerUrl.endsWith('.m4a') ||
+        lowerUrl.endsWith('.cmfv') ||
+        lowerUrl.endsWith('.cmfa') ||
+        lowerUrl.endsWith('.aac') ||
+        lowerUrl.endsWith('.mp3') ||
+        lowerUrl.endsWith('.key') ||
+        lowerUrl.endsWith('.bin') ||
+        lowerUrl.includes('keyaes');
 
-      const isPlaylist = !isMediaOrKey && (
-        lowerUrl.includes('.m3u8') ||
-        lowerUrl.includes('playlist') ||
-        lowerUrl.includes('master') ||
-        rawContentType.includes('mpegurl')
-      );
+      const isSubtitle =
+        lowerUrl.endsWith('.vtt') ||
+        lowerUrl.endsWith('.webvtt') ||
+        lowerUrl.endsWith('.ttml') ||
+        rawContentType.includes('text/vtt');
+
+      const isPlaylist =
+        !isMediaOrKey &&
+        !isSubtitle &&
+        (lowerUrl.endsWith('.m3u8') ||
+          lowerUrl.endsWith('.m3u') ||
+          lowerUrl.includes('playlist') ||
+          lowerUrl.includes('master') ||
+          rawContentType.includes('mpegurl') ||
+          rawContentType.includes('m3u'));
 
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', '*');
+      res.setHeader('Access-Control-Expose-Headers', 'Content-Length, Content-Range, Accept-Ranges');
 
       if (isPlaylist) {
-        res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
         const text = await upstreamResponse.text();
+        // Verify it is actually an M3U8 playlist before rewriting
+        if (text.includes('#EXTM3U') || text.includes('#EXTINF') || text.includes('#EXT-X-')) {
+          res.setHeader('Content-Type', 'application/vnd.apple.mpegurl');
+          res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
 
-        const nonEnglishPatterns = [
-          'es', 'spa', 'spanish', 'español', 'castellano',
-          'fr', 'fra', 'french', 'français',
-          'de', 'deu', 'ger', 'german', 'deutsch',
-          'it', 'ita', 'italian', 'italiano',
-          'pt', 'por', 'portuguese', 'português',
-          'ru', 'rus', 'russian',
-          'ar', 'ara', 'arabic',
-          'zh', 'zho', 'chi', 'chinese',
-          'hi', 'hin', 'hindi',
-          'ja', 'jpn', 'japanese',
-          'ko', 'kor', 'korean',
-          'nl', 'nld', 'dut', 'dutch',
-          'pl', 'pol', 'polish',
-          'tr', 'tur', 'turkish',
-          'vi', 'vie', 'vietnamese'
-        ];
+          const refSuffix = explicitReferer ? `&referer=${encodeURIComponent(explicitReferer)}` : '';
+          const rewritten = text
+            .split(/\r?\n/)
+            .filter((line) => !isNonEnglishAudio(line.trim()))
+            .map((line) => {
+              const trimmed = line.trim();
+              if (!trimmed) return line;
 
-        const isNonEnglishAudio = (line: string) => {
-          if (!line.startsWith('#EXT-X-MEDIA:') || !line.includes('TYPE=AUDIO')) return false;
-          const langMatch = line.match(/LANGUAGE="([^"]+)"/i);
-          const nameMatch = line.match(/NAME="([^"]+)"/i);
-          const lang = (langMatch ? langMatch[1] : '').toLowerCase();
-          const name = (nameMatch ? nameMatch[1] : '').toLowerCase();
+              // Ensure surviving audio tracks remain selectable
+              if (trimmed.startsWith('#EXT-X-MEDIA:') && trimmed.includes('TYPE=AUDIO')) {
+                let updated = line;
+                if (updated.includes('DEFAULT=NO')) updated = updated.replace('DEFAULT=NO', 'DEFAULT=YES');
+                if (updated.includes('AUTOSELECT=NO')) updated = updated.replace('AUTOSELECT=NO', 'AUTOSELECT=YES');
+                line = updated;
+              }
 
-          for (const p of nonEnglishPatterns) {
-            if (lang === p || lang.startsWith(p + '-') || name.includes(p)) {
-              return true;
-            }
-          }
-          return false;
-        };
+              // Rewrite tag URI attributes: URI="xyz" (e.g. #EXT-X-KEY, #EXT-X-MEDIA, #EXT-X-MAP)
+              if (trimmed.startsWith('#')) {
+                return line.replace(/URI="([^"]+)"/g, (_, uriValue) => {
+                  try {
+                    const abs = new URL(uriValue, effectiveUrl).href;
+                    return `URI="/api/proxy-stream?url=${encodeURIComponent(abs)}${refSuffix}"`;
+                  } catch {
+                    return `URI="${uriValue}"`;
+                  }
+                });
+              }
 
-        const rewritten = text.split('\n')
-          .filter(line => !isNonEnglishAudio(line.trim()))
-          .map(line => {
-            const trimmed = line.trim();
-            if (!trimmed) return line;
+              try {
+                const absolute = new URL(trimmed, effectiveUrl).href;
+                return `/api/proxy-stream?url=${encodeURIComponent(absolute)}${refSuffix}`;
+              } catch {
+                return trimmed;
+              }
+            })
+            .join('\n');
 
-            // Ensure English audio tracks are set to DEFAULT=YES, AUTOSELECT=YES
-            if (trimmed.startsWith('#EXT-X-MEDIA:') && trimmed.includes('TYPE=AUDIO')) {
-              let updated = line;
-              if (updated.includes('DEFAULT=NO')) updated = updated.replace('DEFAULT=NO', 'DEFAULT=YES');
-              if (updated.includes('AUTOSELECT=NO')) updated = updated.replace('AUTOSELECT=NO', 'AUTOSELECT=YES');
-              line = updated;
-            }
-
-            // Rewrite tag URI attributes: URI="xyz" (e.g. #EXT-X-KEY, #EXT-X-MEDIA, #EXT-X-MAP)
-            if (trimmed.startsWith('#')) {
-              return line.replace(/URI="([^"]+)"/g, (_, uriValue) => {
-                try {
-                  const abs = new URL(uriValue, effectiveUrl).href;
-                  return `URI="/api/proxy-stream?url=${encodeURIComponent(abs)}&referer=${encodeURIComponent(customReferer)}"`;
-                } catch {
-                  return `URI="${uriValue}"`;
-                }
-              });
-            }
-
-            // Rewrite direct playlist or segment URLs
-            try {
-              const absolute = new URL(trimmed, effectiveUrl).href;
-              return `/api/proxy-stream?url=${encodeURIComponent(absolute)}&referer=${encodeURIComponent(customReferer)}`;
-            } catch {
-              return trimmed;
-            }
-          }).join('\n');
-
-        return res.send(rewritten);
+          return res.send(rewritten);
+        }
+        // Not a playlist; return raw text safely
+        res.setHeader('Content-Type', rawContentType || 'text/plain; charset=utf-8');
+        return res.send(text);
       }
 
-      // Set proper binary mime type
-      if (lowerUrl.includes('.ts')) {
+      // Binary media segment, encryption key, or subtitle track
+      if (upstreamResponse.status === 206) {
+        res.status(206);
+      }
+      const contentRange = upstreamResponse.headers.get('content-range');
+      const contentLength = upstreamResponse.headers.get('content-length');
+      const acceptRanges = upstreamResponse.headers.get('accept-ranges');
+      if (contentRange) res.setHeader('Content-Range', contentRange);
+      if (contentLength) res.setHeader('Content-Length', contentLength);
+      if (acceptRanges) res.setHeader('Accept-Ranges', acceptRanges);
+
+      if (lowerUrl.endsWith('.ts')) {
         res.setHeader('Content-Type', 'video/mp2t');
-      } else if (lowerUrl.includes('.key')) {
+        res.setHeader('Cache-Control', 'public, max-age=300');
+      } else if (lowerUrl.endsWith('.key') || lowerUrl.includes('keyaes')) {
         res.setHeader('Content-Type', 'application/octet-stream');
-      } else if (lowerUrl.includes('.m4s')) {
+        res.setHeader('Cache-Control', 'public, max-age=120');
+      } else if (lowerUrl.endsWith('.m4s') || lowerUrl.endsWith('.cmfv') || lowerUrl.endsWith('.cmfa')) {
         res.setHeader('Content-Type', 'video/iso.segment');
+        res.setHeader('Cache-Control', 'public, max-age=300');
+      } else if (isSubtitle) {
+        res.setHeader('Content-Type', 'text/vtt; charset=utf-8');
+        res.setHeader('Cache-Control', 'public, max-age=120');
       } else {
-        res.setHeader('Content-Type', upstreamResponse.headers.get('content-type') || 'application/octet-stream');
+        res.setHeader('Content-Type', rawContentType || 'application/octet-stream');
       }
 
-      // Pipe binary media
       if (upstreamResponse.body) {
         const stream = Readable.fromWeb(upstreamResponse.body as any);
+        stream.on('error', () => {
+          if (!res.headersSent) res.status(502).end();
+          else res.end();
+        });
+        res.on('close', () => {
+          stream.destroy();
+        });
         stream.pipe(res);
       } else {
         res.end();
       }
     } catch (error: any) {
-      console.error('Sethsrc proxy stream error:', error);
-      res.status(500).send('Proxy error streaming file.');
+      if (error?.name === 'AbortError' || clientAbort.signal.aborted) {
+        if (!res.headersSent) res.status(499).end();
+        return;
+      }
+      console.error('Sethsrc proxy stream error:', error?.message || error);
+      if (!res.headersSent) {
+        res.status(502).send('Proxy error streaming file.');
+      }
+    }
+  });
+
+  // 2.1 Image Proxy Endpoint (/api/proxy-image)
+  app.get('/api/proxy-image', async (req, res) => {
+    const targetUrl = req.query.url as string;
+    if (!targetUrl) {
+      return res.status(400).send('Missing url parameter');
+    }
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6000);
+      const upstream = await fetch(targetUrl, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
+          'Accept': 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        },
+        signal: controller.signal,
+      });
+      clearTimeout(timer);
+      if (!upstream.ok) {
+        return res.status(upstream.status).send('Upstream image error');
+      }
+      const cType = upstream.headers.get('content-type') || 'image/png';
+      res.setHeader('Content-Type', cType);
+      res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      if (upstream.body) {
+        Readable.fromWeb(upstream.body as any).pipe(res);
+      } else {
+        res.end();
+      }
+    } catch {
+      res.status(502).send('Image proxy failed');
     }
   });
 

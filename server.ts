@@ -213,7 +213,6 @@ app.get('/api/ws-db/snapshot', (req, res) => {
   res.json({
     success: true,
     users: globalWsDb.getUsers(),
-    messages: globalWsDb.messages,
     channels: globalWsDb.channels,
     timestamp: Date.now(),
   });
@@ -324,9 +323,8 @@ app.post('/api/ws-db/message', (req, res) => {
       timestamp: row.timestamp || ('Today at ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
       created_at: Number(row.created_at) || Date.now(),
     };
-    globalWsDb.insertMessage(newMsg as any);
-    broadcastTable('messages', globalWsDb.messages);
-    res.json({ success: true, message: newMsg, messages: globalWsDb.messages });
+    broadcastTable('messages', [newMsg]);
+    res.json({ success: true, message: newMsg });
   } catch (err: any) {
     res.status(500).json({ error: 'Insert message failed', message: err?.message });
   }
@@ -336,11 +334,9 @@ app.delete('/api/ws-db/message/:id', (req, res) => {
   try {
     const messageId = req.params.id;
     if (messageId) {
-      globalWsDb.deleteMessage(messageId);
       broadcastWss({ type: 'SQL_DELETE', table: 'messages', id: messageId });
-      broadcastTable('messages', globalWsDb.messages);
     }
-    res.json({ success: true, messages: globalWsDb.messages });
+    res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: 'Delete message failed', message: err?.message });
   }
@@ -350,11 +346,9 @@ app.delete('/api/ws-db/channel-messages/:channelId', (req, res) => {
   try {
     const channelId = req.params.channelId;
     if (channelId) {
-      globalWsDb.deleteChannelMessages(channelId);
       broadcastWss({ type: 'SQL_DELETE_CHANNEL', table: 'messages', channel_id: channelId });
-      broadcastTable('messages', globalWsDb.messages);
     }
-    res.json({ success: true, messages: globalWsDb.messages });
+    res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: 'Delete channel messages failed', message: err?.message });
   }
@@ -362,9 +356,8 @@ app.delete('/api/ws-db/channel-messages/:channelId', (req, res) => {
 
 app.delete('/api/ws-db/messages/all', (req, res) => {
   try {
-    globalWsDb.deleteAllMessages();
     broadcastWss({ type: 'DB_CLEAR_MESSAGES' });
-    res.json({ success: true, messages: [] });
+    res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: 'Global delete failed', message: err?.message });
   }
