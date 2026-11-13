@@ -177,22 +177,14 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   "logo": "data:image/svg+xml;utf8,<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 160 80\" width=\"160\" height=\"80\"><rect width=\"160\" height=\"80\" rx=\"8\" fill=\"%231c0a0a\"/><circle cx=\"36\" cy=\"40\" r=\"14\" fill=\"%23dc2626\"/><circle cx=\"36\" cy=\"40\" r=\"8\" fill=\"%23ffffff\"/><circle cx=\"36\" cy=\"40\" r=\"4\" fill=\"%23dc2626\"/><text x=\"64\" y=\"37\" fill=\"%23ffffff\" font-family=\"system-ui,sans-serif\" font-weight=\"900\" font-size=\"20\" letter-spacing=\"1\">CBC</text><text x=\"64\" y=\"54\" fill=\"%23ef4444\" font-family=\"system-ui,sans-serif\" font-weight=\"700\" font-size=\"13\" letter-spacing=\"1.5\">COMEDY</text></svg>",
   "description": "Top comedy series, sketches, and stand-up routines."
 },
-{
-  "id": "cartoon-network",
-  "name": "Cartoon Network",
-  "url": "/api/proxy-stream?url=https%3A%2F%2Fturnerlive.warnermediacdn.com%2Fhls%2Flive%2F2023183%2Faseast%2Fnoslate%2FVIDEO_1_5128000.m3u8",
-  "category": "Family & Kids",
-  "logo": "https://upload.wikimedia.org/wikipedia/commons/8/80/Cartoon_Network_2010_logo.svg",
-  "description": "Cartoon Network US East 1080p Live Stream (Verified)"
-},
-{
-  "id": "adult-swim",
-  "name": "Adult Swim",
-  "url": "/api/proxy-stream?url=https%3A%2F%2Fturnerlive.warnermediacdn.com%2Fhls%2Flive%2F2023185%2Faswest%2Fnoslate%2FVIDEO_1_5128000.m3u8",
-  "category": "Entertainment",
-  "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTewSE1yaixloq8Kfk-_R5fNghb7p2vbDd4Q464ZgITP3WFhujgHo6VLnA&s=10",
-  "description": "Adult Swim US West 1080p Live Stream (Verified)"
-},
+  {
+    "id": "cartoon-network",
+    "name": "Cartoon Network",
+    "url": "/api/proxy-stream?url=http%3A%2F%2F212.5.144.156%3A8080%2Fcartoon%2Findex.m3u8",
+    "category": "Family & Kids",
+    "logo": "https://upload.wikimedia.org/wikipedia/commons/8/80/Cartoon_Network_2010_logo.svg",
+    "description": "Cartoon Network Live Stream"
+  },
 {
   "id": "pbs-kids",
   "name": "PBS Kids",
