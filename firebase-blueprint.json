@@ -29,6 +29,18 @@
         "deleted_at": { "type": "number" }
       },
       "required": ["id"]
+    },
+    "UserFavorites": {
+      "title": "UserFavorites",
+      "description": "User saved favorite game IDs and TV channel IDs",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "maxLength": 128 },
+        "gameIds": { "type": "array" },
+        "channelIds": { "type": "array" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["userId"]
     }
   },
   "firestore": {
@@ -39,7 +51,10 @@
     "/deletions/{messageId}": {
       "schema": { "$ref": "#/entities/Deletion" },
       "description": "Shared tombstones for permanent message deletion sync"
+    },
+    "/user_favorites/{userId}": {
+      "schema": { "$ref": "#/entities/UserFavorites" },
+      "description": "Persistent user favorites for games and TV channels"
     }
   }
 }
-

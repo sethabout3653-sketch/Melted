@@ -539,35 +539,19 @@ export async function fetchGames(): Promise<GameItem[]> {
   return getAllGames();
 }
 
-const FAVORITES_KEY = 'melted_favorite_ids';
+import { getStoredGameFavorites, toggleGameFavorite as svcToggleGameFavorite } from './favoritesService';
+
 const RECENT_KEY = 'melted_recent_ids';
 
 export function getFavorites(): number[] {
-  try {
-    const stored = localStorage.getItem(FAVORITES_KEY);
-    return stored ? JSON.parse(stored) : [];
-  } catch {
-    return [];
-  }
+  return getStoredGameFavorites();
 }
 
 export function toggleFavorite(id: number): boolean {
-  try {
-    const current = getFavorites();
-    const index = current.indexOf(id);
-    let updated: number[];
-    let added = false;
-    if (index >= 0) {
-      updated = current.filter((x) => x !== id);
-    } else {
-      updated = [id, ...current];
-      added = true;
-    }
-    localStorage.setItem(FAVORITES_KEY, JSON.stringify(updated));
-    return added;
-  } catch {
-    return false;
-  }
+  const prev = getStoredGameFavorites();
+  const wasFav = prev.includes(id);
+  svcToggleGameFavorite(id);
+  return !wasFav;
 }
 
 export function getRecentPlayed(): number[] {

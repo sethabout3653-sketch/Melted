@@ -80,6 +80,56 @@ app.post('/api/upload', (req, res) => {
   }
 });
 
+// User Favorites Persistent Storage Endpoint
+const favoritesStorePath = path.join(uploadsDir, 'favorites_store.json');
+const getFavoritesData = (): Record<string, { gameIds: number[]; channelIds: string[]; updatedAt: number }> => {
+  try {
+    if (fs.existsSync(favoritesStorePath)) {
+      return JSON.parse(fs.readFileSync(favoritesStorePath, 'utf8'));
+    }
+  } catch {}
+  return {};
+};
+
+const saveFavoritesData = (data: Record<string, any>) => {
+  try {
+    fs.writeFileSync(favoritesStorePath, JSON.stringify(data, null, 2), 'utf8');
+  } catch (e) {
+    console.warn('Failed to write favorites store:', e);
+  }
+};
+
+app.get('/api/favorites', (req, res) => {
+  try {
+    const userId = (req.query.userId as string) || 'guest';
+    const store = getFavoritesData();
+    const userFavs = store[userId] || { gameIds: [], channelIds: [], updatedAt: Date.now() };
+    res.json(userFavs);
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to fetch favorites', message: err?.message });
+  }
+});
+
+app.post('/api/favorites', (req, res) => {
+  try {
+    const { userId, gameIds, channelIds } = req.body;
+    if (!userId) {
+      return res.status(400).json({ error: 'Missing userId' });
+    }
+    const store = getFavoritesData();
+    const updated = {
+      gameIds: Array.isArray(gameIds) ? gameIds.map(Number).filter((n) => !Number.isNaN(n)) : [],
+      channelIds: Array.isArray(channelIds) ? channelIds.map(String) : [],
+      updatedAt: Date.now(),
+    };
+    store[userId] = updated;
+    saveFavoritesData(store);
+    res.json({ success: true, ...updated });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to save favorites', message: err?.message });
+  }
+});
+
 // File Download Endpoint
 app.get('/api/download', async (req, res) => {
   try {
