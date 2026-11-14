@@ -49,6 +49,7 @@ const DEFAULT_XMLTV_FEEDS: FeedSource[] = [
 const ADULT_SWIM_SCHEDULE_URL = 'https://www.adultswim.com/api/schedule/marathons/5801264b1bb9661440d5f845';
 const EXPLICIT_XMLTV_CHANNEL_IDS: Record<string, string[]> = {
   'cartoon-network': ['Cartoon.Network.(HD).sg', 'Cartoon.Network.sg'],
+  'pbs-mpt-baltimore': ['PBS.us', 'MPT.us', 'WMPB.us'],
 };
 
 const CATEGORY_TO_COUNTRY: Record<string, string> = {
@@ -96,7 +97,6 @@ function parseXmltvTime(raw: string): number {
   return utcMs - offsetMinutes * 60_000;
 }
 
-/** Parses and normalizes any content rating (TV ratings, MPAA, international age ratings) instantly across all feeds. */
 function parseTvRating(programmeBody: string): string | undefined {
   const matches = [...programmeBody.matchAll(/<rating\b[^>]*>([\s\S]*?)<\/rating>/gi)];
   for (const match of matches) {
