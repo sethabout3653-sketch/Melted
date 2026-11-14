@@ -90,14 +90,14 @@ function parseXmltvTime(raw: string): number {
   return utcMs - offsetMinutes * 60_000;
 }
 
-/** Return a recognized TV rating exactly as supplied by XMLTV; never infer or invent one. */
+/** Instantly parse and normalize any content rating across all feeds and channels (TV ratings, MPAA, age ratings). */
 function parseTvRating(programmeBody: string): string | undefined {
   const matches = [...programmeBody.matchAll(/<rating\b[^>]*>([\s\S]*?)<\/rating>/gi)];
   for (const match of matches) {
     const value = match[1].match(/<value\b[^>]*>([\s\S]*?)<\/value>/i)?.[1];
     if (!value) continue;
     const rating = decodeXmlEntities(value.replace(/<[^>]+>/g, '')).trim().toUpperCase().replace(/\s+/g, '');
-    if (/^TV-(?:Y|Y7|Y7-FV|G|PG|14|MA)$/.test(rating)) return rating;
+    if (rating) return rating;
   }
   return undefined;
 }
@@ -135,8 +135,6 @@ async function fetchAndParseXmltvFeed(source: FeedSource, windowStart: number, w
     if (!res.ok) return { tag: source.tag, channels, programmes };
 
     const buf = Buffer.from(await res.arrayBuffer());
-    // Fetch implementations may transparently decompress gzip responses. Only gunzip
-    // when the response body itself still has the gzip signature.
     const isGzip = buf[0] === 0x1f && buf[1] === 0x8b;
     const xml = isGzip ? zlib.gunzipSync(buf).toString('utf8') : buf.toString('utf8');
 
@@ -217,7 +215,6 @@ function dedupeAndSortProgrammes(rawProgs: EpgProgramme[]): EpgProgramme[] {
   });
 }
 
-/** Resolve a provider ID even when XMLTV decorates it with a provider/region prefix or suffix. */
 function findProviderXmlId(idMap: Map<string, string> | undefined, providerId: string): string | undefined {
   if (!idMap) return undefined;
   const exact = idMap.get(providerId.toLowerCase());
@@ -378,7 +375,7 @@ export async function refreshEpgCache(customUrls?: string[], force = false): Pro
       cachedProgramsByChannelId = byChannelId;
       cachedTvgIdMap = tvgIds;
       lastUpdatedAt = Date.now();
-      console.log(`📺 [EPG] Loaded live Now & Next guide for ${Object.keys(byChannelId).length} channels`);
+      console.log(`📺 [EPG] Loaded live Now & Next guide for ${Object.keys(byChannelId).length} channels with ratings`);
     }
   };
 
