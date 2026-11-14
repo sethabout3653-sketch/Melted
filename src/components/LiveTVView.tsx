@@ -16,7 +16,7 @@ import {
   PanelRightOpen,
 } from 'lucide-react';
 import { TV_CHANNELS, TVChannel } from '../data/channels';
-import { scoreChannelSearch } from '../utils/channelSearch';
+import { searchChannels } from '../utils/channelSearch';
 import { classifyChannel, compareClassifiedChannels } from '../utils/channelOrganization';
 
 const EXTRA_CATEGORIES = [
@@ -132,13 +132,34 @@ const ChannelLogo: React.FC<{ logo?: string; name: string }> = React.memo(({ log
   );
 });
 
+interface EpgProgramme {
+  title: string;
+  start: number;
+  stop: number;
+  desc?: string;
+}
+
+interface ChannelNowNext {
+  now?: EpgProgramme;
+  next?: EpgProgramme;
+}
+
+const formatEpgTime = (ms: number): string => {
+  try {
+    return new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  } catch {
+    return '';
+  }
+};
+
 const ChannelListItem: React.FC<{
   channel: TVChannel;
   isSelected: boolean;
   isFavorite: boolean;
+  epg?: ChannelNowNext;
   onSelect: (channel: TVChannel) => void;
   onToggleFavorite: (channelId: string) => void;
-}> = React.memo(({ channel, isSelected, isFavorite, onSelect, onToggleFavorite }) => {
+}> = React.memo(({ channel, isSelected, isFavorite, epg, onSelect, onToggleFavorite }) => {
   const meta = classifyChannel(channel);
   const subtitle =
     meta.subType && meta.subType.toLowerCase() !== meta.category.toLowerCase()
@@ -166,6 +187,26 @@ const ChannelListItem: React.FC<{
             {channel.name}
           </div>
           <div className="text-[11px] text-slate-400 font-medium truncate mt-0.5">{subtitle}</div>
+          {(epg?.now || epg?.next) && (
+            <div className="mt-1 space-y-0.5 text-[11px] leading-tight">
+              {epg.now && (
+                <div className="text-slate-200 truncate tabular-nums">
+                  <span className="text-[var(--brand-blue)] font-semibold">Now</span>
+                  <span className="text-slate-500 mx-1">·</span>
+                  <span className="text-slate-400 mr-1">{formatEpgTime(epg.now.start)}</span>
+                  <span>{epg.now.title}</span>
+                </div>
+              )}
+              {epg.next && (
+                <div className="text-slate-400 truncate tabular-nums">
+                  <span className="text-slate-500 font-semibold">Next</span>
+                  <span className="text-slate-600 mx-1">·</span>
+                  <span className="text-slate-500 mr-1">{formatEpgTime(epg.next.start)}</span>
+                  <span>{epg.next.title}</span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </button>
 
@@ -230,6 +271,27 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
   const [selectedQuality, setSelectedQuality] = useState<number>(-1); // -1 = Auto ABR
   const [activeHeight, setActiveHeight] = useState<number | null>(null);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
+  const [epgMap, setEpgMap] = useState<Record<string, ChannelNowNext>>({});
+
+  useEffect(() => {
+    let active = true;
+    const loadEpg = async () => {
+      try {
+        const res = await fetch('/api/epg/now-next', { signal: AbortSignal.timeout(8000) });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (active && data && typeof data.programs === 'object') {
+          setEpgMap(data.programs);
+        }
+      } catch {}
+    };
+    void loadEpg();
+    const interval = window.setInterval(loadEpg, 60000);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+    };
+  }, []);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -403,23 +465,19 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
       }).sort((a, b) => compareClassifiedChannels(a, b, selectedCategory === 'All' || selectedCategory === 'Favorites'));
     }
 
-    const scored: Array<{ channel: TVChannel; score: number }> = [];
-    for (const channel of TV_CHANNELS) {
-      if (selectedCategory === 'Favorites' && !favoriteSet.has(channel.id)) continue;
-      const score = scoreChannelSearch(channel, q);
-      if (score > 0) {
-        const channelCat = getDisplayCategory(channel);
-        const categoryBoost = (selectedCategory !== 'All' && selectedCategory !== 'Favorites' && channelCat === selectedCategory) ? 60 : 0;
-        scored.push({ channel, score: score + categoryBoost });
-      }
-    }
+    const pool =
+      selectedCategory === 'Favorites'
+        ? TV_CHANNELS.filter((channel) => favoriteSet.has(channel.id))
+        : TV_CHANNELS;
 
-    scored.sort(
-      (a, b) =>
-        b.score - a.score ||
-        compareClassifiedChannels(a.channel, b.channel, selectedCategory === 'All' || selectedCategory === 'Favorites')
-    );
-    return scored.map((item) => item.channel);
+    return searchChannels(pool, q, {
+      boostPredicate: (channel) =>
+        selectedCategory !== 'All' &&
+        selectedCategory !== 'Favorites' &&
+        getDisplayCategory(channel) === selectedCategory,
+      tieBreaker: (a, b) =>
+        compareClassifiedChannels(a, b, selectedCategory === 'All' || selectedCategory === 'Favorites'),
+    });
   }, [deferredSearchQuery, selectedCategory, favoriteSet]);
 
   useEffect(() => {
@@ -466,6 +524,7 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
   useEffect(() => {
     let isCancelled = false;
     let stallTimer: number | null = null;
+    let initTimer: number | null = null;
 
     if (selectedChannel && videoRef.current) {
       for (let i = 0; i < videoRef.current.textTracks.length; i++) {
@@ -488,11 +547,27 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
       let mediaErrorCount = 0;
       let lastTime = -1;
       let stuckTicks = 0;
+      let hasStartedPlaying = false;
 
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
       }
+
+      const clearInitTimer = () => {
+        if (initTimer !== null) {
+          clearTimeout(initTimer);
+          initTimer = null;
+        }
+      };
+
+      // Prevent infinite loading spinner if a live stream hangs before first frame
+      initTimer = window.setTimeout(() => {
+        if (isCancelled || hasStartedPlaying) return;
+        setIsLoading(false);
+        setIsPlaying(false);
+        setPlaybackError('This stream took too long to initialize. Try Reload or Next Channel.');
+      }, 16000);
 
       const tryPlayVideo = () => {
         if (isCancelled) return;
@@ -500,6 +575,8 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
           .play()
           .then(() => {
             if (isCancelled) return;
+            hasStartedPlaying = true;
+            clearInitTimer();
             setIsPlaying(true);
             setIsLoading(false);
             setPlaybackError(null);
@@ -513,15 +590,19 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
                 .play()
                 .then(() => {
                   if (isCancelled) return;
+                  hasStartedPlaying = true;
+                  clearInitTimer();
                   setIsPlaying(true);
                   setIsLoading(false);
                   setPlaybackError(null);
                 })
                 .catch(() => {
+                  clearInitTimer();
                   setIsPlaying(false);
                   setIsLoading(false);
                 });
             } else if (e.name !== 'AbortError') {
+              clearInitTimer();
               setIsPlaying(false);
               setIsLoading(false);
             }
@@ -530,6 +611,8 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
 
       const onCanPlay = () => {
         if (isCancelled) return;
+        hasStartedPlaying = true;
+        clearInitTimer();
         setIsLoading(false);
         setPlaybackError(null);
       };
@@ -538,6 +621,8 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
       };
       const onPlaying = () => {
         if (isCancelled) return;
+        hasStartedPlaying = true;
+        clearInitTimer();
         setIsLoading(false);
         setIsPlaying(true);
         setPlaybackError(null);
@@ -559,11 +644,12 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
           maxMaxBufferLength: 90,
           backBufferLength: 30,
           highBufferWatchdogPeriod: 2,
-          nudgeMaxRetry: 10,
-          fragLoadingMaxRetry: 6,
+          nudgeMaxRetry: 6,
+          fragLoadingMaxRetry: 3,
           fragLoadingRetryDelay: 750,
-          manifestLoadingMaxRetry: 4,
-          levelLoadingMaxRetry: 4,
+          manifestLoadingMaxRetry: 2,
+          manifestLoadingTimeOut: 8000,
+          levelLoadingMaxRetry: 2,
           autoStartLoad: true,
           capLevelToPlayerSize: false,
           startLevel: -1,
@@ -673,6 +759,7 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
                     if (!isCancelled && hlsRef.current === hls) hls.startLoad();
                   }, 500 * networkRetryCount);
                 } else {
+                  clearInitTimer();
                   setIsLoading(false);
                   setIsPlaying(false);
                   setPlaybackError('This stream is temporarily unreachable or offline.');
@@ -686,6 +773,7 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
                   hls.swapAudioCodec();
                   hls.recoverMediaError();
                 } else {
+                  clearInitTimer();
                   hls.destroy();
                   setIsLoading(false);
                   setIsPlaying(false);
@@ -693,6 +781,7 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
                 }
                 break;
               default:
+                clearInitTimer();
                 hls.destroy();
                 setIsLoading(false);
                 setIsPlaying(false);
@@ -702,16 +791,19 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
           }
         });
 
-        // Watchdog to auto-nudge stalled live buffers without user intervention
+        // Watchdog to auto-nudge stalled live buffers or catch streams stuck loading
         stallTimer = window.setInterval(() => {
-          if (isCancelled || !video || video.paused) return;
+          if (isCancelled || !video) return;
+          if (video.paused && hasStartedPlaying) return;
           const nowTime = video.currentTime;
           if (nowTime === lastTime && video.readyState < 3) {
             stuckTicks++;
             if (stuckTicks === 3) {
               hls.startLoad();
-            } else if (stuckTicks >= 7) {
+            } else if (stuckTicks >= 6) {
+              clearInitTimer();
               setIsLoading(false);
+              setIsPlaying(false);
               setPlaybackError('Stream timed out while buffering.');
               if (stallTimer) clearInterval(stallTimer);
             }
@@ -723,6 +815,7 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
 
         return () => {
           isCancelled = true;
+          clearInitTimer();
           if (stallTimer) clearInterval(stallTimer);
           video.removeEventListener('canplay', onCanPlay);
           video.removeEventListener('waiting', onWaiting);
@@ -760,6 +853,8 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
 
         const onLoaded = () => {
           if (isCancelled) return;
+          hasStartedPlaying = true;
+          clearInitTimer();
           enforceNativeEnglish();
           tryPlayVideo();
           setIsLoading(false);
@@ -770,6 +865,7 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
             usedProxyFallback = true;
             video.src = `/api/proxy-stream?url=${encodeURIComponent(rawUrl)}`;
           } else {
+            clearInitTimer();
             setIsLoading(false);
             setPlaybackError('This stream is temporarily unavailable.');
           }
@@ -782,6 +878,7 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
         }
         return () => {
           isCancelled = true;
+          clearInitTimer();
           video.removeEventListener('canplay', onCanPlay);
           video.removeEventListener('waiting', onWaiting);
           video.removeEventListener('playing', onPlaying);
@@ -797,6 +894,7 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
 
     return () => {
       isCancelled = true;
+      if (initTimer !== null) clearTimeout(initTimer);
       if (stallTimer) clearInterval(stallTimer);
       setActiveCaptions([]);
     };
@@ -835,14 +933,11 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
     };
   }, [captionsEnabled, selectedChannel, syncCaptions]);
 
-  const togglePlayPause = useCallback(() => {
+  const ensureLivePlayback = useCallback(() => {
     const v = videoRef.current;
     if (!v) return;
     if (v.paused) {
       v.play().then(() => setIsPlaying(true)).catch(() => {});
-    } else {
-      v.pause();
-      setIsPlaying(false);
     }
   }, []);
 
@@ -889,9 +984,6 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
       } else if (e.key === 'PageUp' || (e.key === 'ArrowUp' && e.altKey)) {
         e.preventDefault();
         stepChannel(-1);
-      } else if (e.key === 'k' || (e.key === ' ' && document.activeElement?.tagName !== 'BUTTON')) {
-        e.preventDefault();
-        togglePlayPause();
       } else if (e.key === 'm') {
         toggleMute();
       } else if (e.key === 'f') {
@@ -902,7 +994,7 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [stepChannel, togglePlayPause, toggleMute, toggleFullscreen]);
+  }, [stepChannel, toggleMute, toggleFullscreen]);
 
   const selectedMeta = selectedChannel ? classifyChannel(selectedChannel) : null;
   const activeQualityLabel =
@@ -991,8 +1083,8 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
             >
               <video
                 ref={videoRef}
-                onClick={togglePlayPause}
-                className="w-full h-full object-contain cursor-pointer"
+                onClick={ensureLivePlayback}
+                className="w-full h-full object-contain"
                 playsInline
                 autoPlay
                 controls={false}
@@ -1265,6 +1357,7 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
                     channel={channel}
                     isSelected={selectedChannel?.id === channel.id}
                     isFavorite={favoriteSet.has(channel.id)}
+                    epg={epgMap[channel.id]}
                     onSelect={handleSelectChannel}
                     onToggleFavorite={toggleFavorite}
                   />

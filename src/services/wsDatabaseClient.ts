@@ -42,7 +42,7 @@ interface FirestoreErrorInfo {
   };
 }
 
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null, shouldThrow = false) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -61,7 +61,9 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     path,
   };
   console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  if (shouldThrow) {
+    throw new Error(JSON.stringify(errInfo));
+  }
 }
 
 export interface RtcSignalPayload {
@@ -253,9 +255,9 @@ export function useWebSocketDatabase(currentUser: {
       }
     };
 
-    const setupFirebase = async () => {
+    const setupFirebase = () => {
       try {
-        await testConnection();
+        void testConnection();
         if (cancelled) return;
         setIsFirebaseActive(true);
 
@@ -277,7 +279,7 @@ export function useWebSocketDatabase(currentUser: {
           },
           (err) => {
             setIsFirebaseActive(false);
-            handleFirestoreError(err, OperationType.GET, 'messages');
+            handleFirestoreError(err, OperationType.GET, 'messages', false);
           }
         );
 
@@ -300,7 +302,7 @@ export function useWebSocketDatabase(currentUser: {
             }
           },
           (err) => {
-            handleFirestoreError(err, OperationType.GET, 'deletions');
+            handleFirestoreError(err, OperationType.GET, 'deletions', false);
           }
         );
       } catch (err) {

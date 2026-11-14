@@ -184,18 +184,18 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   {
     "id": "cartoon-network",
     "name": "Cartoon Network",
-    "url": "/api/proxy-stream?url=https%3A%2F%2Fturnerlive.warnermediacdn.com%2Fhls%2Flive%2F2023160%2Ftooneast%2Fnoslate%2FVIDEO_1_5128000.m3u8",
+    "url": "/api/proxy-stream?url=https%3A%2F%2Fcdn4.skygo.mn%2Flive%2Fdisk1%2FCartoon_Network%2FHLSv3-FTA%2FCartoon_Network.m3u8",
     "category": "Family & Kids",
     "logo": "https://upload.wikimedia.org/wikipedia/commons/8/80/Cartoon_Network_2010_logo.svg",
-    "description": "Cartoon Network Live English Stream (Turner 1080p)"
+    "description": "Cartoon Network Live 24/7 English HD Stream"
   },
   {
     "id": "adult-swim",
     "name": "Adult Swim",
-    "url": "/api/proxy-stream?url=https%3A%2F%2Fturnerlive.warnermediacdn.com%2Fhls%2Flive%2F2023185%2Faswest%2Fnoslate%2FVIDEO_1_5128000.m3u8",
+    "url": "/api/proxy-stream?url=https%3A%2F%2Fadultswim-vodlive.cdn.turner.com%2Flive%2Frick-and-morty%2Fstream_de.m3u8",
     "category": "Comedy",
     "logo": "https://upload.wikimedia.org/wikipedia/commons/e/e4/Adult_Swim_2003_logo.svg",
-    "description": "Adult Swim Live 24/7 Animation and Comedy"
+    "description": "Adult Swim Live 24/7 English HD Stream"
   },
 {
   "id": "pbs-kids",

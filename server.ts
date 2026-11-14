@@ -15,7 +15,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const portArgIdx = process.argv.indexOf('--port');
+const cliPort = portArgIdx !== -1 ? process.argv[portArgIdx + 1] : undefined;
+const PORT = cliPort || process.env.PORT || 3000;
 const IS_PROD = process.env.NODE_ENV === 'production';
 
 // Initialize Sethsrc HLS Streaming & Reverse Proxy Engine
@@ -1415,7 +1417,7 @@ async function startServer() {
   if (!IS_PROD) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true, port: 3000, host: '0.0.0.0' },
+      server: { middlewareMode: true, hmr: false },
       appType: 'spa',
     });
     app.use(vite.middlewares);

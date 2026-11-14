@@ -5,18 +5,15 @@ export const FrostHubLoadingScreen: React.FC = () => {
   const [isFading, setIsFading] = useState(false);
 
   useEffect(() => {
-    // Lock scroll when mounting
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-
-    // Automatic transition after a short delay to simulate "power on"
+    // Fast reveal so the app never appears stuck loading
     const timer = setTimeout(() => {
       setIsFading(true);
-    }, 1200);
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    }, 200);
 
     return () => {
       clearTimeout(timer);
-      // Unlock scroll when unmounting
       document.body.style.overflow = '';
       document.documentElement.style.overflow = '';
     };
@@ -31,7 +28,7 @@ export const FrostHubLoadingScreen: React.FC = () => {
             initial={{ y: 0 }}
             exit={{ y: '-100%' }}
             transition={{ 
-              duration: 1.1, 
+              duration: 0.35, 
               ease: [0.65, 0, 0.35, 1] 
             }}
             className="absolute top-0 left-0 right-0 h-1/2 bg-[#070d1a] z-20 pointer-events-none"
@@ -42,7 +39,7 @@ export const FrostHubLoadingScreen: React.FC = () => {
             initial={{ y: 0 }}
             exit={{ y: '100%' }}
             transition={{ 
-              duration: 1.1, 
+              duration: 0.35, 
               ease: [0.65, 0, 0.35, 1] 
             }}
             className="absolute bottom-0 left-0 right-0 h-1/2 bg-[#070d1a] z-20 pointer-events-none"

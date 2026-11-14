@@ -388,7 +388,7 @@ export function transformUgsEntry(
  */
 export async function getUGSGames(): Promise<Array<{ name: string; url: string; img?: string }>> {
   try {
-    const res = await fetch(UGS_INDEX_URL);
+    const res = await fetch(UGS_INDEX_URL, { signal: AbortSignal.timeout(6000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (Array.isArray(data) && data.length > 0) {
@@ -397,7 +397,7 @@ export async function getUGSGames(): Promise<Array<{ name: string; url: string; 
     return rawUgsData as Array<{ name: string; url: string; img?: string }>;
   } catch (err) {
     try {
-      const fallbackRes = await fetch('https://cdn.jsdelivr.net/gh/gmshelf/ugs@main/ugs.json');
+      const fallbackRes = await fetch('https://cdn.jsdelivr.net/gh/gmshelf/ugs@main/ugs.json', { signal: AbortSignal.timeout(6000) });
       if (fallbackRes.ok) {
         const fallbackData = await fallbackRes.json();
         if (Array.isArray(fallbackData) && fallbackData.length > 0) {
@@ -414,7 +414,7 @@ export async function getUGSGames(): Promise<Array<{ name: string; url: string; 
  */
 export async function getCKVGames(): Promise<Array<{ name: string; url: string; img?: string }>> {
   try {
-    const res = await fetch('https://raw.githubusercontent.com/WanoCapy/ChickenKingsVault/main/games.js');
+    const res = await fetch('https://raw.githubusercontent.com/WanoCapy/ChickenKingsVault/main/games.js', { signal: AbortSignal.timeout(6000) });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
     const matches = [...text.matchAll(/<a class="game-link" href="([^"]+)">\s*<img src="([^"]+)"[^>]*>\s*<div>([^<]+)<\/div>/g)];

@@ -4,8 +4,10 @@ import fs from 'fs';
 import { exec } from 'child_process';
 import { Readable } from 'stream';
 import { TV_CHANNELS } from '../data/channels';
+import { initEpgRoutes, getMappedTvgId } from './epgService';
 
 export function initSethsrcEngine(app: express.Express, baseDir: string) {
+  initEpgRoutes(app);
   const hlsOutputDir = path.resolve(baseDir, 'hls_output');
   if (!fs.existsSync(hlsOutputDir)) {
     fs.mkdirSync(hlsOutputDir, { recursive: true });
@@ -154,9 +156,9 @@ export function initSethsrcEngine(app: express.Express, baseDir: string) {
 
       if (!upstreamResponse.ok && (targetUrl.includes('tooneast') || targetUrl.toLowerCase().includes('cartoon'))) {
         try {
-          upstreamResponse = await fetchWithTimeout('https://turnerlive.warnermediacdn.com/hls/live/2023160/tooneast/noslate/VIDEO_1_5128000.m3u8');
+          upstreamResponse = await fetchWithTimeout('https://cdn4.skygo.mn/live/disk1/Cartoon_Network/HLSv3-FTA/Cartoon_Network.m3u8');
           if (!upstreamResponse.ok) {
-            upstreamResponse = await fetchWithTimeout('https://cdn4.skygo.mn/live/disk1/Cartoon_Network/HLSv3-FTA/Cartoon_Network.m3u8');
+            upstreamResponse = await fetchWithTimeout('https://turnerlive.warnermediacdn.com/hls/live/2023160/tooneast/noslate/VIDEO_3_1928000.m3u8');
           }
         } catch {}
       }
@@ -568,16 +570,17 @@ export function initSethsrcEngine(app: express.Express, baseDir: string) {
     const protocol = req.protocol === 'https' || req.get('x-forwarded-proto') === 'https' ? 'https' : 'http';
     const baseUrl = `${protocol}://${host}`;
 
-    let m3u = '#EXTM3U\n';
+    let m3u = `#EXTM3U url-tvg="https://i.mjh.nz/PlutoTV/all.xml.gz,https://i.mjh.nz/SamsungTVPlus/all.xml.gz,https://epgshare01.online/epgshare01/epg_ripper_US2.xml.gz"\n`;
     for (const channel of TV_CHANNELS) {
       let streamUrl = channel.url;
       if (streamUrl.startsWith('/')) {
         streamUrl = `${baseUrl}${streamUrl}`;
       }
       const displayCat = (channel.category === 'Family' || channel.category === 'Kids' || channel.category === 'Family & Kids') ? 'Family & Kids' : channel.category;
+      const tvgId = getMappedTvgId(channel);
       const logoAttr = channel.logo ? ` tvg-logo="${channel.logo}"` : '';
       const groupAttr = displayCat ? ` group-title="${displayCat}"` : '';
-      m3u += `#EXTINF:-1 tvg-id="${channel.id}" tvg-name="${channel.name}"${logoAttr}${groupAttr},${channel.name}\n`;
+      m3u += `#EXTINF:-1 tvg-id="${tvgId}" tvg-name="${channel.name}"${logoAttr}${groupAttr},${channel.name}\n`;
       m3u += `${streamUrl}\n`;
     }
 
