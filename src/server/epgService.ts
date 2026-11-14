@@ -270,7 +270,6 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
     let matchedFeed: FeedTag | undefined;
     let matchedXmlId: string | undefined;
 
-    // Comprehensive provider ID extractors for Pluto, Samsung, Roku, Plex, and generic channel IDs
     const providerIds: Array<{ tag: FeedTag; id: string }> = [
       { tag: 'pluto', id: ch.url.match(/plu-([a-f0-9]+)/i)?.[1]?.toLowerCase() || ch.id.match(/plu-([a-f0-9]+)/i)?.[1]?.toLowerCase() || '' },
       { tag: 'samsung', id: ch.url.match(/stvp-([a-z0-9]+)/i)?.[1]?.toLowerCase() || ch.id.match(/stvp-([a-z0-9]+)/i)?.[1]?.toLowerCase() || '' },
@@ -345,6 +344,29 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
           const picked = [...uniqueCandidates.values()][0];
           matchedFeed = picked.feedTag;
           matchedXmlId = picked.xmlId;
+        } else if (uniqueCandidates.size > 1) {
+          const picked = [...uniqueCandidates.values()][0];
+          matchedFeed = picked.feedTag;
+          matchedXmlId = picked.xmlId;
+        }
+      }
+    }
+
+    // Ultimate fallback: if still unmatched, match against any available feed channel with identical compact name
+    if (!matchedXmlId) {
+      const compactName = compactAsciiName(ch.name);
+      if (compactName) {
+        for (const feed of feeds) {
+          for (const [xmlId, names] of feed.channels) {
+            if (names.some((n) => compactAsciiName(n) === compactName)) {
+              if (programmesByFeedAndXmlId.has(`${feed.tag}::${xmlId}`)) {
+                matchedFeed = feed.tag;
+                matchedXmlId = xmlId;
+                break;
+              }
+            }
+          }
+          if (matchedXmlId) break;
         }
       }
     }
