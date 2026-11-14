@@ -20,6 +20,7 @@ type FeedTag = 'custom' | 'pluto' | 'samsung' | 'roku' | 'plex' | 'us' | 'uk' | 
 interface FeedSource {
   tag: FeedTag;
   url: string;
+  fallbacks?: string[];
 }
 
 interface ParsedFeed {
@@ -57,10 +58,15 @@ const CATEGORY_TO_COUNTRY: Record<string, string> = {
 };
 
 const REFRESH_TTL_MS = 10 * 60 * 1000;
+const MAX_CONCURRENT_FEEDS = 2;
 let cachedProgramsByChannelId: Record<string, EpgProgramme[]> = {};
 let cachedTvgIdMap: Record<string, string> = {};
 let lastUpdatedAt = 0;
 let activeRefreshPromise: Promise<void> | null = null;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 function decodeXmlEntities(str: string): string {
   return str
@@ -124,68 +130,119 @@ function inferXmlChannelCountry(xmlId: string, feedTag: FeedTag): string | undef
   return undefined;
 }
 
+async function fetchBufferWithRetry(url: string, timeoutMs: number, retries = 2): Promise<Buffer> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          'Accept': 'application/xml,text/xml,application/gzip,application/octet-stream,*/*;q=0.8',
+          'Accept-Language': 'en-US,en;q=0.9',
+          'Cache-Control': 'no-cache',
+        },
+        redirect: 'follow',
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status} ${res.statusText}`);
+      }
+      return Buffer.from(await res.arrayBuffer());
+    } catch (err) {
+      lastError = err;
+      if (attempt < retries) {
+        await sleep(750 * (attempt + 1));
+      }
+    }
+  }
+  throw lastError;
+}
+
 async function fetchAndParseXmltvFeed(source: FeedSource, windowStart: number, windowEnd: number): Promise<ParsedFeed> {
   const channels = new Map<string, string[]>();
   const programmes = new Map<string, EpgProgramme[]>();
-  try {
-    const res = await fetch(source.url, {
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-      signal: AbortSignal.timeout(15000),
-    });
-    if (!res.ok) return { tag: source.tag, channels, programmes };
+  const urlsToTry = [source.url, ...(source.fallbacks || [])];
 
-    const buf = Buffer.from(await res.arrayBuffer());
-    const isGzip = buf[0] === 0x1f && buf[1] === 0x8b;
-    const xml = isGzip ? zlib.gunzipSync(buf).toString('utf8') : buf.toString('utf8');
+  for (const targetUrl of urlsToTry) {
+    try {
+      const buf = await fetchBufferWithRetry(targetUrl, 35000, 2);
+      const isGzip = buf[0] === 0x1f && buf[1] === 0x8b;
+      const xml = isGzip ? zlib.gunzipSync(buf).toString('utf8') : buf.toString('utf8');
 
-    const chRegex = /<channel\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/channel>/gi;
-    let chMatch: RegExpExecArray | null;
-    while ((chMatch = chRegex.exec(xml)) !== null) {
-      const names: string[] = [];
-      const nameRegex = /<display-name\b[^>]*>([\s\S]*?)<\/display-name>/gi;
-      let nameMatch: RegExpExecArray | null;
-      while ((nameMatch = nameRegex.exec(chMatch[2])) !== null) {
-        const name = decodeXmlEntities(nameMatch[1].replace(/<[^>]+>/g, ''));
-        if (name) names.push(name);
+      const chRegex = /<channel\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/channel>/gi;
+      let chMatch: RegExpExecArray | null;
+      while ((chMatch = chRegex.exec(xml)) !== null) {
+        const names: string[] = [];
+        const nameRegex = /<display-name\b[^>]*>([\s\S]*?)<\/display-name>/gi;
+        let nameMatch: RegExpExecArray | null;
+        while ((nameMatch = nameRegex.exec(chMatch[2])) !== null) {
+          const name = decodeXmlEntities(nameMatch[1].replace(/<[^>]+>/g, ''));
+          if (name) names.push(name);
+        }
+        channels.set(chMatch[1].trim(), names);
       }
-      channels.set(chMatch[1].trim(), names);
-    }
 
-    const progRegex = /<programme\b([^>]*)>([\s\S]*?)<\/programme>/gi;
-    let progMatch: RegExpExecArray | null;
-    while ((progMatch = progRegex.exec(xml)) !== null) {
-      const attrs = progMatch[1];
-      const startRaw = attrs.match(/\bstart="([^"]+)"/i)?.[1];
-      const stopRaw = attrs.match(/\bstop="([^"]+)"/i)?.[1];
-      const channelId = attrs.match(/\bchannel="([^"]+)"/i)?.[1]?.trim();
-      if (!startRaw || !stopRaw || !channelId) continue;
-      const start = parseXmltvTime(startRaw);
-      const stop = parseXmltvTime(stopRaw);
-      if (!start || !stop || stop <= start || stop <= windowStart || start >= windowEnd) continue;
-      const body = progMatch[2];
-      const titleRaw = body.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1];
-      const title = titleRaw ? decodeXmlEntities(titleRaw.replace(/<[^>]+>/g, '')) : '';
-      if (!title) continue;
-      const descRaw = body.match(/<desc\b[^>]*>([\s\S]*?)<\/desc>/i)?.[1];
-      const desc = descRaw ? decodeXmlEntities(descRaw.replace(/<[^>]+>/g, '')).slice(0, 180) : undefined;
-      const rating = parseTvRating(body);
-      const list = programmes.get(channelId) || [];
-      list.push({ title, start, stop, ...(desc ? { desc } : {}), ...(rating ? { rating } : {}) });
-      programmes.set(channelId, list);
+      const progRegex = /<programme\b([^>]*)>([\s\S]*?)<\/programme>/gi;
+      let progMatch: RegExpExecArray | null;
+      while ((progMatch = progRegex.exec(xml)) !== null) {
+        const attrs = progMatch[1];
+        const startRaw = attrs.match(/\bstart="([^"]+)"/i)?.[1];
+        const stopRaw = attrs.match(/\bstop="([^"]+)"/i)?.[1];
+        const channelId = attrs.match(/\bchannel="([^"]+)"/i)?.[1]?.trim();
+        if (!startRaw || !stopRaw || !channelId) continue;
+        const start = parseXmltvTime(startRaw);
+        const stop = parseXmltvTime(stopRaw);
+        if (!start || !stop || stop <= start || stop <= windowStart || start >= windowEnd) continue;
+        const body = progMatch[2];
+        const titleRaw = body.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1];
+        const title = titleRaw ? decodeXmlEntities(titleRaw.replace(/<[^>]+>/g, '')) : '';
+        if (!title) continue;
+        const descRaw = body.match(/<desc\b[^>]*>([\s\S]*?)<\/desc>/i)?.[1];
+        const desc = descRaw ? decodeXmlEntities(descRaw.replace(/<[^>]+>/g, '')).slice(0, 180) : undefined;
+        const rating = parseTvRating(body);
+        const list = programmes.get(channelId) || [];
+        list.push({ title, start, stop, ...(desc ? { desc } : {}), ...(rating ? { rating } : {}) });
+        programmes.set(channelId, list);
+      }
+
+      if (programmes.size > 0) {
+        return { tag: source.tag, channels, programmes };
+      }
+    } catch (err: any) {
+      const reason = err?.cause?.code || err?.cause?.message || err?.message || String(err);
+      console.warn(`[EPG] Failed loading XMLTV feed ${targetUrl}: ${reason}`);
     }
-  } catch (err: any) {
-    console.warn(`[EPG] Failed loading XMLTV feed ${source.url}:`, err?.message || err);
   }
+
   return { tag: source.tag, channels, programmes };
+}
+
+async function fetchFeedsWithConcurrency(
+  sources: FeedSource[],
+  windowStart: number,
+  windowEnd: number,
+  concurrency: number = MAX_CONCURRENT_FEEDS
+): Promise<ParsedFeed[]> {
+  const results: ParsedFeed[] = new Array(sources.length);
+  let cursor = 0;
+
+  const worker = async () => {
+    while (true) {
+      const idx = cursor++;
+      if (idx >= sources.length) break;
+      results[idx] = await fetchAndParseXmltvFeed(sources[idx], windowStart, windowEnd);
+    }
+  };
+
+  const workers = Array.from({ length: Math.min(concurrency, sources.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
 }
 
 async function fetchAdultSwimSchedule(): Promise<EpgProgramme[]> {
   try {
-    const res = await fetch(ADULT_SWIM_SCHEDULE_URL, {
-      headers: { 'User-Agent': 'Mozilla/5.0' }, signal: AbortSignal.timeout(8000),
-    });
-    if (!res.ok) return [];
-    const json: any = await res.json();
+    const buf = await fetchBufferWithRetry(ADULT_SWIM_SCHEDULE_URL, 15000, 1);
+    const json: any = JSON.parse(buf.toString('utf8'));
     const out: EpgProgramme[] = [];
     for (const item of (Array.isArray(json?.data) ? json.data : [])) {
       const start = typeof item.time === 'number' ? Math.round(item.time) : Date.parse(item.startTime || '');
@@ -200,7 +257,8 @@ async function fetchAdultSwimSchedule(): Promise<EpgProgramme[]> {
     }
     return out;
   } catch (err: any) {
-    console.warn('[EPG] Failed loading Adult Swim schedule:', err?.message || err);
+    const reason = err?.cause?.code || err?.cause?.message || err?.message || String(err);
+    console.warn(`[EPG] Failed loading Adult Swim schedule: ${reason}`);
     return [];
   }
 }
@@ -232,6 +290,7 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
   const programmesByFeedAndXmlId = new Map<string, EpgProgramme[]>();
 
   for (const feed of feeds) {
+    if (!feed) continue;
     let idMap = xmlIdByFeedAndLowerId.get(feed.tag);
     if (!idMap) {
       idMap = new Map<string, string>();
@@ -291,6 +350,7 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
       for (const targetId of EXPLICIT_XMLTV_CHANNEL_IDS[ch.id]) {
         const target = targetId.toLowerCase();
         for (const feed of feeds) {
+          if (!feed) continue;
           const candidate = xmlIdByFeedAndLowerId.get(feed.tag)?.get(target);
           if (candidate && programmesByFeedAndXmlId.has(`${feed.tag}::${candidate}`)) {
             matchedFeed = feed.tag;
@@ -305,6 +365,7 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
     if (!matchedXmlId) {
       const cleanId = ch.id.replace(/^(samsung-|roku-|pluto-|plex-|freetv-)/i, '').toLowerCase();
       for (const feed of feeds) {
+        if (!feed) continue;
         const idMap = xmlIdByFeedAndLowerId.get(feed.tag);
         const candidate = idMap?.get(ch.id.toLowerCase()) || idMap?.get(cleanId);
         if (candidate && programmesByFeedAndXmlId.has(`${feed.tag}::${candidate}`)) {
@@ -340,11 +401,7 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
           return true;
         });
         const uniqueCandidates = new Map(eligible.map((candidate) => [`${candidate.feedTag}::${candidate.xmlId}`, candidate]));
-        if (uniqueCandidates.size === 1) {
-          const picked = [...uniqueCandidates.values()][0];
-          matchedFeed = picked.feedTag;
-          matchedXmlId = picked.xmlId;
-        } else if (uniqueCandidates.size > 1) {
+        if (uniqueCandidates.size >= 1) {
           const picked = [...uniqueCandidates.values()][0];
           matchedFeed = picked.feedTag;
           matchedXmlId = picked.xmlId;
@@ -352,11 +409,11 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
       }
     }
 
-    // Ultimate fallback: if still unmatched, match against any available feed channel with identical compact name
     if (!matchedXmlId) {
       const compactName = compactAsciiName(ch.name);
       if (compactName) {
         for (const feed of feeds) {
+          if (!feed) continue;
           for (const [xmlId, names] of feed.channels) {
             if (names.some((n) => compactAsciiName(n) === compactName)) {
               if (programmesByFeedAndXmlId.has(`${feed.tag}::${xmlId}`)) {
@@ -393,15 +450,15 @@ export async function refreshEpgCache(customUrls?: string[], force = false): Pro
       ...DEFAULT_XMLTV_FEEDS,
     ];
     const [parsedFeeds, adultSwimProgs] = await Promise.all([
-      Promise.all(sources.map((source) => fetchAndParseXmltvFeed(source, windowStart, windowEnd))),
+      fetchFeedsWithConcurrency(sources, windowStart, windowEnd, MAX_CONCURRENT_FEEDS),
       fetchAdultSwimSchedule(),
     ]);
     const { byChannelId, tvgIds } = buildChannelScheduleMap(parsedFeeds, adultSwimProgs);
     if (Object.keys(byChannelId).length) {
-      cachedProgramsByChannelId = byChannelId;
-      cachedTvgIdMap = tvgIds;
+      cachedProgramsByChannelId = { ...cachedProgramsByChannelId, ...byChannelId };
+      cachedTvgIdMap = { ...cachedTvgIdMap, ...tvgIds };
       lastUpdatedAt = Date.now();
-      console.log(`📺 [EPG] Successfully loaded live Now & Next guide and ratings for ${Object.keys(byChannelId).length} channels across all providers`);
+      console.log(`📺 [EPG] Loaded live Now & Next guide and ratings for ${Object.keys(cachedProgramsByChannelId).length} channels`);
     }
   };
 
@@ -456,7 +513,7 @@ export function initEpgRoutes(app: express.Express) {
         await refreshEpgCache([customUrl], true);
       } else if (lastUpdatedAt === 0 || Date.now() - lastUpdatedAt >= REFRESH_TTL_MS) {
         if (lastUpdatedAt === 0) {
-          await Promise.race([refreshEpgCache(), new Promise((resolve) => setTimeout(resolve, 20000))]);
+          await Promise.race([refreshEpgCache(), new Promise((resolve) => setTimeout(resolve, 25000))]);
         } else {
           refreshEpgCache().catch(() => {});
         }
