@@ -282,10 +282,8 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
   const [visibleCount, setVisibleCount] = useState<number>(80);
   const [isGuideVisible, setIsGuideVisible] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showInfo, setShowInfo] = useState(false);
   const [numberBuffer, setNumberBuffer] = useState('');
   const [clockNow, setClockNow] = useState(() => new Date());
-  const infoTimerRef = useRef<number | null>(null);
   const cursorTimerRef = useRef<number | null>(null);
   const [cursorHidden, setCursorHidden] = useState(false);
 
@@ -498,22 +496,11 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
     return { byId, byNumber };
   }, []);
 
-  const flashInfo = useCallback(() => {
-    setShowInfo(true);
-    if (infoTimerRef.current !== null) clearTimeout(infoTimerRef.current);
-    infoTimerRef.current = window.setTimeout(() => setShowInfo(false), 3000);
-  }, []);
-
   const handlePlayerPointerMove = useCallback(() => {
-    flashInfo();
     setCursorHidden(false);
     if (cursorTimerRef.current !== null) clearTimeout(cursorTimerRef.current);
     cursorTimerRef.current = window.setTimeout(() => setCursorHidden(true), 3000);
-  }, [flashInfo]);
-
-  useEffect(() => {
-    if (selectedChannel) flashInfo();
-  }, [selectedChannel, flashInfo]);
+  }, []);
 
   useEffect(() => {
     const nowMs = Date.now();
@@ -541,7 +528,6 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
 
   useEffect(() => {
     return () => {
-      if (infoTimerRef.current !== null) clearTimeout(infoTimerRef.current);
       if (cursorTimerRef.current !== null) clearTimeout(cursorTimerRef.current);
     };
   }, []);
@@ -1300,10 +1286,9 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
                 </div>
               )}
 
-              {/* Channel Info Banner */}
-              {showInfo && (
-                <div className="absolute bottom-16 sm:bottom-20 inset-x-0 z-20 px-3 sm:px-5 pointer-events-none">
-                  <div className="pointer-events-auto flex items-stretch gap-3 p-3 rounded-xl bg-[#05080f]/90 border border-[#1c2a48] shadow-2xl backdrop-blur-sm">
+              {/* Channel Info Bar */}
+              {!isFullscreen && (
+                <div className="absolute top-0 inset-x-0 z-20 flex items-stretch gap-3 px-3 sm:px-4 py-2.5 bg-[#05080f]/90 border-b border-[#1c2a48] backdrop-blur-sm">
                     <div className="flex items-center justify-center min-w-[3.5rem] px-2 rounded-lg bg-[var(--brand-blue)] text-white text-xl sm:text-2xl font-extrabold tabular-nums">
                       {selectedChannelNumber}
                     </div>
@@ -1365,7 +1350,6 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
                     >
                       <Star className={`w-4 h-4 ${favoriteSet.has(selectedChannel.id) ? 'fill-current' : ''}`} />
                     </button>
-                  </div>
                 </div>
               )}
 
