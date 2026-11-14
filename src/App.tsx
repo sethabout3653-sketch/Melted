@@ -381,8 +381,8 @@ export default function App() {
       <Navbar
         currentTab={currentTab}
         onTabChange={setCurrentTab}
-        searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
+        searchQuery={currentTab === 'games' ? searchQuery : ''}
+        onSearchChange={currentTab === 'games' ? setSearchQuery : () => {}}
         onRandomGame={handleRandomGame}
         favoritesCount={favorites.length}
         showFavoritesOnly={showFavoritesOnly}
@@ -448,7 +448,7 @@ export default function App() {
             exit="exit"
             className="flex-1 flex flex-col min-h-0 h-full w-full pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0"
           >
-            <LiveTVView />
+            <LiveTVView searchQuery={searchQuery} onSearchChange={setSearchQuery} />
           </motion.div>
         ) : (
           <motion.main
