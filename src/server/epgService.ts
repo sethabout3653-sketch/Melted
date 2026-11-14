@@ -122,9 +122,8 @@ async function fetchAndParseXmltvFeed(source: FeedSource, windowStart: number, w
     if (!res.ok) return { tag: source.tag, channels, programmes };
 
     const buf = Buffer.from(await res.arrayBuffer());
-    // Node's built-in fetch transparently decompresses HTTP gzip responses. Only
-    // gunzip payloads that are still gzip-compressed; checking the .gz URL alone
-    // causes "incorrect header check" and silently empties the production EPG.
+    // Fetch implementations may transparently decompress HTTP gzip responses, so
+    // inspect the payload rather than assuming every .gz URL is still compressed.
     const isGzip = buf[0] === 0x1f && buf[1] === 0x8b;
     const xml = isGzip ? zlib.gunzipSync(buf).toString('utf8') : buf.toString('utf8');
 
@@ -152,13 +151,21 @@ async function fetchAndParseXmltvFeed(source: FeedSource, windowStart: number, w
       const start = parseXmltvTime(startRaw);
       const stop = parseXmltvTime(stopRaw);
       if (!start || !stop || stop <= start || stop <= windowStart || start >= windowEnd) continue;
-      const titleRaw = progMatch[2].match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1];
+      const body = progMatch[2];
+      const titleRaw = body.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1];
       const title = titleRaw ? decodeXmlEntities(titleRaw.replace(/<[^>]+>/g, '')) : '';
       if (!title) continue;
-      const descRaw = progMatch[2].match(/<desc\b[^>]*>([\s\S]*?)<\/desc>/i)?.[1];
+      const descRaw = body.match(/<desc\b[^>]*>([\s\S]*?)<\/desc>/i)?.[1];
       const desc = descRaw ? decodeXmlEntities(descRaw.replace(/<[^>]+>/g, '')).slice(0, 180) : undefined;
+      // XMLTV content ratings are usually provided as <rating><value>TV-PG</value></rating>.
+      // Add supported US TV ratings to the displayed programme title so both Now and Next
+      // show the rating without requiring a separate client-side data path.
+      const rawRating = body.match(/<rating\b[^>]*>\s*<value\b[^>]*>([\s\S]*?)<\/value>/i)?.[1];
+      const ratingValue = rawRating ? decodeXmlEntities(rawRating.replace(/<[^>]+>/g, '')).toUpperCase().replace(/\s+/g, '') : '';
+      const rating = /^(TV-Y|TV-Y7|TV-G|TV-PG|TV-14|TV-MA)$/.test(ratingValue) ? ratingValue : undefined;
+      const displayTitle = rating ? `${title} (${rating})` : title;
       const list = programmes.get(channelId) || [];
-      list.push({ title, start, stop, ...(desc ? { desc } : {}) });
+      list.push({ title: displayTitle, start, stop, ...(desc ? { desc } : {}) });
       programmes.set(channelId, list);
     }
   } catch (err: any) {
