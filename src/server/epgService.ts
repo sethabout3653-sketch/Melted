@@ -90,7 +90,7 @@ function parseXmltvTime(raw: string): number {
   return utcMs - offsetMinutes * 60_000;
 }
 
-/** Instantly parse and normalize any content rating across all feeds and channels (TV ratings, MPAA, age ratings). */
+/** Parses and normalizes any content rating (TV ratings, MPAA, international age ratings) instantly across all feeds. */
 function parseTvRating(programmeBody: string): string | undefined {
   const matches = [...programmeBody.matchAll(/<rating\b[^>]*>([\s\S]*?)<\/rating>/gi)];
   for (const match of matches) {
@@ -269,11 +269,15 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
     if (ch.id === 'adult-swim' && byChannelId['adult-swim']) continue;
     let matchedFeed: FeedTag | undefined;
     let matchedXmlId: string | undefined;
+
+    // Comprehensive provider ID extractors for Pluto, Samsung, Roku, Plex, and generic channel IDs
     const providerIds: Array<{ tag: FeedTag; id: string }> = [
-      { tag: 'pluto', id: ch.url.match(/plu-([a-f0-9]+)/i)?.[1]?.toLowerCase() || '' },
-      { tag: 'samsung', id: ch.url.match(/stvp-([a-z0-9]+)/i)?.[1]?.toLowerCase() || '' },
-      { tag: 'roku', id: ch.url.match(/rok-([a-f0-9]+)/i)?.[1]?.toLowerCase() || '' },
+      { tag: 'pluto', id: ch.url.match(/plu-([a-f0-9]+)/i)?.[1]?.toLowerCase() || ch.id.match(/plu-([a-f0-9]+)/i)?.[1]?.toLowerCase() || '' },
+      { tag: 'samsung', id: ch.url.match(/stvp-([a-z0-9]+)/i)?.[1]?.toLowerCase() || ch.id.match(/stvp-([a-z0-9]+)/i)?.[1]?.toLowerCase() || '' },
+      { tag: 'roku', id: ch.url.match(/rok-([a-f0-9]+)/i)?.[1]?.toLowerCase() || ch.id.match(/rok-([a-f0-9]+)/i)?.[1]?.toLowerCase() || '' },
+      { tag: 'plex', id: ch.url.match(/plex-([a-z0-9]+)/i)?.[1]?.toLowerCase() || ch.id.match(/plex-([a-z0-9]+)/i)?.[1]?.toLowerCase() || '' },
     ];
+
     for (const provider of providerIds) {
       if (!provider.id) continue;
       const candidate = findProviderXmlId(xmlIdByFeedAndLowerId.get(provider.tag), provider.id);
@@ -300,7 +304,7 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
     }
 
     if (!matchedXmlId) {
-      const cleanId = ch.id.replace(/^(samsung-|roku-|pluto-|freetv-)/i, '').toLowerCase();
+      const cleanId = ch.id.replace(/^(samsung-|roku-|pluto-|plex-|freetv-)/i, '').toLowerCase();
       for (const feed of feeds) {
         const idMap = xmlIdByFeedAndLowerId.get(feed.tag);
         const candidate = idMap?.get(ch.id.toLowerCase()) || idMap?.get(cleanId);
@@ -313,10 +317,10 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
     }
 
     if (!matchedXmlId) {
-      const isPluto = Boolean(providerIds[0].id || ch.id.startsWith('pluto-'));
-      const isSamsung = Boolean(providerIds[1].id || ch.id.startsWith('samsung-'));
-      const isRoku = ch.id.startsWith('roku-') || /roku\.wurl\.tv/i.test(ch.url);
-      const isPlex = ch.id.startsWith('plex-') || /plex\.tv/i.test(ch.url);
+      const isPluto = Boolean(providerIds[0].id || ch.id.startsWith('pluto-') || /pluto/i.test(ch.url));
+      const isSamsung = Boolean(providerIds[1].id || ch.id.startsWith('samsung-') || /samsung/i.test(ch.url));
+      const isRoku = Boolean(providerIds[2].id || ch.id.startsWith('roku-') || /roku/i.test(ch.url));
+      const isPlex = Boolean(providerIds[3].id || ch.id.startsWith('plex-') || /plex/i.test(ch.url));
       const channelCountry = inferChannelCountry(ch);
       const channelHasNonAscii = hasNonLatinOrAccentedChars(ch.name);
       const compactName = compactAsciiName(ch.name);
@@ -375,7 +379,7 @@ export async function refreshEpgCache(customUrls?: string[], force = false): Pro
       cachedProgramsByChannelId = byChannelId;
       cachedTvgIdMap = tvgIds;
       lastUpdatedAt = Date.now();
-      console.log(`📺 [EPG] Loaded live Now & Next guide for ${Object.keys(byChannelId).length} channels with ratings`);
+      console.log(`📺 [EPG] Successfully loaded live Now & Next guide and ratings for ${Object.keys(byChannelId).length} channels across all providers`);
     }
   };
 
