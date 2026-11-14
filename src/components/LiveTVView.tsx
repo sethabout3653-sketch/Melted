@@ -153,70 +153,63 @@ const formatEpgTime = (ms: number): string => {
   }
 };
 
+const CHANNEL_NUMBER_BASE = 101;
+
+const programmeProgress = (programme: EpgProgramme) => {
+  const span = programme.stop - programme.start;
+  if (span <= 0) return 0;
+  return Math.min(1, Math.max(0, (Date.now() - programme.start) / span));
+};
+
+const formatProgrammeRange = (programme: EpgProgramme) =>
+  `${formatEpgTime(programme.start)} - ${formatEpgTime(programme.stop)}`;
+
 const ChannelListItem: React.FC<{
   channel: TVChannel;
+  number: number;
   isSelected: boolean;
   isFavorite: boolean;
   epg?: ChannelNowNext;
   onSelect: (channel: TVChannel) => void;
   onToggleFavorite: (channelId: string) => void;
-}> = React.memo(({ channel, isSelected, isFavorite, epg, onSelect, onToggleFavorite }) => {
-  const meta = classifyChannel(channel);
-  const subtitle =
-    meta.subType && meta.subType.toLowerCase() !== meta.category.toLowerCase()
-      ? `${meta.category} • ${meta.subType} • ${meta.network}`
-      : `${meta.category} • ${meta.network}`;
+}> = React.memo(({ channel, number, isSelected, isFavorite, epg, onSelect, onToggleFavorite }) => {
+  const nowProgramme = epg?.now;
 
   return (
     <div
-      className={`w-full flex items-center gap-3 p-2.5 rounded-xl transition-colors border group ${
-        isSelected
-          ? 'bg-[var(--brand-blue)]/10 border-[var(--brand-blue)] text-white shadow-sm'
-          : 'border-[#1f1f2e] bg-[#12151e] text-slate-300 hover:bg-[#1a1e2b] hover:border-slate-700 hover:text-white'
+      className={`group flex items-stretch h-16 border-b border-[#1a2232] transition-colors ${
+        isSelected ? 'bg-[var(--brand-blue)]/25' : 'hover:bg-[#161c2b]'
       }`}
     >
       <button
         type="button"
         onClick={() => onSelect(channel)}
-        className="flex-1 min-w-0 flex items-center gap-3 text-left cursor-pointer focus:outline-none"
+        className="flex-1 min-w-0 flex items-center text-left cursor-pointer focus:outline-none"
       >
-        <div className="w-14 h-10 sm:w-16 sm:h-11 rounded-lg bg-black/60 border border-slate-800 flex items-center justify-center overflow-hidden shrink-0 p-1">
+        <div
+          className={`w-14 shrink-0 text-center text-sm font-extrabold tabular-nums ${
+            isSelected ? 'text-amber-300' : 'text-slate-300'
+          }`}
+        >
+          {number}
+        </div>
+        <div className="w-14 h-10 shrink-0 rounded bg-black/70 border border-slate-800 flex items-center justify-center overflow-hidden p-1">
           <ChannelLogo logo={channel.logo} name={channel.name} />
         </div>
-        <div className="min-w-0 flex-1">
-          <div className={`text-xs truncate font-bold transition-colors ${isSelected ? 'text-[var(--brand-blue)]' : 'text-slate-200 group-hover:text-white'}`}>
-            {channel.name}
-          </div>
-          <div className="text-[11px] text-slate-400 font-medium truncate mt-0.5">{subtitle}</div>
-          {(epg?.now || epg?.next) && (
-            <div className="mt-1 space-y-0.5 text-[11px] leading-tight">
-              {epg.now && (
-                <div className="text-slate-200 truncate tabular-nums">
-                  <span className="text-[var(--brand-blue)] font-semibold">Now</span>
-                  <span className="text-slate-500 mx-1">·</span>
-                  <span className="text-slate-400 mr-1">{formatEpgTime(epg.now.start)}</span>
-                  <span>{epg.now.title}</span>
-                  {epg.now.rating && (
-                    <span className="ml-1.5 px-1 py-0.2 bg-slate-800 border border-slate-700 rounded text-[9px] font-bold text-slate-300">
-                      {epg.now.rating}
-                    </span>
-                  )}
-                </div>
-              )}
-              {epg.next && (
-                <div className="text-slate-400 truncate tabular-nums">
-                  <span className="text-slate-500 font-semibold">Next</span>
-                  <span className="text-slate-600 mx-1">·</span>
-                  <span className="text-slate-500 mr-1">{formatEpgTime(epg.next.start)}</span>
-                  <span>{epg.next.title}</span>
-                  {epg.next.rating && (
-                    <span className="ml-1.5 px-1 py-0.2 bg-slate-800/80 border border-slate-700/80 rounded text-[9px] font-bold text-slate-400">
-                      {epg.next.rating}
-                    </span>
-                  )}
-                </div>
-              )}
-            </div>
+        <div className="min-w-0 flex-1 pl-3 pr-2">
+          <div className="text-xs font-bold text-white truncate">{channel.name}</div>
+          {nowProgramme ? (
+            <>
+              <div className="text-[11px] text-slate-300 truncate">{nowProgramme.title}</div>
+              <div className="mt-1 h-1 w-full rounded-full bg-slate-700/80 overflow-hidden">
+                <div
+                  className="h-full bg-[var(--brand-blue)]"
+                  style={{ width: `${programmeProgress(nowProgramme) * 100}%` }}
+                />
+              </div>
+            </>
+          ) : (
+            <div className="text-[11px] text-slate-500 truncate">{classifyChannel(channel).category}</div>
           )}
         </div>
       </button>
@@ -228,7 +221,7 @@ const ChannelListItem: React.FC<{
           onToggleFavorite(channel.id);
         }}
         aria-label={isFavorite ? `Remove ${channel.name} from favorites` : `Save ${channel.name} to favorites`}
-        className={`p-2 rounded-lg transition-colors cursor-pointer shrink-0 ${
+        className={`w-10 shrink-0 flex items-center justify-center transition-colors cursor-pointer ${
           isFavorite
             ? 'text-amber-400 hover:text-amber-300'
             : 'text-slate-600 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 hover:text-amber-400'
@@ -277,6 +270,10 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
   const [visibleCount, setVisibleCount] = useState<number>(80);
   const [isGuideVisible, setIsGuideVisible] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+  const [numberBuffer, setNumberBuffer] = useState('');
+  const [clockNow, setClockNow] = useState(() => new Date());
+  const infoTimerRef = useRef<number | null>(null);
 
   const [qualityLevels, setQualityLevels] = useState<QualityLevel[]>([]);
   const [selectedQuality, setSelectedQuality] = useState<number>(-1); // -1 = Auto ABR
@@ -474,6 +471,48 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
     }
     setRandomizedChannels(shuffled);
   }, []);
+
+  const channelIndex = useMemo(() => {
+    const byId = new Map<string, number>();
+    const byNumber = new Map<number, TVChannel>();
+    TV_CHANNELS.forEach((channel, i) => {
+      const number = CHANNEL_NUMBER_BASE + i;
+      byId.set(channel.id, number);
+      byNumber.set(number, channel);
+    });
+    return { byId, byNumber };
+  }, []);
+
+  const flashInfo = useCallback(() => {
+    setShowInfo(true);
+    if (infoTimerRef.current !== null) clearTimeout(infoTimerRef.current);
+    infoTimerRef.current = window.setTimeout(() => setShowInfo(false), 5000);
+  }, []);
+
+  useEffect(() => {
+    if (selectedChannel) flashInfo();
+  }, [selectedChannel, flashInfo]);
+
+  useEffect(() => {
+    const tick = window.setInterval(() => setClockNow(new Date()), 30000);
+    return () => window.clearInterval(tick);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (infoTimerRef.current !== null) clearTimeout(infoTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!numberBuffer) return;
+    const timer = window.setTimeout(() => {
+      const target = channelIndex.byNumber.get(Number(numberBuffer));
+      if (target) setSelectedChannel(target);
+      setNumberBuffer('');
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [numberBuffer, channelIndex]);
 
   const categories = useMemo(
     () => Array.from(new Set([...EXTRA_CATEGORIES, ...randomizedChannels.map((c) => getDisplayCategory(c))])),
@@ -1024,6 +1063,9 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
       } else if (e.key.toLowerCase() === 'c') {
         e.preventDefault();
         handleToggleCaptions();
+      } else if (/^[0-9]$/.test(e.key)) {
+        e.preventDefault();
+        setNumberBuffer((prev) => (prev + e.key).slice(-4));
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -1044,24 +1086,31 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
   );
 
   const selectedEpg = selectedChannel ? epgMap[selectedChannel.id] : undefined;
+  const selectedChannelNumber = selectedChannel ? channelIndex.byId.get(selectedChannel.id) ?? 0 : 0;
+  const clockLabel = formatEpgTime(clockNow.getTime());
 
   return (
     <div className="flex flex-col h-full min-h-0 flex-1 bg-[#0b0e14] text-white overflow-hidden">
-      {/* Category Pills Bar */}
-      <div className="flex items-center gap-2 px-3 sm:px-5 py-2.5 bg-[#0f131b] border-b border-[#1f1f2e] shrink-0">
+      {/* Guide Header */}
+      <div className="flex items-stretch bg-[#070b14] border-b border-[#1c2a48] shrink-0">
+        <div className="hidden sm:flex items-center gap-2 px-4 border-r border-[#1c2a48] shrink-0">
+          <Tv className="w-4 h-4 text-[var(--brand-blue)]" />
+          <span className="text-xs font-extrabold uppercase tracking-widest text-white">Live TV</span>
+        </div>
+
         <div
           onWheel={handleCategoryWheel}
-          className="flex items-center gap-1.5 overflow-x-auto no-scrollbar flex-1 py-0.5"
+          className="flex items-stretch gap-1 overflow-x-auto no-scrollbar flex-1 min-w-0 px-2"
         >
           {categories.map((cat) => (
             <button
               key={cat}
               type="button"
               onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer shrink-0 ${
+              className={`px-3 py-3 text-xs font-bold whitespace-nowrap border-b-2 transition-colors cursor-pointer shrink-0 ${
                 selectedCategory === cat
-                  ? 'bg-[var(--brand-blue)] text-white shadow-sm'
-                  : 'bg-[#161b26] text-slate-400 hover:bg-[#1e2433] hover:text-slate-200 border border-[#242938]'
+                  ? 'border-[var(--brand-blue)] text-white'
+                  : 'border-transparent text-slate-400 hover:text-white'
               }`}
             >
               {cat}
@@ -1072,10 +1121,14 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
           ))}
         </div>
 
+        <div className="hidden md:flex items-center px-4 text-xs font-bold tabular-nums text-slate-300 border-l border-[#1c2a48] shrink-0">
+          {clockLabel}
+        </div>
+
         <button
           type="button"
           onClick={() => setIsGuideVisible((prev) => !prev)}
-          className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[#161b26] hover:bg-[#1e2433] border border-[#242938] text-xs font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer shrink-0"
+          className="hidden lg:flex items-center gap-1.5 px-4 border-l border-[#1c2a48] text-xs font-semibold text-slate-300 hover:text-white hover:bg-[#101726] transition-colors cursor-pointer shrink-0"
           title={isGuideVisible ? 'Hide channel guide' : 'Show channel guide'}
         >
           {isGuideVisible ? (
@@ -1097,8 +1150,15 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
         {/* Video Player Container */}
         <div
           ref={containerRef}
+          onPointerMove={flashInfo}
           className="relative w-full aspect-video lg:aspect-auto lg:flex-1 bg-black flex flex-col justify-between overflow-hidden shrink-0 lg:shrink select-none group/player"
         >
+          {numberBuffer && (
+            <div className="absolute top-4 right-4 z-30 px-4 py-2 rounded-lg bg-black/85 border border-[var(--brand-blue)] text-2xl font-extrabold tabular-nums tracking-widest text-white pointer-events-none">
+              {numberBuffer}
+            </div>
+          )}
+
           {selectedChannel ? (
             <>
               <video
@@ -1157,55 +1217,69 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
                 </div>
               )}
 
-              {/* Top Overlay Bar (Channel Info + Now/Next + Rating) */}
-              <div className="absolute top-0 inset-x-0 p-3 sm:p-4 bg-gradient-to-b from-black/85 via-black/45 to-transparent flex items-start justify-between gap-3 z-20 opacity-100 lg:opacity-0 lg:group-hover/player:opacity-100 transition-opacity duration-200 pointer-events-none">
-                <div className="flex items-center gap-3 min-w-0 pointer-events-auto">
-                  <div className="w-11 h-8 sm:w-12 sm:h-9 rounded-lg bg-black/70 border border-slate-700/80 p-1 flex items-center justify-center shrink-0">
-                    <ChannelLogo logo={selectedChannel.logo} name={selectedChannel.name} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h2 className="text-sm sm:text-base font-extrabold text-white truncate">
-                        {selectedChannel.name}
-                      </h2>
-                      {selectedEpg?.now?.rating && (
-                        <span className="px-1.5 py-0.5 bg-slate-900/90 border border-slate-600 rounded text-[10px] font-extrabold text-slate-200 shrink-0">
-                          {selectedEpg.now.rating}
-                        </span>
-                      )}
+              {/* Channel Info Banner */}
+              {showInfo && (
+                <div className="absolute bottom-16 sm:bottom-20 inset-x-0 z-20 px-3 sm:px-5 pointer-events-none">
+                  <div className="pointer-events-auto flex items-stretch gap-3 p-3 rounded-xl bg-[#05080f]/90 border border-[#1c2a48] shadow-2xl backdrop-blur-sm">
+                    <div className="flex items-center justify-center min-w-[3.5rem] px-2 rounded-lg bg-[var(--brand-blue)] text-white text-xl sm:text-2xl font-extrabold tabular-nums">
+                      {selectedChannelNumber}
                     </div>
-                    {selectedEpg?.now ? (
-                      <p className="text-xs text-slate-200 truncate mt-0.5">
-                        <span className="text-[var(--brand-blue)] font-semibold">Now:</span>{' '}
-                        {selectedEpg.now.title}
-                        {selectedEpg.next && (
-                          <span className="text-slate-400">
-                            {' '}
-                            • <span className="font-semibold">Next:</span> {selectedEpg.next.title}
+                    <div className="w-12 h-9 sm:w-16 sm:h-11 shrink-0 rounded-lg bg-black/70 border border-slate-800 p-1 flex items-center justify-center overflow-hidden self-center">
+                      <ChannelLogo logo={selectedChannel.logo} name={selectedChannel.name} />
+                    </div>
+                    <div className="min-w-0 flex-1 flex flex-col justify-center">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <h2 className="text-sm sm:text-base font-extrabold text-white truncate">
+                          {selectedChannel.name}
+                        </h2>
+                        {selectedEpg?.now?.rating && (
+                          <span className="px-1.5 py-0.5 bg-slate-900/90 border border-slate-600 rounded text-[10px] font-extrabold text-slate-200 shrink-0">
+                            {selectedEpg.now.rating}
                           </span>
                         )}
-                      </p>
-                    ) : (
-                      selectedChannelMeta && (
-                        <p className="text-xs text-slate-300 truncate mt-0.5">
-                          {selectedChannelMeta.category} • {selectedChannelMeta.network}
-                        </p>
-                      )
-                    )}
+                      </div>
+                      {selectedEpg?.now ? (
+                        <>
+                          <p className="text-xs text-white truncate mt-0.5">
+                            <span className="text-sky-300 font-semibold">Now</span>
+                            <span className="text-slate-500 mx-1.5 tabular-nums">{formatProgrammeRange(selectedEpg.now)}</span>
+                            {selectedEpg.now.title}
+                          </p>
+                          <div className="mt-1.5 h-1 w-full rounded-full bg-slate-700/80 overflow-hidden">
+                            <div
+                              className="h-full bg-[var(--brand-blue)]"
+                              style={{ width: `${programmeProgress(selectedEpg.now) * 100}%` }}
+                            />
+                          </div>
+                          {selectedEpg.next && (
+                            <p className="text-[11px] text-slate-400 truncate mt-1.5">
+                              <span className="font-semibold">Next</span>
+                              <span className="text-slate-500 mx-1.5 tabular-nums">{formatProgrammeRange(selectedEpg.next)}</span>
+                              {selectedEpg.next.title}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        selectedChannelMeta && (
+                          <p className="text-xs text-slate-400 truncate mt-0.5">
+                            {selectedChannelMeta.category} • {selectedChannelMeta.network}
+                          </p>
+                        )
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleFavorite(selectedChannel.id)}
+                      className={`self-center p-2 rounded-lg bg-black/60 hover:bg-black/80 border border-slate-700/80 transition-colors cursor-pointer shrink-0 ${
+                        favoriteSet.has(selectedChannel.id) ? 'text-amber-400' : 'text-slate-300 hover:text-amber-400'
+                      }`}
+                      title={favoriteSet.has(selectedChannel.id) ? 'Remove favorite' : 'Favorite channel'}
+                    >
+                      <Star className={`w-4 h-4 ${favoriteSet.has(selectedChannel.id) ? 'fill-current' : ''}`} />
+                    </button>
                   </div>
                 </div>
-
-                <button
-                  type="button"
-                  onClick={() => toggleFavorite(selectedChannel.id)}
-                  className={`p-2 rounded-lg bg-black/60 hover:bg-black/80 border border-slate-700/80 transition-colors cursor-pointer pointer-events-auto shrink-0 ${
-                    favoriteSet.has(selectedChannel.id) ? 'text-amber-400' : 'text-slate-300 hover:text-amber-400'
-                  }`}
-                  title={favoriteSet.has(selectedChannel.id) ? 'Remove favorite' : 'Favorite channel'}
-                >
-                  <Star className={`w-4 h-4 ${favoriteSet.has(selectedChannel.id) ? 'fill-current' : ''}`} />
-                </button>
-              </div>
+              )}
 
               {/* Bottom Controls Overlay */}
               <div className="absolute bottom-0 inset-x-0 p-3 sm:p-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex items-center justify-between gap-3 z-20 opacity-100 lg:opacity-0 lg:group-hover/player:opacity-100 transition-opacity duration-200">
@@ -1358,12 +1432,19 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
               </div>
             </div>
 
+            <div className="flex items-center h-7 bg-[#0a0f1a] border-b border-[#1c2a48] text-[10px] font-bold uppercase tracking-wider text-slate-500 shrink-0">
+              <span className="w-14 text-center">Ch</span>
+              <span className="w-14 shrink-0" />
+              <span className="flex-1 pl-3">Program</span>
+            </div>
+
             {/* Channel List */}
-            <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
+            <div className="flex-1 min-h-0 overflow-y-auto">
               {visibleChannels.map((channel) => (
                 <ChannelListItem
                   key={channel.id}
                   channel={channel}
+                  number={channelIndex.byId.get(channel.id) ?? 0}
                   isSelected={selectedChannel?.id === channel.id}
                   isFavorite={favoriteSet.has(channel.id)}
                   epg={epgMap[channel.id]}
@@ -1382,7 +1463,7 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
                 <button
                   type="button"
                   onClick={() => setVisibleCount((prev) => prev + 80)}
-                  className="w-full py-2.5 rounded-xl bg-[#161b26] hover:bg-[#1e2433] border border-[#242938] text-xs font-bold text-slate-300 hover:text-white transition-colors cursor-pointer"
+                  className="block w-[calc(100%-1.5rem)] mx-3 my-3 py-2.5 rounded-xl bg-[#161b26] hover:bg-[#1e2433] border border-[#242938] text-xs font-bold text-slate-300 hover:text-white transition-colors cursor-pointer"
                 >
                   Load More ({filteredChannels.length - visibleCount} remaining)
                 </button>
