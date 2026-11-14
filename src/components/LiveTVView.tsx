@@ -155,6 +155,11 @@ const formatEpgTime = (ms: number): string => {
 
 const CHANNEL_NUMBER_BASE = 101;
 
+const liveEpgEntry = (entry: ChannelNowNext, nowMs: number): ChannelNowNext => ({
+  now: entry.now && entry.now.start <= nowMs && nowMs < entry.now.stop ? entry.now : undefined,
+  next: entry.next && entry.next.start > nowMs ? entry.next : undefined,
+});
+
 const programmeProgress = (programme: EpgProgramme) => {
   const span = programme.stop - programme.start;
   if (span <= 0) return 0;
@@ -281,19 +286,22 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
   const [numberBuffer, setNumberBuffer] = useState('');
   const [clockNow, setClockNow] = useState(() => new Date());
   const infoTimerRef = useRef<number | null>(null);
+  const cursorTimerRef = useRef<number | null>(null);
+  const [cursorHidden, setCursorHidden] = useState(false);
 
   const [qualityLevels, setQualityLevels] = useState<QualityLevel[]>([]);
   const [selectedQuality, setSelectedQuality] = useState<number>(-1); // -1 = Auto ABR
   const [activeHeight, setActiveHeight] = useState<number | null>(null);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
   const [epgMap, setEpgMap] = useState<Record<string, ChannelNowNext>>({});
+  const [epgRefreshNonce, setEpgRefreshNonce] = useState(0);
 
   useEffect(() => {
     let active = true;
     let retryTimer: number | null = null;
     const loadEpg = async () => {
       try {
-        const res = await fetch('/api/epg/now-next', { signal: AbortSignal.timeout(20000) });
+        const res = await fetch('/api/epg/now-next', { signal: AbortSignal.timeout(20000), cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
         if (active && data && typeof data.programs === 'object') {
@@ -315,7 +323,7 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
       if (retryTimer !== null) clearTimeout(retryTimer);
       window.clearInterval(interval);
     };
-  }, []);
+  }, [epgRefreshNonce]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const hlsRef = useRef<Hls | null>(null);
@@ -493,12 +501,38 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
   const flashInfo = useCallback(() => {
     setShowInfo(true);
     if (infoTimerRef.current !== null) clearTimeout(infoTimerRef.current);
-    infoTimerRef.current = window.setTimeout(() => setShowInfo(false), 5000);
+    infoTimerRef.current = window.setTimeout(() => setShowInfo(false), 3000);
   }, []);
+
+  const handlePlayerPointerMove = useCallback(() => {
+    flashInfo();
+    setCursorHidden(false);
+    if (cursorTimerRef.current !== null) clearTimeout(cursorTimerRef.current);
+    cursorTimerRef.current = window.setTimeout(() => setCursorHidden(true), 3000);
+  }, [flashInfo]);
 
   useEffect(() => {
     if (selectedChannel) flashInfo();
   }, [selectedChannel, flashInfo]);
+
+  useEffect(() => {
+    const nowMs = Date.now();
+    let boundary = Infinity;
+    for (const entry of Object.values(epgMap)) {
+      for (const programme of [entry.now, entry.next]) {
+        if (!programme) continue;
+        for (const t of [programme.start, programme.stop]) {
+          if (t > nowMs && t < boundary) boundary = t;
+        }
+      }
+    }
+    if (boundary === Infinity) return;
+    const timer = window.setTimeout(() => {
+      setClockNow(new Date());
+      setEpgRefreshNonce((n) => n + 1);
+    }, boundary - nowMs + 500);
+    return () => clearTimeout(timer);
+  }, [epgMap]);
 
   useEffect(() => {
     const tick = window.setInterval(() => setClockNow(new Date()), 30000);
@@ -508,6 +542,7 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
   useEffect(() => {
     return () => {
       if (infoTimerRef.current !== null) clearTimeout(infoTimerRef.current);
+      if (cursorTimerRef.current !== null) clearTimeout(cursorTimerRef.current);
     };
   }, []);
 
@@ -1092,7 +1127,17 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
     [selectedChannel]
   );
 
-  const selectedEpg = selectedChannel ? epgMap[selectedChannel.id] : undefined;
+  const liveEpgMap = useMemo(() => {
+    const nowMs = clockNow.getTime();
+    const out: Record<string, ChannelNowNext> = {};
+    for (const [id, entry] of Object.entries(epgMap)) {
+      const live = liveEpgEntry(entry, nowMs);
+      if (live.now || live.next) out[id] = live;
+    }
+    return out;
+  }, [epgMap, clockNow]);
+
+  const selectedEpg = selectedChannel ? liveEpgMap[selectedChannel.id] : undefined;
   const selectedChannelNumber = selectedChannel ? channelIndex.byId.get(selectedChannel.id) ?? 0 : 0;
   const clockLabel = formatEpgTime(clockNow.getTime());
 
@@ -1186,8 +1231,10 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
         {/* Video Player Container */}
         <div
           ref={containerRef}
-          onPointerMove={flashInfo}
-          className="relative w-full aspect-video lg:aspect-auto lg:flex-1 bg-black flex flex-col justify-between overflow-hidden shrink-0 lg:shrink select-none group/player"
+          onPointerMove={handlePlayerPointerMove}
+          className={`relative w-full aspect-video lg:aspect-auto lg:flex-1 bg-black flex flex-col justify-between overflow-hidden shrink-0 lg:shrink select-none group/player ${
+            cursorHidden ? 'cursor-none [&_*]:!cursor-none' : ''
+          }`}
         >
           {numberBuffer && (
             <div className="absolute top-4 right-4 z-30 px-4 py-2 rounded-lg bg-black/85 border border-[var(--brand-blue)] text-2xl font-extrabold tabular-nums tracking-widest text-white pointer-events-none">
@@ -1488,7 +1535,7 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
                   number={channelIndex.byId.get(channel.id) ?? 0}
                   isSelected={selectedChannel?.id === channel.id}
                   isFavorite={favoriteSet.has(channel.id)}
-                  epg={epgMap[channel.id]}
+                  epg={liveEpgMap[channel.id]}
                   onSelect={handleSelectChannel}
                   onToggleFavorite={toggleFavorite}
                 />
