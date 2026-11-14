@@ -122,7 +122,10 @@ async function fetchAndParseXmltvFeed(source: FeedSource, windowStart: number, w
     if (!res.ok) return { tag: source.tag, channels, programmes };
 
     const buf = Buffer.from(await res.arrayBuffer());
-    const isGzip = source.url.endsWith('.gz') || (buf[0] === 0x1f && buf[1] === 0x8b);
+    // Node's built-in fetch transparently decompresses HTTP gzip responses. Only
+    // gunzip payloads that are still gzip-compressed; checking the .gz URL alone
+    // causes "incorrect header check" and silently empties the production EPG.
+    const isGzip = buf[0] === 0x1f && buf[1] === 0x8b;
     const xml = isGzip ? zlib.gunzipSync(buf).toString('utf8') : buf.toString('utf8');
 
     const chRegex = /<channel\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/channel>/gi;
