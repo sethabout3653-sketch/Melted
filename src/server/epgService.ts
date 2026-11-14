@@ -270,26 +270,12 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
       if (matchedXmlId) break;
     }
 
-    // 2. Try normalized name matching across ALL feeds without restrictions
+    // 2. Exact normalized display-name match across all feeds
     if (!matchedXmlId) {
       const targetNormalized = normalizeChannelName(ch.name);
       if (targetNormalized) {
         for (const candidate of globalCandidates) {
           if (candidate.names.some(n => normalizeChannelName(n) === targetNormalized)) {
-            matchedFeed = candidate.feedTag;
-            matchedXmlId = candidate.xmlId;
-            break;
-          }
-        }
-      }
-    }
-
-    // 3. Universal Fallback: Substring / Fuzzy match on any channel name
-    if (!matchedXmlId) {
-      const cleanChName = ch.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (cleanChName.length >= 3) {
-        for (const candidate of globalCandidates) {
-          if (candidate.names.some(n => n.toLowerCase().replace(/[^a-z0-9]/g, '').includes(cleanChName) || cleanChName.includes(n.toLowerCase().replace(/[^a-z0-9]/g, '')))) {
             matchedFeed = candidate.feedTag;
             matchedXmlId = candidate.xmlId;
             break;
