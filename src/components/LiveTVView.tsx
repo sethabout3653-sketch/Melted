@@ -604,7 +604,6 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
         }
       };
 
-      // Prevent infinite loading spinner if a live stream hangs before first frame
       initTimer = window.setTimeout(() => {
         if (isCancelled || hasStartedPlaying) return;
         setIsLoading(false);
@@ -1166,10 +1165,6 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-600 text-[10px] font-extrabold uppercase tracking-wider text-white shrink-0">
-                        <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                        LIVE
-                      </span>
                       <h2 className="text-sm sm:text-base font-extrabold text-white truncate">
                         {selectedChannel.name}
                       </h2>
