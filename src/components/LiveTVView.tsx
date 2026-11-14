@@ -1105,28 +1105,57 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
           <span className="text-xs font-extrabold uppercase tracking-widest text-white">Live TV</span>
         </div>
 
-        <div
-          onWheel={handleCategoryWheel}
-          className="flex items-stretch gap-1 overflow-x-auto no-scrollbar flex-1 min-w-0 px-2"
-        >
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => setSelectedCategory(cat)}
-              className={`px-3 py-3 text-xs font-bold whitespace-nowrap border-b-2 transition-colors cursor-pointer shrink-0 ${
-                selectedCategory === cat
-                  ? 'border-[var(--brand-blue)] text-white'
-                  : 'border-transparent text-slate-400 hover:text-white'
-              }`}
-            >
-              {cat}
-              {cat === 'Favorites' && favoriteIds.length > 0 && (
-                <span className="ml-1.5 text-[10px] opacity-80">({favoriteIds.length})</span>
-              )}
-            </button>
-          ))}
-        </div>
+        {isGuideVisible ? (
+          <div
+            onWheel={handleCategoryWheel}
+            className="flex items-stretch gap-1 overflow-x-auto no-scrollbar flex-1 min-w-0 px-2"
+          >
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                onClick={() => setSelectedCategory(cat)}
+                className={`px-3 py-3 text-xs font-bold whitespace-nowrap border-b-2 transition-colors cursor-pointer shrink-0 ${
+                  selectedCategory === cat
+                    ? 'border-[var(--brand-blue)] text-white'
+                    : 'border-transparent text-slate-400 hover:text-white'
+                }`}
+              >
+                {cat}
+                {cat === 'Favorites' && favoriteIds.length > 0 && (
+                  <span className="ml-1.5 text-[10px] opacity-80">({favoriteIds.length})</span>
+                )}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="flex items-center gap-5 flex-1 min-w-0 px-4 overflow-hidden">
+            {!selectedChannel ? (
+              <span className="text-xs text-slate-500 truncate">Select a channel to see what's on</span>
+            ) : selectedEpg?.now ? (
+              <>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-white font-semibold truncate">
+                    <span className="text-sky-300 mr-1.5">Now</span>
+                    {selectedEpg.now.title}
+                  </p>
+                  <p className="text-[10px] text-slate-500 tabular-nums">{formatProgrammeRange(selectedEpg.now)}</p>
+                </div>
+                {selectedEpg.next && (
+                  <div className="min-w-0 flex-1 hidden sm:block">
+                    <p className="text-xs text-slate-300 font-semibold truncate">
+                      <span className="mr-1.5">Next</span>
+                      {selectedEpg.next.title}
+                    </p>
+                    <p className="text-[10px] text-slate-500 tabular-nums">{formatProgrammeRange(selectedEpg.next)}</p>
+                  </div>
+                )}
+              </>
+            ) : (
+              <span className="text-xs text-slate-500 truncate">No schedule info for {selectedChannel.name}</span>
+            )}
+          </div>
+        )}
 
         <div className="hidden md:flex items-center px-4 text-xs font-bold tabular-nums text-slate-300 border-l border-[#1c2a48] shrink-0">
           {clockLabel}
