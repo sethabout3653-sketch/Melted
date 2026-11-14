@@ -37,8 +37,14 @@ const KIDS_PRESCHOOL_REGEX =
 const KIDS_CARTOON_REGEX =
   /\b(spongebob|garfield|sonic|mario|transformers|power\s*rangers|pok[eé]mon|yu-gi-oh|grizzy|johnny\s*test|slugterra|rabbids|smurf|dennis\s*and\s*gnasher|pink\s*panther|mr\.?\s*bean\s*animated|go\s*go\s*gadget|hot\s*wheels|my\s*little\s*pony|lego|supertoons|looney|scooby|icarly|90'?s\s*kids|90s\s*kids)\b/i;
 
+const GAMING_TECH_REGEX =
+  /\b(gaming|gamer|gamers|game-on|video\s*game|esport|esports|pixel\s*world|team\s*liquid|dungeons\s*&\s*dragons|dungeontv|arcade|speedrun|estv|playerstv|gametoon|ginx|ign\b|twitch|venn|popular\s*science|science\s*is\s*amazing|pluto\s*tv\s*science|wired2tech|cnet)\b/i;
+
+const CREATOR_GAMING_REGEX =
+  /\b(ben\s*azelart|preston\s*&\s*brianna|ssundee|fgteev|caylus|jesser|mrbeast|unspeakable|ryan\s*trahan|futcrunch|zhc|sam\s*and\s*colby|aphmau|danny\s*duncan|filmrise\s*creators|creator\s*tv|creator\s*television|house\s*of\s*creators)\b/i;
+
 const KIDS_GAMING_MAKERS_REGEX =
-  /\b(pocket\.watch|ryan\s*and\s*friends|ninja\s*kidz|sensical|video\s*game\s*heroes|batterypop|kids\s*movie\s*club|animated\s*plus|animation\+)\b/i;
+  /\b(ryan\s*and\s*friends|ninja\s*kidz|sensical\s*jr|pocket\.watch|batterypop|kids\s*movie\s*club|animated\s*plus|animation\+)\b/i;
 
 const ANIME_REGEX =
   /\b(anime|crunchyroll|hidive|retrocrush|naruto|boruto|one\s*piece|sailor\s*moon|inuyasha|ani-monsters)\b/i;
@@ -68,6 +74,9 @@ export function detectChannelNetwork(channel: TVChannel): string {
   if (/pluto tv/i.test(n) || /pluto tv/i.test(d)) return 'Pluto TV';
   if (/samsung tv plus/i.test(d)) return 'Samsung TV Plus';
   if (/the roku channel/i.test(d)) return 'The Roku Channel';
+  if (/vizio/i.test(d)) return 'WatchFree+';
+  if (/xumo/i.test(d)) return 'Xumo';
+  if (/distro/i.test(d)) return 'DistroTV';
   if (/filmrise/i.test(n)) return 'FilmRise';
   if (/vevo/i.test(n)) return 'Vevo';
   if (/stingray/i.test(n)) return 'Stingray';
@@ -95,12 +104,28 @@ export function classifyChannel(channel: TVChannel): ChannelClassification {
   let subType = rawCat || 'Live Channel';
   let subRank = 50;
 
-  const isAnime = ANIME_REGEX.test(n) || rawCat === 'Anime';
+  const isGamingOrTech =
+    GAMING_TECH_REGEX.test(n) ||
+    CREATOR_GAMING_REGEX.test(n) ||
+    ['Gaming', 'Gaming & Tech', 'Computers', 'Esports'].includes(rawCat);
+  const isAnime = !isGamingOrTech && (ANIME_REGEX.test(n) || rawCat === 'Anime');
   const isFaith = FAITH_REGEX.test(n) || rawCat === 'Faith';
   const isExcludedNonKids = NON_KIDS_EXCLUSION_REGEX.test(n);
 
-  // 1. Auto-classify Anime & Faith first, then ALL genuine Kids channels into "Kids"
-  if (isAnime) {
+  // 1. Auto-classify Gaming & Tech, Anime, Faith, and Kids channels accurately
+  if (isGamingOrTech) {
+    category = 'Gaming & Tech';
+    if (CREATOR_GAMING_REGEX.test(n)) {
+      subType = 'Gaming & Creators';
+      subRank = 10;
+    } else if (/science|tech|computers/i.test(n + ' ' + rawCat)) {
+      subType = 'Science & Tech';
+      subRank = 20;
+    } else {
+      subType = 'Gaming & Esports';
+      subRank = 10;
+    }
+  } else if (isAnime) {
     category = 'Anime';
     subType = 'Anime Series & Movies';
     subRank = 10;
@@ -123,7 +148,7 @@ export function classifyChannel(channel: TVChannel): ChannelClassification {
       subRank = 30;
     } else if (KIDS_GAMING_MAKERS_REGEX.test(n)) {
       category = 'Kids';
-      subType = /movie/i.test(n) ? 'Kids Movies' : 'Kids & Gaming';
+      subType = /movie/i.test(n) ? 'Kids Movies' : 'Kids & Makers';
       subRank = 40;
     } else if (
       ['Family & Kids', 'Kids', 'Family', 'Animated'].includes(rawCat) &&

@@ -67,7 +67,7 @@ const TOPIC_CLUSTERS: string[][] = [
   ],
   [
     'gaming', 'game', 'games', 'esports', 'gamer', 'gamers', 'videogames', 'video games', 'tech',
-    'technology', 'computer', 'computers', 'geek', 'nerd', 'retro'
+    'technology', 'computer', 'computers', 'geek', 'nerd', 'retro', 'creator', 'creators'
   ],
   [
     'reality', 'reality tv', 'dating', 'competition', 'contest', 'game show', 'game shows', 'trivia',

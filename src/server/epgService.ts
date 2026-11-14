@@ -360,7 +360,17 @@ function buildChannelScheduleMap(
       }
     }
 
-    // 3. Verified explicit XMLTV ID overrides (e.g. Cartoon Network Asia feed)
+    // 3. Direct Roku Channel stream ID match (rok-...) strictly from Roku feed
+    const rokId = ch.url.match(/rok-([a-f0-9]+)/i)?.[1]?.toLowerCase();
+    if (!matchedXmlId && rokId) {
+      const candidate = xmlIdByFeedAndLowerId.get('roku')?.get(rokId);
+      if (candidate && programmesByFeedAndXmlId.has(`roku::${candidate}`)) {
+        matchedFeed = 'roku';
+        matchedXmlId = candidate;
+      }
+    }
+
+    // 4. Verified explicit XMLTV ID overrides (e.g. Cartoon Network Asia feed)
     if (!matchedXmlId && EXPLICIT_XMLTV_CHANNEL_IDS[ch.id]) {
       for (const targetId of EXPLICIT_XMLTV_CHANNEL_IDS[ch.id]) {
         const lowerTarget = targetId.toLowerCase();
@@ -532,10 +542,8 @@ export function getMappedTvgId(channel: TVChannel): string {
 }
 
 export function initEpgRoutes(app: express.Express) {
-  // Background warm-up shortly after server boot so startup stays instant
-  setTimeout(() => {
-    refreshEpgCache().catch(() => {});
-  }, 1500);
+  // Background warm-up immediately on server boot
+  refreshEpgCache().catch(() => {});
 
   app.get('/api/epg/now-next', async (req, res) => {
     try {
@@ -546,7 +554,7 @@ export function initEpgRoutes(app: express.Express) {
         if (lastUpdatedAt === 0) {
           await Promise.race([
             refreshEpgCache(),
-            new Promise((resolve) => setTimeout(resolve, 6500)),
+            new Promise((resolve) => setTimeout(resolve, 20000)),
           ]);
         } else {
           refreshEpgCache().catch(() => {});

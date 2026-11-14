@@ -92,11 +92,7 @@ export function initSethsrcEngine(app: express.Express, baseDir: string) {
         ? req.query.referer.trim()
         : '';
 
-      let actualTargetUrl = targetUrl;
-      const pluMatch = targetUrl.match(/plu-([a-f0-9]+)/i);
-      if (pluMatch && pluMatch[1]) {
-        actualTargetUrl = `https://cf-stitcher-orion.pluto.tv/stitch/hls/channel/${pluMatch[1]}/master.m3u8?deviceType=web&deviceMake=web&deviceModel=web&deviceId=web&appVersion=web&serverSideAds=false`;
-      }
+      const actualTargetUrl = targetUrl;
 
       const cachedRedirect = redirectCache.get(targetUrl);
       const initialFetchUrl =
@@ -270,23 +266,31 @@ export function initSethsrcEngine(app: express.Express, baseDir: string) {
         return res.send(text);
       }
 
-      // Binary media segment, encryption key, or subtitle track
+      // Encryption key file (e.g. AES-128 key for Pluto TV and FAST streams)
+      if (lowerUrl.endsWith('.key') || lowerUrl.includes('keyaes')) {
+        const keyBuffer = Buffer.from(await upstreamResponse.arrayBuffer());
+        res.setHeader('Content-Type', 'application/octet-stream');
+        res.setHeader('Content-Length', keyBuffer.length.toString());
+        res.setHeader('Cache-Control', 'public, max-age=300');
+        return res.send(keyBuffer);
+      }
+
+      // Binary media segment or subtitle track
       if (upstreamResponse.status === 206) {
         res.status(206);
       }
       const contentRange = upstreamResponse.headers.get('content-range');
       const contentLength = upstreamResponse.headers.get('content-length');
+      const contentEncoding = upstreamResponse.headers.get('content-encoding');
       const acceptRanges = upstreamResponse.headers.get('accept-ranges');
       if (contentRange) res.setHeader('Content-Range', contentRange);
-      if (contentLength) res.setHeader('Content-Length', contentLength);
+      // Only forward Content-Length if upstream body was not decompressed by fetch
+      if (contentLength && !contentEncoding) res.setHeader('Content-Length', contentLength);
       if (acceptRanges) res.setHeader('Accept-Ranges', acceptRanges);
 
       if (lowerUrl.endsWith('.ts')) {
         res.setHeader('Content-Type', 'video/mp2t');
         res.setHeader('Cache-Control', 'public, max-age=300');
-      } else if (lowerUrl.endsWith('.key') || lowerUrl.includes('keyaes')) {
-        res.setHeader('Content-Type', 'application/octet-stream');
-        res.setHeader('Cache-Control', 'public, max-age=120');
       } else if (lowerUrl.endsWith('.m4s') || lowerUrl.endsWith('.cmfv') || lowerUrl.endsWith('.cmfa')) {
         res.setHeader('Content-Type', 'video/iso.segment');
         res.setHeader('Cache-Control', 'public, max-age=300');

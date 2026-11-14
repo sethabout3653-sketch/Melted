@@ -275,20 +275,29 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
 
   useEffect(() => {
     let active = true;
+    let retryTimer: number | null = null;
     const loadEpg = async () => {
       try {
-        const res = await fetch('/api/epg/now-next', { signal: AbortSignal.timeout(8000) });
+        const res = await fetch('/api/epg/now-next', { signal: AbortSignal.timeout(20000) });
         if (!res.ok) return;
         const data = await res.json();
         if (active && data && typeof data.programs === 'object') {
           setEpgMap(data.programs);
+          if (Object.keys(data.programs).length === 0) {
+            retryTimer = window.setTimeout(loadEpg, 4000);
+          }
         }
-      } catch {}
+      } catch {
+        if (active) {
+          retryTimer = window.setTimeout(loadEpg, 4000);
+        }
+      }
     };
     void loadEpg();
     const interval = window.setInterval(loadEpg, 60000);
     return () => {
       active = false;
+      if (retryTimer !== null) clearTimeout(retryTimer);
       window.clearInterval(interval);
     };
   }, []);
@@ -444,9 +453,20 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
     setActiveCaptions(collectedLines);
   }, []);
 
+  const [randomizedChannels, setRandomizedChannels] = useState<TVChannel[]>(() => TV_CHANNELS);
+
+  useEffect(() => {
+    const shuffled = [...TV_CHANNELS];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    setRandomizedChannels(shuffled);
+  }, []);
+
   const categories = useMemo(
-    () => Array.from(new Set([...EXTRA_CATEGORIES, ...TV_CHANNELS.map((c) => getDisplayCategory(c))])),
-    []
+    () => Array.from(new Set([...EXTRA_CATEGORIES, ...randomizedChannels.map((c) => getDisplayCategory(c))])),
+    [randomizedChannels]
   );
 
   const handleCategoryWheel = (e: React.WheelEvent<HTMLDivElement>) => {
@@ -455,30 +475,42 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
     }
   };
 
+  const channelsByCategory = useMemo(() => {
+    const map = new Map<string, TVChannel[]>();
+    for (const ch of randomizedChannels) {
+      const cat = getDisplayCategory(ch);
+      let list = map.get(cat);
+      if (!list) {
+        list = [];
+        map.set(cat, list);
+      }
+      list.push(ch);
+    }
+    return map;
+  }, [randomizedChannels]);
+
   const filteredChannels = useMemo(() => {
     const q = deferredSearchQuery.trim().toLowerCase();
     if (!q) {
-      return TV_CHANNELS.filter((channel) => {
-        if (selectedCategory === 'Favorites') return favoriteSet.has(channel.id);
-        const channelCat = getDisplayCategory(channel);
-        return selectedCategory === 'All' || channelCat === selectedCategory;
-      }).sort((a, b) => compareClassifiedChannels(a, b, selectedCategory === 'All' || selectedCategory === 'Favorites'));
+      if (selectedCategory === 'All') return randomizedChannels;
+      if (selectedCategory === 'Favorites') return randomizedChannels.filter((ch) => favoriteSet.has(ch.id));
+      return channelsByCategory.get(selectedCategory) || [];
     }
 
     const pool =
       selectedCategory === 'Favorites'
-        ? TV_CHANNELS.filter((channel) => favoriteSet.has(channel.id))
-        : TV_CHANNELS;
+        ? randomizedChannels.filter((channel) => favoriteSet.has(channel.id))
+        : selectedCategory === 'All'
+        ? randomizedChannels
+        : channelsByCategory.get(selectedCategory) || randomizedChannels;
 
     return searchChannels(pool, q, {
       boostPredicate: (channel) =>
         selectedCategory !== 'All' &&
         selectedCategory !== 'Favorites' &&
         getDisplayCategory(channel) === selectedCategory,
-      tieBreaker: (a, b) =>
-        compareClassifiedChannels(a, b, selectedCategory === 'All' || selectedCategory === 'Favorites'),
     });
-  }, [deferredSearchQuery, selectedCategory, favoriteSet]);
+  }, [deferredSearchQuery, selectedCategory, favoriteSet, channelsByCategory, randomizedChannels]);
 
   useEffect(() => {
     setVisibleCount(80);
@@ -1042,15 +1074,6 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
               <Star className={`w-4 h-4 ${favoriteSet.has(selectedChannel.id) ? 'fill-current' : ''}`} />
             </button>
           )}
-          <button
-            type="button"
-            onClick={() => setIsGuideVisible((v) => !v)}
-            className="hidden lg:inline-flex items-center gap-1.5 px-3 py-2 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/70 rounded-lg text-xs font-semibold text-slate-200 transition-colors cursor-pointer"
-            title={isGuideVisible ? 'Hide Channel Guide' : 'Show Channel Guide'}
-          >
-            {isGuideVisible ? <PanelRightClose className="w-4 h-4" /> : <PanelRightOpen className="w-4 h-4" />}
-            <span>{isGuideVisible ? 'Hide Guide' : 'Show Guide'}</span>
-          </button>
         </div>
       </div>
 

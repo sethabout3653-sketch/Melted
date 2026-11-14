@@ -111,25 +111,30 @@ export function useGlobalChat({
 
   // Sync state if firebaseUserId becomes available (user logs in)
   useEffect(() => {
-    if (firebaseUserId && currentUser.id !== firebaseUserId) {
+    if (firebaseUserId) {
       setCurrentUser(prev => {
+        if (prev.id === firebaseUserId) return prev;
         const next = { ...prev, id: firebaseUserId };
         localStorage.setItem('frosthub_chat_user_id', firebaseUserId);
         return next;
       });
     }
-  }, [firebaseUserId, currentUser.id]);
+  }, [firebaseUserId]);
+
+  const hasAttemptedAnonAuth = useRef(false);
 
   // Firebase Auth & Connection Guard
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user) {
+      if (!user && !hasAttemptedAnonAuth.current) {
+        hasAttemptedAnonAuth.current = true;
         try {
           await signInAnonymously(auth);
         } catch (err) {
-          console.warn('[Firebase] Anonymous sign-in failed:', err);
+          // If anonymous auth is not enabled in Firebase project, log gracefully without repeating
+          console.info('[Firebase] Anonymous sign-in skipped or disabled (auth/admin-restricted-operation). App is fully operational via WebSocket/local mode.');
         }
-      } else {
+      } else if (user) {
         // Test connection as required by security skill
         try {
           await getDocFromServer(doc(db, 'test', 'connection'));

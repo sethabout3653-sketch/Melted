@@ -17,7 +17,7 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
     name: 'South Park 24/7',
     url: '/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-62bdb1c5e25122000798ac79.m3u8',
     category: 'Comedy',
-    logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR1G-YkPtGWvbSaaGT1lkzAMxWkumByCtQpcIoE2K07DYWSmBppJavat24z&s=10',
+    logo: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR9o3KeNG4looXJgrDtDmq8fKIKx-tna-u77TCD5YmXCw&s=10',
     description: 'Official 24/7 South Park continuous channel (Pluto TV).'
   },
   {
@@ -4741,6 +4741,374 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/33/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF_%D0%B1%D0%B5%D0%BB%D0%BE%D1%80%D1%83%D1%81%D1%81%D0%BA%D0%BE%D0%B3%D0%BE_%D1%82%D0%B5%D0%BB%D0%B5%D0%BA%D0%B0%D0%BD%D0%B0%D0%BB%D0%B0_%C2%AB%D0%A1%D0%A2%D0%92%C2%BB.svg/500px-%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF_%D0%B1%D0%B5%D0%BB%D0%BE%D1%80%D1%83%D1%81%D1%81%D0%BA%D0%BE%D0%B3%D0%BE_%D1%82%D0%B5%D0%BB%D0%B5%D0%BA%D0%B0%D0%BD%D0%B0%D0%BB%D0%B0_%C2%AB%D0%A1%D0%A2%D0%92%C2%BB.svg.png",
   "description": "Imported from Free-TV: СТВ"
 },
+  {
+    "id": "fast-ben-azelart",
+    "name": "Ben Azelart",
+    "url": "https://424e6d3a.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/Vml6aW9fQmVuQXplbGFydF9ITFM/playlist.m3u8",
+    "category": "Gaming & Tech",
+    "logo": "https://images.vizio.com/v4/btv/1/1736244372/1/267/150/0.jpg",
+    "description": "Ben Azelart challenges, stunts, builds, and creator videos 24/7."
+  },
+  {
+    "id": "fast-ssundee",
+    "name": "Ssundee",
+    "url": "https://8ad4ede6.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/Vml6aW9fU1N1bmRlZV9ITFM/playlist.m3u8",
+    "category": "Gaming & Tech",
+    "logo": "https://images.vizio.com/v4/btv/1/1736244365/1/267/150/0.jpg",
+    "description": "SSundee gaming, Minecraft, Among Us, and Fortnite adventures 24/7."
+  },
+  {
+    "id": "fast-caylus",
+    "name": "Caylus",
+    "url": "https://amg00285-amg00285c14-amgplt0022.playout.now3.amagi.tv/ts-us-w2-n2/playlist/amg00285-amg00285c14-amgplt0022/playlist.m3u8",
+    "category": "Gaming & Tech",
+    "logo": "https://images.vizio.com/v4/btv/1/1736245269/1/267/150/0.jpg",
+    "description": "Caylus gaming, GTA, Minecraft, and reaction challenges 24/7."
+  },
+  {
+    "id": "fast-jesser",
+    "name": "Jesser",
+    "url": "https://amg16763-amg16763c3-amgplt0022.playout.now3.amagi.tv/ts-us-e2-n2/playlist/amg16763-amg16763c3-amgplt0022/playlist.m3u8",
+    "category": "Gaming & Tech",
+    "logo": "https://images.vizio.com/v4/btv/1/1736244395/1/267/150/0.jpg",
+    "description": "Jesser basketball challenges, NBA 2K, and creator videos 24/7."
+  },
+  {
+    "id": "fast-creator-tv",
+    "name": "Creator TV",
+    "url": "https://amg16070-amg16070c1-amgplt0022.playout.now3.amagi.tv/ts-us-e2-n2/playlist/amg16070-amg16070c1-amgplt0022/playlist.m3u8",
+    "category": "Gaming & Tech",
+    "logo": "https://images.vizio.com/v4/btv/1/1736244659/1/267/150/0.jpg",
+    "description": "Creator-led gaming, comedy, and digital entertainment 24/7."
+  },
+  {
+    "id": "fast-zhc",
+    "name": "ZHC",
+    "url": "https://dp86zvvitxks3.cloudfront.net/10901/88885600/hls/master.m3u8?includeAssetTags=true&ads.xumo_channelId=88885600&ads.xumo_streamId=88885600",
+    "category": "Gaming & Tech",
+    "logo": "https://images.vizio.com/v4/btv/1/1736244387/1/267/150/0.jpg",
+    "description": "ZHC custom art builds, challenges, and creator collaborations live on WatchFree+."
+  },
+  {
+    "id": "fast-futcrunch",
+    "name": "Futcrunch",
+    "url": "https://dp86zvvitxks3.cloudfront.net/10901/88885597/hls/master.m3u8?includeAssetTags=true&ads.xumo_channelId=88885597&ads.xumo_streamId=88885597",
+    "category": "Gaming & Tech",
+    "logo": "https://images.vizio.com/v4/btv/1/1736244120/1/267/150/0.jpg",
+    "description": "Futcrunch football gaming, EA FC packs, and challenges live on WatchFree+."
+  },
+  {
+    "id": "fast-es-tv",
+    "name": "ES.TV",
+    "url": "https://a-cdn.klowdtv.com/live2/estv_720p/playlist.m3u8",
+    "category": "Gaming & Tech",
+    "logo": "https://i.imgur.com/ihY01ao.png",
+    "description": "Esports, competitive gaming tournaments, and pro gamer coverage 24/7."
+  },
+  {
+    "id": "fast-dungeontv",
+    "name": "DungeonTV",
+    "url": "https://stream-us-east-1.getpublica.com/playlist.m3u8?livestream=1&live=1&hls_marker=1&network_id=1964&content_channel=DungeonTV",
+    "category": "Gaming & Tech",
+    "logo": "",
+    "description": "Dungeons & Dragons, tabletop RPG campaigns, and esports live on DistroTV."
+  },
+  {
+    "id": "fast-popular-science",
+    "name": "Popular Science",
+    "url": "https://linear-1677.frequency.stream/dist/vizio/1677/hls/master/playlist.m3u8",
+    "category": "Gaming & Tech",
+    "logo": "https://images.vizio.com/v4/btv/1/1736244126/1/267/150/0.jpg",
+    "description": "Technology, engineering, and future science programming live on WatchFree+."
+  },
+  {
+    "id": "fast-science-is-amazing",
+    "name": "Science Is Amazing",
+    "url": "https://amg00376-amg00376c4-vizio-us-3416.playouts.now.amagi.tv/playlist/amg00376-magellantv-scienceisamazing-vizious/playlist.m3u8",
+    "category": "Gaming & Tech",
+    "logo": "https://images.vizio.com/v4/btv/1/1736243918/1/267/150/0.jpg",
+    "description": "Science discoveries, experiments, and tech stories live on WatchFree+."
+  },
+  {
+    "id": "fast-space-science-now",
+    "name": "Space Science Now",
+    "url": "https://amg00376-amg00376c13-tablo-us-6002.playouts.now.amagi.tv/playlist/amg00376-magellantv-spacesciencenowmainus-tablous/playlist.m3u8",
+    "category": "Gaming & Tech",
+    "logo": "",
+    "description": "Space & Astronomy documentaries and live science streams."
+  },
+  {
+    "id": "fast-the-royalty-family",
+    "name": "The Royalty Family",
+    "url": "https://6e346ea5.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/Vml6aW9fVGhlUm95YWx0eUZhbWlseV9ITFM/playlist.m3u8",
+    "category": "Entertainment",
+    "logo": "https://images.vizio.com/v4/btv/1/1736244381/1/267/150/0.jpg",
+    "description": "The Royalty Family daily vlogs, challenges, and family fun live on WatchFree+."
+  },
+  {
+    "id": "fast-law-by-mike",
+    "name": "Law by Mike",
+    "url": "https://34cd7a42.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/Vml6aW9fTGF3YnlNaWtlX0hMUw/playlist.m3u8",
+    "category": "Entertainment",
+    "logo": "https://images.vizio.com/v4/btv/1/1736244504/1/267/150/0.jpg",
+    "description": "Law by Mike legal explainers, court breakdowns, and creator shorts live on WatchFree+."
+  },
+  {
+    "id": "fast-jesse-james-west",
+    "name": "Jesse James West",
+    "url": "https://amg35360-amg35360c1-amgplt0022.playout.now3.amagi.tv/ts-us-e2-n1/playlist/amg35360-amg35360c1-amgplt0022/playlist.m3u8",
+    "category": "Sports",
+    "logo": "https://images.vizio.com/v4/btv/1/1736244646/1/267/150/0.jpg",
+    "description": "Jesse James West fitness challenges and creator competitions live on WatchFree+."
+  },
+  {
+    "id": "fast-magnus-midtbo",
+    "name": "Magnus Midtbo",
+    "url": "https://amg35360-amg35360c3-amgplt0022.playout.now3.amagi.tv/ts-us-e2-n1/playlist/amg35360-amg35360c3-amgplt0022/playlist.m3u8",
+    "category": "Sports",
+    "logo": "https://images.vizio.com/v4/btv/1/1736244813/1/267/150/0.jpg",
+    "description": "Magnus Midtbo climbing challenges and outdoor adventures live on WatchFree+."
+  },
+  {
+    "id": "fast-celine-dept",
+    "name": "Celine Dept",
+    "url": "https://amg35360-amg35360c2-amgplt0022.playout.now3.amagi.tv/ts-us-w2-n2/playlist/amg35360-amg35360c2-amgplt0022/playlist.m3u8",
+    "category": "Sports",
+    "logo": "https://images.vizio.com/v4/btv/1/1736244640/1/267/150/0.jpg",
+    "description": "Celine Dept football skills, trick shots, and soccer challenges live on WatchFree+."
+  },
+  {
+    "id": "fast-the-ed-bassmaster-channel",
+    "name": "The Ed Bassmaster Channel",
+    "url": "https://3bc24ab5.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/Vml6aW9fVGhlRWRCYXNzbWFzdGVyU2hvd19ITFM/playlist.m3u8",
+    "category": "Comedy",
+    "logo": "https://images.vizio.com/v4/btv/1/1736245554/1/267/150/0.jpg",
+    "description": "Ed Bassmaster classic prank calls and comedy sketches live on WatchFree+."
+  },
+  {
+    "id": "fast-grind-hard-plumbing-co",
+    "name": "Grind Hard Plumbing Co.",
+    "url": "https://amg35360-amg35360c4-amgplt0022.playout.now3.amagi.tv/ts-us-e2-n2/playlist/amg35360-amg35360c4-amgplt0022/playlist.m3u8",
+    "category": "Lifestyle",
+    "logo": "https://images.vizio.com/v4/btv/1/1736244821/1/267/150/0.jpg",
+    "description": "Custom off-road builds, fabrication, and extreme garage projects live on WatchFree+."
+  },
+  {
+    "id": "fast-space-beyond",
+    "name": "Space & Beyond",
+    "url": "https://amg00376-amg00376c6-vizio-us-3417.playouts.now.amagi.tv/playlist/amg00376-magellantv-spacebeyond-vizious/playlist.m3u8",
+    "category": "Documentary",
+    "logo": "https://images.vizio.com/v4/btv/1/1736244132/1/267/150/0.jpg",
+    "description": "Space exploration, astronomy, and cosmos documentaries live on WatchFree+."
+  },
+  {
+    "id": "fast-sesame-street",
+    "name": "Sesame Street",
+    "url": "https://a9c4ff2b.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/Vml6aW9fU2VzYW1lU3RyZWV0X0hMUw/playlist.m3u8",
+    "category": "Kids",
+    "logo": "https://images.vizio.com/v4/btv/1/1736244496/1/267/150/0.jpg",
+    "description": "Sesame Street educational stories and songs for kids live on WatchFree+."
+  },
+  {
+    "id": "fast-hbo-boxing",
+    "name": "HBO Boxing",
+    "url": "https://amg00136-wbd-amg00136c63-vizio-us-7845.playouts.now.amagi.tv/playlist/amg00136-warnerbrothersdiscovery-hboboxing-vizious/playlist.m3u8",
+    "category": "Sports",
+    "logo": "https://images.vizio.com/v4/btv/1/1736115795/1/267/150/0.jpg",
+    "description": "Classic and championship HBO Boxing bouts and highlights live on WatchFree+."
+  },
+  {
+    "id": "fast-bbc-top-gear",
+    "name": "BBC Top Gear",
+    "url": "https://amg00793-amg00793c23-vizio-us-6122.playouts.now.amagi.tv/playlist/amg00793-bbcstudios-topgearvizio-vizious/playlist.m3u8",
+    "category": "Lifestyle",
+    "logo": "https://images.vizio.com/v4/btv/1/1646515987/1/267/150/0.jpg",
+    "description": "BBC Top Gear motoring adventures, supercars, and challenges live on WatchFree+."
+  },
+  {
+    "id": "fast-madtv",
+    "name": "MADtv",
+    "url": "https://amg00136-wbd-amg00136c67-vizio-us-7850.playouts.now.amagi.tv/playlist/amg00136-warnerbrothersdiscovery-madtv-vizious/playlist.m3u8",
+    "category": "Comedy",
+    "logo": "https://images.vizio.com/v4/btv/1/1736115763/1/267/150/0.jpg",
+    "description": "Classic MADtv sketch comedy and parodies 24/7 live on WatchFree+."
+  },
+  {
+    "id": "fast-the-three-stooges",
+    "name": "The Three Stooges+",
+    "url": "https://d7c86182.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/Vml6aW9fVGhlVGhyZWVTdG9vZ2VzX0hMUw/playlist.m3u8",
+    "category": "Comedy",
+    "logo": "https://images.vizio.com/v4/btv/1/1646277627/1/267/150/0.jpg",
+    "description": "Classic slapstick comedy shorts with The Three Stooges live on WatchFree+."
+  },
+  {
+    "id": "fast-the-price-is-right-drew-carey",
+    "name": "The Price is Right: Drew Carey",
+    "url": "https://cdn-uw2-prod.tsv2.amagi.tv/linear/amg00488-fremantleviz-tpirmodern-vizious/playlist.m3u8",
+    "category": "Game Show",
+    "logo": "https://images.vizio.com/v4/btv/1/1736243652/1/267/150/0.jpg",
+    "description": "The Price is Right episodes hosted by Drew Carey live on WatchFree+."
+  },
+  {
+    "id": "fast-classic-family-feud",
+    "name": "Classic Family Feud",
+    "url": "https://amg00488-fremantle-amg00488c14-vizio-us-6347.playouts.now.amagi.tv/playlist/amg00488-fremantleintl-familyfeudclassics-vizious/playlist.m3u8",
+    "category": "Game Show",
+    "logo": "https://images.vizio.com/v4/btv/1/1736243726/1/267/150/0.jpg",
+    "description": "Classic Family Feud game show episodes 24/7 live on WatchFree+."
+  },
+  {
+    "id": "fast-america-says",
+    "name": "America Says",
+    "url": "https://amg00462-amg00462c2-vizio-us-4993.playouts.now.amagi.tv/playlist/amg00462-gsnfast-americasays-vizious/playlist.m3u8",
+    "category": "Game Show",
+    "logo": "https://images.vizio.com/v4/btv/1/1736244720/1/267/150/0.jpg",
+    "description": "America Says word-guessing game show hosted by John Michael Higgins live on WatchFree+."
+  },
+  {
+    "id": "fast-house",
+    "name": "House",
+    "url": "https://992716f1.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/Vml6aW9fSG91c2VfSExT/playlist.m3u8",
+    "category": "Series",
+    "logo": "https://images.vizio.com/v4/btv/1/1736245303/1/267/150/0.jpg",
+    "description": "Medical drama series House starring Hugh Laurie 24/7 live on WatchFree+."
+  },
+  {
+    "id": "fast-duck-dynasty-by-a-e",
+    "name": "Duck Dynasty by A&E",
+    "url": "https://amg01074-amg01074c1-vizio-us-6020.playouts.now.amagi.tv/playlist/amg01074-aenetworksfast-duckdynasty-vizious/playlist.m3u8",
+    "category": "Reality",
+    "logo": "https://images.vizio.com/v4/btv/1/1736243818/1/267/150/0.jpg",
+    "description": "Duck Dynasty Robertson family reality series by A&E live on WatchFree+."
+  },
+  {
+    "id": "fast-on-patrol-live-channel",
+    "name": "On Patrol: Live Channel",
+    "url": "https://amg01008-amg01008c3-vizio-us-5998.playouts.now.amagi.tv/playlist/amg01008-reelzfast-onpatrollivechannel-vizious/playlist.m3u8",
+    "category": "Crime",
+    "logo": "https://images.vizio.com/v4/btv/1/1736243710/1/267/150/0.jpg",
+    "description": "On Patrol: Live policing highlights and ride-alongs live on WatchFree+."
+  },
+  {
+    "id": "fast-the-great-british-baking-channel",
+    "name": "The Great British Baking Channel",
+    "url": "https://linear-1675.frequency.stream/dist/vizio/1675/hls/master/playlist.m3u8",
+    "category": "Reality",
+    "logo": "https://images.vizio.com/v4/btv/1/1736245035/1/267/150/0.jpg",
+    "description": "The Great British Baking Show episodes and baking specials live on WatchFree+."
+  },
+  {
+    "id": "fast-amc-thrillers",
+    "name": "AMC Thrillers",
+    "url": "https://18f2fbf906cb473e8adbe37026e7e27f.mediatailor.us-east-1.amazonaws.com/v1/master/44f73ba4d03e9607dcd9bebdcb8494d86964f1d8/Vizio_RushByAMC/playlist.m3u8",
+    "category": "Movies",
+    "logo": "https://images.vizio.com/v4/btv/1/1646279455/1/267/150/0.jpg",
+    "description": "Suspenseful thriller movies and action cinema by AMC live on WatchFree+."
+  },
+  {
+    "id": "fast-dawson-s-creek-party-of-five",
+    "name": "Dawson's Creek & Party of Five",
+    "url": "https://a0d79b0971044318ba9d149984e556fd.mediatailor.us-west-2.amazonaws.com/v1/master/ba62fe743df0fe93366eba3a257d792884136c7f/LINEAR-1660-DAWSONSCREEKPARTYOFFIVE-VIZIO/playlist.m3u8",
+    "category": "Series",
+    "logo": "https://images.vizio.com/v4/btv/1/1736246188/1/267/150/0.jpg",
+    "description": "Classic drama series Dawson's Creek and Party of Five live on WatchFree+."
+  },
+  {
+    "id": "fast-speedvision",
+    "name": "Speedvision",
+    "url": "https://linear-1683.frequency.stream/dist/vizio/1683/hls/master/playlist.m3u8",
+    "category": "Sports",
+    "logo": "https://images.vizio.com/v4/btv/1/1727343611/1/267/150/0.jpg",
+    "description": "Automotive racing, restoration, and motorsport shows live on WatchFree+."
+  },
+  {
+    "id": "fast-fubo-sports",
+    "name": "fubo Sports",
+    "url": "https://fubo-sports-fast-vizio.amagi.tv/playlist.m3u8",
+    "category": "Sports",
+    "logo": "https://images.vizio.com/v4/btv/1/1646277965/1/267/150/0.jpg",
+    "description": "Live sports talk, highlights, and combat sports on fubo Sports live on WatchFree+."
+  },
+  {
+    "id": "fast-the-emeril-lagasse-channel",
+    "name": "The Emeril Lagasse Channel",
+    "url": "https://amg17902-amg17902c2-amgplt0022.playout.now3.amagi.tv/playlist/amg17902-amg17902c2-amgplt0022/playlist.m3u8",
+    "category": "Lifestyle",
+    "logo": "https://images.vizio.com/v4/btv/1/1736241882/1/267/150/0.jpg",
+    "description": "Chef Emeril Lagasse cooking shows and culinary favorites live on WatchFree+."
+  },
+  {
+    "id": "fast-delicious-eats",
+    "name": "Delicious Eats",
+    "url": "https://amg00136-wbd-amg00136c80-vizio-us-9384.playouts.now.amagi.tv/playlist/amg00136-warnerbrothersdiscovery-deliciouseats-vizious/playlist.m3u8",
+    "category": "Lifestyle",
+    "logo": "https://images.vizio.com/v4/btv/1/1736115848/1/267/150/0.jpg",
+    "description": "Food Network and Discovery culinary favorites live on WatchFree+."
+  },
+  {
+    "id": "fast-home-cooking",
+    "name": "Home Cooking",
+    "url": "https://amg00136-wbd-amg00136c79-vizio-us-9382.playouts.now.amagi.tv/playlist/amg00136-warnerbrothersdiscovery-homecooking-vizious/playlist.m3u8",
+    "category": "Lifestyle",
+    "logo": "https://images.vizio.com/v4/btv/1/1736115832/1/267/150/0.jpg",
+    "description": "Comfort food recipes and home chef cooking series live on WatchFree+."
+  },
+  {
+    "id": "fast-breaking-news",
+    "name": "Breaking News",
+    "url": "https://amg02703-amg02703c18-vizio-us-6423.playouts.now.amagi.tv/playlist/amg02703-leadstoryfast-leadstoryus-vizious/playlist.m3u8",
+    "category": "News",
+    "logo": "https://images.vizio.com/v4/btv/1/1717219887/1/267/150/0.jpg",
+    "description": "Global breaking news coverage and live reports live on WatchFree+."
+  },
+  {
+    "id": "fast-reuters-60",
+    "name": "Reuters 60",
+    "url": "https://amg00453-reuters-amg00453c1-vizio-us-2107.playouts.now.amagi.tv/playlist/amg00453-reuters-reuters-vizious/playlist.m3u8",
+    "category": "News",
+    "logo": "https://images.vizio.com/v4/btv/1/1725546167/1/267/150/0.jpg",
+    "description": "Hourly global news briefings from Reuters live on WatchFree+."
+  },
+  {
+    "id": "fast-four-in-a-bed",
+    "name": "Four In A Bed",
+    "url": "https://wurlall3media.global.transmit.live/hls/684330e0efdff2f214fb95ba/playlist.m3u8",
+    "category": "Reality",
+    "logo": "https://images.vizio.com/v4/btv/1/1647706216/1/267/150/0.jpg",
+    "description": "Four In A Bed B&B hospitality competition series live on WatchFree+."
+  },
+  {
+    "id": "fast-the-hunger-games-5-film-collection",
+    "name": "The Hunger Games 5 - Film Collection",
+    "url": "https://31861d84.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/Vml6aW9fVGhlSHVuZ2VyR2FtZXM1RmlsbUNvbGxlY3Rpb25fSExT/playlist.m3u8",
+    "category": "Movies",
+    "logo": "https://images.vizio.com/v4/btv/1/200885042811660630/1/267/150/0.jpg",
+    "description": "The Hunger Games movie collection streaming 24/7 live on WatchFree+."
+  },
+  {
+    "id": "fast-outersphere-by-lionsgate",
+    "name": "OuterSphere by Lionsgate",
+    "url": "https://amg00353-amg00353c17-vizio-us-2569.playouts.now.amagi.tv/playlist/amg00353-lionsgatetvfast-outersphere-vizious/playlist.m3u8",
+    "category": "Sci-Fi & Horror",
+    "logo": "https://images.vizio.com/v4/btv/1/1663399334/1/267/150/0.jpg",
+    "description": "Sci-fi and fantasy movies and series from Lionsgate live on WatchFree+."
+  },
+  {
+    "id": "fast-stingray-hit-list",
+    "name": "Stingray Hit List",
+    "url": "https://dp86zvvitxks3.cloudfront.net/10901/88885532/hls/master.m3u8?includeAssetTags=true&ads.xumo_channelId=88885532&ads.xumo_streamId=88885532",
+    "category": "Music",
+    "logo": "https://images.vizio.com/v4/btv/1/1731224218/1/267/150/0.jpg",
+    "description": "Stingray Hit List pop and chart music videos live on WatchFree+."
+  },
+  {
+    "id": "fast-xumo-free-sci-fi-fantasy-movies",
+    "name": "Xumo Free Sci-Fi & Fantasy Movies",
+    "url": "https://dbsmvzfksdzmk.cloudfront.net/10901/88885570/hls/master.m3u8?ads.xumo_channelId=88885570&ads.xumo_streamId=88885570",
+    "category": "Sci-Fi & Horror",
+    "logo": "https://images.vizio.com/v4/btv/1/1661466360/1/267/150/0.jpg",
+    "description": "Xumo Free Sci-Fi & Fantasy Movies live on WatchFree+."
+  },
 ...(freeTvChannels as TVChannel[]),
 ...(rokuChannels as TVChannel[]),
 ...(samsungChannels as TVChannel[])
@@ -4971,6 +5339,14 @@ function deduplicateChannels(channels: TVChannel[]): TVChannel[] {
   return result;
 }
 
-export const TV_CHANNELS: TVChannel[] = deduplicateChannels(
-  RAW_TV_CHANNELS.filter((c): c is TVChannel => !!c && isEnglishChannel(c))
-);
+export const TV_CHANNELS: TVChannel[] = (() => {
+  const deduped = deduplicateChannels(
+    RAW_TV_CHANNELS.filter((c): c is TVChannel => !!c && isEnglishChannel(c))
+  );
+  const shuffled = [...deduped];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+})();
