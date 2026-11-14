@@ -33,7 +33,7 @@ interface CandidateEntry {
   xmlId: string;
   feedTag: FeedTag;
   country?: string;
-  hasNonAscii: boolean;
+  names: string[];
 }
 
 const DEFAULT_XMLTV_FEEDS: FeedSource[] = [
@@ -48,18 +48,12 @@ const DEFAULT_XMLTV_FEEDS: FeedSource[] = [
 
 const ADULT_SWIM_SCHEDULE_URL = 'https://www.adultswim.com/api/schedule/marathons/5801264b1bb9661440d5f845';
 const EXPLICIT_XMLTV_CHANNEL_IDS: Record<string, string[]> = {
-  'cartoon-network': ['Cartoon.Network.(HD).sg', 'Cartoon.Network.sg'],
+  'cartoon-network': ['Cartoon.Network.(HD).sg', 'Cartoon.Network.sg', 'CartoonNetwork.us'],
   'pbs-mpt-baltimore': ['PBS.us', 'MPT.us', 'WMPB.us'],
 };
 
-const CATEGORY_TO_COUNTRY: Record<string, string> = {
-  uk: 'gb', 'united kingdom': 'gb', canada: 'ca', australia: 'au', nigeria: 'ng', india: 'in',
-  germany: 'de', france: 'fr', spain: 'es', italy: 'it', brazil: 'br', mexico: 'mx', japan: 'jp',
-  korea: 'kr', singapore: 'sg',
-};
-
 const REFRESH_TTL_MS = 10 * 60 * 1000;
-const MAX_CONCURRENT_FEEDS = 2;
+const MAX_CONCURRENT_FEEDS = 3;
 let cachedProgramsByChannelId: Record<string, EpgProgramme[]> = {};
 let cachedTvgIdMap: Record<string, string> = {};
 let lastUpdatedAt = 0;
@@ -80,12 +74,12 @@ function stripCircledSymbols(name: string): string {
   return name.replace(/[\u24B6-\u24E9]/g, '').trim();
 }
 
-function hasNonLatinOrAccentedChars(name: string): boolean {
-  return /[^\x00-\x7F]/.test(stripCircledSymbols(name));
-}
-
-function compactAsciiName(name: string): string {
-  return stripCircledSymbols(name).toLowerCase().replace(/[^a-z0-9]+/g, '').trim();
+function normalizeChannelName(name: string): string {
+  return stripCircledSymbols(name)
+    .toLowerCase()
+    .replace(/\b(hd|fhd|uhd|tv|channel|us|uk|sg|east|west)\b/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .trim();
 }
 
 function parseXmltvTime(raw: string): number {
@@ -108,28 +102,6 @@ function parseTvRating(programmeBody: string): string | undefined {
   return undefined;
 }
 
-function inferChannelCountry(ch: TVChannel): string | undefined {
-  const idCountry = ch.id.match(/-([a-z]{2})-[a-z0-9]{4,}$/i)?.[1]?.toLowerCase();
-  if (idCountry) return idCountry === 'uk' ? 'gb' : idCountry;
-  const category = (ch.category || '').toLowerCase();
-  if (CATEGORY_TO_COUNTRY[category]) return CATEGORY_TO_COUNTRY[category];
-  if (/\.uk/i.test(ch.id)) return 'gb';
-  if (/\.ca/i.test(ch.id)) return 'ca';
-  if (/\.au/i.test(ch.id)) return 'au';
-  return undefined;
-}
-
-function inferXmlChannelCountry(xmlId: string, feedTag: FeedTag): string | undefined {
-  if (feedTag === 'uk' || /\.uk$/i.test(xmlId)) return 'gb';
-  if (feedTag === 'us' || /\.us2?$/i.test(xmlId)) return 'us';
-  if (feedTag === 'sg' || /\.sg$/i.test(xmlId)) return 'sg';
-  if (feedTag === 'samsung') {
-    const prefix = xmlId.slice(0, 2).toLowerCase();
-    if (/^[a-z]{2}$/.test(prefix)) return prefix;
-  }
-  return undefined;
-}
-
 async function fetchBufferWithRetry(url: string, timeoutMs: number, retries = 2): Promise<Buffer> {
   let lastError: unknown;
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -138,21 +110,16 @@ async function fetchBufferWithRetry(url: string, timeoutMs: number, retries = 2)
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
           'Accept': 'application/xml,text/xml,application/gzip,application/octet-stream,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.9',
           'Cache-Control': 'no-cache',
         },
         redirect: 'follow',
         signal: AbortSignal.timeout(timeoutMs),
       });
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status} ${res.statusText}`);
-      }
+      if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
       return Buffer.from(await res.arrayBuffer());
     } catch (err) {
       lastError = err;
-      if (attempt < retries) {
-        await sleep(750 * (attempt + 1));
-      }
+      if (attempt < retries) await sleep(750 * (attempt + 1));
     }
   }
   throw lastError;
@@ -165,7 +132,7 @@ async function fetchAndParseXmltvFeed(source: FeedSource, windowStart: number, w
 
   for (const targetUrl of urlsToTry) {
     try {
-      const buf = await fetchBufferWithRetry(targetUrl, 35000, 2);
+      const buf = await fetchBufferWithRetry(targetUrl, 40000, 2);
       const isGzip = buf[0] === 0x1f && buf[1] === 0x8b;
       const xml = isGzip ? zlib.gunzipSync(buf).toString('utf8') : buf.toString('utf8');
 
@@ -200,32 +167,23 @@ async function fetchAndParseXmltvFeed(source: FeedSource, windowStart: number, w
         const descRaw = body.match(/<desc\b[^>]*>([\s\S]*?)<\/desc>/i)?.[1];
         const desc = descRaw ? decodeXmlEntities(descRaw.replace(/<[^>]+>/g, '')).slice(0, 180) : undefined;
         const rating = parseTvRating(body);
+        
         const list = programmes.get(channelId) || [];
         list.push({ title, start, stop, ...(desc ? { desc } : {}), ...(rating ? { rating } : {}) });
         programmes.set(channelId, list);
       }
 
-      if (programmes.size > 0) {
-        return { tag: source.tag, channels, programmes };
-      }
+      if (programmes.size > 0) return { tag: source.tag, channels, programmes };
     } catch (err: any) {
-      const reason = err?.cause?.code || err?.cause?.message || err?.message || String(err);
-      console.warn(`[EPG] Failed loading XMLTV feed ${targetUrl}: ${reason}`);
+      console.warn(`[EPG] Failed loading XMLTV feed ${targetUrl}: ${err?.message || err}`);
     }
   }
-
   return { tag: source.tag, channels, programmes };
 }
 
-async function fetchFeedsWithConcurrency(
-  sources: FeedSource[],
-  windowStart: number,
-  windowEnd: number,
-  concurrency: number = MAX_CONCURRENT_FEEDS
-): Promise<ParsedFeed[]> {
+async function fetchFeedsWithConcurrency(sources: FeedSource[], windowStart: number, windowEnd: number, concurrency = MAX_CONCURRENT_FEEDS): Promise<ParsedFeed[]> {
   const results: ParsedFeed[] = new Array(sources.length);
   let cursor = 0;
-
   const worker = async () => {
     while (true) {
       const idx = cursor++;
@@ -233,9 +191,7 @@ async function fetchFeedsWithConcurrency(
       results[idx] = await fetchAndParseXmltvFeed(sources[idx], windowStart, windowEnd);
     }
   };
-
-  const workers = Array.from({ length: Math.min(concurrency, sources.length) }, () => worker());
-  await Promise.all(workers);
+  await Promise.all(Array.from({ length: Math.min(concurrency, sources.length) }, () => worker()));
   return results;
 }
 
@@ -256,9 +212,7 @@ async function fetchAdultSwimSchedule(): Promise<EpgProgramme[]> {
       out.push({ title, start, stop: Math.round(start + durationSec * 1000), ...(desc ? { desc } : {}) });
     }
     return out;
-  } catch (err: any) {
-    const reason = err?.cause?.code || err?.cause?.message || err?.message || String(err);
-    console.warn(`[EPG] Failed loading Adult Swim schedule: ${reason}`);
+  } catch {
     return [];
   }
 }
@@ -266,59 +220,31 @@ async function fetchAdultSwimSchedule(): Promise<EpgProgramme[]> {
 function dedupeAndSortProgrammes(rawProgs: EpgProgramme[]): EpgProgramme[] {
   const sorted = [...rawProgs].sort((a, b) => a.start - b.start || b.stop - a.stop);
   const seen = new Set<number>();
-  return sorted.filter((programme) => {
-    if (seen.has(programme.start)) return false;
-    seen.add(programme.start);
+  return sorted.filter((p) => {
+    if (seen.has(p.start)) return false;
+    seen.add(p.start);
     return true;
   });
 }
 
-function findProviderXmlId(idMap: Map<string, string> | undefined, providerId: string): string | undefined {
-  if (!idMap) return undefined;
-  const exact = idMap.get(providerId.toLowerCase());
-  if (exact) return exact;
-  const matches = [...idMap.entries()].filter(([xmlId]) =>
-    new RegExp(`(?:^|[^a-f0-9])${providerId}(?:$|[^a-f0-9])`, 'i').test(xmlId)
-  );
-  return matches.length === 1 ? matches[0][1] : undefined;
-}
-
 function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgramme[]) {
-  const xmlIdByFeedAndLowerId = new Map<FeedTag, Map<string, string>>();
-  const xmlIdByLowerIdGlobal = new Map<string, string>();
-  const candidatesByCompactName = new Map<string, CandidateEntry[]>();
   const programmesByFeedAndXmlId = new Map<string, EpgProgramme[]>();
+  const globalCandidates: CandidateEntry[] = [];
 
   for (const feed of feeds) {
     if (!feed) continue;
-    let idMap = xmlIdByFeedAndLowerId.get(feed.tag);
-    if (!idMap) {
-      idMap = new Map<string, string>();
-      xmlIdByFeedAndLowerId.set(feed.tag, idMap);
-    }
     for (const [xmlId, progs] of feed.programmes) {
-      const key = `${feed.tag}::${xmlId}`;
-      const existing = programmesByFeedAndXmlId.get(key);
-      if (!existing || progs.length > existing.length) programmesByFeedAndXmlId.set(key, progs);
+      programmesByFeedAndXmlId.set(`${feed.tag}::${xmlId}`, progs);
     }
     for (const [xmlId, names] of feed.channels) {
-      if (!programmesByFeedAndXmlId.has(`${feed.tag}::${xmlId}`)) continue;
-      const lowerId = xmlId.toLowerCase();
-      if (!idMap.has(lowerId)) idMap.set(lowerId, xmlId);
-      if (!xmlIdByLowerIdGlobal.has(lowerId)) xmlIdByLowerIdGlobal.set(lowerId, xmlId);
-      const country = inferXmlChannelCountry(xmlId, feed.tag);
-      for (const name of names) {
-        const compactName = compactAsciiName(name);
-        if (!compactName) continue;
-        const list = candidatesByCompactName.get(compactName) || [];
-        list.push({ xmlId, feedTag: feed.tag, country, hasNonAscii: hasNonLatinOrAccentedChars(name) });
-        candidatesByCompactName.set(compactName, list);
-      }
+      if (!feed.programmes.has(xmlId)) continue;
+      globalCandidates.push({ xmlId, feedTag: feed.tag, names });
     }
   }
 
   const byChannelId: Record<string, EpgProgramme[]> = {};
   const tvgIds: Record<string, string> = {};
+
   if (adultSwimProgs.length) {
     byChannelId['adult-swim'] = dedupeAndSortProgrammes(adultSwimProgs);
     tvgIds['adult-swim'] = 'AdultSwim.RickAndMorty.marathon';
@@ -326,104 +252,48 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
 
   for (const ch of TV_CHANNELS) {
     if (ch.id === 'adult-swim' && byChannelId['adult-swim']) continue;
+    
     let matchedFeed: FeedTag | undefined;
     let matchedXmlId: string | undefined;
 
-    const providerIds: Array<{ tag: FeedTag; id: string }> = [
-      { tag: 'pluto', id: ch.url.match(/plu-([a-f0-9]+)/i)?.[1]?.toLowerCase() || ch.id.match(/plu-([a-f0-9]+)/i)?.[1]?.toLowerCase() || '' },
-      { tag: 'samsung', id: ch.url.match(/stvp-([a-z0-9]+)/i)?.[1]?.toLowerCase() || ch.id.match(/stvp-([a-z0-9]+)/i)?.[1]?.toLowerCase() || '' },
-      { tag: 'roku', id: ch.url.match(/rok-([a-f0-9]+)/i)?.[1]?.toLowerCase() || ch.id.match(/rok-([a-f0-9]+)/i)?.[1]?.toLowerCase() || '' },
-      { tag: 'plex', id: ch.url.match(/plex-([a-z0-9]+)/i)?.[1]?.toLowerCase() || ch.id.match(/plex-([a-z0-9]+)/i)?.[1]?.toLowerCase() || '' },
-    ];
-
-    for (const provider of providerIds) {
-      if (!provider.id) continue;
-      const candidate = findProviderXmlId(xmlIdByFeedAndLowerId.get(provider.tag), provider.id);
-      if (candidate && programmesByFeedAndXmlId.has(`${provider.tag}::${candidate}`)) {
-        matchedFeed = provider.tag;
-        matchedXmlId = candidate;
-        break;
-      }
-    }
-
-    if (!matchedXmlId && EXPLICIT_XMLTV_CHANNEL_IDS[ch.id]) {
-      for (const targetId of EXPLICIT_XMLTV_CHANNEL_IDS[ch.id]) {
-        const target = targetId.toLowerCase();
-        for (const feed of feeds) {
-          if (!feed) continue;
-          const candidate = xmlIdByFeedAndLowerId.get(feed.tag)?.get(target);
-          if (candidate && programmesByFeedAndXmlId.has(`${feed.tag}::${candidate}`)) {
-            matchedFeed = feed.tag;
-            matchedXmlId = candidate;
-            break;
-          }
-        }
-        if (matchedXmlId) break;
-      }
-    }
-
-    if (!matchedXmlId) {
-      const cleanId = ch.id.replace(/^(samsung-|roku-|pluto-|plex-|freetv-)/i, '').toLowerCase();
+    // 1. Try exact or explicit ID mappings first
+    const explicitList = EXPLICIT_XMLTV_CHANNEL_IDS[ch.id] || [];
+    for (const targetId of [ch.id, ...explicitList]) {
       for (const feed of feeds) {
         if (!feed) continue;
-        const idMap = xmlIdByFeedAndLowerId.get(feed.tag);
-        const candidate = idMap?.get(ch.id.toLowerCase()) || idMap?.get(cleanId);
-        if (candidate && programmesByFeedAndXmlId.has(`${feed.tag}::${candidate}`)) {
+        if (feed.programmes.has(targetId)) {
           matchedFeed = feed.tag;
-          matchedXmlId = candidate;
+          matchedXmlId = targetId;
           break;
         }
       }
+      if (matchedXmlId) break;
     }
 
+    // 2. Try normalized name matching across ALL feeds without restrictions
     if (!matchedXmlId) {
-      const isPluto = Boolean(providerIds[0].id || ch.id.startsWith('pluto-') || /pluto/i.test(ch.url));
-      const isSamsung = Boolean(providerIds[1].id || ch.id.startsWith('samsung-') || /samsung/i.test(ch.url));
-      const isRoku = Boolean(providerIds[2].id || ch.id.startsWith('roku-') || /roku/i.test(ch.url));
-      const isPlex = Boolean(providerIds[3].id || ch.id.startsWith('plex-') || /plex/i.test(ch.url));
-      const channelCountry = inferChannelCountry(ch);
-      const channelHasNonAscii = hasNonLatinOrAccentedChars(ch.name);
-      const compactName = compactAsciiName(ch.name);
-      if (compactName.length >= 3) {
-        const eligible = (candidatesByCompactName.get(compactName) || []).filter((candidate) => {
-          if (!channelHasNonAscii && candidate.hasNonAscii) return false;
-          if (isPluto && candidate.feedTag !== 'pluto') return false;
-          if (isSamsung && candidate.feedTag !== 'samsung') return false;
-          if (isRoku && candidate.feedTag !== 'roku') return false;
-          if (isPlex && candidate.feedTag !== 'plex') return false;
-          if (channelCountry) {
-            if (candidate.country && candidate.country !== channelCountry) return false;
-            if (!candidate.country && channelCountry !== 'us' && candidate.feedTag === 'us') return false;
-          } else {
-            if (candidate.country && candidate.country !== 'us' && candidate.country !== 'ca') return false;
-            if (candidate.feedTag === 'uk' || candidate.feedTag === 'sg') return false;
+      const targetNormalized = normalizeChannelName(ch.name);
+      if (targetNormalized) {
+        for (const candidate of globalCandidates) {
+          if (candidate.names.some(n => normalizeChannelName(n) === targetNormalized)) {
+            matchedFeed = candidate.feedTag;
+            matchedXmlId = candidate.xmlId;
+            break;
           }
-          return true;
-        });
-        const uniqueCandidates = new Map(eligible.map((candidate) => [`${candidate.feedTag}::${candidate.xmlId}`, candidate]));
-        if (uniqueCandidates.size >= 1) {
-          const picked = [...uniqueCandidates.values()][0];
-          matchedFeed = picked.feedTag;
-          matchedXmlId = picked.xmlId;
         }
       }
     }
 
+    // 3. Universal Fallback: Substring / Fuzzy match on any channel name
     if (!matchedXmlId) {
-      const compactName = compactAsciiName(ch.name);
-      if (compactName) {
-        for (const feed of feeds) {
-          if (!feed) continue;
-          for (const [xmlId, names] of feed.channels) {
-            if (names.some((n) => compactAsciiName(n) === compactName)) {
-              if (programmesByFeedAndXmlId.has(`${feed.tag}::${xmlId}`)) {
-                matchedFeed = feed.tag;
-                matchedXmlId = xmlId;
-                break;
-              }
-            }
+      const cleanChName = ch.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      if (cleanChName.length >= 3) {
+        for (const candidate of globalCandidates) {
+          if (candidate.names.some(n => n.toLowerCase().replace(/[^a-z0-9]/g, '').includes(cleanChName) || cleanChName.includes(n.toLowerCase().replace(/[^a-z0-9]/g, '')))) {
+            matchedFeed = candidate.feedTag;
+            matchedXmlId = candidate.xmlId;
+            break;
           }
-          if (matchedXmlId) break;
         }
       }
     }
@@ -431,9 +301,12 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
     if (matchedXmlId && matchedFeed) {
       tvgIds[ch.id] = matchedXmlId;
       const rawPrograms = programmesByFeedAndXmlId.get(`${matchedFeed}::${matchedXmlId}`) || [];
-      if (rawPrograms.length) byChannelId[ch.id] = dedupeAndSortProgrammes(rawPrograms);
+      if (rawPrograms.length) {
+        byChannelId[ch.id] = dedupeAndSortProgrammes(rawPrograms);
+      }
     }
   }
+
   return { byChannelId, tvgIds };
 }
 
@@ -443,8 +316,8 @@ export async function refreshEpgCache(customUrls?: string[], force = false): Pro
 
   const run = async () => {
     const now = Date.now();
-    const windowStart = now - 5 * 60_000;
-    const windowEnd = now + 8 * 3600_000;
+    const windowStart = now - 10 * 60_000;
+    const windowEnd = now + 12 * 3600_000;
     const sources: FeedSource[] = [
       ...(customUrls || []).map((url) => ({ tag: 'custom' as FeedTag, url })),
       ...DEFAULT_XMLTV_FEEDS,
@@ -458,7 +331,7 @@ export async function refreshEpgCache(customUrls?: string[], force = false): Pro
       cachedProgramsByChannelId = { ...cachedProgramsByChannelId, ...byChannelId };
       cachedTvgIdMap = { ...cachedTvgIdMap, ...tvgIds };
       lastUpdatedAt = Date.now();
-      console.log(`📺 [EPG] Loaded live Now & Next guide and ratings for ${Object.keys(cachedProgramsByChannelId).length} channels`);
+      console.log(`📺 [EPG] Successfully mapped guide and ratings for ${Object.keys(cachedProgramsByChannelId).length} channels`);
     }
   };
 
@@ -483,7 +356,7 @@ export function getNowNextSnapshot(nowMs: number = Date.now()): {
         nowProg = programme;
         for (let j = i + 1; j < list.length; j++) {
           const candidate = list[j];
-          if (candidate.start > programme.start && candidate.stop > programme.stop) {
+          if (candidate.start >= nowProg.stop || candidate.start > nowMs) {
             nextProg = candidate;
             break;
           }
@@ -495,7 +368,9 @@ export function getNowNextSnapshot(nowMs: number = Date.now()): {
         break;
       }
     }
-    if (nowProg || nextProg) programs[channelId] = { ...(nowProg ? { now: nowProg } : {}), ...(nextProg ? { next: nextProg } : {}) };
+    if (nowProg || nextProg) {
+      programs[channelId] = { ...(nowProg ? { now: nowProg } : {}), ...(nextProg ? { next: nextProg } : {}) };
+    }
   }
   return { updatedAt: lastUpdatedAt, programs };
 }
