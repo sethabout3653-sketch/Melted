@@ -248,10 +248,10 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
 {
   "id": "pluto-totally-turtles",
   "name": "Nicktoons",
-  "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5d0c16d686454ead733d08f8.m3u8",
+  "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-654ca7f92c1d3300086b608c.m3u8",
   "category": "Kids",
   "logo": "https://upload.wikimedia.org/wikipedia/commons/9/97/Nicktoons_logo_%282023%29.svg?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=original",
-  "description": "TOTALLY TURTLES live on Pluto TV"
+  "description": "NickToons live on Pluto TV"
 },
 {
   "id": "pluto-pluto-tv-comedy",

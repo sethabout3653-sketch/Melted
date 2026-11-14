@@ -82,6 +82,10 @@ function normalizeChannelName(name: string): string {
     .trim();
 }
 
+function providerXmltvId(streamUrl: string): string | undefined {
+  return streamUrl.match(/(?:plu|rok)-([a-f0-9]{24,32})\.m3u8/)?.[1];
+}
+
 function parseXmltvTime(raw: string): number {
   const m = raw.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})(?:\s*([+-])(\d{2})(\d{2}))?/);
   if (!m) return 0;
@@ -258,7 +262,8 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
 
     // 1. Try exact or explicit ID mappings first
     const explicitList = EXPLICIT_XMLTV_CHANNEL_IDS[ch.id] || [];
-    for (const targetId of [ch.id, ...explicitList]) {
+    const streamProviderId = providerXmltvId(ch.url);
+    for (const targetId of [ch.id, ...(streamProviderId ? [streamProviderId] : []), ...explicitList]) {
       for (const feed of feeds) {
         if (!feed) continue;
         if (feed.programmes.has(targetId)) {
@@ -270,26 +275,12 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
       if (matchedXmlId) break;
     }
 
-    // 2. Try normalized name matching across ALL feeds without restrictions
+    // 2. Exact normalized display-name match across all feeds
     if (!matchedXmlId) {
       const targetNormalized = normalizeChannelName(ch.name);
       if (targetNormalized) {
         for (const candidate of globalCandidates) {
           if (candidate.names.some(n => normalizeChannelName(n) === targetNormalized)) {
-            matchedFeed = candidate.feedTag;
-            matchedXmlId = candidate.xmlId;
-            break;
-          }
-        }
-      }
-    }
-
-    // 3. Universal Fallback: Substring / Fuzzy match on any channel name
-    if (!matchedXmlId) {
-      const cleanChName = ch.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-      if (cleanChName.length >= 3) {
-        for (const candidate of globalCandidates) {
-          if (candidate.names.some(n => n.toLowerCase().replace(/[^a-z0-9]/g, '').includes(cleanChName) || cleanChName.includes(n.toLowerCase().replace(/[^a-z0-9]/g, '')))) {
             matchedFeed = candidate.feedTag;
             matchedXmlId = candidate.xmlId;
             break;
