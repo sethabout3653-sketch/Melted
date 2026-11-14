@@ -101,9 +101,110 @@ function parseTvRating(programmeBody: string): string | undefined {
     const value = match[1].match(/<value\b[^>]*>([\s\S]*?)<\/value>/i)?.[1];
     if (!value) continue;
     const rating = decodeXmlEntities(value.replace(/<[^>]+>/g, '')).trim().toUpperCase().replace(/\s+/g, '');
-    if (rating) return rating;
+    if (rating && rating !== 'NA') return rating;
   }
   return undefined;
+}
+
+const TMDB_API_KEY = process.env.TMDB_API_KEY || 'e378bd904d6b4952f9261f8f27882a9c';
+const TMDB_BASE = 'https://api.themoviedb.org/3';
+const TMDB_TIMEOUT_MS = 8000;
+const TMDB_LOOKUP_CONCURRENCY = 6;
+const RATING_ENRICH_WAIT_MS = 6000;
+const tmdbRatingLookups = new Map<string, Promise<string | undefined>>();
+const tmdbRatingResults = new Map<string, string | undefined>();
+
+function normalizeTitleKey(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+async function tmdbGet<T>(path: string, params: Record<string, string> = {}): Promise<T> {
+  const url = new URL(`${TMDB_BASE}${path}`);
+  url.searchParams.set('api_key', TMDB_API_KEY);
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  const res = await fetch(url, { signal: AbortSignal.timeout(TMDB_TIMEOUT_MS) });
+  if (!res.ok) throw new Error(`TMDB HTTP ${res.status}`);
+  return res.json() as Promise<T>;
+}
+
+async function resolveTmdbRating(title: string): Promise<string | undefined> {
+  const titleKey = normalizeTitleKey(title);
+  const baseKey = normalizeTitleKey(title.split(/[:|–—-]/)[0]);
+  const search = await tmdbGet<{ results: { id: number; media_type: string; name?: string; title?: string }[] }>(
+    '/search/multi',
+    { query: title, include_adult: 'false', language: 'en-US' },
+  );
+  const match = search.results?.find((result) => {
+    if (result.media_type !== 'movie' && result.media_type !== 'tv') return false;
+    return [result.name, result.title].some((name) => {
+      const key = normalizeTitleKey(name || '');
+      return key !== '' && (key === titleKey || key === baseKey);
+    });
+  });
+  if (!match) return undefined;
+
+  if (match.media_type === 'movie') {
+    const data = await tmdbGet<{ results: { iso_3166_1: string; release_dates: { certification?: string }[] }[] }>(
+      `/movie/${match.id}/release_dates`,
+    );
+    const certification = data.results
+      ?.find((region) => region.iso_3166_1 === 'US')
+      ?.release_dates?.map((release) => release.certification?.trim())
+      .find(Boolean);
+    return certification ? certification.toUpperCase() : undefined;
+  }
+
+  const data = await tmdbGet<{ results: { iso_3166_1: string; rating?: string }[] }>(`/tv/${match.id}/content_ratings`);
+  const rating = data.results?.find((region) => region.iso_3166_1 === 'US')?.rating?.trim().toUpperCase();
+  return rating && rating !== 'NA' ? rating : undefined;
+}
+
+function lookupTmdbRating(title: string): Promise<string | undefined> {
+  const key = normalizeTitleKey(title);
+  if (!key) return Promise.resolve(undefined);
+  const existing = tmdbRatingLookups.get(key);
+  if (existing) return existing;
+  const lookup = resolveTmdbRating(title)
+    .then((rating) => {
+      tmdbRatingResults.set(key, rating);
+      return rating;
+    })
+    .catch(() => {
+      tmdbRatingLookups.delete(key);
+      return undefined;
+    });
+  tmdbRatingLookups.set(key, lookup);
+  return lookup;
+}
+
+async function withTmdbRatings(snapshot: ReturnType<typeof getNowNextSnapshot>): Promise<ReturnType<typeof getNowNextSnapshot>> {
+  const pendingTitles = new Set<string>();
+  for (const entry of Object.values(snapshot.programs)) {
+    for (const programme of [entry.now, entry.next]) {
+      if (programme && !programme.rating) pendingTitles.add(programme.title);
+    }
+  }
+
+  const queue = [...pendingTitles].filter((title) => !tmdbRatingResults.has(normalizeTitleKey(title)));
+  const worker = async () => {
+    while (queue.length) await lookupTmdbRating(queue.shift()!);
+  };
+  const lookups = Promise.all(Array.from({ length: Math.min(TMDB_LOOKUP_CONCURRENCY, queue.length) }, worker));
+  await Promise.race([lookups, sleep(RATING_ENRICH_WAIT_MS)]);
+
+  const applyRating = (programme?: EpgProgramme): EpgProgramme | undefined => {
+    if (!programme || programme.rating) return programme;
+    const rating = tmdbRatingResults.get(normalizeTitleKey(programme.title));
+    return rating ? { ...programme, rating } : programme;
+  };
+
+  const programs: Record<string, ChannelNowNext> = {};
+  for (const [channelId, entry] of Object.entries(snapshot.programs)) {
+    const now = applyRating(entry.now);
+    const next = applyRating(entry.next);
+    programs[channelId] = { ...(now ? { now } : {}), ...(next ? { next } : {}) };
+  }
+  return { updatedAt: snapshot.updatedAt, programs };
 }
 
 async function fetchBufferWithRetry(url: string, timeoutMs: number, retries = 2): Promise<Buffer> {
@@ -385,7 +486,7 @@ export function initEpgRoutes(app: express.Express) {
         }
       }
       res.setHeader('Cache-Control', 'public, max-age=30');
-      res.json(getNowNextSnapshot());
+      res.json(await withTmdbRatings(getNowNextSnapshot()));
     } catch {
       res.status(500).json({ error: 'Failed to load EPG guide', programs: {} });
     }
