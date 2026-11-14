@@ -448,7 +448,7 @@ export default function App() {
             exit="exit"
             className="flex-1 flex flex-col min-h-0 h-full w-full pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0"
           >
-            <LiveTVView searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+            <LiveTVView />
           </motion.div>
         ) : (
           <motion.main
