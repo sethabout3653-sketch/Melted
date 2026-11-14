@@ -7,6 +7,7 @@ export interface EpgProgramme {
   start: number;
   stop: number;
   desc?: string;
+  rating?: string;
 }
 
 export interface ChannelNowNext {
@@ -89,6 +90,18 @@ function parseXmltvTime(raw: string): number {
   return utcMs - offsetMinutes * 60_000;
 }
 
+/** Return a recognized TV rating exactly as supplied by XMLTV; never infer or invent one. */
+function parseTvRating(programmeBody: string): string | undefined {
+  const matches = [...programmeBody.matchAll(/<rating\b[^>]*>([\s\S]*?)<\/rating>/gi)];
+  for (const match of matches) {
+    const value = match[1].match(/<value\b[^>]*>([\s\S]*?)<\/value>/i)?.[1];
+    if (!value) continue;
+    const rating = decodeXmlEntities(value.replace(/<[^>]+>/g, '')).trim().toUpperCase().replace(/\s+/g, '');
+    if (/^TV-(?:Y|Y7|Y7-FV|G|PG|14|MA)$/.test(rating)) return rating;
+  }
+  return undefined;
+}
+
 function inferChannelCountry(ch: TVChannel): string | undefined {
   const idCountry = ch.id.match(/-([a-z]{2})-[a-z0-9]{4,}$/i)?.[1]?.toLowerCase();
   if (idCountry) return idCountry === 'uk' ? 'gb' : idCountry;
@@ -122,8 +135,8 @@ async function fetchAndParseXmltvFeed(source: FeedSource, windowStart: number, w
     if (!res.ok) return { tag: source.tag, channels, programmes };
 
     const buf = Buffer.from(await res.arrayBuffer());
-    // Fetch implementations may transparently decompress HTTP gzip responses, so
-    // inspect the payload rather than assuming every .gz URL is still compressed.
+    // Fetch implementations may transparently decompress gzip responses. Only gunzip
+    // when the response body itself still has the gzip signature.
     const isGzip = buf[0] === 0x1f && buf[1] === 0x8b;
     const xml = isGzip ? zlib.gunzipSync(buf).toString('utf8') : buf.toString('utf8');
 
@@ -157,15 +170,9 @@ async function fetchAndParseXmltvFeed(source: FeedSource, windowStart: number, w
       if (!title) continue;
       const descRaw = body.match(/<desc\b[^>]*>([\s\S]*?)<\/desc>/i)?.[1];
       const desc = descRaw ? decodeXmlEntities(descRaw.replace(/<[^>]+>/g, '')).slice(0, 180) : undefined;
-      // XMLTV content ratings are usually provided as <rating><value>TV-PG</value></rating>.
-      // Add supported US TV ratings to the displayed programme title so both Now and Next
-      // show the rating without requiring a separate client-side data path.
-      const rawRating = body.match(/<rating\b[^>]*>\s*<value\b[^>]*>([\s\S]*?)<\/value>/i)?.[1];
-      const ratingValue = rawRating ? decodeXmlEntities(rawRating.replace(/<[^>]+>/g, '')).toUpperCase().replace(/\s+/g, '') : '';
-      const rating = /^(TV-Y|TV-Y7|TV-G|TV-PG|TV-14|TV-MA)$/.test(ratingValue) ? ratingValue : undefined;
-      const displayTitle = rating ? `${title} (${rating})` : title;
+      const rating = parseTvRating(body);
       const list = programmes.get(channelId) || [];
-      list.push({ title: displayTitle, start, stop, ...(desc ? { desc } : {}) });
+      list.push({ title, start, stop, ...(desc ? { desc } : {}), ...(rating ? { rating } : {}) });
       programmes.set(channelId, list);
     }
   } catch (err: any) {
@@ -218,7 +225,6 @@ function findProviderXmlId(idMap: Map<string, string> | undefined, providerId: s
   const matches = [...idMap.entries()].filter(([xmlId]) =>
     new RegExp(`(?:^|[^a-f0-9])${providerId}(?:$|[^a-f0-9])`, 'i').test(xmlId)
   );
-  // Embedded IDs are safe only when they identify exactly one XMLTV channel.
   return matches.length === 1 ? matches[0][1] : undefined;
 }
 
@@ -266,9 +272,6 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
     if (ch.id === 'adult-swim' && byChannelId['adult-swim']) continue;
     let matchedFeed: FeedTag | undefined;
     let matchedXmlId: string | undefined;
-
-    // Provider stream IDs are stronger evidence than channel-name similarity. Some XMLTV
-    // feeds decorate IDs with prefixes/suffixes, so also accept one unique embedded ID.
     const providerIds: Array<{ tag: FeedTag; id: string }> = [
       { tag: 'pluto', id: ch.url.match(/plu-([a-f0-9]+)/i)?.[1]?.toLowerCase() || '' },
       { tag: 'samsung', id: ch.url.match(/stvp-([a-z0-9]+)/i)?.[1]?.toLowerCase() || '' },
@@ -299,7 +302,6 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
       }
     }
 
-    // Exact channel-ID matching is also useful for imported/custom playlists.
     if (!matchedXmlId) {
       const cleanId = ch.id.replace(/^(samsung-|roku-|pluto-|freetv-)/i, '').toLowerCase();
       for (const feed of feeds) {
@@ -337,8 +339,6 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
           }
           return true;
         });
-        // Duplicate names (for example local stations or similarly named FAST channels) are
-        // ambiguous. Do not display a potentially incorrect guide just to increase coverage.
         const uniqueCandidates = new Map(eligible.map((candidate) => [`${candidate.feedTag}::${candidate.xmlId}`, candidate]));
         if (uniqueCandidates.size === 1) {
           const picked = [...uniqueCandidates.values()][0];
@@ -374,7 +374,6 @@ export async function refreshEpgCache(customUrls?: string[], force = false): Pro
       fetchAdultSwimSchedule(),
     ]);
     const { byChannelId, tvgIds } = buildChannelScheduleMap(parsedFeeds, adultSwimProgs);
-    // Keep the last good cache when every upstream guide is temporarily unavailable.
     if (Object.keys(byChannelId).length) {
       cachedProgramsByChannelId = byChannelId;
       cachedTvgIdMap = tvgIds;
