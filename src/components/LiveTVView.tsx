@@ -1370,7 +1370,9 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
               )}
 
               {/* Bottom Controls Overlay */}
-              <div className="absolute bottom-0 inset-x-0 p-3 sm:p-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex items-center justify-between gap-3 z-20 opacity-100 lg:opacity-0 lg:group-hover/player:opacity-100 transition-opacity duration-200">
+              <div className={`absolute bottom-0 inset-x-0 p-3 sm:p-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex items-center justify-between gap-3 z-20 transition-opacity duration-200 ${
+                cursorHidden ? 'opacity-0 pointer-events-none' : 'opacity-100 lg:opacity-0 lg:group-hover/player:opacity-100'
+              }`}>
                 <div className="flex items-center gap-2">
                   {/* Volume Controls */}
                   <button
