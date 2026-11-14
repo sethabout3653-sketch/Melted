@@ -200,7 +200,14 @@ const ChannelListItem: React.FC<{
           <div className="text-xs font-bold text-white truncate">{channel.name}</div>
           {nowProgramme ? (
             <>
-              <div className="text-[11px] text-slate-300 truncate">{nowProgramme.title}</div>
+              <div className="flex items-center gap-1.5 min-w-0">
+                <div className="text-[11px] text-slate-300 truncate">{nowProgramme.title}</div>
+                {nowProgramme.rating && (
+                  <span className="shrink-0 px-1 rounded border border-slate-600 text-[9px] font-extrabold text-slate-300 leading-4">
+                    {nowProgramme.rating}
+                  </span>
+                )}
+              </div>
               <div className="mt-1 h-1 w-full rounded-full bg-slate-700/80 overflow-hidden">
                 <div
                   className="h-full bg-[var(--brand-blue)]"
@@ -1256,6 +1263,11 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
                               <span className="font-semibold">Next</span>
                               <span className="text-slate-500 mx-1.5 tabular-nums">{formatProgrammeRange(selectedEpg.next)}</span>
                               {selectedEpg.next.title}
+                              {selectedEpg.next.rating && (
+                                <span className="ml-1.5 px-1 rounded border border-slate-600 text-[9px] font-extrabold text-slate-300">
+                                  {selectedEpg.next.rating}
+                                </span>
+                              )}
                             </p>
                           )}
                         </>
