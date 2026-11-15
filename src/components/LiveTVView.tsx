@@ -1241,7 +1241,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
         <div
           ref={containerRef}
           onPointerMove={handlePlayerPointerMove}
-          className={`relative w-full aspect-video lg:aspect-auto lg:flex-1 bg-black flex flex-col justify-between overflow-hidden shrink-0 lg:shrink select-none group/player ${
+          className={`relative w-full aspect-video lg:aspect-auto lg:flex-1 bg-white dark:bg-black flex flex-col justify-between overflow-hidden shrink-0 lg:shrink select-none group/player ${
             cursorHidden ? 'cursor-none [&_*]:!cursor-none' : ''
           }`}
         >
@@ -1256,7 +1256,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
               <video
                 ref={videoRef}
                 playsInline
-                className="w-full h-full object-contain bg-black"
+                className="w-full h-full object-contain bg-white dark:bg-black"
               />
 
               {/* Custom Captions Overlay */}
@@ -1275,9 +1275,9 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
 
               {/* Loading Spinner Overlay */}
               {isLoading && !playbackError && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 backdrop-blur-[2px] z-10 pointer-events-none">
+                <div className="absolute inset-0 flex flex-col items-center justify-center bg-white/60 dark:bg-black/50 backdrop-blur-[2px] z-10 pointer-events-none">
                   <div className="w-10 h-10 border-2 border-[var(--brand-blue)] border-t-transparent rounded-full animate-spin mb-3" />
-                  <p className="text-xs font-semibold text-slate-200 tracking-wide">
+                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-200 tracking-wide">
                     Tuning into {selectedChannel.name}...
                   </p>
                 </div>
@@ -1377,7 +1377,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
               )}
 
               {/* Bottom Controls Overlay */}
-              <div className={`absolute bottom-0 inset-x-0 p-2.5 sm:p-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex items-center justify-between gap-2 sm:gap-3 z-20 transition-opacity duration-200 ${
+              <div className={`absolute bottom-0 inset-x-0 p-2.5 sm:p-4 bg-gradient-to-t from-white/90 via-white/50 dark:from-black/90 dark:via-black/50 to-transparent flex items-center justify-between gap-2 sm:gap-3 z-20 transition-opacity duration-200 ${
                 cursorHidden ? 'opacity-0 pointer-events-none' : 'opacity-100 lg:opacity-0 lg:group-hover/player:opacity-100'
               }`}>
                 <div className="flex items-center gap-1.5 sm:gap-2">
@@ -1385,7 +1385,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
                   <button
                     type="button"
                     onClick={toggleMute}
-                    className="min-w-[36px] min-h-[36px] flex items-center justify-center p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                    className="min-w-[36px] min-h-[36px] flex items-center justify-center p-2 rounded-lg bg-black/5 hover:bg-black/10 text-slate-800 dark:bg-white/10 dark:hover:bg-white/20 dark:text-white transition-colors cursor-pointer"
                     title={isMuted ? 'Unmute (M)' : 'Mute (M)'}
                   >
                     {isMuted || volume === 0 ? (
@@ -1414,7 +1414,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
                   <button
                     type="button"
                     onClick={handleRetryStream}
-                    className="min-w-[36px] min-h-[36px] flex items-center justify-center p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                    className="min-w-[36px] min-h-[36px] flex items-center justify-center p-2 rounded-lg bg-black/5 hover:bg-black/10 text-slate-800 dark:bg-white/10 dark:hover:bg-white/20 dark:text-white transition-colors cursor-pointer"
                     title="Reload stream"
                   >
                     <RotateCw className="w-4 h-4" />
@@ -1429,7 +1429,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
                     className={`px-2.5 py-1.5 rounded-lg text-xs font-extrabold transition-colors cursor-pointer border ${
                       captionsEnabled
                         ? 'bg-[var(--brand-blue)] border-[var(--brand-blue)] text-white'
-                        : 'bg-white/10 hover:bg-white/20 border-transparent text-slate-200'
+                        : 'bg-black/5 hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/20 border-transparent text-slate-700 dark:text-slate-200'
                     }`}
                     title="Closed Captions (C)"
                   >
@@ -1442,7 +1442,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
                       <button
                         type="button"
                         onClick={() => setShowQualityMenu((prev) => !prev)}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-colors cursor-pointer"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-black/5 hover:bg-black/10 dark:bg-white/10 dark:hover:bg-white/20 text-xs font-bold text-slate-800 dark:text-white transition-colors cursor-pointer"
                         title="Video Quality"
                       >
                         <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -1450,12 +1450,12 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
                       </button>
 
                       {showQualityMenu && (
-                        <div className="absolute bottom-full right-0 mb-2 w-36 rounded-xl bg-[#12151e] border border-slate-700 shadow-xl py-1.5 z-30">
+                        <div className="absolute bottom-full right-0 mb-2 w-36 rounded-xl bg-white dark:bg-[#12151e] border border-slate-200 dark:border-slate-700 shadow-xl py-1.5 z-30">
                           <button
                             type="button"
                             onClick={() => handleSelectQuality(-1)}
-                            className={`w-full px-3 py-1.5 text-left text-xs font-semibold hover:bg-white/10 transition-colors cursor-pointer ${
-                              selectedQuality === -1 ? 'text-[var(--brand-blue)] font-bold' : 'text-slate-200'
+                            className={`w-full px-3 py-1.5 text-left text-xs font-semibold hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer ${
+                              selectedQuality === -1 ? 'text-[var(--brand-blue)] font-bold' : 'text-slate-700 dark:text-slate-200'
                             }`}
                           >
                             Auto {activeHeight ? `(${activeHeight}p)` : ''}
@@ -1465,8 +1465,8 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
                               key={lvl.index}
                               type="button"
                               onClick={() => handleSelectQuality(lvl.index)}
-                              className={`w-full px-3 py-1.5 text-left text-xs font-semibold hover:bg-white/10 transition-colors cursor-pointer ${
-                                selectedQuality === lvl.index ? 'text-[var(--brand-blue)] font-bold' : 'text-slate-200'
+                              className={`w-full px-3 py-1.5 text-left text-xs font-semibold hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer ${
+                                selectedQuality === lvl.index ? 'text-[var(--brand-blue)] font-bold' : 'text-slate-700 dark:text-slate-200'
                               }`}
                             >
                               {lvl.label}
@@ -1481,7 +1481,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
                   <button
                     type="button"
                     onClick={toggleFullscreen}
-                    className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                    className="p-2 rounded-lg bg-black/5 hover:bg-black/10 text-slate-800 dark:bg-white/10 dark:hover:bg-white/20 dark:text-white transition-colors cursor-pointer"
                     title={isFullscreen ? 'Exit Fullscreen (F)' : 'Fullscreen (F)'}
                   >
                     {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
