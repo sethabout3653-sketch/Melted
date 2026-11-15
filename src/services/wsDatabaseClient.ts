@@ -321,35 +321,11 @@ export function useWebSocketDatabase(currentUser: {
   }, []);
 
   const onRtcSignalRef = useRef<((fromUserId: string, signal: any) => void) | null>(null);
-  const onUserCallRef = useRef<((fromUserId: string, fromUserName: string, callType: 'audio' | 'video') => void) | null>(null);
-  const onCallAnsweredRef = useRef<((fromUserId: string, fromUserName: string, callType: 'audio' | 'video') => void) | null>(null);
-  const onCallEndedRef = useRef<((fromUserId: string) => void) | null>(null);
-  const onDirectRtcSignalRef = useRef<((fromUserId: string, signal: any) => void) | null>(null);
-  const onVoicemailNotificationRef = useRef<((fromUserId: string, fromUserName: string, voicemail: any) => void) | null>(null);
-  const onCallSyncRef = useRef<((fromUserId: string, data: any) => void) | null>(null);
   const onUserJoinedMediaRef = useRef<((userId: string, channel: string) => void) | null>(null);
   const onUserLeftMediaRef = useRef<((userId: string, channel: string) => void) | null>(null);
 
   const setRtcSignalHandler = useCallback((fn: (fromUserId: string, signal: any) => void) => {
     onRtcSignalRef.current = fn;
-  }, []);
-  const setUserCallHandler = useCallback((fn: (fromUserId: string, fromUserName: string, callType: 'audio' | 'video') => void) => {
-    onUserCallRef.current = fn;
-  }, []);
-  const setCallAnsweredHandler = useCallback((fn: (fromUserId: string, fromUserName: string, callType: 'audio' | 'video') => void) => {
-    onCallAnsweredRef.current = fn;
-  }, []);
-  const setCallEndedHandler = useCallback((fn: (fromUserId: string) => void) => {
-    onCallEndedRef.current = fn;
-  }, []);
-  const setDirectRtcSignalHandler = useCallback((fn: ((fromUserId: string, signal: any) => void) | null) => {
-    onDirectRtcSignalRef.current = fn;
-  }, []);
-  const setVoicemailNotificationHandler = useCallback((fn: (fromUserId: string, fromUserName: string, voicemail: any) => void) => {
-    onVoicemailNotificationRef.current = fn;
-  }, []);
-  const setCallSyncHandler = useCallback((fn: (fromUserId: string, data: any) => void) => {
-    onCallSyncRef.current = fn;
   }, []);
   const setMediaHandlers = useCallback(
     (onJoined: (userId: string, channel: string) => void, onLeft: (userId: string, channel: string) => void) => {
@@ -439,16 +415,6 @@ export function useWebSocketDatabase(currentUser: {
                   processedRtcSignalsRef.current.delete(first);
                 }
                 if (s.type === 'RTC_SIGNAL' && onRtcSignalRef.current) onRtcSignalRef.current(s.fromUserId, s.signal);
-                else if (s.type === 'USER_CALL' && onUserCallRef.current)
-                  onUserCallRef.current(s.fromUserId, s.fromUserName || 'Player', s.callType || 'audio');
-                else if (s.type === 'CALL_ANSWERED' && onCallAnsweredRef.current)
-                  onCallAnsweredRef.current(s.fromUserId, s.fromUserName || 'Player', s.callType || 'audio');
-                else if (s.type === 'CALL_ENDED' && onCallEndedRef.current) onCallEndedRef.current(s.fromUserId);
-                else if (s.type === 'DIRECT_RTC_SIGNAL' && onDirectRtcSignalRef.current)
-                  onDirectRtcSignalRef.current(s.fromUserId, s.signal);
-                else if (s.type === 'VOICEMAIL_NOTIFICATION' && onVoicemailNotificationRef.current)
-                  onVoicemailNotificationRef.current(s.fromUserId, s.fromUserName || 'Player', s.voicemail);
-                else if (s.type === 'CALL_SYNC' && onCallSyncRef.current) onCallSyncRef.current(s.fromUserId, s);
               }
             }
           });
@@ -583,15 +549,7 @@ export function useWebSocketDatabase(currentUser: {
                 return true;
               })
             );
-          } else if (
-            msg.type === 'RTC_SIGNAL' ||
-            msg.type === 'USER_CALL' ||
-            msg.type === 'CALL_ANSWERED' ||
-            msg.type === 'CALL_ENDED' ||
-            msg.type === 'DIRECT_RTC_SIGNAL' ||
-            msg.type === 'CALL_SYNC' ||
-            msg.type === 'VOICEMAIL_NOTIFICATION'
-          ) {
+          } else if (msg.type === 'RTC_SIGNAL') {
             if (msg.targetUserId === currentUserRef.current.id && msg.fromUserId !== currentUserRef.current.id) {
               if (msg.sigId) {
                 if (processedRtcSignalsRef.current.has(msg.sigId)) return;
@@ -601,17 +559,7 @@ export function useWebSocketDatabase(currentUser: {
                   processedRtcSignalsRef.current.delete(first);
                 }
               }
-              if (msg.type === 'RTC_SIGNAL' && onRtcSignalRef.current) onRtcSignalRef.current(msg.fromUserId, msg.signal);
-              else if (msg.type === 'USER_CALL' && onUserCallRef.current)
-                onUserCallRef.current(msg.fromUserId, msg.fromUserName, msg.callType);
-              else if (msg.type === 'CALL_ANSWERED' && onCallAnsweredRef.current)
-                onCallAnsweredRef.current(msg.fromUserId, msg.fromUserName, msg.callType);
-              else if (msg.type === 'CALL_ENDED' && onCallEndedRef.current) onCallEndedRef.current(msg.fromUserId);
-              else if (msg.type === 'DIRECT_RTC_SIGNAL' && onDirectRtcSignalRef.current)
-                onDirectRtcSignalRef.current(msg.fromUserId, msg.signal);
-              else if (msg.type === 'CALL_SYNC' && onCallSyncRef.current) onCallSyncRef.current(msg.fromUserId, msg);
-              else if (msg.type === 'VOICEMAIL_NOTIFICATION' && onVoicemailNotificationRef.current)
-                onVoicemailNotificationRef.current(msg.fromUserId, msg.fromUserName, msg.voicemail);
+              if (onRtcSignalRef.current) onRtcSignalRef.current(msg.fromUserId, msg.signal);
             }
           } else if (msg.type === 'USER_JOINED_MEDIA') {
             if (onUserJoinedMediaRef.current) onUserJoinedMediaRef.current(msg.userId, msg.channel);
@@ -902,107 +850,6 @@ export function useWebSocketDatabase(currentUser: {
     }).catch(() => {});
   }, []);
 
-  const callUser = useCallback(
-    (targetUserId: string, callType: 'audio' | 'video') => {
-      const u = currentUserRef.current;
-      safeSend({ type: 'USER_CALL', fromUserId: u.id, fromUserName: u.username, targetUserId, callType });
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        fetch('/api/ws-db/signal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fromUserId: u.id, fromUserName: u.username, targetUserId, type: 'USER_CALL', callType }),
-        }).catch(() => {});
-      }
-    },
-    [safeSend]
-  );
-
-  const answerCall = useCallback(
-    (targetUserId: string, callType: 'audio' | 'video' = 'audio') => {
-      const u = currentUserRef.current;
-      safeSend({ type: 'CALL_ANSWERED', fromUserId: u.id, fromUserName: u.username, targetUserId, callType });
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        fetch('/api/ws-db/signal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fromUserId: u.id, fromUserName: u.username, targetUserId, type: 'CALL_ANSWERED', callType }),
-        }).catch(() => {});
-      }
-    },
-    [safeSend]
-  );
-
-  const endCallSignal = useCallback(
-    (targetUserId: string) => {
-      const u = currentUserRef.current;
-      safeSend({ type: 'CALL_ENDED', fromUserId: u.id, targetUserId });
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        fetch('/api/ws-db/signal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fromUserId: u.id, targetUserId, type: 'CALL_ENDED' }),
-        }).catch(() => {});
-      }
-    },
-    [safeSend]
-  );
-
-  const sendDirectRtcSignal = useCallback((targetUserId: string, signal: any) => {
-    const fromUserId = currentUserRef.current.id;
-    const sigId = `dsig-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const payload = { type: 'DIRECT_RTC_SIGNAL', fromUserId, targetUserId, signal, sigId };
-
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      try {
-        wsRef.current.send(JSON.stringify(payload));
-        return;
-      } catch {}
-    }
-
-    fetch('/api/ws-db/signal', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }).catch(() => {});
-  }, []);
-
-  const sendVoicemailNotification = useCallback(
-    (targetUserId: string, voicemail: any) => {
-      const u = currentUserRef.current;
-      safeSend({ type: 'VOICEMAIL_NOTIFICATION', fromUserId: u.id, fromUserName: u.username, targetUserId, voicemail });
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        fetch('/api/ws-db/signal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            fromUserId: u.id,
-            fromUserName: u.username,
-            targetUserId,
-            type: 'VOICEMAIL_NOTIFICATION',
-            voicemail,
-          }),
-        }).catch(() => {});
-      }
-    },
-    [safeSend]
-  );
-
-  const sendCallSync = useCallback(
-    (targetUserId: string, data: { hold?: boolean; muted?: boolean; video?: boolean }) => {
-      const fromUserId = currentUserRef.current.id;
-      const payload = { type: 'CALL_SYNC', fromUserId, targetUserId, ...data };
-      safeSend(payload);
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
-        fetch('/api/ws-db/signal', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload),
-        }).catch(() => {});
-      }
-    },
-    [safeSend]
-  );
-
   return {
     users,
     messages,
@@ -1014,22 +861,9 @@ export function useWebSocketDatabase(currentUser: {
     deleteChannelMessages,
     clearAllMessages,
     registerUser,
-    callUser,
-    answerCall,
-    endCallSignal,
-    sendDirectRtcSignal,
-    sendVoicemailNotification,
-    sendCallSync,
     sendRtcSignal,
     setRtcSignalHandler,
-    setUserCallHandler,
-    setCallAnsweredHandler,
-    setCallEndedHandler,
-    setDirectRtcSignalHandler,
-    setVoicemailNotificationHandler,
-    setCallSyncHandler,
     setMediaHandlers,
     ws: wsRef.current,
   };
 }
-

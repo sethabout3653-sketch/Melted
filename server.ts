@@ -422,26 +422,23 @@ app.delete('/api/ws-db/messages/all', (req, res) => {
 
 app.post('/api/ws-db/signal', (req, res) => {
   try {
-    const { fromUserId, fromUserName, targetUserId, type, callType, signal } = req.body;
+    const { fromUserId, targetUserId, signal } = req.body;
     if (!targetUserId || targetUserId === fromUserId) {
       return res.status(400).json({ error: 'Invalid targetUserId' });
     }
 
     const payload = {
-      type,
+      type: 'RTC_SIGNAL' as const,
       fromUserId,
-      fromUserName: fromUserName || 'Player',
       targetUserId,
-      callType: callType || 'audio',
       signal,
-      ...(req.body.voicemail ? { voicemail: req.body.voicemail } : {}),
       timestamp: Date.now(),
     };
 
     const delivered = sendToUserSockets(targetUserId, payload);
     if (!delivered) {
       globalWsDb.addPendingSignal({
-        id: (type || 'sig') + '-' + Date.now(),
+        id: 'sig-' + Date.now(),
         ...payload,
       });
     }

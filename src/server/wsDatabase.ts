@@ -37,12 +37,9 @@ export interface DbMessage {
 export interface PendingSignal {
   id: string;
   fromUserId: string;
-  fromUserName?: string;
   targetUserId: string;
-  type: 'RTC_SIGNAL' | 'USER_CALL' | 'CALL_ANSWERED' | 'CALL_ENDED' | 'DIRECT_RTC_SIGNAL' | 'VOICEMAIL_NOTIFICATION' | 'CALL_SYNC';
-  callType?: 'audio' | 'video';
+  type: 'RTC_SIGNAL';
   signal?: any;
-  voicemail?: any;
   timestamp: number;
 }
 
@@ -367,112 +364,6 @@ export function initWebSocketDatabase(server: Server) {
                   timestamp: Date.now(),
                 });
               }
-            }
-            break;
-          }
-
-          case 'USER_CALL': {
-            if (msg.targetUserId && msg.targetUserId !== boundUserId) {
-              const callPayload = {
-                type: 'USER_CALL',
-                fromUserId: msg.fromUserId || boundUserId,
-                fromUserName: msg.fromUserName || 'Player',
-                targetUserId: msg.targetUserId,
-                callType: msg.callType || 'audio',
-              };
-
-              const delivered = sendToUserSockets(msg.targetUserId, callPayload);
-
-              if (!delivered) {
-                globalWsDb.addPendingSignal({
-                  id: 'call-' + Date.now(),
-                  fromUserId: msg.fromUserId || boundUserId || 'anon',
-                  fromUserName: msg.fromUserName || 'Player',
-                  targetUserId: msg.targetUserId,
-                  type: 'USER_CALL',
-                  callType: msg.callType || 'audio',
-                  timestamp: Date.now(),
-                });
-              }
-            }
-            break;
-          }
-
-          case 'CALL_ANSWERED': {
-            if (msg.targetUserId && msg.targetUserId !== boundUserId) {
-              const payload = {
-                type: 'CALL_ANSWERED',
-                fromUserId: msg.fromUserId || boundUserId,
-                fromUserName: msg.fromUserName || 'Player',
-                targetUserId: msg.targetUserId,
-                callType: msg.callType || 'audio',
-              };
-              sendToUserSockets(msg.targetUserId, payload);
-            }
-            break;
-          }
-
-          case 'CALL_ENDED': {
-            if (msg.targetUserId && msg.targetUserId !== boundUserId) {
-              const payload = {
-                type: 'CALL_ENDED',
-                fromUserId: msg.fromUserId || boundUserId,
-                targetUserId: msg.targetUserId,
-              };
-              sendToUserSockets(msg.targetUserId, payload);
-            }
-            break;
-          }
-
-          case 'DIRECT_RTC_SIGNAL': {
-            if (msg.targetUserId && msg.targetUserId !== boundUserId) {
-              const payload = {
-                type: 'DIRECT_RTC_SIGNAL',
-                fromUserId: msg.fromUserId || boundUserId,
-                targetUserId: msg.targetUserId,
-                signal: msg.signal,
-              };
-              sendToUserSockets(msg.targetUserId, payload);
-            }
-            break;
-          }
-
-          case 'VOICEMAIL_NOTIFICATION': {
-            if (msg.targetUserId && msg.targetUserId !== boundUserId) {
-              const payload = {
-                type: 'VOICEMAIL_NOTIFICATION',
-                fromUserId: msg.fromUserId || boundUserId,
-                fromUserName: msg.fromUserName || 'Player',
-                targetUserId: msg.targetUserId,
-                voicemail: msg.voicemail,
-              };
-              const delivered = sendToUserSockets(msg.targetUserId, payload);
-              if (!delivered) {
-                globalWsDb.addPendingSignal({
-                  id: 'vm-' + Date.now(),
-                  fromUserId: msg.fromUserId || boundUserId || 'anon',
-                  fromUserName: msg.fromUserName || 'Player',
-                  targetUserId: msg.targetUserId,
-                  type: 'VOICEMAIL_NOTIFICATION',
-                  voicemail: msg.voicemail,
-                  timestamp: Date.now(),
-                });
-              }
-            }
-            break;
-          }
-
-          case 'CALL_SYNC': {
-            if (msg.targetUserId && msg.targetUserId !== boundUserId) {
-              const payload = {
-                type: 'CALL_SYNC',
-                fromUserId: msg.fromUserId || boundUserId,
-                targetUserId: msg.targetUserId,
-                hold: msg.hold,
-                muted: msg.muted,
-                video: msg.video,
-              };
-              sendToUserSockets(msg.targetUserId, payload);
             }
             break;
           }

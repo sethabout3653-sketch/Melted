@@ -10,7 +10,6 @@ import { FrostHubLoadingScreen } from './components/FrostHubLoadingScreen';
 import { FrostHubLogo } from './components/FrostHubLogo';
 import { InAppNotificationToast } from './components/InAppNotificationToast';
 import { VoiceAudioEngine } from './components/VoiceAudioEngine';
-import { PhoneCallOverlay } from './components/PhoneCallOverlay';
 import { getAllGames, resolveGameUrl, getUGSGames, getCKVGames, mergeUgsGames, getPlayableGameUrl } from './services/gameService';
 import { tabTransition, containerVariants, entryVariants } from './utils/animations';
 import { useCloak, launchAboutBlank } from './hooks/useCloak';
@@ -354,19 +353,6 @@ export default function App() {
     };
   }, [currentTab, activeGame]);
 
-  const handleStartCall = useCallback((user: any) => {
-    globalChat.initiateCall(user.id, user.username || user.display_name || 'Online user', 'audio');
-  }, [globalChat]);
-
-  const handleStartVideoCall = useCallback((user: any) => {
-    globalChat.initiateCall(user.id, user.username || user.display_name || 'Online user', 'video');
-  }, [globalChat]);
-
-  const handleStartGroupCall = useCallback((selectedUsers: any[]) => {
-    const firstUser = selectedUsers[0];
-    if (firstUser) globalChat.initiateCall(firstUser.id, firstUser.username || firstUser.display_name || 'Group call', 'audio');
-  }, [globalChat]);
-
   return (
     <>
       <FrostHubLoadingScreen />
@@ -403,12 +389,7 @@ export default function App() {
         isConnected={globalChat.isConnected}
         theme={theme}
         onToggleTheme={toggleTheme}
-        users={globalChat.users}
-        currentUser={globalChat.currentUser}
         onOpenThemeSelector={handleOpenThemeSelector}
-        onStartCall={handleStartCall}
-        onStartVideoCall={handleStartVideoCall}
-        onStartGroupCall={handleStartGroupCall}
       />
 
       {/* Main Content Scrollable Area with Smooth Transitions */}
@@ -615,19 +596,6 @@ export default function App() {
           onToggleFavorite={handleToggleFavorite}
         />
       )}
-
-      <PhoneCallOverlay
-        incomingCall={globalChat.incomingCall}
-        outgoingCall={globalChat.outgoingCall}
-        activeDirectCall={globalChat.activeDirectCall}
-  isConnected={globalChat.directRtc?.isConnected}
-  localVideoStream={globalChat.cameraStream}
-  onToggleVideo={() => globalChat.toggleCamera()}
-  onToggleMic={(enabled) => globalChat.setIsMuted(!enabled)}
-  onAccept={globalChat.acceptCall}
-        onDecline={globalChat.dismissIncomingCall}
-        onEnd={globalChat.endDirectCall}
-      />
 
       {/* Global In-App Message Notification Toast - visible on every screen and over games */}
       <InAppNotificationToast
