@@ -50,7 +50,7 @@ export const FrostHubLoadingScreen: React.FC = () => {
             initial={{ opacity: 0 }}
             animate={{ opacity: [0, 0.4, 0] }}
             transition={{ delay: 0.1, duration: 0.4 }}
-            className="absolute inset-0 bg-white z-10 pointer-events-none"
+            className="absolute inset-0 bg-white dark:bg-slate-950 z-10 pointer-events-none"
           />
         </div>
       )}
