@@ -1490,12 +1490,12 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
               </div>
             </>
           ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-gradient-to-b from-[#111520] to-[#0b0e14]">
+            <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center bg-gradient-to-b from-slate-100 to-slate-50 dark:from-[#111520] dark:to-[#0b0e14]">
               <div className="w-16 h-16 rounded-2xl bg-[var(--brand-blue)]/10 border border-[var(--brand-blue)]/30 flex items-center justify-center mb-4">
                 <Tv className="w-8 h-8 text-[var(--brand-blue)]" />
               </div>
-              <h2 className="text-lg font-extrabold text-white mb-1">Select a Live Channel</h2>
-              <p className="text-xs text-slate-400 max-w-sm">
+              <h2 className="text-lg font-extrabold text-slate-900 dark:text-white mb-1">Select a Live Channel</h2>
+              <p className="text-xs text-slate-600 dark:text-slate-400 max-w-sm">
                 Pick any channel from the guide to start streaming live TV with real-time program schedules and ratings.
               </p>
             </div>
@@ -1522,7 +1522,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
                 </div>
                 {selectedEpg?.now ? (
                   <p className="text-[11px] text-slate-600 dark:text-slate-300 truncate">
-                    <span className="text-sky-300 font-semibold mr-1">Now:</span>
+                    <span className="text-sky-600 dark:text-sky-300 font-semibold mr-1">Now:</span>
                     {selectedEpg.now.title}
                     {selectedEpg.next && (
                       <span className="text-slate-500 dark:text-slate-400 ml-1.5">
