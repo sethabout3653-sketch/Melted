@@ -46,27 +46,27 @@ export const InAppNotificationToast: React.FC<InAppNotificationToastProps> = ({
     const type = notification.attachment_type.toLowerCase();
     if (type === 'image' || type === 'gif') {
       return (
-        <span className="inline-flex items-center gap-1 text-[11px] text-cyan-300 font-semibold">
+        <span className="inline-flex items-center gap-1 text-[11px] text-cyan-500 dark:text-cyan-300 font-semibold">
           <ImageIcon className="w-3 h-3" /> Photo
         </span>
       );
     }
     if (type === 'audio') {
       return (
-        <span className="inline-flex items-center gap-1 text-[11px] text-sky-400 font-semibold">
+        <span className="inline-flex items-center gap-1 text-[11px] text-sky-600 dark:text-sky-400 font-semibold">
           <Music className="w-3 h-3" /> Audio Track
         </span>
       );
     }
     if (type === 'video') {
       return (
-        <span className="inline-flex items-center gap-1 text-[11px] text-indigo-400 font-semibold">
+        <span className="inline-flex items-center gap-1 text-[11px] text-indigo-600 dark:text-indigo-400 font-semibold">
           <VideoIcon className="w-3 h-3" /> Video
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 text-[11px] text-zinc-400 font-semibold">
+      <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500 dark:text-zinc-400 font-semibold">
         <FileText className="w-3 h-3" /> File Attachment
       </span>
     );

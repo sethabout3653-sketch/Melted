@@ -146,12 +146,12 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
       <div className="px-2 py-2 sm:p-2.5 space-y-0.5 sm:space-y-1">
         <h3 
           onClick={() => onPlay(game)}
-          className="font-bold text-white text-xs sm:text-sm hover:text-[var(--brand-blue)] transition-colors leading-tight line-clamp-1 cursor-pointer font-heading tracking-tight"
+          className="font-bold text-slate-900 dark:text-white text-xs sm:text-sm hover:text-[var(--brand-blue)] transition-colors leading-tight line-clamp-1 cursor-pointer font-heading tracking-tight"
           title={game.name}
         >
           {game.name}
         </h3>
-        <p className="text-[11px] text-slate-400 font-medium truncate">
+        <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
           {game.author || game.category || 'Instant Play'}
         </p>
       </div>
@@ -161,7 +161,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
         <button
           type="button"
           onClick={() => onAboutBlank(game)}
-          className="flex-1 min-h-[34px] sm:min-h-[30px] py-1.5 rounded-lg bg-[#1e1e2d] hover:bg-[#28283a] text-slate-300 hover:text-[var(--brand-blue)] border border-[#2a2a3e] hover:border-[var(--brand-blue)]/40 text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+          className="flex-1 min-h-[34px] sm:min-h-[30px] py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-[#1e1e2d] dark:hover:bg-[#28283a] text-slate-700 dark:text-slate-300 hover:text-[var(--brand-blue)] border border-slate-200 dark:border-[#2a2a3e] hover:border-[var(--brand-blue)]/40 text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
         >
           Stealth Launch
         </button>

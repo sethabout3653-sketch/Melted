@@ -573,13 +573,13 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                           className="hidden"
                         />
                       </div>
-                      {uploadError && <p className="text-xs text-red-500 font-bold">{uploadError}</p>}
+                      {uploadError && <p className="text-xs text-red-500 dark:text-red-400 font-bold">{uploadError}</p>}
                     </div>
 
                     {/* Image Controls: Blur & Dimming Opacity */}
                     <div className="p-4 bg-slate-50 dark:bg-slate-950 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
                       <div className="flex items-center gap-2 text-xs font-bold text-slate-900 dark:text-white">
-                        <Sliders className="w-4 h-4 text-cyan-400" />
+                        <Sliders className="w-4 h-4 text-cyan-500 dark:text-cyan-300" />
                         <span>Background Adjustments</span>
                       </div>
 

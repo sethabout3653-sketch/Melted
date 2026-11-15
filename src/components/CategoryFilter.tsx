@@ -86,7 +86,7 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = React.memo(({
 
       {/* Sort Selector Right Side */}
       <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Sort by</span>
+        <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">Sort by</span>
         <div className="relative group">
           <select
             value={sortBy}
