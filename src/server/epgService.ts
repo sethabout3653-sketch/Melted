@@ -376,6 +376,16 @@ function normalizeRatingBadge(raw: string): string | undefined {
   return table[clean] || (/^(TV-Y|TV-Y7|TV-G|TV-PG|TV-14|TV-MA|G|PG|PG-13|R|NC-17)$/.test(clean) ? clean : undefined);
 }
 
+function getDefaultRatingForCategory(category?: string, channelName?: string): string {
+  const cat = (category || '').toLowerCase();
+  const name = (channelName || '').toLowerCase();
+  if (cat.includes('kids') || name.includes('cartoon') || name.includes('kids') || name.includes('family') || cat.includes('animation')) return 'TV-G';
+  if (cat.includes('news') || cat.includes('ambiance') || cat.includes('music') || cat.includes('lifestyle') || name.includes('news') || name.includes('radio')) return 'TV-G';
+  if (cat.includes('sci-fi') || cat.includes('horror') || cat.includes('crime') || cat.includes('action')) return 'TV-14';
+  if (cat.includes('comedy') || cat.includes('entertainment') || cat.includes('series') || cat.includes('movies') || cat.includes('drama') || cat.includes('reality') || cat.includes('game show')) return 'TV-PG';
+  return 'TV-PG';
+}
+
 function parseTvRating(programmeBody: string): string | undefined {
   const matches = [...programmeBody.matchAll(/<rating\b[^>]*>([\s\S]*?)<\/rating>/gi)];
   for (const match of matches) {
@@ -569,18 +579,22 @@ async function withTmdbRatings(snapshot: ReturnType<typeof getNowNextSnapshot>):
     }, 10);
   }
 
-  const applyRating = (programme?: EpgProgramme): EpgProgramme | undefined => {
+  const applyRating = (programme?: EpgProgramme, channelCategory?: string, channelName?: string): EpgProgramme | undefined => {
     if (!programme) return undefined;
     const { category: _cat, ...rest } = programme;
-    if (programme.rating) return rest;
+    if (programme.rating && programme.rating.toLowerCase() !== 'none' && programme.rating.toLowerCase() !== 'n/a') {
+      return rest;
+    }
     const tmdbRating = tmdbRatingResults.get(normalizeTitleKey(programme.title));
-    return tmdbRating ? { ...rest, rating: tmdbRating } : rest;
+    const fallbackRating = getDefaultRatingForCategory(programme.category || channelCategory, channelName);
+    return { ...rest, rating: tmdbRating || fallbackRating };
   };
 
   const programs: Record<string, ChannelNowNext> = {};
   for (const [channelId, entry] of Object.entries(snapshot.programs)) {
-    const now = applyRating(entry.now);
-    const next = applyRating(entry.next);
+    const ch = CHANNEL_BY_ID.get(channelId);
+    const now = applyRating(entry.now, ch?.category, ch?.name);
+    const next = applyRating(entry.next, ch?.category, ch?.name);
     programs[channelId] = { ...(now ? { now } : {}), ...(next ? { next } : {}) };
   }
   return { updatedAt: snapshot.updatedAt, programs };
@@ -879,6 +893,8 @@ function buildMetadataFallbackSchedule(ch: TVChannel, nowMs: number = Date.now()
     nextTitle = `${cleanName} — Next Showcase`;
   }
 
+  const defaultRating = getDefaultRatingForCategory(ch.category, cleanName);
+
   return [
     {
       title: nowTitle,
@@ -886,6 +902,7 @@ function buildMetadataFallbackSchedule(ch: TVChannel, nowMs: number = Date.now()
       stop: hourEnd,
       desc: ch.description || `Live programming on ${cleanName}.`,
       category: ch.category,
+      rating: defaultRating,
     },
     {
       title: nextTitle,
@@ -893,6 +910,7 @@ function buildMetadataFallbackSchedule(ch: TVChannel, nowMs: number = Date.now()
       stop: nextEnd,
       desc: ch.description || `Continuing broadcast on ${cleanName}.`,
       category: ch.category,
+      rating: defaultRating,
     },
   ];
 }
@@ -1062,7 +1080,8 @@ export function getNowNextSnapshot(nowMs: number = Date.now()): {
   programs: Record<string, ChannelNowNext>;
 } {
   const programs: Record<string, ChannelNowNext> = {};
-  for (const [channelId, list] of Object.entries(cachedProgramsByChannelId)) {
+  for (const ch of TV_CHANNELS) {
+    const list = cachedProgramsByChannelId[ch.id] || buildMetadataFallbackSchedule(ch, nowMs);
     let nowProg: EpgProgramme | undefined;
     let nextProg: EpgProgramme | undefined;
     for (let i = 0; i < list.length; i++) {
@@ -1083,8 +1102,12 @@ export function getNowNextSnapshot(nowMs: number = Date.now()): {
         break;
       }
     }
+    if (!nowProg && !nextProg && list.length > 0) {
+      nowProg = list[0];
+      nextProg = list[1] || list[0];
+    }
     if (nowProg || nextProg) {
-      programs[channelId] = { ...(nowProg ? { now: nowProg } : {}), ...(nextProg ? { next: nextProg } : {}) };
+      programs[ch.id] = { ...(nowProg ? { now: nowProg } : {}), ...(nextProg ? { next: nextProg } : {}) };
     }
   }
   return { updatedAt: lastUpdatedAt, programs };

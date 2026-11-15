@@ -5,7 +5,7 @@
  * and guarantees persistence across page refreshes, long time spans, and offline usage.
  */
 
-export async function processAvatarImage(file: File, maxSize = 256): Promise<string> {
+export async function processAvatarImage(file: File, maxSize = 160): Promise<string> {
   if (!file.type.startsWith('image/')) {
     throw new Error('Please select a valid image file (JPEG, PNG, WebP, etc.).');
   }
@@ -22,7 +22,6 @@ export async function processAvatarImage(file: File, maxSize = 256): Promise<str
       const img = new Image();
 
       img.onerror = () => {
-        // Fallback to raw data url if decoding fails
         resolve(rawDataUrl);
       };
 
@@ -40,7 +39,6 @@ export async function processAvatarImage(file: File, maxSize = 256): Promise<str
           const startX = (width - cropSize) / 2;
           const startY = (height - cropSize) / 2;
 
-          // Target dimensions (max 256px for high-res retina display while keeping file ~15KB)
           const targetDimension = Math.min(cropSize, maxSize);
 
           const canvas = document.createElement('canvas');
@@ -55,7 +53,6 @@ export async function processAvatarImage(file: File, maxSize = 256): Promise<str
           ctx.imageSmoothingEnabled = true;
           ctx.imageSmoothingQuality = 'high';
 
-          // Draw the square cropped area
           ctx.drawImage(
             img,
             startX,
@@ -68,8 +65,8 @@ export async function processAvatarImage(file: File, maxSize = 256): Promise<str
             targetDimension
           );
 
-          // Convert to JPEG with quality 0.88 (~12-25KB, universally supported, fits in localStorage)
-          const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+          // Convert to compact JPEG (~3-6KB) to guarantee fit in localStorage
+          const optimizedDataUrl = canvas.toDataURL('image/jpeg', 0.78);
           resolve(optimizedDataUrl);
         } catch (err) {
           console.warn('[Avatar Processing] Canvas export fallback:', err);
@@ -85,8 +82,7 @@ export async function processAvatarImage(file: File, maxSize = 256): Promise<str
 }
 
 /**
- * Safely saves the avatar URL to localStorage.
- * Handles potential QuotaExceededError and verifies validity.
+ * Safely saves the avatar URL to localStorage with quota overflow recovery.
  */
 export function persistAvatarUrl(avatarUrl: string): boolean {
   try {
@@ -97,7 +93,21 @@ export function persistAvatarUrl(avatarUrl: string): boolean {
     localStorage.setItem('frosthub_chat_avatar_url', avatarUrl);
     return true;
   } catch (err) {
-    console.warn('[Avatar Persistence] localStorage save warning:', err);
-    return false;
+    console.warn('[Avatar Persistence] Quota exceeded, attempting cleanup...', err);
+    try {
+      // Free up space by removing older or non-essential items
+      for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key && (key.startsWith('frosthub_save_') || key.startsWith('frosthub_epg_cache'))) {
+          localStorage.removeItem(key);
+        }
+      }
+      localStorage.setItem('frosthub_chat_avatar_url', avatarUrl);
+      return true;
+    } catch (retryErr) {
+      console.error('[Avatar Persistence] Failed to save avatar even after cleanup:', retryErr);
+      return false;
+    }
   }
 }
+
