@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { DbUser, DbMessage } from '../server/wsDatabase';
 import { db, auth } from './firebase';
 import {
@@ -450,10 +450,8 @@ export function useWebSocketDatabase(currentUser: {
     };
 
     window.addEventListener('beforeunload', handleLeave);
-    window.addEventListener('pagehide', handleLeave);
     return () => {
       window.removeEventListener('beforeunload', handleLeave);
-      window.removeEventListener('pagehide', handleLeave);
     };
   }, []);
 
@@ -850,20 +848,38 @@ export function useWebSocketDatabase(currentUser: {
     }).catch(() => {});
   }, []);
 
-  return {
-    users,
-    messages,
-    isConnected: isWsConnected || isHttpSyncActive || isFirebaseActive,
-    isFirebaseActive,
-    updateUser,
-    insertMessage,
-    deleteMessage,
-    deleteChannelMessages,
-    clearAllMessages,
-    registerUser,
-    sendRtcSignal,
-    setRtcSignalHandler,
-    setMediaHandlers,
-    ws: wsRef.current,
-  };
+  const isConnected = isWsConnected || isHttpSyncActive || isFirebaseActive;
+
+  return useMemo(
+    () => ({
+      users,
+      messages,
+      isConnected,
+      isFirebaseActive,
+      updateUser,
+      insertMessage,
+      deleteMessage,
+      deleteChannelMessages,
+      clearAllMessages,
+      registerUser,
+      sendRtcSignal,
+      setRtcSignalHandler,
+      setMediaHandlers,
+    }),
+    [
+      users,
+      messages,
+      isConnected,
+      isFirebaseActive,
+      updateUser,
+      insertMessage,
+      deleteMessage,
+      deleteChannelMessages,
+      clearAllMessages,
+      registerUser,
+      sendRtcSignal,
+      setRtcSignalHandler,
+      setMediaHandlers,
+    ]
+  );
 }
