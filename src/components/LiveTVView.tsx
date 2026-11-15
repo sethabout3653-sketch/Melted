@@ -1311,44 +1311,44 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
 
               {/* Channel Info Bar (Desktop overlay — on mobile/tablet it lives cleanly below the video player) */}
               {!isFullscreen && (
-                <div className="hidden lg:flex absolute top-0 inset-x-0 z-20 items-stretch gap-3 px-4 py-2.5 bg-[#05080f]/90 border-b border-[#1c2a48] backdrop-blur-sm">
+                <div className="hidden lg:flex absolute top-0 inset-x-0 z-20 items-stretch gap-3 px-4 py-2.5 bg-white/90 dark:bg-[#05080f]/90 border-b border-slate-200 dark:border-[#1c2a48] backdrop-blur-sm">
                     <div className="flex items-center justify-center min-w-[3.5rem] px-2 rounded-lg bg-[var(--brand-blue)] text-white text-2xl font-extrabold tabular-nums">
                       {selectedChannelNumber}
                     </div>
-                    <div className="w-16 h-11 shrink-0 rounded-lg bg-black/70 border border-slate-800 p-1 flex items-center justify-center overflow-hidden self-center">
+                    <div className="w-16 h-11 shrink-0 rounded-lg bg-slate-100 dark:bg-black/70 border border-slate-200 dark:border-slate-800 p-1 flex items-center justify-center overflow-hidden self-center">
                       <ChannelLogo logo={selectedChannel.logo} name={selectedChannel.name} forceDark />
                     </div>
                     <div className="min-w-0 flex-1 flex flex-col justify-center">
                       <div className="flex items-center gap-2 min-w-0">
-                        <h2 className="text-base font-extrabold text-white truncate">
+                        <h2 className="text-base font-extrabold text-slate-900 dark:text-white truncate">
                           {selectedChannel.name}
                         </h2>
                         {selectedEpg?.now?.rating && selectedEpg.now.rating.toLowerCase() !== 'none' && selectedEpg.now.rating.toLowerCase() !== 'n/a' && (
-                          <span className="px-1.5 py-0.5 bg-slate-900/90 border border-slate-500 rounded text-[10px] font-extrabold shrink-0 text-slate-200">
+                          <span className="px-1.5 py-0.5 bg-slate-100/90 dark:bg-slate-900/90 border border-slate-400 dark:border-slate-500 rounded text-[10px] font-extrabold shrink-0 text-slate-700 dark:text-slate-200">
                             {selectedEpg.now.rating}
                           </span>
                         )}
                       </div>
                       {selectedEpg?.now ? (
                         <>
-                          <p className="text-xs text-white truncate mt-0.5">
-                            <span className="text-sky-300 font-semibold">Now</span>
+                          <p className="text-xs text-slate-900 dark:text-white truncate mt-0.5">
+                            <span className="text-sky-600 dark:text-sky-300 font-semibold">Now</span>
                             <span className="text-slate-500 mx-1.5 tabular-nums">{formatProgrammeRange(selectedEpg.now)}</span>
                             {selectedEpg.now.title}
                           </p>
-                          <div className="mt-1.5 h-1 w-full rounded-full bg-slate-700/80 overflow-hidden">
+                          <div className="mt-1.5 h-1 w-full rounded-full bg-slate-200 dark:bg-slate-700/80 overflow-hidden">
                             <div
                               className="h-full bg-[var(--brand-blue)]"
                               style={{ width: `${programmeProgress(selectedEpg.now) * 100}%` }}
                             />
                           </div>
                           {selectedEpg.next && (
-                            <p className="text-[11px] text-slate-400 truncate mt-1.5">
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-1.5">
                               <span className="font-semibold">Next</span>
                               <span className="text-slate-500 mx-1.5 tabular-nums">{formatProgrammeRange(selectedEpg.next)}</span>
                               {selectedEpg.next.title}
                               {selectedEpg.next.rating && selectedEpg.next.rating.toLowerCase() !== 'none' && selectedEpg.next.rating.toLowerCase() !== 'n/a' && (
-                                <span className="ml-1.5 px-1 rounded border border-slate-500 text-[9px] font-extrabold text-slate-300">
+                                <span className="ml-1.5 px-1 rounded border border-slate-500 text-[9px] font-extrabold text-slate-600 dark:text-slate-300">
                                   {selectedEpg.next.rating}
                                 </span>
                               )}
@@ -1357,7 +1357,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
                         </>
                       ) : (
                         selectedChannelMeta && (
-                          <p className="text-xs text-slate-400 truncate mt-0.5">
+                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
                             {selectedChannelMeta.category} • {selectedChannelMeta.network}
                           </p>
                         )
@@ -1366,8 +1366,8 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
                     <button
                       type="button"
                       onClick={() => toggleFavorite(selectedChannel.id)}
-                      className={`self-center p-2 rounded-lg bg-black/60 hover:bg-black/80 border border-slate-700/80 transition-colors cursor-pointer shrink-0 ${
-                        favoriteSet.has(selectedChannel.id) ? 'text-amber-400' : 'text-slate-300 hover:text-amber-400'
+                      className={`self-center p-2 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-black/60 dark:hover:bg-black/80 border border-slate-300 dark:border-slate-700/80 transition-colors cursor-pointer shrink-0 ${
+                        favoriteSet.has(selectedChannel.id) ? 'text-amber-500 dark:text-amber-400' : 'text-slate-500 hover:text-amber-500 dark:text-slate-300 dark:hover:text-amber-400'
                       }`}
                       title={favoriteSet.has(selectedChannel.id) ? 'Remove favorite' : 'Favorite channel'}
                     >
