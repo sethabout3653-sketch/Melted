@@ -255,7 +255,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
               <div className="absolute inset-0 bg-gradient-to-t from-[#08090b] via-transparent to-black/25" />
               <div className="relative z-10 flex h-full items-end max-w-7xl mx-auto px-4 sm:px-10 pb-6 sm:pb-14">
                 <div className="max-w-3xl">
-                  <h1 className="text-2xl sm:text-5xl lg:text-[4.5rem] font-black uppercase tracking-[-0.04em] leading-[0.95] max-w-2xl">{featuredHeroMovie.title || featuredHeroMovie.name}</h1>
+                  <h1 className="text-2xl sm:text-5xl lg:text-[4.5rem] font-black uppercase tracking-[-0.04em] leading-[0.95] max-w-2xl text-white">{featuredHeroMovie.title || featuredHeroMovie.name}</h1>
                   <div className="mt-2.5 sm:mt-4 flex flex-wrap items-center gap-3 text-xs sm:text-sm text-white/80">
                     {featuredHeroMovie.vote_average !== undefined && <span className="inline-flex items-center gap-1 text-amber-400 tabular-nums"><Star className="w-4 h-4 fill-current" />{featuredHeroMovie.vote_average.toFixed(1)}</span>}
                     {featuredHeroMovie.release_date && <span className="tabular-nums">{featuredHeroMovie.release_date.slice(0, 4)}</span>}
@@ -279,7 +279,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-5">
               {items.map(item => (
                 <button key={`${item.id}-${item.media_type || (item.title ? 'movie' : 'tv')}`} type="button" onClick={() => void selectMedia(item)} className="group text-left bg-white dark:bg-[#141519] rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 hover:border-slate-400 dark:hover:border-white/40 transition-colors cursor-pointer">
-                  <div className="relative aspect-[2/3] bg-slate-900">
+                  <div className="relative aspect-[2/3] bg-slate-200 dark:bg-slate-900">
                     <img src={getPosterUrl(item.poster_path)} alt={item.title || item.name || 'Title poster'} loading="lazy" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
                     <span className="absolute top-2 left-2 bg-black/80 text-white text-[9px] font-bold px-2 py-0.5 rounded">{item.media_type === 'tv' || item.first_air_date ? 'TV' : 'MOVIE'}</span>
                     <span className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity"><Play className="w-8 h-8 text-[var(--brand-blue)] fill-current" /></span>

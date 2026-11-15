@@ -32,7 +32,7 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
   if (cleanUrl && !hasError) {
     return (
       <div 
-        className={`${sizeClass} rounded-2xl overflow-hidden shrink-0 border border-black/10 dark:border-white/10 bg-slate-900 shadow-sm relative ${className}`}
+        className={`${sizeClass} rounded-2xl overflow-hidden shrink-0 border border-black/10 dark:border-white/10 bg-slate-200 dark:bg-slate-900 shadow-sm relative ${className}`}
       >
         <img 
           src={cleanUrl} 
@@ -61,4 +61,3 @@ export const UserAvatar: React.FC<UserAvatarProps> = ({
 };
 
 export default UserAvatar;
-
