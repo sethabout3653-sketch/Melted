@@ -16,13 +16,18 @@ import { tabTransition, containerVariants, entryVariants } from './utils/animati
 import { useCloak, launchAboutBlank } from './hooks/useCloak';
 import { useGlobalChat } from './hooks/useGlobalChat';
 import { useDeviceAdaptation } from './hooks/useDeviceAdaptation';
-import { DeviceAdaptationBar } from './components/DeviceAdaptationBar';
 import { useThemeConfig } from './hooks/useThemeConfig';
 import { useFontConfig } from './hooks/useFontConfig';
 import { ThemeSelectorModal } from './components/ThemeSelectorModal';
 import { AppCanvasBackground } from './components/AppCanvasBackground';
 import { MovieView } from './components/MovieView';
 import { LiveTVView } from './components/LiveTVView';
+import {
+  getEffectiveUserId,
+  getStoredGameFavorites,
+  subscribeToFavorites,
+  toggleGameFavorite,
+} from './services/favoritesService';
 import { GameItem, GameCategory } from './types/game';
 import { 
   Search, 
@@ -44,7 +49,8 @@ import {
   VolumeX,
   Maximize2,
   Film,
-  Tv
+  Tv,
+  X
 } from 'lucide-react';
 
 const PAGE_SIZE = 36;
@@ -56,7 +62,7 @@ export default function App() {
 
   const [selectedCategory, setSelectedCategory] = useState<GameCategory>('All');
   const [sortBy, setSortBy] = useState<'popular' | 'alpha-asc' | 'alpha-desc' | 'random'>('popular');
-  const [favorites, setFavorites] = useState<number[]>(() => getFavorites());
+  const [favorites, setFavorites] = useState<number[]>(() => getStoredGameFavorites());
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [targetChatChannel, setTargetChatChannel] = useState<string | null>(null);
@@ -141,6 +147,21 @@ export default function App() {
       isMounted = false;
     };
   }, []);
+
+  // Background prefetch for Live TV EPG so it renders instantly on navigation
+  useEffect(() => {
+    fetch('/api/epg/now-next')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.programs && typeof data.programs === 'object' && Object.keys(data.programs).length > 0) {
+          try {
+            localStorage.setItem('frosthub_epg_cache', JSON.stringify(data.programs));
+          } catch {}
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
   const [activeGame, setActiveGame] = useState<GameItem | null>(null);
   const [activeMedia, setActiveMedia] = useState<{ title: string; mediaType: 'movie' | 'tv'; season?: number; episode?: number } | null>(null);
@@ -173,31 +194,17 @@ export default function App() {
     };
   }, []);
 
-  // Favorites helpers
-  function getFavorites(): number[] {
-    try {
-      const stored = localStorage.getItem('frosthub_favorites');
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  }
-
-  function toggleFavoriteStorage(id: number) {
-    try {
-      const current = getFavorites();
-      const updated = current.includes(id)
-        ? current.filter((item) => item !== id)
-        : [...current, id];
-      localStorage.setItem('frosthub_favorites', JSON.stringify(updated));
-      return updated;
-    } catch {
-      return [];
-    }
-  }
+  // Sync game favorites reliably across LocalStorage, backend API, and Firestore
+  useEffect(() => {
+    const userId = getEffectiveUserId();
+    const unsub = subscribeToFavorites(userId, ({ gameIds }) => {
+      setFavorites(gameIds);
+    });
+    return () => unsub();
+  }, [globalChat.currentUser?.id]);
 
   const handleToggleFavorite = useCallback((id: number) => {
-    const updated = toggleFavoriteStorage(id);
+    const updated = toggleGameFavorite(id);
     setFavorites(updated);
   }, []);
 
@@ -424,7 +431,7 @@ export default function App() {
             initial="initial"
             animate="animate"
             exit="exit"
-            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-hidden pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0"
+            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-hidden pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0"
           >
             <AIAssistantView />
           </motion.div>
@@ -435,7 +442,7 @@ export default function App() {
             initial="initial"
             animate="animate"
             exit="exit"
-            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-y-auto pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0"
+            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-y-auto pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0"
           >
             <MovieView onActiveMediaChange={setActiveMedia} />
           </motion.div>
@@ -459,9 +466,33 @@ export default function App() {
             exit="exit"
             className="flex-1 w-full overflow-y-auto"
           >
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 pb-24 lg:pb-16">
+            <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 pb-24 lg:pb-16">
+            {/* Mobile Search Input (since top navbar search hides on narrow mobile) */}
+            <div className="sm:hidden mb-3">
+              <div className="relative">
+                <Search className="w-4 h-4 text-[var(--brand-blue)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={`Search ${allGames.length} games...`}
+                  className="w-full bg-white dark:bg-[#13151f] text-base text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-10 pr-10 py-2.5 border border-slate-200 dark:border-[#24283b] focus:border-[var(--brand-blue)] focus:outline-none shadow-sm"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    aria-label="Clear search"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Categories & Sorting - Directly at top below header */}
-            <div className="mb-6">
+            <div className="mb-4 sm:mb-6">
               <CategoryFilter
                 selectedCategory={selectedCategory}
                 onSelectCategory={handleSelectCategory}
@@ -517,7 +548,7 @@ export default function App() {
             ) : (
               /* Game Grid - Animated Container */
               <div 
-                className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6 sm:gap-8"
+                className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6 lg:gap-8"
               >
                 {visibleGames.map((game, index) => (
                   <GameCard
@@ -610,13 +641,13 @@ export default function App() {
         }}
       />
 
-      {/* Sleek Responsive Mobile & Tablet Navigation Bar */}
-      <nav aria-label="Mobile Navigation" className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-[#0d0d12]/95 backdrop-blur-xl border-t border-slate-200 dark:border-[#1e1e2d] px-1 py-1.5 pb-[max(0.5rem,env(safe-area-inset-bottom))] flex items-center justify-around shadow-[0_-10px_40px_rgba(0,0,0,0.2)] transition-colors">
+      {/* Sleek Responsive Mobile & Tablet Navigation Bar (5 clean tabs, Style lives in top Navbar) */}
+      <nav aria-label="Mobile Navigation" className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-[#0d0d12]/95 backdrop-blur-xl border-t border-slate-200 dark:border-[#1e1e2d] px-2 py-1.5 pb-[max(0.45rem,env(safe-area-inset-bottom))] flex items-center justify-around gap-1 shadow-[0_-10px_40px_rgba(0,0,0,0.2)] transition-colors">
         <button
           type="button"
           onClick={() => setCurrentTab('games')}
-          className={`flex flex-col items-center justify-center gap-1 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
-            currentTab === 'games' ? 'text-[var(--brand-blue)]' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
+          className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
+            currentTab === 'games' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
           }`}
         >
           <Gamepad2 className="w-5 h-5" />
@@ -626,8 +657,8 @@ export default function App() {
         <button
           type="button"
           onClick={() => setCurrentTab('movies')}
-          className={`flex flex-col items-center justify-center gap-1 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
-            currentTab === 'movies' ? 'text-[var(--brand-blue)]' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
+          className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
+            currentTab === 'movies' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
           }`}
         >
           <Film className="w-5 h-5" />
@@ -636,20 +667,9 @@ export default function App() {
 
         <button
           type="button"
-          onClick={() => setCurrentTab('ai')}
-          className={`flex flex-col items-center justify-center gap-1 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
-            currentTab === 'ai' ? 'text-[var(--brand-blue)]' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
-          }`}
-        >
-          <Sparkles className="w-5 h-5" />
-          <span className="text-[10px] font-bold uppercase tracking-tight">AI</span>
-        </button>
-
-        <button
-          type="button"
           onClick={() => setCurrentTab('tv')}
-          className={`flex flex-col items-center justify-center gap-1 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
-            currentTab === 'tv' ? 'text-[var(--brand-blue)]' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
+          className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
+            currentTab === 'tv' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
           }`}
         >
           <Tv className="w-5 h-5" />
@@ -658,9 +678,20 @@ export default function App() {
 
         <button
           type="button"
+          onClick={() => setCurrentTab('ai')}
+          className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
+            currentTab === 'ai' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
+          }`}
+        >
+          <Sparkles className="w-5 h-5" />
+          <span className="text-[10px] font-bold uppercase tracking-tight">AI</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setCurrentTab('chat')}
-          className={`flex flex-col items-center justify-center gap-1 min-h-[44px] transition-colors relative cursor-pointer flex-1 py-1 rounded-xl ${
-            currentTab === 'chat' ? 'text-[var(--brand-blue)]' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
+          className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors relative cursor-pointer flex-1 py-1 rounded-xl ${
+            currentTab === 'chat' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
           }`}
         >
           <div className="relative">
@@ -672,15 +703,6 @@ export default function App() {
             )}
           </div>
           <span className="text-[10px] font-bold uppercase tracking-tight">Social</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setIsThemeModalOpen(true)}
-          className="flex flex-col items-center justify-center gap-1 min-h-[44px] text-slate-400 dark:text-slate-500 hover:text-slate-200 transition-colors cursor-pointer flex-1 py-1 rounded-xl"
-        >
-          <Palette className="w-5 h-5" />
-          <span className="text-[10px] font-bold uppercase tracking-tight">Style</span>
         </button>
       </nav>
 
@@ -696,34 +718,34 @@ export default function App() {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] bg-slate-900/90 backdrop-blur-xl border border-white/10 rounded-2xl px-4 py-3 flex items-center gap-4 shadow-2xl"
+          className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:bottom-6 left-1/2 -translate-x-1/2 z-[100] w-[calc(100vw-1rem)] max-w-md bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-4 shadow-2xl"
         >
-          <div className="flex items-center gap-2 pr-4 border-r border-white/10">
-            <div className="w-8 h-8 rounded-xl bg-cyan-500 flex items-center justify-center">
+          <div className="flex items-center gap-2 pr-2 sm:pr-4 border-r border-white/10 min-w-0">
+            <div className="w-8 h-8 rounded-xl bg-cyan-500 flex items-center justify-center shrink-0">
               <Mic className="w-4 h-4 text-white" />
             </div>
-            <div className="flex flex-col">
+            <div className="flex flex-col min-w-0">
               <span className="text-[10px] font-black text-white uppercase tracking-tighter">In Voice</span>
               <span className="text-[9px] text-slate-400 font-bold truncate max-w-[80px]">General Voice</span>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button 
               onClick={() => globalChat.setIsMuted(!globalChat.isMuted)}
-              className={`p-2 rounded-xl transition-all ${globalChat.isMuted ? 'bg-red-500/20 text-red-500' : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'}`}
+              className={`min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl transition-all ${globalChat.isMuted ? 'bg-red-500/20 text-red-500' : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'}`}
             >
               {globalChat.isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
             </button>
             <button 
               onClick={() => globalChat.setIsDeafened(!globalChat.isDeafened)}
-              className={`p-2 rounded-xl transition-all ${globalChat.isDeafened ? 'bg-red-500/20 text-red-500' : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'}`}
+              className={`min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl transition-all ${globalChat.isDeafened ? 'bg-red-500/20 text-red-500' : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'}`}
             >
               {globalChat.isDeafened ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
             </button>
             <button 
               onClick={() => globalChat.stopVoiceChannel()}
-              className="p-2 bg-red-600 hover:bg-red-500 text-white rounded-xl transition-all shadow-lg shadow-red-600/20"
+              className="min-w-[36px] min-h-[36px] flex items-center justify-center bg-red-600 hover:bg-red-500 text-white rounded-xl transition-all shadow-lg shadow-red-600/20"
             >
               <PhoneOff className="w-4 h-4" />
             </button>
@@ -732,11 +754,11 @@ export default function App() {
                 setTargetChatChannel('video-general');
                 setCurrentTab('chat');
               }}
-              className="ml-2 px-3.5 py-2 bg-cyan-500 hover:bg-cyan-400 text-white text-[10px] font-black rounded-xl uppercase tracking-tighter transition-all flex items-center gap-1.5 shadow-lg shadow-cyan-500/20 cursor-pointer"
+              className="px-2.5 sm:px-3.5 py-2 bg-cyan-500 hover:bg-cyan-400 text-white text-[10px] font-black rounded-xl uppercase tracking-tighter transition-all flex items-center gap-1.5 shadow-lg shadow-cyan-500/20 cursor-pointer"
               title="Maximize Voice"
             >
               <Maximize2 className="w-3.5 h-3.5" />
-              <span>Maximize</span>
+              <span className="hidden sm:inline">Maximize</span>
             </button>
           </div>
         </motion.div>
@@ -749,6 +771,8 @@ export default function App() {
         config={themeConfig}
         onUpdateConfig={updateThemeConfig}
         onResetTheme={resetTheme}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       />
 
       </div>

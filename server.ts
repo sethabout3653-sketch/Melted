@@ -103,7 +103,7 @@ app.get('/api/favorites', (req, res) => {
   try {
     const userId = (req.query.userId as string) || 'guest';
     const store = getFavoritesData();
-    const userFavs = store[userId] || { gameIds: [], channelIds: [], updatedAt: Date.now() };
+    const userFavs = store[userId] || { gameIds: [], channelIds: [], updatedAt: 0 };
     res.json(userFavs);
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to fetch favorites', message: err?.message });
@@ -112,15 +112,20 @@ app.get('/api/favorites', (req, res) => {
 
 app.post('/api/favorites', (req, res) => {
   try {
-    const { userId, gameIds, channelIds } = req.body;
+    const { userId, gameIds, channelIds, updatedAt } = req.body;
     if (!userId) {
       return res.status(400).json({ error: 'Missing userId' });
     }
     const store = getFavoritesData();
+    const existing = store[userId];
+    const nextTs = typeof updatedAt === 'number' && Number.isFinite(updatedAt) ? updatedAt : Date.now();
+    if (existing && typeof existing.updatedAt === 'number' && existing.updatedAt > nextTs) {
+      return res.json({ success: true, ...existing });
+    }
     const updated = {
-      gameIds: Array.isArray(gameIds) ? gameIds.map(Number).filter((n) => !Number.isNaN(n)) : [],
-      channelIds: Array.isArray(channelIds) ? channelIds.map(String) : [],
-      updatedAt: Date.now(),
+      gameIds: Array.isArray(gameIds) ? Array.from(new Set(gameIds.map(Number).filter((n) => !Number.isNaN(n)))) : [],
+      channelIds: Array.isArray(channelIds) ? Array.from(new Set(channelIds.map(String).filter(Boolean))) : [],
+      updatedAt: nextTs,
     };
     store[userId] = updated;
     saveFavoritesData(store);

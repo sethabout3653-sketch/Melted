@@ -22,7 +22,7 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   },
   {
     id: 'pbs-mpt-baltimore', name: 'MPT',
-    url: 'https://2-fss-2.streamhoster.com/pl_138/amlst:201814-1291584/playlist.m3u8',
+    url: 'https://wmpbdt.lls.cdn.pbs.org/wmpbdt/fdb26654-eed0-4858-aa50-a84b538f4747/primary.m3u8',
     category: 'Lifestyle', logo: 'https://yt3.googleusercontent.com/lIPxOIsrzPb61G88m_XBJz1U7fNAKJmKfxS7ql0iniY2A8gu0Mxtx1XXRf9TvLgw7F63id7w6Q=s900-c-k-c0x00ffffff-no-rj', description: 'Maryland Public Television (WMPB) live stream.'
   },
   {
@@ -87,7 +87,7 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   },
   {
     id: 'al-jazeera-english-live', name: 'Al Jazeera English',
-    url: 'https://live-hls-web-aje.getaj.net/AJE/index.m3u8',
+    url: 'https://jmp2.uk/stvp-GB2300005ML',
     category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/AlJazeera.qa.png', description: 'Al Jazeera English live stream.'
   },
   {
@@ -132,7 +132,7 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   },
   {
     id: 'euronews-english-live', name: 'Euronews English',
-    url: 'https://aegis-cloudfront-1.tubi.video/b1c4d439-03a5-4c40-ae9d-90a183e010c9/euronews-en.m3u8',
+    url: '/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5ca1da6c593a5d78f0e7edce.m3u8',
     category: 'News', logo: 'https://images.iptv-org.github.io/epg/logos/EuronewsEnglish.fr.png', description: 'Euronews English stream via Tubi; service and regional availability may vary.'
   },
   {
@@ -1582,14 +1582,6 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   "description": "HSN live on Pluto TV"
 },
 {
-  "id": "pluto-closed-caption-test-3",
-  "name": "Closed Caption Test 3",
-  "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5f9b017d037a30000730c68e.m3u8",
-  "category": "Entertainment",
-  "logo": "https://images.pluto.tv/missing.png",
-  "description": "Closed Caption Test 3 live on Pluto TV"
-},
-{
   "id": "pluto-ryan-and-friends",
   "name": "Ryan and Friends",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-5fb584b7613a31000789de5a.m3u8",
@@ -2232,7 +2224,7 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
 {
   "id": "pluto-cbs-news-detroit",
   "name": "CBS News Detroit",
-  "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-634f24cf3ce5fa0007c68f39.m3u8",
+  "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-634f2610d5023700078f7dee.m3u8",
   "category": "News",
   "logo": "https://images.pluto.tv/channels/634f24cf3ce5fa0007c68f39/colorLogoPNG.png",
   "description": "CBS News Detroit live on Pluto TV"
@@ -3150,22 +3142,6 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   "description": "ANIME x HIDIVE live on Pluto TV"
 },
 {
-  "id": "pluto-degrassi-vidaa-test",
-  "name": "Degrassi VIDAA TEST",
-  "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-67c0a90621445314490642c8.m3u8",
-  "category": "Entertainment",
-  "logo": "https://images.pluto.tv/channels/67c0a90621445314490642c8/colorLogoPNG.png",
-  "description": "Degrassi VIDAA TEST live on Pluto TV"
-},
-{
-  "id": "pluto-heartland-vidaa-test",
-  "name": "Heartland VIDAA TEST",
-  "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-67c0ac57214453144906eb48.m3u8",
-  "category": "Series",
-  "logo": "https://images.pluto.tv/channels/67c0ac57214453144906eb48/colorLogoPNG.png",
-  "description": "Heartland VIDAA TEST live on Pluto TV"
-},
-{
   "id": "pluto-the-martha-stewart-channel",
   "name": "The Martha Stewart Channel",
   "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-67c62ac2095aea2ec805eb34.m3u8",
@@ -3212,14 +3188,6 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   "category": "Sports",
   "logo": "https://images.pluto.tv/channels/683df56f5195c2a60a3f5559/colorLogoPNG_1775667541424.png",
   "description": "Swerve Women\u2019s Sports live on Pluto TV"
-},
-{
-  "id": "pluto-p-vll",
-  "name": "P+ VLL",
-  "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-683f67fde5f82715941c047b.m3u8",
-  "category": "Entertainment",
-  "logo": "https://images.pluto.tv/missing.png",
-  "description": "P+ VLL live on Pluto TV"
 },
 {
   "id": "pluto-50-cent-action",
@@ -3424,7 +3392,7 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
 {
   "id": "pluto-the-brady-bunch",
   "name": "The Brady Bunch",
-  "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-68e40b54cba140ddfe5fb3b5.m3u8",
+  "url": "https://jmp2.uk/stvp-US3900008GK",
   "category": "Series",
   "logo": "https://images.pluto.tv/channels/68e40b54cba140ddfe5fb3b5/colorLogoPNG_1764176830263.png",
   "description": "The Brady Bunch live on Pluto TV"
@@ -3432,7 +3400,7 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
 {
   "id": "pluto-the-hills-laguna-beach",
   "name": "The Hills / Laguna Beach",
-  "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-68e40bc9a1646a6c555a7e85.m3u8",
+  "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-61c1d56f28e94c0007827bdb.m3u8",
   "category": "Entertainment",
   "logo": "https://images.pluto.tv/channels/68e40bc9a1646a6c555a7e85/colorLogoPNG_1767996779003.png",
   "description": "The Hills / Laguna Beach live on Pluto TV"
@@ -4446,14 +4414,6 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   "description": "Imported from Free-TV: SBS Food Ⓖ"
 },
 {
-  "id": "nitv-au-1ky",
-  "name": "NITV Ⓖ",
-  "url": "https://i.mjh.nz/.r/sbs-5nsw.m3u8",
-  "category": "Australia",
-  "logo": "https://i.imgur.com/YR7sXaN.png",
-  "description": "Imported from Free-TV: NITV Ⓖ"
-},
-{
   "id": "7two-au-9c3",
   "name": "7two",
   "url": "https://i.mjh.nz/.r/7two-syd.m3u8",
@@ -4741,23 +4701,7 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   "logo": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/33/%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF_%D0%B1%D0%B5%D0%BB%D0%BE%D1%80%D1%83%D1%81%D1%81%D0%BA%D0%BE%D0%B3%D0%BE_%D1%82%D0%B5%D0%BB%D0%B5%D0%BA%D0%B0%D0%BD%D0%B0%D0%BB%D0%B0_%C2%AB%D0%A1%D0%A2%D0%92%C2%BB.svg/500px-%D0%9B%D0%BE%D0%B3%D0%BE%D1%82%D0%B8%D0%BF_%D0%B1%D0%B5%D0%BB%D0%BE%D1%80%D1%83%D1%81%D1%81%D0%BA%D0%BE%D0%B3%D0%BE_%D1%82%D0%B5%D0%BB%D0%B5%D0%BA%D0%B0%D0%BD%D0%B0%D0%BB%D0%B0_%C2%AB%D0%A1%D0%A2%D0%92%C2%BB.svg.png",
   "description": "Imported from Free-TV: СТВ"
 },
-  {
-    "id": "fast-ben-azelart",
-    "name": "Ben Azelart",
-    "url": "https://424e6d3a.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/Vml6aW9fQmVuQXplbGFydF9ITFM/playlist.m3u8",
-    "category": "Gaming & Tech",
-    "logo": "https://images.vizio.com/v4/btv/1/1736244372/1/267/150/0.jpg",
-    "description": "Ben Azelart challenges, stunts, builds, and creator videos 24/7."
-  },
-  {
-    "id": "fast-ssundee",
-    "name": "Ssundee",
-    "url": "https://8ad4ede6.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/Vml6aW9fU1N1bmRlZV9ITFM/playlist.m3u8",
-    "category": "Gaming & Tech",
-    "logo": "https://images.vizio.com/v4/btv/1/1736244365/1/267/150/0.jpg",
-    "description": "SSundee gaming, Minecraft, Among Us, and Fortnite adventures 24/7."
-  },
-  {
+      {
     "id": "fast-caylus",
     "name": "Caylus",
     "url": "https://amg00285-amg00285c14-amgplt0022.playout.now3.amagi.tv/ts-us-w2-n2/playlist/amg00285-amg00285c14-amgplt0022/playlist.m3u8",
@@ -4821,15 +4765,7 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
     "logo": "https://images.vizio.com/v4/btv/1/1736244126/1/267/150/0.jpg",
     "description": "Technology, engineering, and future science programming live on WatchFree+."
   },
-  {
-    "id": "fast-science-is-amazing",
-    "name": "Science Is Amazing",
-    "url": "https://amg00376-amg00376c4-vizio-us-3416.playouts.now.amagi.tv/playlist/amg00376-magellantv-scienceisamazing-vizious/playlist.m3u8",
-    "category": "Gaming & Tech",
-    "logo": "https://images.vizio.com/v4/btv/1/1736243918/1/267/150/0.jpg",
-    "description": "Science discoveries, experiments, and tech stories live on WatchFree+."
-  },
-  {
+    {
     "id": "fast-space-science-now",
     "name": "Space Science Now",
     "url": "https://amg00376-amg00376c13-tablo-us-6002.playouts.now.amagi.tv/playlist/amg00376-magellantv-spacesciencenowmainus-tablous/playlist.m3u8",
@@ -4837,23 +4773,7 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
     "logo": "",
     "description": "Space & Astronomy documentaries and live science streams."
   },
-  {
-    "id": "fast-the-royalty-family",
-    "name": "The Royalty Family",
-    "url": "https://6e346ea5.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/Vml6aW9fVGhlUm95YWx0eUZhbWlseV9ITFM/playlist.m3u8",
-    "category": "Entertainment",
-    "logo": "https://images.vizio.com/v4/btv/1/1736244381/1/267/150/0.jpg",
-    "description": "The Royalty Family daily vlogs, challenges, and family fun live on WatchFree+."
-  },
-  {
-    "id": "fast-law-by-mike",
-    "name": "Law by Mike",
-    "url": "https://34cd7a42.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/Vml6aW9fTGF3YnlNaWtlX0hMUw/playlist.m3u8",
-    "category": "Entertainment",
-    "logo": "https://images.vizio.com/v4/btv/1/1736244504/1/267/150/0.jpg",
-    "description": "Law by Mike legal explainers, court breakdowns, and creator shorts live on WatchFree+."
-  },
-  {
+      {
     "id": "fast-jesse-james-west",
     "name": "Jesse James West",
     "url": "https://amg35360-amg35360c1-amgplt0022.playout.now3.amagi.tv/ts-us-e2-n1/playlist/amg35360-amg35360c1-amgplt0022/playlist.m3u8",
@@ -4877,15 +4797,7 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
     "logo": "https://images.vizio.com/v4/btv/1/1736244640/1/267/150/0.jpg",
     "description": "Celine Dept football skills, trick shots, and soccer challenges live on WatchFree+."
   },
-  {
-    "id": "fast-the-ed-bassmaster-channel",
-    "name": "The Ed Bassmaster Channel",
-    "url": "https://3bc24ab5.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/Vml6aW9fVGhlRWRCYXNzbWFzdGVyU2hvd19ITFM/playlist.m3u8",
-    "category": "Comedy",
-    "logo": "https://images.vizio.com/v4/btv/1/1736245554/1/267/150/0.jpg",
-    "description": "Ed Bassmaster classic prank calls and comedy sketches live on WatchFree+."
-  },
-  {
+    {
     "id": "fast-grind-hard-plumbing-co",
     "name": "Grind Hard Plumbing Co.",
     "url": "https://amg35360-amg35360c4-amgplt0022.playout.now3.amagi.tv/ts-us-e2-n2/playlist/amg35360-amg35360c4-amgplt0022/playlist.m3u8",
@@ -4896,23 +4808,15 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   {
     "id": "fast-space-beyond",
     "name": "Space & Beyond",
-    "url": "https://amg00376-amg00376c6-vizio-us-3417.playouts.now.amagi.tv/playlist/amg00376-magellantv-spacebeyond-vizious/playlist.m3u8",
+    "url": "https://epg.provider.plex.tv/library/parts/6a1610bebdf296985fd95603-69d93c22a5c870fb1e88f871/?X-Plex-Token=DxoTLJvQAiQXEG-h_bLy",
     "category": "Documentary",
     "logo": "https://images.vizio.com/v4/btv/1/1736244132/1/267/150/0.jpg",
     "description": "Space exploration, astronomy, and cosmos documentaries live on WatchFree+."
   },
-  {
-    "id": "fast-sesame-street",
-    "name": "Sesame Street",
-    "url": "https://a9c4ff2b.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/Vml6aW9fU2VzYW1lU3RyZWV0X0hMUw/playlist.m3u8",
-    "category": "Kids",
-    "logo": "https://images.vizio.com/v4/btv/1/1736244496/1/267/150/0.jpg",
-    "description": "Sesame Street educational stories and songs for kids live on WatchFree+."
-  },
-  {
+    {
     "id": "fast-hbo-boxing",
     "name": "HBO Boxing",
-    "url": "https://amg00136-wbd-amg00136c63-vizio-us-7845.playouts.now.amagi.tv/playlist/amg00136-warnerbrothersdiscovery-hboboxing-vizious/playlist.m3u8",
+    "url": "https://epg.provider.plex.tv/library/parts/6a1610bebdf296985fd95603-69d93d6e8061ebfbca58c328/?X-Plex-Token=DxoTLJvQAiQXEG-h_bLy",
     "category": "Sports",
     "logo": "https://images.vizio.com/v4/btv/1/1736115795/1/267/150/0.jpg",
     "description": "Classic and championship HBO Boxing bouts and highlights live on WatchFree+."
@@ -4920,28 +4824,12 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   {
     "id": "fast-bbc-top-gear",
     "name": "BBC Top Gear",
-    "url": "https://amg00793-amg00793c23-vizio-us-6122.playouts.now.amagi.tv/playlist/amg00793-bbcstudios-topgearvizio-vizious/playlist.m3u8",
+    "url": "/api/proxy-stream?url=https%3A%2F%2Fjmp2.uk%2Fplu-636adc255bcf470007d6e0e2.m3u8",
     "category": "Lifestyle",
     "logo": "https://images.vizio.com/v4/btv/1/1646515987/1/267/150/0.jpg",
     "description": "BBC Top Gear motoring adventures, supercars, and challenges live on WatchFree+."
   },
-  {
-    "id": "fast-madtv",
-    "name": "MADtv",
-    "url": "https://amg00136-wbd-amg00136c67-vizio-us-7850.playouts.now.amagi.tv/playlist/amg00136-warnerbrothersdiscovery-madtv-vizious/playlist.m3u8",
-    "category": "Comedy",
-    "logo": "https://images.vizio.com/v4/btv/1/1736115763/1/267/150/0.jpg",
-    "description": "Classic MADtv sketch comedy and parodies 24/7 live on WatchFree+."
-  },
-  {
-    "id": "fast-the-three-stooges",
-    "name": "The Three Stooges+",
-    "url": "https://d7c86182.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/Vml6aW9fVGhlVGhyZWVTdG9vZ2VzX0hMUw/playlist.m3u8",
-    "category": "Comedy",
-    "logo": "https://images.vizio.com/v4/btv/1/1646277627/1/267/150/0.jpg",
-    "description": "Classic slapstick comedy shorts with The Three Stooges live on WatchFree+."
-  },
-  {
+      {
     "id": "fast-the-price-is-right-drew-carey",
     "name": "The Price is Right: Drew Carey",
     "url": "https://cdn-uw2-prod.tsv2.amagi.tv/linear/amg00488-fremantleviz-tpirmodern-vizious/playlist.m3u8",
@@ -4952,31 +4840,15 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   {
     "id": "fast-classic-family-feud",
     "name": "Classic Family Feud",
-    "url": "https://amg00488-fremantle-amg00488c14-vizio-us-6347.playouts.now.amagi.tv/playlist/amg00488-fremantleintl-familyfeudclassics-vizious/playlist.m3u8",
+    "url": "https://epg.provider.plex.tv/library/parts/6a1610bebdf296985fd95603-64b710b44612b1f48e9ad31a/?X-Plex-Token=DxoTLJvQAiQXEG-h_bLy",
     "category": "Game Show",
     "logo": "https://images.vizio.com/v4/btv/1/1736243726/1/267/150/0.jpg",
     "description": "Classic Family Feud game show episodes 24/7 live on WatchFree+."
   },
-  {
-    "id": "fast-america-says",
-    "name": "America Says",
-    "url": "https://amg00462-amg00462c2-vizio-us-4993.playouts.now.amagi.tv/playlist/amg00462-gsnfast-americasays-vizious/playlist.m3u8",
-    "category": "Game Show",
-    "logo": "https://images.vizio.com/v4/btv/1/1736244720/1/267/150/0.jpg",
-    "description": "America Says word-guessing game show hosted by John Michael Higgins live on WatchFree+."
-  },
-  {
-    "id": "fast-house",
-    "name": "House",
-    "url": "https://992716f1.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/Vml6aW9fSG91c2VfSExT/playlist.m3u8",
-    "category": "Series",
-    "logo": "https://images.vizio.com/v4/btv/1/1736245303/1/267/150/0.jpg",
-    "description": "Medical drama series House starring Hugh Laurie 24/7 live on WatchFree+."
-  },
-  {
+      {
     "id": "fast-duck-dynasty-by-a-e",
     "name": "Duck Dynasty by A&E",
-    "url": "https://amg01074-amg01074c1-vizio-us-6020.playouts.now.amagi.tv/playlist/amg01074-aenetworksfast-duckdynasty-vizious/playlist.m3u8",
+    "url": "https://epg.provider.plex.tv/library/parts/6a1610bebdf296985fd95603-63f688faf615dc7d3f9071f7/?X-Plex-Token=DxoTLJvQAiQXEG-h_bLy",
     "category": "Reality",
     "logo": "https://images.vizio.com/v4/btv/1/1736243818/1/267/150/0.jpg",
     "description": "Duck Dynasty Robertson family reality series by A&E live on WatchFree+."
@@ -4984,7 +4856,7 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   {
     "id": "fast-on-patrol-live-channel",
     "name": "On Patrol: Live Channel",
-    "url": "https://amg01008-amg01008c3-vizio-us-5998.playouts.now.amagi.tv/playlist/amg01008-reelzfast-onpatrollivechannel-vizious/playlist.m3u8",
+    "url": "https://epg.provider.plex.tv/library/parts/6a1610bebdf296985fd95603-69d80ed5db43551137a2ff86/?X-Plex-Token=DxoTLJvQAiQXEG-h_bLy",
     "category": "Crime",
     "logo": "https://images.vizio.com/v4/btv/1/1736243710/1/267/150/0.jpg",
     "description": "On Patrol: Live policing highlights and ride-alongs live on WatchFree+."
@@ -5024,7 +4896,7 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   {
     "id": "fast-fubo-sports",
     "name": "fubo Sports",
-    "url": "https://fubo-sports-fast-vizio.amagi.tv/playlist.m3u8",
+    "url": "https://epg.provider.plex.tv/library/parts/6a1610bebdf296985fd95603-5fc705f68aba71002d8b7b37/?X-Plex-Token=DxoTLJvQAiQXEG-h_bLy",
     "category": "Sports",
     "logo": "https://images.vizio.com/v4/btv/1/1646277965/1/267/150/0.jpg",
     "description": "Live sports talk, highlights, and combat sports on fubo Sports live on WatchFree+."
@@ -5077,15 +4949,7 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
     "logo": "https://images.vizio.com/v4/btv/1/1647706216/1/267/150/0.jpg",
     "description": "Four In A Bed B&B hospitality competition series live on WatchFree+."
   },
-  {
-    "id": "fast-the-hunger-games-5-film-collection",
-    "name": "The Hunger Games 5 - Film Collection",
-    "url": "https://31861d84.wurl.com/master/f36d25e7e52f1ba8d7e56eb859c636563214f541/Vml6aW9fVGhlSHVuZ2VyR2FtZXM1RmlsbUNvbGxlY3Rpb25fSExT/playlist.m3u8",
-    "category": "Movies",
-    "logo": "https://images.vizio.com/v4/btv/1/200885042811660630/1/267/150/0.jpg",
-    "description": "The Hunger Games movie collection streaming 24/7 live on WatchFree+."
-  },
-  {
+    {
     "id": "fast-outersphere-by-lionsgate",
     "name": "OuterSphere by Lionsgate",
     "url": "https://amg00353-amg00353c17-vizio-us-2569.playouts.now.amagi.tv/playlist/amg00353-lionsgatetvfast-outersphere-vizious/playlist.m3u8",

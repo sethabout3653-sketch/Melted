@@ -183,37 +183,27 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onCha
     [lightness, onChange]
   );
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
     setIsDragging(true);
     handlePickColor(e.clientX, e.clientY);
   };
 
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      if (isDragging) {
-        handlePickColor(e.clientX, e.clientY);
-      }
-    },
-    [isDragging, handlePickColor]
-  );
-
-  const handleMouseUp = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
-  useEffect(() => {
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
     if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-    } else {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
+      handlePickColor(e.clientX, e.clientY);
     }
-    return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging, handleMouseMove, handleMouseUp]);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (isDragging) {
+      setIsDragging(false);
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch {}
+    }
+  };
 
   // Handle Lightness slider change
   const handleLightnessChange = (newLightness: number) => {
@@ -232,7 +222,14 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onCha
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-center gap-6 p-4 rounded-3xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
         {/* Interactive 360 Color Wheel Container */}
-        <div className="relative shrink-0 select-none cursor-crosshair group" ref={containerRef} onMouseDown={handleMouseDown}>
+        <div
+          className="relative shrink-0 select-none cursor-crosshair group touch-none"
+          ref={containerRef}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+        >
           {/* Wheel Canvas */}
           <canvas
             ref={canvasRef}

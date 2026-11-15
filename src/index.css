@@ -49,27 +49,32 @@
     backface-visibility: hidden;
   }
 
-  /* Locked 60 FPS GPU-Composited Animation Rules */
+  /* Locked 60 FPS GPU-Composited Animation Rules (scoped to heavy elements) */
   .gpu-accelerated,
   .motion-safe-gpu,
-  button,
   video,
   iframe,
   canvas {
     transform: translateZ(0);
-    will-change: transform, opacity;
     backface-visibility: hidden;
   }
 
-
-
-  /* Render containment for zero-lag smooth 60-120fps scrolling */
+  /* Render containment for smooth mobile & desktop scrolling */
   .custom-scrollbar,
   .overflow-y-auto,
   .overflow-x-auto {
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
-    transform: translate3d(0, 0, 0);
+  }
+
+  .scrollbar-none,
+  .no-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  .scrollbar-none::-webkit-scrollbar,
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 
   ::-webkit-scrollbar {
@@ -80,16 +85,15 @@
     font-family: var(--app-font-heading);
     letter-spacing: -0.035em;
     font-weight: var(--app-font-heading-weight);
+  }
+
+  :where(h1, h2, h3, h4) {
     color: #0f172a;
   }
 
-  /* In dark mode, ensure headings and titles render in bright crisp white */
-  .dark h1,
-  .dark h2,
-  .dark h3,
-  .dark h4,
-  .dark .font-heading {
-    color: #ffffff !important;
+  /* In dark mode, default headings cleanly to white without blocking utility text classes */
+  :where(.dark h1, .dark h2, .dark h3, .dark h4) {
+    color: #ffffff;
   }
 
   code, pre, .font-mono {

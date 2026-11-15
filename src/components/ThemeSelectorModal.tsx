@@ -33,6 +33,8 @@ interface ThemeSelectorModalProps {
   config: ThemeConfig;
   onUpdateConfig: (partial: Partial<ThemeConfig>) => void;
   onResetTheme: () => void;
+  theme?: 'light' | 'dark';
+  onToggleTheme?: () => void;
 }
 
 export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
@@ -41,6 +43,8 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
   config,
   onUpdateConfig,
   onResetTheme,
+  theme = 'dark',
+  onToggleTheme,
 }) => {
   const [activeTab, setActiveTab] = useState<'accent' | 'radius' | 'background' | 'typography'>('accent');
   const [customHexInput, setCustomHexInput] = useState(config.accentColor);
@@ -94,87 +98,111 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 sm:p-6 bg-black/80 animate-in fade-in duration-200">
+      <div className="fixed inset-0 z-[150] flex items-center justify-center p-2.5 sm:p-6 bg-black/80 animate-in fade-in duration-200">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
           transition={{ duration: 0.2 }}
-          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl overflow-hidden"
+          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl sm:rounded-3xl w-full max-w-2xl max-h-[92dvh] flex flex-col shadow-2xl overflow-hidden"
         >
           {/* Header */}
-          <div className="px-6 py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-slate-50/50 dark:bg-slate-900/50">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-cyan-500/10 dark:bg-cyan-400/20 text-cyan-500 dark:text-cyan-300 flex items-center justify-center">
+          <div className="px-4 sm:px-6 py-4 sm:py-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-cyan-500/10 dark:bg-cyan-400/20 text-cyan-500 dark:text-cyan-300 flex items-center justify-center shrink-0">
                 <Palette className="w-5 h-5" />
               </div>
-              <div>
-                <h2 className="text-lg font-black text-slate-900 dark:text-white font-heading">
+              <div className="min-w-0">
+                <h2 className="text-base sm:text-lg font-black text-slate-900 dark:text-white font-heading truncate">
                   Theme & Customization
                 </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                  Customize colors, border style, and dark background wallpaper
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium truncate">
+                  Customize colors, rounding, and background
                 </p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              {onToggleTheme && (
+                <button
+                  type="button"
+                  onClick={onToggleTheme}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 hover:border-cyan-500 transition-colors cursor-pointer"
+                  title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
+                  aria-label={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} mode`}
+                >
+                  {theme === 'dark' ? (
+                    <>
+                      <Moon className="w-3.5 h-3.5 text-sky-400" />
+                      <span className="hidden sm:inline">Dark</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sun className="w-3.5 h-3.5 text-amber-500" />
+                      <span className="hidden sm:inline">Light</span>
+                    </>
+                  )}
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="min-w-[38px] min-h-[38px] flex items-center justify-center p-2 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                aria-label="Close theme modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
 
           {/* Navigation Tabs */}
-          <div className="flex border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-6 pt-2 shrink-0 gap-2 overflow-x-auto">
+          <div className="flex border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-3 sm:px-6 pt-2 shrink-0 gap-1.5 sm:gap-2 overflow-x-auto scrollbar-none">
             <button
               onClick={() => setActiveTab('accent')}
-              className={`px-4 py-3 text-xs font-bold rounded-t-xl transition-all flex items-center gap-2 border-b-2 cursor-pointer ${
+              className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-bold whitespace-nowrap shrink-0 rounded-t-xl transition-all flex items-center gap-1.5 sm:gap-2 border-b-2 cursor-pointer ${
                 activeTab === 'accent'
                   ? 'border-cyan-500 text-cyan-500 dark:text-cyan-300 bg-white dark:bg-slate-900'
                   : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <Sparkles className="w-4 h-4" />
-              <span>Accent Color</span>
+              <span>Accent</span>
             </button>
             <button
               onClick={() => setActiveTab('radius')}
-              className={`px-4 py-3 text-xs font-bold rounded-t-xl transition-all flex items-center gap-2 border-b-2 cursor-pointer ${
+              className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-bold whitespace-nowrap shrink-0 rounded-t-xl transition-all flex items-center gap-1.5 sm:gap-2 border-b-2 cursor-pointer ${
                 activeTab === 'radius'
                   ? 'border-cyan-500 text-cyan-500 dark:text-cyan-300 bg-white dark:bg-slate-900'
                   : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <Layers className="w-4 h-4" />
-              <span>Border Radius</span>
+              <span>Radius</span>
             </button>
             <button
               onClick={() => setActiveTab('background')}
-              className={`px-4 py-3 text-xs font-bold rounded-t-xl transition-all flex items-center gap-2 border-b-2 cursor-pointer ${
+              className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-bold whitespace-nowrap shrink-0 rounded-t-xl transition-all flex items-center gap-1.5 sm:gap-2 border-b-2 cursor-pointer ${
                 activeTab === 'background'
                   ? 'border-cyan-500 text-cyan-500 dark:text-cyan-300 bg-white dark:bg-slate-900'
                   : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <ImageIcon className="w-4 h-4" />
-              <span>App Canvas Background</span>
+              <span>Background</span>
             </button>
             <button
               onClick={() => setActiveTab('typography')}
-              className={`px-4 py-3 text-xs font-bold rounded-t-xl transition-all flex items-center gap-2 border-b-2 cursor-pointer ${
+              className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-bold whitespace-nowrap shrink-0 rounded-t-xl transition-all flex items-center gap-1.5 sm:gap-2 border-b-2 cursor-pointer ${
                 activeTab === 'typography'
                   ? 'border-cyan-500 text-cyan-500 dark:text-cyan-300 bg-white dark:bg-slate-900'
                   : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <Type className="w-4 h-4" />
-              <span>Typography & Font</span>
+              <span>Fonts</span>
             </button>
           </div>
 
           {/* Modal Body */}
-          <div className="p-6 overflow-y-auto space-y-6 flex-1 min-h-0">
+          <div className="p-4 sm:p-6 overflow-y-auto space-y-5 sm:space-y-6 flex-1 min-h-0">
             {/* TAB 1: ACCENT COLOR */}
             {activeTab === 'accent' && (
               <div className="space-y-6">
@@ -197,7 +225,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-3">
                     Curated Accent Presets
                   </label>
-                  <div className="grid grid-cols-3 sm:grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
                     {ACCENT_PRESETS.map((p) => {
                       const isSelected = config.accentColor.toLowerCase() === p.color.toLowerCase();
                       return (
@@ -487,7 +515,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                       <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block">
                         Upload Custom Background or Paste URL
                       </label>
-                      <div className="flex gap-2">
+                      <div className="flex flex-col sm:flex-row gap-2">
                         <input
                           type="text"
                           value={customUrlInput}
@@ -502,7 +530,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                           type="button"
                           onClick={() => fileInputRef.current?.click()}
                           disabled={isUploading}
-                          className="px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-white font-bold text-xs flex items-center gap-2 cursor-pointer shrink-0 shadow-md"
+                          className="px-4 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-white font-bold text-xs flex items-center justify-center gap-2 cursor-pointer shrink-0 shadow-md"
                         >
                           <Upload className="w-4 h-4" />
                           <span>{isUploading ? 'Uploading...' : 'Upload File'}</span>
@@ -570,7 +598,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
           </div>
 
           {/* Footer Controls */}
-          <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-slate-50/50 dark:bg-slate-900/50">
+          <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-slate-50/50 dark:bg-slate-900/50">
             <button
               onClick={() => {
                 onResetTheme();

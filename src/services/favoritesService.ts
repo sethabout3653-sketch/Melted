@@ -4,6 +4,7 @@ import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 const STORAGE_KEY_GAMES = 'frosthub_favorites';
 const STORAGE_KEY_GAMES_LEGACY = 'melted_favorite_ids';
 const STORAGE_KEY_CHANNELS = 'frosthub_tv_favorites';
+const STORAGE_KEY_UPDATED_AT = 'frosthub_favorites_updated_at';
 const STORAGE_KEY_USER_ID = 'frosthub_chat_user_id';
 
 export interface FavoritesData {
@@ -15,6 +16,7 @@ export interface FavoritesData {
 // In-memory cache for fast zero-latency access
 let cachedGameFavorites: number[] | null = null;
 let cachedChannelFavorites: string[] | null = null;
+let cachedUpdatedAt: number | null = null;
 
 export function getEffectiveUserId(): string {
   try {
@@ -33,6 +35,21 @@ export function getEffectiveUserId(): string {
   }
 }
 
+export function getStoredFavoritesUpdatedAt(): number {
+  if (cachedUpdatedAt !== null) {
+    return cachedUpdatedAt;
+  }
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_UPDATED_AT);
+    const parsed = raw ? Number(raw) : 0;
+    cachedUpdatedAt = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    return cachedUpdatedAt;
+  } catch {
+    cachedUpdatedAt = 0;
+    return 0;
+  }
+}
+
 export function getStoredGameFavorites(): number[] {
   if (cachedGameFavorites !== null) {
     return cachedGameFavorites;
@@ -42,7 +59,7 @@ export function getStoredGameFavorites(): number[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        cachedGameFavorites = parsed.map((x) => Number(x)).filter((n) => !Number.isNaN(n));
+        cachedGameFavorites = Array.from(new Set(parsed.map((x) => Number(x)).filter((n) => !Number.isNaN(n))));
         return cachedGameFavorites;
       }
     }
@@ -60,7 +77,7 @@ export function getStoredChannelFavorites(): string[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed)) {
-        cachedChannelFavorites = parsed.map((x) => String(x).trim()).filter(Boolean);
+        cachedChannelFavorites = Array.from(new Set(parsed.map((x) => String(x).trim()).filter(Boolean)));
         return cachedChannelFavorites;
       }
     }
@@ -69,13 +86,17 @@ export function getStoredChannelFavorites(): string[] {
   return cachedChannelFavorites;
 }
 
-export function saveLocalFavorites(gameIds: number[], channelIds: string[]) {
-  cachedGameFavorites = [...gameIds];
-  cachedChannelFavorites = [...channelIds];
+export function saveLocalFavorites(gameIds: number[], channelIds: string[], updatedAt: number = Date.now()) {
+  const cleanGames = Array.from(new Set(gameIds.map(Number).filter((n) => !Number.isNaN(n))));
+  const cleanChannels = Array.from(new Set(channelIds.map((x) => String(x).trim()).filter(Boolean)));
+  cachedGameFavorites = cleanGames;
+  cachedChannelFavorites = cleanChannels;
+  cachedUpdatedAt = updatedAt;
   try {
-    localStorage.setItem(STORAGE_KEY_GAMES, JSON.stringify(gameIds));
-    localStorage.setItem(STORAGE_KEY_GAMES_LEGACY, JSON.stringify(gameIds));
-    localStorage.setItem(STORAGE_KEY_CHANNELS, JSON.stringify(channelIds));
+    localStorage.setItem(STORAGE_KEY_GAMES, JSON.stringify(cleanGames));
+    localStorage.setItem(STORAGE_KEY_GAMES_LEGACY, JSON.stringify(cleanGames));
+    localStorage.setItem(STORAGE_KEY_CHANNELS, JSON.stringify(cleanChannels));
+    localStorage.setItem(STORAGE_KEY_UPDATED_AT, String(updatedAt));
   } catch (err) {
     console.warn('[Favorites] LocalStorage write error:', err);
   }
@@ -84,17 +105,22 @@ export function saveLocalFavorites(gameIds: number[], channelIds: string[]) {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(
       new CustomEvent('frosthub:favorites_updated', {
-        detail: { gameIds, channelIds },
+        detail: { gameIds: cleanGames, channelIds: cleanChannels },
       })
     );
   }
 }
 
-export async function persistFavoritesRemote(userId: string, gameIds: number[], channelIds: string[]) {
+export async function persistFavoritesRemote(
+  userId: string,
+  gameIds: number[],
+  channelIds: string[],
+  updatedAt: number = getStoredFavoritesUpdatedAt() || Date.now()
+) {
   const payload: FavoritesData = {
-    gameIds,
-    channelIds,
-    updatedAt: Date.now(),
+    gameIds: Array.from(new Set(gameIds)),
+    channelIds: Array.from(new Set(channelIds)),
+    updatedAt,
   };
 
   // 1. Sync to Firebase Firestore
@@ -120,10 +146,11 @@ export function toggleGameFavorite(gameId: number): number[] {
   const exists = current.includes(gameId);
   const updated = exists ? current.filter((id) => id !== gameId) : [gameId, ...current];
   const channelIds = getStoredChannelFavorites();
+  const now = Date.now();
 
-  saveLocalFavorites(updated, channelIds);
+  saveLocalFavorites(updated, channelIds, now);
   const userId = getEffectiveUserId();
-  persistFavoritesRemote(userId, updated, channelIds).catch(() => {});
+  persistFavoritesRemote(userId, updated, channelIds, now).catch(() => {});
   return updated;
 }
 
@@ -132,11 +159,48 @@ export function toggleChannelFavorite(channelId: string): string[] {
   const exists = current.includes(channelId);
   const updated = exists ? current.filter((id) => id !== channelId) : [channelId, ...current];
   const gameIds = getStoredGameFavorites();
+  const now = Date.now();
 
-  saveLocalFavorites(gameIds, updated);
+  saveLocalFavorites(gameIds, updated, now);
   const userId = getEffectiveUserId();
-  persistFavoritesRemote(userId, gameIds, updated).catch(() => {});
+  persistFavoritesRemote(userId, gameIds, updated, now).catch(() => {});
   return updated;
+}
+
+function applyRemoteSnapshot(
+  userId: string,
+  remoteGamesRaw: unknown,
+  remoteChannelsRaw: unknown,
+  remoteUpdatedAtRaw: unknown,
+  onUpdate: (data: { gameIds: number[]; channelIds: string[] }) => void
+) {
+  const remoteGames = Array.isArray(remoteGamesRaw)
+    ? Array.from(new Set(remoteGamesRaw.map(Number).filter((n) => !Number.isNaN(n))))
+    : [];
+  const remoteChannels = Array.isArray(remoteChannelsRaw)
+    ? Array.from(new Set(remoteChannelsRaw.map((x) => String(x).trim()).filter(Boolean)))
+    : [];
+  const remoteUpdatedAt = typeof remoteUpdatedAtRaw === 'number' && Number.isFinite(remoteUpdatedAtRaw) ? remoteUpdatedAtRaw : 0;
+
+  const localGames = getStoredGameFavorites();
+  const localChannels = getStoredChannelFavorites();
+  const localUpdatedAt = getStoredFavoritesUpdatedAt();
+  const hasAnyLocal = localGames.length > 0 || localChannels.length > 0 || localUpdatedAt > 0;
+
+  if (!hasAnyLocal && (remoteGames.length > 0 || remoteChannels.length > 0)) {
+    const ts = remoteUpdatedAt || Date.now();
+    saveLocalFavorites(remoteGames, remoteChannels, ts);
+    onUpdate({ gameIds: remoteGames, channelIds: remoteChannels });
+    return;
+  }
+
+  if (remoteUpdatedAt > localUpdatedAt) {
+    saveLocalFavorites(remoteGames, remoteChannels, remoteUpdatedAt);
+    onUpdate({ gameIds: remoteGames, channelIds: remoteChannels });
+  } else if (localUpdatedAt > remoteUpdatedAt && (remoteGames.length !== localGames.length || remoteChannels.length !== localChannels.length)) {
+    // Push newer local state so un-favorites aren't resurrected by stale remote copies
+    persistFavoritesRemote(userId, localGames, localChannels, localUpdatedAt).catch(() => {});
+  }
 }
 
 /**
@@ -166,12 +230,7 @@ export function subscribeToFavorites(
     .then((r) => (r.ok ? r.json() : null))
     .then((data) => {
       if (data && (Array.isArray(data.gameIds) || Array.isArray(data.channelIds))) {
-        const localGames = getStoredGameFavorites();
-        const localChannels = getStoredChannelFavorites();
-        const mergedGames = Array.from(new Set([...localGames, ...(data.gameIds || [])]));
-        const mergedChannels = Array.from(new Set([...localChannels, ...(data.channelIds || [])]));
-        saveLocalFavorites(mergedGames, mergedChannels);
-        onUpdate({ gameIds: mergedGames, channelIds: mergedChannels });
+        applyRemoteSnapshot(userId, data.gameIds, data.channelIds, data.updatedAt, onUpdate);
       }
     })
     .catch(() => {});
@@ -185,22 +244,13 @@ export function subscribeToFavorites(
       (snapshot) => {
         if (snapshot.exists()) {
           const data = snapshot.data();
-          const remoteGames = Array.isArray(data.gameIds) ? data.gameIds.map(Number) : [];
-          const remoteChannels = Array.isArray(data.channelIds) ? data.channelIds.map(String) : [];
-          
-          const localGames = getStoredGameFavorites();
-          const localChannels = getStoredChannelFavorites();
-          const mergedGames = Array.from(new Set([...localGames, ...remoteGames]));
-          const mergedChannels = Array.from(new Set([...localChannels, ...remoteChannels]));
-
-          saveLocalFavorites(mergedGames, mergedChannels);
-          onUpdate({ gameIds: mergedGames, channelIds: mergedChannels });
+          applyRemoteSnapshot(userId, data.gameIds, data.channelIds, data.updatedAt, onUpdate);
         } else {
           // If Firestore document doesn't exist yet, seed it with current local favorites
           const localGames = getStoredGameFavorites();
           const localChannels = getStoredChannelFavorites();
           if (localGames.length > 0 || localChannels.length > 0) {
-            persistFavoritesRemote(userId, localGames, localChannels).catch(() => {});
+            persistFavoritesRemote(userId, localGames, localChannels, getStoredFavoritesUpdatedAt() || Date.now()).catch(() => {});
           }
         }
       },

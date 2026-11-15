@@ -50,11 +50,11 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = React.memo(({
   };
 
   return (
-    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 py-2 border-b border-[#1f1f2e]">
+    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-4 py-1.5 sm:py-2 border-b border-[#1f1f2e]">
       {/* Category Navigation Bar / Chips */}
       <div 
         onWheel={handleWheel}
-        className="flex overflow-x-auto pb-2 sm:pb-0 scrollbar-none touch-pan-x sm:flex-wrap items-center gap-2 shrink-0 w-full sm:w-auto cursor-grab active:cursor-grabbing"
+        className="flex overflow-x-auto pb-1.5 sm:pb-0 scrollbar-none touch-pan-x sm:flex-wrap items-center gap-1.5 sm:gap-2 flex-1 min-w-0 cursor-grab active:cursor-grabbing"
       >
         {CATEGORIES.map((cat) => {
           const isSelected = selectedCategory === cat.id;
@@ -67,14 +67,14 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = React.memo(({
               key={cat.id}
               type="button"
               onClick={() => onSelectCategory(cat.id)}
-              className={`flex items-center gap-2 transition-colors duration-150 cursor-pointer py-1.5 px-3.5 rounded-lg border text-xs font-bold font-heading whitespace-nowrap ${
+              className={`flex items-center gap-1.5 transition-colors duration-150 cursor-pointer min-h-[38px] sm:min-h-[34px] py-1.5 px-3 rounded-lg border text-xs font-bold font-heading whitespace-nowrap shrink-0 ${
                 isSelected 
                   ? 'bg-[var(--brand-blue)] text-slate-950 border-[var(--brand-blue)] font-extrabold shadow-md shadow-[var(--brand-blue-glow)]' 
                   : 'bg-[#181822] hover:bg-[#20202e] text-slate-300 hover:text-white border-[#262638]'
               }`}
             >
               <span>{cat.label}</span>
-              <span className={`text-[10px] font-black px-1.5 py-0.2 rounded-md ${
+              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md tabular-nums ${
                 isSelected ? 'bg-black/20 text-slate-950' : 'bg-[#262638] text-slate-400'
               }`}>
                 {count}
@@ -85,13 +85,14 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = React.memo(({
       </div>
 
       {/* Sort Selector Right Side */}
-      <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Sort:</span>
+      <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
+        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Sort by</span>
         <div className="relative group">
           <select
             value={sortBy}
             onChange={(e) => onSortChange(e.target.value as any)}
-            className="appearance-none bg-[#181822] hover:bg-[#20202e] text-white font-bold px-3 py-1.5 pr-8 rounded-lg border border-[#262638] focus:border-[var(--brand-blue)] focus:outline-none cursor-pointer text-xs shadow-sm transition-colors duration-150"
+            aria-label="Sort games"
+            className="appearance-none bg-[#181822] hover:bg-[#20202e] text-white font-bold px-3 py-1.5 pr-8 rounded-lg border border-[#262638] focus:border-[var(--brand-blue)] focus:outline-none cursor-pointer text-xs shadow-sm transition-colors duration-150 min-h-[38px] sm:min-h-[34px]"
           >
             <option value="popular" className="bg-[#181822] text-white">Popularity</option>
             <option value="alpha-asc" className="bg-[#181822] text-white">A-Z</option>

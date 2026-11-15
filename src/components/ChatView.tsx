@@ -747,7 +747,7 @@ const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
         whileTap={{ scale: 0.9 }}
         type="button"
         onClick={onOpenFileUpload}
-        className="w-8 h-8 shrink-0 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer border border-transparent will-change-transform"
+        className="w-9 h-9 sm:w-8 sm:h-8 shrink-0 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors cursor-pointer border border-transparent will-change-transform"
         title="Upload File or Media"
       >
         <PlusCircle className="w-5 h-5" />
@@ -759,7 +759,7 @@ const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
         whileTap={{ scale: 0.95 }}
         type="button"
         onClick={onToggleGiphy}
-        className={`shrink-0 px-2 sm:px-2.5 py-1 rounded-md text-xs font-bold transition-colors duration-150 cursor-pointer flex items-center justify-center border will-change-transform ${
+        className={`shrink-0 min-h-[36px] px-2.5 py-1 rounded-lg text-xs font-bold transition-colors duration-150 cursor-pointer flex items-center justify-center border will-change-transform ${
           isGiphyOpen 
             ? 'bg-cyan-500 text-white shadow-sm border-cyan-300' 
             : 'bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700'
@@ -775,7 +775,7 @@ const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
         whileTap={canSubmit ? { scale: 0.95 } : {}}
         type="submit"
         disabled={!canSubmit}
-        className={`shrink-0 px-2.5 sm:px-3.5 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer border will-change-transform ${
+        className={`shrink-0 min-w-[38px] min-h-[38px] px-3 sm:px-3.5 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-colors duration-150 cursor-pointer border will-change-transform ${
           canSubmit
             ? 'bg-cyan-500 text-white shadow-md shadow-cyan-500/30 border-cyan-300' 
             : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-600 opacity-50 cursor-not-allowed border-transparent'
@@ -1464,7 +1464,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                   <button
                     type="button"
                     onClick={() => setIsMobileChannelsOpen(true)}
-                    className="md:hidden p-2 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+                    className="md:hidden min-w-[38px] min-h-[38px] flex items-center justify-center p-2 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
                     title="Open Channels"
                   >
                     <Menu className="w-5 h-5" />
@@ -1484,7 +1484,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                   <button
                     type="button"
                     onClick={() => setIsMobileMembersOpen(true)}
-                    className="px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-cyan-500 dark:text-cyan-300 border border-blue-100 dark:border-blue-800 flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+                    className="px-2 sm:px-2.5 py-1 rounded-lg text-[10px] sm:text-[11px] font-bold bg-blue-50 dark:bg-blue-900/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-cyan-500 dark:text-cyan-300 border border-blue-100 dark:border-blue-800 flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
                     title="View Online Members"
                   >
                     <span className="w-1.5 h-1.5 rounded-sm bg-cyan-400" />
@@ -1492,12 +1492,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                   </button>
                 </div>
 
-                <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+                <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                   {/* Mobile Search Toggle */}
                   <button
                     type="button"
                     onClick={() => setIsMobileSearchOpen((prev) => !prev)}
-                    className={`sm:hidden p-2 rounded-xl transition-colors cursor-pointer ${
+                    className={`sm:hidden min-w-[38px] min-h-[38px] flex items-center justify-center p-2 rounded-xl transition-colors cursor-pointer ${
                       isMobileSearchOpen || messageSearch
                         ? 'text-cyan-500 bg-cyan-50 dark:bg-cyan-500/10'
                         : 'text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
@@ -1533,7 +1533,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                   <button
                     type="button"
                     onClick={() => setIsMobileMembersOpen(true)}
-                    className="lg:hidden p-2 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer flex items-center gap-1 text-xs font-bold"
+                    className="lg:hidden min-w-[38px] min-h-[38px] flex items-center justify-center p-2 rounded-xl text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer gap-1 text-xs font-bold"
                     title="View Members"
                   >
                     <Users className="w-4 h-4" />

@@ -224,20 +224,20 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
   };
 
   return (
-    <div className="w-full min-h-screen bg-[#08090b] text-white flex flex-col font-sans pb-28">
+    <div className="w-full min-h-full bg-[#08090b] text-white flex flex-col font-sans pb-8 lg:pb-12">
       {!isPlayerOpen && <>
-        <header className="relative z-30 bg-[#08090b] border-b border-white/10 px-4 sm:px-8 py-4">
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-            <nav aria-label="Movie categories" className="flex items-center gap-2 overflow-x-auto max-w-full scrollbar-none">
+        <header className="relative z-30 bg-[#08090b] border-b border-white/10 px-3 sm:px-8 py-3 sm:py-4">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-4">
+            <nav aria-label="Movie categories" className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto max-w-full w-full sm:w-auto scrollbar-none">
               {tabs.map(({ id, label, Icon }) => (
-                <button key={id} type="button" onClick={() => { setActiveTab(id); setQuery(''); }} className={`px-4 sm:px-5 py-2.5 rounded-full text-sm font-bold whitespace-nowrap transition-colors cursor-pointer ${activeTab === id ? 'bg-[var(--brand-blue)] text-white' : 'text-white/75 hover:text-white hover:bg-white/10'}`}>
-                  <Icon className="inline w-4 h-4 mr-2" />{label}
+                <button key={id} type="button" onClick={() => { setActiveTab(id); setQuery(''); }} className={`px-3.5 sm:px-5 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap transition-colors cursor-pointer shrink-0 ${activeTab === id ? 'bg-[var(--brand-blue)] text-white' : 'text-white/75 hover:text-white hover:bg-white/10'}`}>
+                  <Icon className="inline w-4 h-4 mr-1.5 sm:mr-2" />{label}
                 </button>
               ))}
             </nav>
             <div className="relative w-full sm:w-[22rem]">
               <Search className="w-4 h-4 text-white/60 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search movies and TV shows..." className="w-full bg-white/5 border border-white/10 rounded-full pl-11 pr-10 py-2.5 text-sm text-white placeholder:text-white/50 focus:outline-none focus:border-white/30" />
+              <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search movies and TV shows..." className="w-full bg-white/5 border border-white/10 rounded-full pl-11 pr-10 py-2 sm:py-2.5 text-base sm:text-sm text-white placeholder:text-white/50 focus:outline-none focus:border-white/30" />
               {query && (
                 <button type="button" onClick={() => setQuery('')} aria-label="Clear search" className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 text-white/60 hover:text-white cursor-pointer">
                   <X className="w-4 h-4" />
@@ -249,34 +249,34 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
 
         <main className="w-full">
           {!query && featuredHeroMovie && !isLoading && (
-            <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="relative w-full h-[400px] sm:h-[500px] md:h-[580px] overflow-hidden">
+            <motion.section initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="relative w-full h-[340px] sm:h-[480px] md:h-[560px] overflow-hidden">
               <img src={getBackdropUrl(featuredHeroMovie.backdrop_path)} alt={featuredHeroMovie.title || featuredHeroMovie.name || 'Featured'} className="absolute inset-0 w-full h-full object-cover" />
-              <div className="absolute inset-0 bg-gradient-to-r from-[#08090b] via-black/70 to-black/20" />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#08090b] via-transparent to-black/20" />
-              <div className="relative z-10 flex h-full items-end max-w-7xl mx-auto px-6 sm:px-10 pb-10 sm:pb-14">
+              <div className="absolute inset-0 bg-gradient-to-r from-[#08090b] via-black/75 to-black/25" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#08090b] via-transparent to-black/25" />
+              <div className="relative z-10 flex h-full items-end max-w-7xl mx-auto px-4 sm:px-10 pb-6 sm:pb-14">
                 <div className="max-w-3xl">
-                  <h1 className="text-3xl sm:text-5xl lg:text-[4.5rem] font-black uppercase tracking-[-0.04em] leading-[0.95] max-w-2xl">{featuredHeroMovie.title || featuredHeroMovie.name}</h1>
-                  <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-white/80">
+                  <h1 className="text-2xl sm:text-5xl lg:text-[4.5rem] font-black uppercase tracking-[-0.04em] leading-[0.95] max-w-2xl">{featuredHeroMovie.title || featuredHeroMovie.name}</h1>
+                  <div className="mt-2.5 sm:mt-4 flex flex-wrap items-center gap-3 text-xs sm:text-sm text-white/80">
                     {featuredHeroMovie.vote_average !== undefined && <span className="inline-flex items-center gap-1 text-amber-400 tabular-nums"><Star className="w-4 h-4 fill-current" />{featuredHeroMovie.vote_average.toFixed(1)}</span>}
                     {featuredHeroMovie.release_date && <span className="tabular-nums">{featuredHeroMovie.release_date.slice(0, 4)}</span>}
                     <span className="text-white/40">•</span><span>Movie</span>
                   </div>
-                  {featuredHeroMovie.overview && <p className="mt-4 max-w-xl text-sm sm:text-base text-white/75 leading-relaxed line-clamp-3">{featuredHeroMovie.overview}</p>}
-                  <div className="mt-6 flex flex-wrap gap-3">
-                    <button type="button" onClick={() => void selectMedia(featuredHeroMovie)} className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-blue)] px-7 py-3 text-sm font-black uppercase tracking-wide text-white hover:bg-[var(--brand-blue-hover)] cursor-pointer"><Play className="w-4 h-4 fill-current" />Play Now</button>
-                    <button type="button" onClick={() => void selectMedia(featuredHeroMovie)} className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-6 py-3 text-sm font-bold uppercase tracking-wide text-white hover:bg-white/20 cursor-pointer"><Info className="w-4 h-4" />Episodes & Sources</button>
+                  {featuredHeroMovie.overview && <p className="mt-2.5 sm:mt-4 max-w-xl text-xs sm:text-base text-white/75 leading-relaxed line-clamp-2 sm:line-clamp-3">{featuredHeroMovie.overview}</p>}
+                  <div className="mt-4 sm:mt-6 flex flex-wrap gap-2.5 sm:gap-3">
+                    <button type="button" onClick={() => void selectMedia(featuredHeroMovie)} className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-blue)] px-5 sm:px-7 py-2.5 sm:py-3 text-xs sm:text-sm font-black uppercase tracking-wide text-white hover:bg-[var(--brand-blue-hover)] cursor-pointer"><Play className="w-4 h-4 fill-current" />Play Now</button>
+                    <button type="button" onClick={() => void selectMedia(featuredHeroMovie)} className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-bold uppercase tracking-wide text-white hover:bg-white/20 cursor-pointer"><Info className="w-4 h-4" />Details</button>
                   </div>
                 </div>
               </div>
             </motion.section>
           )}
 
-          <section className="max-w-7xl mx-auto px-4 sm:px-8 space-y-4 py-8">
+          <section className="max-w-7xl mx-auto px-3 sm:px-8 space-y-4 py-5 sm:py-8">
             <div className="flex items-center justify-between">
-              <h2 className="text-xl sm:text-2xl font-black flex items-center gap-2"><Film className="w-5 h-5 text-[var(--brand-blue)]" />{query ? `Search Results for “${query}”` : activeTab === 'all' ? 'Trending' : activeTab === 'movies' ? 'Movies' : 'Popular Series'}</h2>
+              <h2 className="text-lg sm:text-2xl font-black flex items-center gap-2"><Film className="w-5 h-5 text-[var(--brand-blue)]" />{query ? `Search Results for “${query}”` : activeTab === 'all' ? 'Trending' : activeTab === 'movies' ? 'Movies' : 'Popular Series'}</h2>
               <span className="text-xs text-white/50 tabular-nums">{items.length} titles</span>
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 sm:gap-5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-5">
               {items.map(item => (
                 <button key={`${item.id}-${item.media_type || (item.title ? 'movie' : 'tv')}`} type="button" onClick={() => void selectMedia(item)} className="group text-left bg-[#141519] rounded-xl overflow-hidden border border-white/10 hover:border-white/40 transition-colors cursor-pointer">
                   <div className="relative aspect-[2/3] bg-slate-900">
@@ -284,7 +284,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
                     <span className="absolute top-2 left-2 bg-black/80 text-white text-[9px] font-bold px-2 py-0.5 rounded">{item.media_type === 'tv' || item.first_air_date ? 'TV' : 'MOVIE'}</span>
                     <span className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity"><Play className="w-8 h-8 text-[var(--brand-blue)] fill-current" /></span>
                   </div>
-                  <div className="p-3"><h3 className="text-xs font-bold text-white truncate">{item.title || item.name}</h3><p className="text-[10px] text-white/50 mt-1 tabular-nums">{item.release_date?.slice(0, 4) || item.first_air_date?.slice(0, 4) || ''}</p></div>
+                  <div className="p-2.5 sm:p-3"><h3 className="text-xs font-bold text-white truncate">{item.title || item.name}</h3><p className="text-[10px] text-white/50 mt-0.5 tabular-nums">{item.release_date?.slice(0, 4) || item.first_air_date?.slice(0, 4) || ''}</p></div>
                 </button>
               ))}
               {(isLoading || searchLoading) && Array.from({ length: 12 }, (_, index) => <div key={`loading-${index}`} className="aspect-[2/3] rounded-xl bg-white/5 animate-pulse" />)}
@@ -298,26 +298,26 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
 
       {isPlayerOpen && selectedMedia && createPortal(
         <div className="fixed inset-0 z-[999999] bg-black flex flex-col h-[100dvh] w-[100dvw] overflow-hidden select-none">
-          <div className="px-4 py-3 bg-[#090d16] border-b border-white/10 flex flex-wrap items-center justify-between gap-3 shrink-0 z-30">
-            <div className="flex items-center gap-3 min-w-0">
-              <button type="button" onClick={() => setSelectedMedia(null)} aria-label="Close player" className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer"><X className="w-5 h-5" /></button>
+          <div className="px-3 sm:px-4 py-2.5 sm:py-3 pt-[max(0.625rem,env(safe-area-inset-top))] bg-[#090d16] border-b border-white/10 flex flex-wrap items-center justify-between gap-2 sm:gap-3 shrink-0 z-30">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1 sm:flex-initial">
+              <button type="button" onClick={() => setSelectedMedia(null)} aria-label="Close player" className="min-w-[40px] min-h-[40px] w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center cursor-pointer shrink-0"><X className="w-5 h-5" /></button>
               <div className="min-w-0">
                 <h1 className="text-sm font-bold text-white truncate">{selectedMedia.title || selectedMedia.name}</h1>
                 {(selectedMedia.media_type === 'tv' || !!selectedMedia.first_air_date) && <p className="text-[11px] text-[var(--brand-blue)] font-bold tabular-nums">Season {season} · Episode {episode}</p>}
               </div>
             </div>
+            <div className="relative shrink-0 sm:order-3">
+              <button type="button" onClick={() => setServerMenuOpen(open => !open)} className="min-h-[38px] px-3 py-1.5 sm:py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold flex items-center gap-1.5 sm:gap-2 cursor-pointer"><Server className="w-4 h-4 text-[var(--brand-blue)]" /><span className="max-w-[90px] sm:max-w-none truncate">{activeServer.name}</span><ChevronDown className="w-3.5 h-3.5" /></button>
+              <AnimatePresence>{serverMenuOpen && <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="absolute right-0 mt-2 w-52 bg-[#14141d] border border-white/15 rounded-xl p-1.5 z-40 shadow-2xl"><div className="text-[10px] font-bold uppercase text-slate-400 px-2 py-1">Streaming Source</div>{MOVIE_SERVERS.map((server, index) => <button key={server.id} type="button" onClick={() => { setServerIndex(index); setServerMenuOpen(false); }} className={`w-full text-left text-xs p-2.5 rounded-lg cursor-pointer ${serverIndex === index ? 'bg-[var(--brand-blue)] text-slate-950 font-extrabold' : 'text-white hover:bg-white/10'}`}>{server.name}</button>)}</motion.div>}</AnimatePresence>
+            </div>
             {(selectedMedia.media_type === 'tv' || !!selectedMedia.first_air_date) && (
-              <div className="flex items-center gap-2 flex-wrap">
-                <button type="button" onClick={handlePrevEpisode} disabled={season === 1 && episode === 1} className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-40 text-xs font-bold text-white cursor-pointer">Prev</button>
-                <label className="text-xs text-white flex items-center gap-1">S <select value={season} onChange={event => { setSeason(Number(event.target.value)); setEpisode(1); }} className="bg-slate-900 text-[var(--brand-blue)] rounded px-2 py-1">{Array.from({ length: Math.max(1, totalSeasons) }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label>
-                <label className="text-xs text-white flex items-center gap-1">E <select value={episode} onChange={event => setEpisode(Number(event.target.value))} className="bg-slate-900 text-[var(--brand-blue)] rounded px-2 py-1">{Array.from({ length: Math.max(1, episodeCount) }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label>
-                <button type="button" onClick={handleNextEpisode} disabled={season === totalSeasons && episode === episodeCount} className="px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-40 text-xs font-bold text-white cursor-pointer">Next</button>
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap w-full sm:w-auto sm:order-2">
+                <button type="button" onClick={handlePrevEpisode} disabled={season === 1 && episode === 1} className="min-h-[36px] px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-40 text-xs font-bold text-white cursor-pointer">Prev</button>
+                <label className="text-xs text-white flex items-center gap-1">S <select value={season} onChange={event => { setSeason(Number(event.target.value)); setEpisode(1); }} className="bg-slate-900 text-[var(--brand-blue)] rounded px-2 py-1.5">{Array.from({ length: Math.max(1, totalSeasons) }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label>
+                <label className="text-xs text-white flex items-center gap-1">E <select value={episode} onChange={event => setEpisode(Number(event.target.value))} className="bg-slate-900 text-[var(--brand-blue)] rounded px-2 py-1.5">{Array.from({ length: Math.max(1, episodeCount) }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select></label>
+                <button type="button" onClick={handleNextEpisode} disabled={season === totalSeasons && episode === episodeCount} className="min-h-[36px] px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 disabled:opacity-40 text-xs font-bold text-white cursor-pointer">Next</button>
               </div>
             )}
-            <div className="relative">
-              <button type="button" onClick={() => setServerMenuOpen(open => !open)} className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-white text-xs font-bold flex items-center gap-2 cursor-pointer"><Server className="w-4 h-4 text-[var(--brand-blue)]" /><span>{activeServer.name}</span><ChevronDown className="w-3.5 h-3.5" /></button>
-              <AnimatePresence>{serverMenuOpen && <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 8 }} className="absolute right-0 mt-2 w-52 bg-[#14141d] border border-white/15 rounded-xl p-1.5 z-40 shadow-2xl"><div className="text-[10px] font-bold uppercase text-slate-400 px-2 py-1">Streaming Source</div>{MOVIE_SERVERS.map((server, index) => <button key={server.id} type="button" onClick={() => { setServerIndex(index); setServerMenuOpen(false); }} className={`w-full text-left text-xs p-2 rounded-lg cursor-pointer ${serverIndex === index ? 'bg-[var(--brand-blue)] text-slate-950 font-extrabold' : 'text-white hover:bg-white/10'}`}>{server.name}</button>)}</motion.div>}</AnimatePresence>
-            </div>
           </div>
           <div className="relative flex-1 bg-black w-full min-h-0"><iframe key={`${selectedMedia.id}-${season}-${episode}-${serverIndex}`} src={playerUrl} title={selectedMedia.title || selectedMedia.name || 'Media player'} className="w-full h-full border-0" allowFullScreen allow="autoplay; encrypted-media; picture-in-picture" /></div>
         </div>, document.body

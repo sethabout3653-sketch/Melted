@@ -534,15 +534,15 @@ export const AIAssistantView: React.FC = () => {
   const latestStep = activeSteps[activeSteps.length - 1];
 
   return (
-    <div className="w-full h-[calc(100dvh-5rem)] md:h-[calc(100vh-5.5rem)] px-4 sm:px-8 py-4 pb-[calc(4rem+env(safe-area-inset-bottom))] md:pb-4 flex flex-col font-sans overflow-hidden">
-      <div className="mb-4 flex items-center justify-end shrink-0">
+    <div className="w-full h-full flex-1 min-h-0 px-3 sm:px-8 py-2.5 sm:py-4 flex flex-col font-sans overflow-hidden">
+      <div className="mb-2.5 sm:mb-4 flex items-center justify-end shrink-0">
         <motion.button
           type="button"
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={handleNewSession}
           style={{ backgroundColor: 'var(--brand-blue)' }}
-          className="px-5 py-2.5 rounded-2xl text-white hover:opacity-95 transition-all cursor-pointer text-xs font-bold flex items-center gap-2.5 shadow-lg glow-subtle-blue shrink-0 will-change-transform"
+          className="px-3.5 py-2 sm:px-5 sm:py-2.5 rounded-2xl text-white hover:opacity-95 transition-all cursor-pointer text-xs font-bold flex items-center gap-2 shadow-lg glow-subtle-blue shrink-0 will-change-transform"
           title="Reset conversation"
         >
           <RefreshCw className="w-4 h-4" />
@@ -555,7 +555,7 @@ export const AIAssistantView: React.FC = () => {
         variants={containerVariants}
         initial="hidden"
         animate="visible"
-        className="flex-1 min-h-0 overflow-y-auto space-y-6 pr-2 custom-scrollbar pb-6 w-full"
+        className="flex-1 min-h-0 overflow-y-auto space-y-4 sm:space-y-6 pr-1 sm:pr-2 custom-scrollbar pb-4 sm:pb-6 w-full"
       >
         <AnimatePresence mode="popLayout">
           {messages.map((msg, idx) => (
@@ -579,12 +579,12 @@ export const AIAssistantView: React.FC = () => {
           >
             <div 
               style={{ backgroundColor: 'var(--brand-blue)' }}
-              className="w-10 h-10 rounded-2xl text-white flex items-center justify-center shrink-0 shadow-lg glow-subtle-blue"
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl text-white flex items-center justify-center shrink-0 shadow-lg glow-subtle-blue"
             >
-              <Bot className="w-6 h-6" />
+              <Bot className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
 
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl rounded-tl-sm p-4 shadow-md max-w-[90%] sm:max-w-[70%] space-y-3">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl rounded-tl-sm p-3.5 sm:p-4 shadow-md max-w-[90%] sm:max-w-[70%] space-y-3">
               {latestStep ? (
                 <div className="flex items-center gap-3">
                   <div 
@@ -614,7 +614,7 @@ export const AIAssistantView: React.FC = () => {
       </motion.div>
 
       {messages.length <= 2 && !isLoading && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3 shrink-0 w-full">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-2.5 sm:mb-3 shrink-0 w-full">
           {QUICK_PROMPTS.map((qp, idx) => {
             const Icon = qp.icon;
             return (
@@ -625,7 +625,7 @@ export const AIAssistantView: React.FC = () => {
                 whileTap={{ scale: 0.98 }}
                 type="button"
                 onClick={() => handleSend(qp.prompt)}
-                className="p-3.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-2xl text-left transition-colors duration-150 cursor-pointer group shadow-sm flex flex-col justify-between will-change-transform"
+                className="p-2.5 sm:p-3.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-2xl text-left transition-colors duration-150 cursor-pointer group shadow-sm flex flex-col justify-between will-change-transform"
               >
                 <Icon style={{ color: 'var(--brand-blue)' }} className="w-4 h-4 mb-1 group-hover:scale-110 transition-transform" />
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block truncate">{qp.label}</span>

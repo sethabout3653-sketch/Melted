@@ -20,9 +20,9 @@ export const FrostHubLogo: React.FC<FrostHubLogoProps> = ({
       community: 'text-[10px] tracking-[0.4em] mt-0.5',
     },
     md: {
-      text: 'text-2xl sm:text-3xl font-black',
-      badge: 'text-xl sm:text-2xl font-black px-2.5 py-0.5 rounded-lg ml-1',
-      community: 'text-[11px] sm:text-xs tracking-[0.42em] mt-1',
+      text: 'text-xl sm:text-2xl lg:text-3xl font-black',
+      badge: 'text-base sm:text-lg lg:text-2xl font-black px-2 sm:px-2.5 py-0.5 rounded-md sm:rounded-lg ml-0.5 sm:ml-1',
+      community: 'text-[10px] sm:text-xs tracking-[0.42em] mt-0.5 sm:mt-1',
     },
     lg: {
       text: 'text-3xl sm:text-4xl font-black',
@@ -43,7 +43,7 @@ export const FrostHubLogo: React.FC<FrostHubLogoProps> = ({
       style={{ fontFamily: 'Arial, "Helvetica Neue", Helvetica, sans-serif' }}
     >
       <div className={`flex items-center tracking-tight leading-none ${sizeClasses.text}`}>
-        <span className="text-white tracking-tight">Frost</span>
+        <span className="text-slate-900 dark:text-white tracking-tight transition-colors">Frost</span>
         <span 
           className={`bg-[var(--brand-blue)] text-[#090d16] flex items-center justify-center transition-all duration-200 ${sizeClasses.badge}`}
           style={{ boxShadow: '0 0 14px var(--brand-blue-glow)', fontFamily: 'Arial, "Helvetica Neue", Helvetica, sans-serif' }}

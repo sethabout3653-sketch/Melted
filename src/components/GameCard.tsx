@@ -122,14 +122,15 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
             e.stopPropagation();
             onToggleFavorite(game.id);
           }}
-          className={`absolute top-2 right-2 p-2 rounded-xl backdrop-blur-md transition-colors duration-150 cursor-pointer z-10 border shadow-md ${
+          aria-label={isFavorite ? `Remove ${game.name} from favorites` : `Add ${game.name} to favorites`}
+          className={`absolute top-1.5 right-1.5 min-w-[38px] min-h-[38px] sm:min-w-[34px] sm:min-h-[34px] flex items-center justify-center rounded-xl backdrop-blur-md transition-colors duration-150 cursor-pointer z-10 border shadow-md ${
             isFavorite 
               ? 'bg-[var(--brand-blue)] border-[var(--brand-blue)] text-[#090d16]' 
-              : 'bg-[#090d16]/70 border-[#222232] text-slate-400 hover:text-white'
+              : 'bg-[#090d16]/75 border-[#222232] text-slate-300 hover:text-white'
           }`}
           title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
         >
-          <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-current' : ''}`} />
+          <Heart className={`w-4 h-4 sm:w-3.5 sm:h-3.5 ${isFavorite ? 'fill-current' : ''}`} />
         </button>
 
         {/* Hover Play Overlay */}
@@ -142,7 +143,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
       </div>
 
       {/* Title & Info */}
-      <div className="p-2.5 space-y-1">
+      <div className="px-2 py-2 sm:p-2.5 space-y-0.5 sm:space-y-1">
         <h3 
           onClick={() => onPlay(game)}
           className="font-bold text-white text-xs sm:text-sm hover:text-[var(--brand-blue)] transition-colors leading-tight line-clamp-1 cursor-pointer font-heading tracking-tight"
@@ -156,11 +157,11 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
       </div>
 
       {/* Action Footer */}
-      <div className="mt-auto px-2.5 pb-2 pt-0.5 flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
+      <div className="mt-auto px-2 pb-1.5 sm:px-2.5 sm:pb-2 pt-0.5 flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
         <button
           type="button"
           onClick={() => onAboutBlank(game)}
-          className="flex-1 py-1.5 rounded-lg bg-[#1e1e2d] hover:bg-[#28283a] text-slate-300 hover:text-[var(--brand-blue)] border border-[#2a2a3e] hover:border-[var(--brand-blue)]/40 text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
+          className="flex-1 min-h-[34px] sm:min-h-[30px] py-1.5 rounded-lg bg-[#1e1e2d] hover:bg-[#28283a] text-slate-300 hover:text-[var(--brand-blue)] border border-[#2a2a3e] hover:border-[var(--brand-blue)]/40 text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer"
         >
           Stealth Launch
         </button>

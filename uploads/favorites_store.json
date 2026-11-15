@@ -1,0 +1,16 @@
+{
+  "test-user-1794749118609": {
+    "gameIds": [],
+    "channelIds": [],
+    "updatedAt": 3000
+  },
+  "test-user-1794749147548": {
+    "gameIds": [
+      101
+    ],
+    "channelIds": [
+      "c2"
+    ],
+    "updatedAt": 3000
+  }
+}

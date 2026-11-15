@@ -14,10 +14,18 @@ import {
   X,
   PanelRightClose,
   PanelRightOpen,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 import { TV_CHANNELS, TVChannel } from '../data/channels';
 import { searchChannels } from '../utils/channelSearch';
 import { classifyChannel, compareClassifiedChannels } from '../utils/channelOrganization';
+import {
+  getEffectiveUserId,
+  getStoredChannelFavorites,
+  subscribeToFavorites,
+  toggleChannelFavorite,
+} from '../services/favoritesService';
 
 const EXTRA_CATEGORIES = [
   'All',
@@ -207,8 +215,8 @@ const ChannelListItem: React.FC<{
             <>
               <div className="flex items-center gap-1.5 min-w-0">
                 <div className="text-[11px] text-slate-300 truncate">{nowProgramme.title}</div>
-                {nowProgramme.rating && (
-                  <span className="shrink-0 px-1 rounded border border-slate-600 text-[9px] font-extrabold text-slate-300 leading-4">
+                {nowProgramme.rating && nowProgramme.rating.toLowerCase() !== 'none' && nowProgramme.rating.toLowerCase() !== 'n/a' && (
+                  <span className="shrink-0 px-1 rounded border border-slate-500 text-slate-200 text-[9px] font-extrabold leading-4">
                     {nowProgramme.rating}
                   </span>
                 )}
@@ -221,7 +229,9 @@ const ChannelListItem: React.FC<{
               </div>
             </>
           ) : (
-            <div className="text-[11px] text-slate-500 truncate">{classifyChannel(channel).category}</div>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <div className="text-[11px] text-slate-500 truncate">{classifyChannel(channel).category}</div>
+            </div>
           )}
         </div>
       </button>
@@ -233,14 +243,14 @@ const ChannelListItem: React.FC<{
           onToggleFavorite(channel.id);
         }}
         aria-label={isFavorite ? `Remove ${channel.name} from favorites` : `Save ${channel.name} to favorites`}
-        className={`w-10 shrink-0 flex items-center justify-center transition-colors cursor-pointer ${
+        className={`w-11 sm:w-10 shrink-0 flex items-center justify-center transition-colors cursor-pointer ${
           isFavorite
             ? 'text-amber-400 hover:text-amber-300'
-            : 'text-slate-600 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 hover:text-amber-400'
+            : 'text-slate-500 opacity-80 sm:opacity-0 sm:group-hover:opacity-100 hover:text-amber-400'
         }`}
         title={isFavorite ? 'Remove favorite' : 'Favorite channel'}
       >
-        <Star className={`w-3.5 h-3.5 ${isFavorite ? 'fill-current' : ''}`} />
+        <Star className={`w-4 h-4 sm:w-3.5 sm:h-3.5 ${isFavorite ? 'fill-current' : ''}`} />
       </button>
     </div>
   );
@@ -255,14 +265,7 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
   searchQuery: externalSearchQuery,
   onSearchChange: externalOnSearchChange,
 }) => {
-  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => {
-    try {
-      const saved = localStorage.getItem(TV_FAVORITES_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [favoriteIds, setFavoriteIds] = useState<string[]>(() => getStoredChannelFavorites());
 
   const [selectedChannel, setSelectedChannel] = useState<TVChannel | null>(null);
 
@@ -287,11 +290,29 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
   const cursorTimerRef = useRef<number | null>(null);
   const [cursorHidden, setCursorHidden] = useState(false);
 
+const EPG_STORAGE_KEY = 'frosthub_epg_cache';
+let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
+
   const [qualityLevels, setQualityLevels] = useState<QualityLevel[]>([]);
   const [selectedQuality, setSelectedQuality] = useState<number>(-1); // -1 = Auto ABR
   const [activeHeight, setActiveHeight] = useState<number | null>(null);
   const [showQualityMenu, setShowQualityMenu] = useState(false);
-  const [epgMap, setEpgMap] = useState<Record<string, ChannelNowNext>>({});
+  const [epgMap, setEpgMap] = useState<Record<string, ChannelNowNext>>(() => {
+    if (inMemoryEpgCache && Object.keys(inMemoryEpgCache).length > 0) {
+      return inMemoryEpgCache;
+    }
+    try {
+      const raw = localStorage.getItem(EPG_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+          inMemoryEpgCache = parsed;
+          return parsed;
+        }
+      }
+    } catch {}
+    return {};
+  });
   const [epgRefreshNonce, setEpgRefreshNonce] = useState(0);
 
   useEffect(() => {
@@ -299,18 +320,19 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
     let retryTimer: number | null = null;
     const loadEpg = async () => {
       try {
-        const res = await fetch('/api/epg/now-next', { signal: AbortSignal.timeout(20000), cache: 'no-store' });
+        const res = await fetch('/api/epg/now-next', { signal: AbortSignal.timeout(10000), cache: 'default' });
         if (!res.ok) return;
         const data = await res.json();
-        if (active && data && typeof data.programs === 'object') {
+        if (active && data && typeof data.programs === 'object' && Object.keys(data.programs).length > 0) {
+          inMemoryEpgCache = data.programs;
           setEpgMap(data.programs);
-          if (Object.keys(data.programs).length === 0) {
-            retryTimer = window.setTimeout(loadEpg, 4000);
-          }
+          try {
+            localStorage.setItem(EPG_STORAGE_KEY, JSON.stringify(data.programs));
+          } catch {}
         }
       } catch {
         if (active) {
-          retryTimer = window.setTimeout(loadEpg, 4000);
+          retryTimer = window.setTimeout(loadEpg, 6000);
         }
       }
     };
@@ -332,16 +354,17 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
 
   const favoriteSet = useMemo(() => new Set(favoriteIds), [favoriteIds]);
 
-  const toggleFavorite = useCallback((channelId: string) => {
-    setFavoriteIds((prev) => {
-      const updated = prev.includes(channelId)
-        ? prev.filter((id) => id !== channelId)
-        : [channelId, ...prev];
-      try {
-        localStorage.setItem(TV_FAVORITES_KEY, JSON.stringify(updated));
-      } catch {}
-      return updated;
+  useEffect(() => {
+    const userId = getEffectiveUserId();
+    const unsub = subscribeToFavorites(userId, ({ channelIds }) => {
+      setFavoriteIds(channelIds);
     });
+    return () => unsub();
+  }, []);
+
+  const toggleFavorite = useCallback((channelId: string) => {
+    const updated = toggleChannelFavorite(channelId);
+    setFavoriteIds(updated);
   }, []);
 
   useEffect(() => {
@@ -1128,9 +1151,9 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
   const clockLabel = formatEpgTime(clockNow.getTime());
 
   return (
-    <div className="flex flex-col h-full min-h-0 flex-1 bg-[#0b0e14] text-white overflow-hidden">
+    <div className="flex flex-col h-full min-h-0 flex-1 bg-slate-50 dark:bg-[#0b0e14] text-slate-900 dark:text-white overflow-hidden transition-colors">
       {/* Guide Header */}
-      <div className="flex items-stretch bg-[#070b14] border-b border-[#1c2a48] shrink-0">
+      <div className="flex items-stretch bg-white dark:bg-[#070b14] border-b border-slate-200 dark:border-[#1c2a48] shrink-0 transition-colors">
         <div className="hidden sm:flex items-center gap-2 px-4 border-r border-[#1c2a48] shrink-0">
           <Tv className="w-4 h-4 text-[var(--brand-blue)]" />
           <span className="text-xs font-extrabold uppercase tracking-widest text-white">Live TV</span>
@@ -1286,22 +1309,22 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
                 </div>
               )}
 
-              {/* Channel Info Bar */}
+              {/* Channel Info Bar (Desktop overlay — on mobile/tablet it lives cleanly below the video player) */}
               {!isFullscreen && (
-                <div className="absolute top-0 inset-x-0 z-20 flex items-stretch gap-3 px-3 sm:px-4 py-2.5 bg-[#05080f]/90 border-b border-[#1c2a48] backdrop-blur-sm">
-                    <div className="flex items-center justify-center min-w-[3.5rem] px-2 rounded-lg bg-[var(--brand-blue)] text-white text-xl sm:text-2xl font-extrabold tabular-nums">
+                <div className="hidden lg:flex absolute top-0 inset-x-0 z-20 items-stretch gap-3 px-4 py-2.5 bg-[#05080f]/90 border-b border-[#1c2a48] backdrop-blur-sm">
+                    <div className="flex items-center justify-center min-w-[3.5rem] px-2 rounded-lg bg-[var(--brand-blue)] text-white text-2xl font-extrabold tabular-nums">
                       {selectedChannelNumber}
                     </div>
-                    <div className="w-12 h-9 sm:w-16 sm:h-11 shrink-0 rounded-lg bg-black/70 border border-slate-800 p-1 flex items-center justify-center overflow-hidden self-center">
+                    <div className="w-16 h-11 shrink-0 rounded-lg bg-black/70 border border-slate-800 p-1 flex items-center justify-center overflow-hidden self-center">
                       <ChannelLogo logo={selectedChannel.logo} name={selectedChannel.name} />
                     </div>
                     <div className="min-w-0 flex-1 flex flex-col justify-center">
                       <div className="flex items-center gap-2 min-w-0">
-                        <h2 className="text-sm sm:text-base font-extrabold text-white truncate">
+                        <h2 className="text-base font-extrabold text-white truncate">
                           {selectedChannel.name}
                         </h2>
-                        {selectedEpg?.now?.rating && (
-                          <span className="px-1.5 py-0.5 bg-slate-900/90 border border-slate-600 rounded text-[10px] font-extrabold text-slate-200 shrink-0">
+                        {selectedEpg?.now?.rating && selectedEpg.now.rating.toLowerCase() !== 'none' && selectedEpg.now.rating.toLowerCase() !== 'n/a' && (
+                          <span className="px-1.5 py-0.5 bg-slate-900/90 border border-slate-500 rounded text-[10px] font-extrabold shrink-0 text-slate-200">
                             {selectedEpg.now.rating}
                           </span>
                         )}
@@ -1324,8 +1347,8 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
                               <span className="font-semibold">Next</span>
                               <span className="text-slate-500 mx-1.5 tabular-nums">{formatProgrammeRange(selectedEpg.next)}</span>
                               {selectedEpg.next.title}
-                              {selectedEpg.next.rating && (
-                                <span className="ml-1.5 px-1 rounded border border-slate-600 text-[9px] font-extrabold text-slate-300">
+                              {selectedEpg.next.rating && selectedEpg.next.rating.toLowerCase() !== 'none' && selectedEpg.next.rating.toLowerCase() !== 'n/a' && (
+                                <span className="ml-1.5 px-1 rounded border border-slate-500 text-[9px] font-extrabold text-slate-300">
                                   {selectedEpg.next.rating}
                                 </span>
                               )}
@@ -1354,15 +1377,15 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
               )}
 
               {/* Bottom Controls Overlay */}
-              <div className={`absolute bottom-0 inset-x-0 p-3 sm:p-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex items-center justify-between gap-3 z-20 transition-opacity duration-200 ${
+              <div className={`absolute bottom-0 inset-x-0 p-2.5 sm:p-4 bg-gradient-to-t from-black/90 via-black/50 to-transparent flex items-center justify-between gap-2 sm:gap-3 z-20 transition-opacity duration-200 ${
                 cursorHidden ? 'opacity-0 pointer-events-none' : 'opacity-100 lg:opacity-0 lg:group-hover/player:opacity-100'
               }`}>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5 sm:gap-2">
                   {/* Volume Controls */}
                   <button
                     type="button"
                     onClick={toggleMute}
-                    className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                    className="min-w-[36px] min-h-[36px] flex items-center justify-center p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
                     title={isMuted ? 'Unmute (M)' : 'Mute (M)'}
                   >
                     {isMuted || volume === 0 ? (
@@ -1384,14 +1407,14 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
                       if (val > 0 && isMuted) setIsMuted(false);
                     }}
                     aria-label="Volume"
-                    className="w-16 sm:w-24 accent-[var(--brand-blue)] cursor-pointer"
+                    className="hidden sm:block w-24 accent-[var(--brand-blue)] cursor-pointer"
                   />
 
                   {/* Reload Stream */}
                   <button
                     type="button"
                     onClick={handleRetryStream}
-                    className="p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
+                    className="min-w-[36px] min-h-[36px] flex items-center justify-center p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors cursor-pointer"
                     title="Reload stream"
                   >
                     <RotateCw className="w-4 h-4" />
@@ -1479,28 +1502,107 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
           )}
         </div>
 
+        {/* Mobile / Tablet Compact Channel Info & Quick Switcher Below Video */}
+        {selectedChannel && !isFullscreen && (
+          <div className="lg:hidden bg-[#080c15] border-t border-[#1c2a48] px-3 py-2 shrink-0">
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center justify-center min-w-[2.75rem] h-8 px-1.5 rounded-lg bg-[var(--brand-blue)] text-white text-sm font-extrabold tabular-nums shrink-0">
+                {selectedChannelNumber}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <h2 className="text-xs font-extrabold text-white truncate">
+                    {selectedChannel.name}
+                  </h2>
+                  {selectedEpg?.now?.rating && selectedEpg.now.rating.toLowerCase() !== 'none' && selectedEpg.now.rating.toLowerCase() !== 'n/a' && (
+                    <span className="px-1.5 py-0.5 bg-slate-900 border border-slate-500 rounded text-[9px] font-extrabold shrink-0 text-slate-200">
+                      {selectedEpg.now.rating}
+                    </span>
+                  )}
+                </div>
+                {selectedEpg?.now ? (
+                  <p className="text-[11px] text-slate-300 truncate">
+                    <span className="text-sky-300 font-semibold mr-1">Now:</span>
+                    {selectedEpg.now.title}
+                    {selectedEpg.next && (
+                      <span className="text-slate-400 ml-1.5">
+                        • Next: {selectedEpg.next.title}{' '}
+                        {selectedEpg.next.rating && selectedEpg.next.rating.toLowerCase() !== 'none' && selectedEpg.next.rating.toLowerCase() !== 'n/a' && (
+                          <span className="px-1 rounded border border-slate-500 text-[9px] font-extrabold text-slate-300">
+                            {selectedEpg.next.rating}
+                          </span>
+                        )}
+                      </span>
+                    )}
+                  </p>
+                ) : selectedChannelMeta ? (
+                  <p className="text-[11px] text-slate-400 truncate">
+                    {selectedChannelMeta.category} • {selectedChannelMeta.network}
+                  </p>
+                ) : null}
+              </div>
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => stepChannel(-1)}
+                  aria-label="Previous channel"
+                  className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg bg-[#141926] border border-slate-700/80 text-slate-200 hover:text-white cursor-pointer"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => stepChannel(1)}
+                  aria-label="Next channel"
+                  className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg bg-[#141926] border border-slate-700/80 text-slate-200 hover:text-white cursor-pointer"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => toggleFavorite(selectedChannel.id)}
+                  aria-label={favoriteSet.has(selectedChannel.id) ? 'Remove favorite' : 'Favorite channel'}
+                  className={`min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg bg-[#141926] border border-slate-700/80 transition-colors cursor-pointer ${
+                    favoriteSet.has(selectedChannel.id) ? 'text-amber-400' : 'text-slate-300 hover:text-amber-400'
+                  }`}
+                >
+                  <Star className={`w-4 h-4 ${favoriteSet.has(selectedChannel.id) ? 'fill-current' : ''}`} />
+                </button>
+              </div>
+            </div>
+            {selectedEpg?.now && (
+              <div className="mt-1.5 h-1 w-full rounded-full bg-slate-800 overflow-hidden">
+                <div
+                  className="h-full bg-[var(--brand-blue)]"
+                  style={{ width: `${programmeProgress(selectedEpg.now) * 100}%` }}
+                />
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Channel Guide Sidebar */}
         {isGuideVisible && (
-          <div className="w-full lg:w-[390px] xl:w-[420px] flex-1 lg:flex-initial min-h-0 bg-[#0f131b] border-t lg:border-t-0 lg:border-l border-[#1f1f2e] flex flex-col overflow-hidden">
+          <div className="w-full lg:w-[390px] xl:w-[420px] flex-1 lg:flex-initial min-h-0 bg-white dark:bg-[#0f131b] border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-[#1f1f2e] flex flex-col overflow-hidden transition-colors">
             {/* Search Header */}
-            <div className="p-3 border-b border-[#1f1f2e] shrink-0">
+            <div className="p-2.5 sm:p-3 border-b border-slate-100 dark:border-[#1f1f2e] shrink-0">
               <div className="relative">
-                <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={`Search ${filteredChannels.length} channels...`}
-                  className="w-full pl-9 pr-8 py-2 bg-[#161b26] border border-[#242938] focus:border-[var(--brand-blue)] rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none transition-colors"
+                  className="w-full pl-9 pr-9 py-2.5 sm:py-2 bg-slate-100 dark:bg-[#161b26] border border-slate-200 dark:border-[#242938] focus:border-[var(--brand-blue)] rounded-xl text-base sm:text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none transition-colors"
                 />
                 {searchQuery && (
                   <button
                     type="button"
                     onClick={() => setSearchQuery('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-300 cursor-pointer"
                     aria-label="Clear search"
                   >
-                    <X className="w-3.5 h-3.5" />
+                    <X className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
                   </button>
                 )}
               </div>

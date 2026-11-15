@@ -3576,14 +3576,6 @@
     "logo": "https://tvpnlogopus.samsungcloud.tv/platform/image/sourcelogo/vc/00/02/34/US3900011JQ_20260616T032129SQUARE.png"
   },
   {
-    "id": "samsung-the-hunger-games-43640",
-    "name": "The Hunger Games",
-    "url": "https://jmp2.uk/stvp-US4300005KC",
-    "category": "Movies",
-    "description": "The Hunger Games live on Samsung TV Plus (US)",
-    "logo": "https://tvpnlogopus.samsungcloud.tv/platform/image/sourcelogo/vc/00/02/34/US4300005KC_20261109T015533SQUARE.png"
-  },
-  {
     "id": "samsung-the-incredible-dr-pol-f3468",
     "name": "The Incredible Dr. Pol",
     "url": "https://jmp2.uk/stvp-US4100031FK",
@@ -5914,7 +5906,7 @@
   {
     "id": "samsung-rookie-blue-c21cb",
     "name": "Rookie Blue",
-    "url": "https://jmp2.uk/stvp-GB2100005YU",
+    "url": "https://jmp2.uk/plu-63fe2ec4dff38e000835f786.m3u8",
     "category": "Series",
     "description": "Rookie Blue live on Samsung TV Plus (GB)",
     "logo": "https://tvpnlogopeu.samsungcloud.tv/platform/image/sourcelogo/vc/00/02/34/GB2100005YU_20250811T172955SQUARE.png"
@@ -5974,14 +5966,6 @@
     "category": "Entertainment",
     "description": "Sky Arts live on Samsung TV Plus (GB)",
     "logo": "https://tvpnlogopeu.samsungcloud.tv/platform/image/sourcelogo/vc/00/02/34/GB60000197_20260421T123840SQUARE.png"
-  },
-  {
-    "id": "samsung-sky-mix-f2b14",
-    "name": "Sky Mix",
-    "url": "https://jmp2.uk/stvp-GBBD3100006XM",
-    "category": "Series",
-    "description": "Sky Mix live on Samsung TV Plus (GB)",
-    "logo": "https://tvpnlogopeu.samsungcloud.tv/platform/image/sourcelogo/vc/00/02/34/GBBD3100006XM_20260421T123849SQUARE.png"
   },
   {
     "id": "samsung-sky-news-0b7d3",
@@ -7066,7 +7050,7 @@
   {
     "id": "samsung-corner-gas-channel-by-ctv-73530",
     "name": "Corner Gas Channel by CTV",
-    "url": "https://jmp2.uk/stvp-CA1400007U9",
+    "url": "https://jmp2.uk/plu-667d664815f35c00089489bf.m3u8",
     "category": "Comedy",
     "description": "Corner Gas Channel by CTV live on Samsung TV Plus (CA)",
     "logo": "https://tvpnlogopus.samsungcloud.tv/platform/image/sourcelogo/vc/00/02/34/CA1400007U9_20260421T140304SQUARE.png"
