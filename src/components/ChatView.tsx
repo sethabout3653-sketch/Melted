@@ -31,7 +31,8 @@ import {
   Check,
   Hand,
   MessageCircle,
-  Trash2
+  Trash2,
+  Maximize2
 } from 'lucide-react';
 
 import { UserAvatar } from './UserAvatar';
@@ -420,8 +421,27 @@ const RemoteVideoPlayer: React.FC<{
     };
   }, [stream, isScreen, onBlackStateChange]);
 
+  const enterFullscreen = () => {
+    const target = videoRef.current?.parentElement;
+    if (!target || !document.fullscreenEnabled) return;
+    target.requestFullscreen().catch((error) => {
+      console.warn('[RemoteVideoPlayer] Fullscreen request was not allowed:', error);
+    });
+  };
+
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-white dark:bg-slate-900">
+      {isScreen && (
+        <button
+          type="button"
+          onClick={enterFullscreen}
+          aria-label={`View ${username} in fullscreen`}
+          title="View shared screen fullscreen"
+          className="absolute right-3 top-3 z-30 grid h-10 w-10 place-items-center rounded-xl border border-white/20 bg-slate-950/75 text-white shadow-lg transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+        >
+          <Maximize2 className="h-4 w-4" aria-hidden="true" />
+        </button>
+      )}
       {!isScreen && renderAvatar && user && (isBlack || !hasVideoFrame || !stream) && (
         <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-slate-900 z-10 transition-opacity duration-200">
           <div className="relative flex items-center justify-center">
