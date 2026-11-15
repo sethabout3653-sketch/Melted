@@ -1,15 +1,10 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Search, 
   Shuffle, 
   Heart, 
   X, 
   Palette,
-  Phone,
-  Video,
-  Users,
-  Check,
-  ChevronDown,
   Sun,
   Moon
 } from 'lucide-react';
@@ -41,12 +36,7 @@ interface NavbarProps {
   onToggleTheme?: () => void;
   onOpenFirebase?: () => void;
   firebaseUser?: any;
-  users?: any[];
-  currentUser?: any;
   onOpenThemeSelector?: () => void;
-  onStartCall?: (user: any) => void;
-  onStartVideoCall?: (user: any) => void;
-  onStartGroupCall?: (users: any[]) => void;
 }
 
 interface NavSearchInputProps {
@@ -122,36 +112,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
   theme = 'dark',
   onToggleTheme,
   onOpenThemeSelector,
-  users = [],
-  currentUser,
-  onStartCall,
-  onStartVideoCall,
-  onStartGroupCall,
 }) => {
-  const [isCallMenuOpen, setIsCallMenuOpen] = useState(false);
-  const [callMode, setCallMode] = useState<'audio' | 'video' | 'group'>('audio');
-  const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>([]);
-  const callMenuRef = useRef<HTMLDivElement>(null);
-  const callableUsers = users.filter((user) => user.id !== currentUser?.id && user.status !== 'offline');
-  const selectedGroupUsers = callableUsers.filter((user) => selectedGroupIds.includes(user.id));
-
-  useEffect(() => {
-    if (!isCallMenuOpen) return;
-    const handlePointerDown = (e: MouseEvent) => {
-      if (callMenuRef.current && !callMenuRef.current.contains(e.target as Node)) {
-        setIsCallMenuOpen(false);
-      }
-    };
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsCallMenuOpen(false);
-    };
-    document.addEventListener('mousedown', handlePointerDown);
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [isCallMenuOpen]);
 
   return (
     <header className="sticky top-0 z-50 w-full bg-white/95 dark:bg-[#0d0d12]/95 backdrop-blur-md border-b border-slate-200 dark:border-[#1e1e2d] text-slate-900 dark:text-white shrink-0 shadow-md transition-colors">
@@ -220,62 +181,6 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
 
           {/* Quick Action Icons */}
           <div className="flex items-center gap-1 sm:gap-1.5 sm:border-l border-slate-200 dark:border-[#242436] sm:pl-3">
-            {onStartCall && (
-              <div className="relative" ref={callMenuRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsCallMenuOpen((open) => !open)}
-                  className={`min-w-[38px] min-h-[38px] flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold transition-all cursor-pointer ${isCallMenuOpen ? 'bg-[var(--brand-blue)]/15 text-[var(--brand-blue)]' : 'text-slate-500 hover:bg-slate-100 hover:text-[var(--brand-blue)] dark:text-slate-400 dark:hover:bg-[#1a1a26]'}`}
-                  title="Call someone online"
-                  aria-expanded={isCallMenuOpen}
-                  aria-haspopup="menu"
-                >
-                  <Phone className="h-4 w-4" />
-                  <span className="hidden xl:inline">Call</span>
-                  <ChevronDown className={`hidden sm:block h-3 w-3 transition-transform ${isCallMenuOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {isCallMenuOpen && (
-                  <div className="fixed sm:absolute right-3 sm:right-0 top-14 sm:top-full z-50 mt-2 w-[min(17rem,calc(100vw-1.5rem))] rounded-xl border border-slate-200 bg-white p-2 shadow-2xl dark:border-[#2a2a3c] dark:bg-[#12121b]" role="menu">
-                    <div className="mb-2 grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1 dark:bg-white/5">
-                      {([['audio', Phone, 'Voice'], ['video', Video, 'Video'], ['group', Users, 'Group']] as const).map(([mode, Icon, label]) => (
-                        <button key={mode} type="button" onClick={() => setCallMode(mode)} className={`flex flex-col items-center gap-1 rounded-md px-1 py-1.5 text-[10px] font-semibold cursor-pointer ${callMode === mode ? 'bg-[var(--brand-blue)]/15 text-[var(--brand-blue)]' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'}`}>
-                          <Icon className="h-3.5 w-3.5" />{label}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="px-2 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">{callMode === 'group' ? 'Select people' : 'Online people'}</div>
-                    {callableUsers.length === 0 ? (
-                      <div className="px-2 py-3 text-xs text-slate-500">No one else is online.</div>
-                    ) : callableUsers.map((user) => (
-                      <button
-                        key={user.id}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => {
-                          if (callMode === 'group') {
-                            setSelectedGroupIds((ids) => ids.includes(user.id) ? ids.filter((id) => id !== user.id) : [...ids, user.id]);
-                          } else {
-                            (callMode === 'video' ? onStartVideoCall : onStartCall)?.(user);
-                            setIsCallMenuOpen(false);
-                          }
-                        }}
-                        className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-slate-100 dark:hover:bg-white/10 cursor-pointer"
-                      >
-                        <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900 dark:text-white">{user.username || user.display_name || 'Online user'}</span>
-                        {callMode === 'group' ? (selectedGroupIds.includes(user.id) ? <Check className="h-3.5 w-3.5 text-[var(--brand-blue)]" /> : <span className="h-4 w-4 rounded border border-slate-300 dark:border-white/30" />) : callMode === 'video' ? <Video className="h-3.5 w-3.5 text-[var(--brand-blue)]" /> : <Phone className="h-3.5 w-3.5 text-[var(--brand-blue)]" />}
-                      </button>
-                    ))}
-                    {callMode === 'group' && (
-                      <button type="button" disabled={selectedGroupUsers.length === 0} onClick={() => { onStartGroupCall?.(selectedGroupUsers); setSelectedGroupIds([]); setIsCallMenuOpen(false); }} className="mt-2 flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--brand-blue)] px-3 py-2 text-xs font-black text-slate-950 transition hover:bg-[var(--brand-blue-hover)] disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer">
-                        <Users className="h-3.5 w-3.5" /> Group Call ({selectedGroupUsers.length})
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-
             <button
               type="button"
               onClick={onRandomGame}
