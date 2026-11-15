@@ -843,6 +843,11 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
     micPermissionStatus,
     requestMicrophonePermission,
     micError,
+    setMicError,
+    cameraError,
+    setCameraError,
+    screenShareError,
+    setScreenShareError,
     toggleCamera,
     toggleScreenShare,
   } = globalChat;
@@ -1024,7 +1029,6 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
   const [peerOrientations, setPeerOrientations] = useState<Record<string, boolean>>({});
   const [peerCameraBlack, setPeerCameraBlack] = useState<Record<string, boolean>>({});
   const [localCameraBlack, setLocalCameraBlack] = useState<boolean>(true);
-  const [screenShareError, setScreenShareError] = useState<string | null>(null);
 
   // GIF items state
   const [gifs, setGifs] = useState<any[]>([]);
@@ -2149,15 +2153,25 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                 </div>
               </div>
 
-              {/* Screen Share Error Alert */}
-              {screenShareError && (
-                <div className="mx-3 sm:mx-6 mt-3 p-3 bg-amber-500/15 border border-amber-500/30 rounded-2xl flex items-center justify-between text-xs text-amber-700 dark:text-amber-200 shrink-0">
-                  <div className="flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0" />
-                    <span>{screenShareError}</span>
+              {(micError || cameraError || screenShareError) && (
+                <div className="mx-3 sm:mx-6 mt-3 p-3 bg-amber-500/15 border border-amber-500/30 rounded-2xl flex items-start justify-between gap-3 text-xs text-amber-700 dark:text-amber-200 shrink-0">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0 mt-0.5" />
+                    <div className="flex flex-col gap-1">
+                      {micError && <span>Microphone: {micError}</span>}
+                      {cameraError && <span>Camera: {cameraError}</span>}
+                      {screenShareError && <span>Screen share: {screenShareError}</span>}
+                      {micError && (
+                        <button type="button" onClick={() => void requestMicrophonePermission()} className="mt-1 w-fit underline font-bold cursor-pointer">
+                          Retry microphone access
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  <button 
-                    onClick={() => setScreenShareError(null)} 
+                  <button
+                    type="button"
+                    onClick={() => { setMicError(null); setCameraError(null); setScreenShareError(null); }}
+                    aria-label="Dismiss media warning"
                     className="p-1 text-slate-400 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
                   >
                     <X className="w-4 h-4" />
