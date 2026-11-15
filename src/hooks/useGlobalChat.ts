@@ -759,6 +759,14 @@ export function useGlobalChat({
     });
   }, [chat, cameraStream, localAudioStream, screenStream]);
 
+  const presenceChannel = (currentUser as any).current_channel;
+  useEffect(() => {
+    if (isInVideo && presenceChannel !== 'video-general') {
+      setCurrentUser(prev => ({ ...prev, current_channel: 'video-general' }));
+      chat.updateUser({ current_channel: 'video-general' });
+    }
+  }, [isInVideo, presenceChannel, chat]);
+
   const toggleCamera = useCallback(async () => {
     if (isVideoEnabled) {
       if (cameraStreamRef.current) {

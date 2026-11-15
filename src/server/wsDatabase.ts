@@ -47,6 +47,8 @@ export interface PendingSignal {
 }
 
 // Ephemeral in-memory WebSocket state (presence, voice/video rooms, typing & WebRTC signaling; chat history lives in Firebase)
+const DISCONNECT_GRACE_MS = 60000;
+
 export class WebSocketDatabase {
   public users: Map<string, DbUser> = new Map();
   public pendingSignals: Map<string, PendingSignal[]> = new Map(); // targetUserId -> signals
@@ -535,13 +537,18 @@ export function initWebSocketDatabase(server: Server) {
           sockets.delete(ws);
           if (sockets.size === 0) {
             userSocketsMap.delete(uId);
-            const user = globalWsDb.getUser(uId);
-            const oldChannel = user?.current_channel;
-            globalWsDb.deleteUser(uId);
-            broadcastTable('users', globalWsDb.getUsers());
-            if (oldChannel === 'video-general' || oldChannel === 'voice-general') {
-              broadcastMediaPresence('USER_LEFT_MEDIA', uId, oldChannel);
-            }
+            const timer = setTimeout(() => {
+              disconnectTimers.delete(uId);
+              if (userSocketsMap.has(uId)) return;
+              const user = globalWsDb.getUser(uId);
+              const oldChannel = user?.current_channel;
+              globalWsDb.deleteUser(uId);
+              broadcastTable('users', globalWsDb.getUsers());
+              if (oldChannel === 'video-general' || oldChannel === 'voice-general') {
+                broadcastMediaPresence('USER_LEFT_MEDIA', uId, oldChannel);
+              }
+            }, DISCONNECT_GRACE_MS);
+            disconnectTimers.set(uId, timer);
           }
         }
       }
