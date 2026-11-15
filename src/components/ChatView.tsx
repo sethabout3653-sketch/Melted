@@ -31,7 +31,8 @@ import {
   Check,
   Hand,
   MessageCircle,
-  Trash2
+  Trash2,
+  Maximize2
 } from 'lucide-react';
 
 import { UserAvatar } from './UserAvatar';
@@ -420,8 +421,27 @@ const RemoteVideoPlayer: React.FC<{
     };
   }, [stream, isScreen, onBlackStateChange]);
 
+  const enterFullscreen = () => {
+    const target = videoRef.current?.closest('[data-screen-tile]') ?? videoRef.current?.parentElement;
+    if (!target || !document.fullscreenEnabled) return;
+    target.requestFullscreen().catch((error) => {
+      console.warn('[RemoteVideoPlayer] Fullscreen request was not allowed:', error);
+    });
+  };
+
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-white dark:bg-slate-900">
+      {isScreen && (
+        <button
+          type="button"
+          onClick={enterFullscreen}
+          aria-label={`View ${username} in fullscreen`}
+          title="View shared screen fullscreen"
+          className="absolute right-3 top-3 z-30 grid h-10 w-10 place-items-center rounded-xl border border-white/20 bg-slate-950/75 text-white shadow-lg transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+        >
+          <Maximize2 className="h-4 w-4" aria-hidden="true" />
+        </button>
+      )}
       {!isScreen && renderAvatar && user && (isBlack || !hasVideoFrame || !stream) && (
         <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-slate-900 z-10 transition-opacity duration-200">
           <div className="relative flex items-center justify-center">
@@ -968,6 +988,24 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
   // Call & Audio Level States
   const [audioLevel, setAudioLevel] = useState<number>(0);
   const [isMicTesting, setIsMicTesting] = useState(false);
+  const handRaiseAudioRef = useRef<HTMLAudioElement | null>(null);
+  const raisedUsersRef = useRef<Set<string> | null>(null);
+
+  const playHandRaiseSound = useCallback(() => {
+    const audio = handRaiseAudioRef.current;
+    if (!audio) return;
+    audio.currentTime = 0;
+    audio.play().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const raisedUsers = new Set<string>((users as any[]).filter((user) => user.is_hand_raised).map((user) => String(user.id)));
+    if (raisedUsersRef.current) {
+      const someoneNewRaised = [...raisedUsers].some((userId) => userId !== currentUser.id && !raisedUsersRef.current?.has(userId));
+      if (someoneNewRaised) playHandRaiseSound();
+    }
+    raisedUsersRef.current = raisedUsers;
+  }, [users, currentUser.id, playHandRaiseSound]);
 
   // Mobile Drawer toggles
   const [isMobileChannelsOpen, setIsMobileChannelsOpen] = useState(false);
@@ -999,6 +1037,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
   const toggleHandRaise = () => {
     const nextState = !currentUser.is_hand_raised;
+    if (nextState) playHandRaiseSound();
     setCurrentUser((prev: any) => ({ ...prev, is_hand_raised: nextState }));
     updateUser({ is_hand_raised: nextState });
   };
@@ -1318,6 +1357,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
   return (
     <div className="flex flex-1 min-h-0 h-full w-full bg-white/90 dark:bg-slate-950/80 text-slate-900 dark:text-slate-100 font-sans antialiased overflow-hidden select-none transition-colors">
+      <audio ref={handRaiseAudioRef} src="/hand-raise.mp3" preload="auto" className="hidden" aria-hidden="true" />
       
       {/* Hidden Global File Input */}
       <input 
@@ -2335,7 +2375,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
                           {/* Dedicated Remote Screen Share Tile (when screen share is on) */}
                           {hasScreen && (
-                            <div className="relative mx-auto rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border border-cyan-400/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
+                            <div data-screen-tile className="relative mx-auto rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border border-cyan-400/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px] fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:w-screen fullscreen:h-screen fullscreen:max-w-none fullscreen:aspect-auto fullscreen:rounded-none fullscreen:bg-black">
                               <RemoteVideoPlayer 
                                 stream={scrStream} 
                                 username={`${u.username}'s Screen`}

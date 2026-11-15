@@ -476,21 +476,43 @@ export function useWebRTC({
       }
     };
 
-    pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed') {
+    let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleIceRestart = (delay: number) => {
+      if (recoveryTimer) return;
+      recoveryTimer = setTimeout(() => {
+        recoveryTimer = null;
+        const connectionNeedsRecovery =
+          pc.connectionState === 'failed' ||
+          pc.connectionState === 'disconnected' ||
+          pc.iceConnectionState === 'failed' ||
+          pc.iceConnectionState === 'disconnected';
+        if (!connectionNeedsRecovery) return;
         try {
           pc.restartIce();
           renegotiateRef.current(peerId);
-        } catch {}
-      }
+        } catch (error) {
+          console.warn('[useWebRTC] ICE restart failed:', error);
+        }
+      }, delay);
+    };
+    const clearRecoveryTimer = () => {
+      if (recoveryTimer) clearTimeout(recoveryTimer);
+      recoveryTimer = null;
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'connected') clearRecoveryTimer();
+      else if (pc.connectionState === 'failed') scheduleIceRestart(0);
+      else if (pc.connectionState === 'disconnected') scheduleIceRestart(4000);
     };
 
     pc.oniceconnectionstatechange = () => {
-      if (pc.iceConnectionState === 'failed') {
-        try {
-          pc.restartIce();
-          renegotiateRef.current(peerId);
-        } catch {}
+      if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
+        clearRecoveryTimer();
+      } else if (pc.iceConnectionState === 'failed') {
+        scheduleIceRestart(0);
+      } else if (pc.iceConnectionState === 'disconnected') {
+        scheduleIceRestart(4000);
       }
     };
 
