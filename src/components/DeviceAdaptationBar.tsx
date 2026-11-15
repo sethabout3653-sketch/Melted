@@ -33,15 +33,15 @@ export const DeviceAdaptationBar: React.FC<DeviceAdaptationBarProps> = ({
       {isMobile && (
         <nav 
           aria-label="Mobile Navigation"
-          className="fixed bottom-0 inset-x-0 z-40 bg-[#0a1128]/95 backdrop-blur-xl border-t border-white/10 px-3 py-2 flex items-center justify-around pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-2xl"
+          className="fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-[#0a1128]/95 backdrop-blur-xl border-t border-slate-200 dark:border-white/10 px-3 py-2 flex items-center justify-around pb-[max(0.5rem,env(safe-area-inset-bottom))] shadow-2xl"
         >
           {/* Games Tab */}
           <button
             onClick={() => onTabChange('games')}
             className={`flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl transition-all border ${
               currentTab === 'games' && !showFavoritesOnly
-                ? 'text-[var(--brand-blue)] font-bold border-[var(--brand-blue)]/20 bg-[var(--brand-blue)]/5'
-                : 'text-zinc-400 hover:text-white border-transparent'
+                ? 'text-[var(--brand-blue)] dark:text-cyan-300 font-bold border-[var(--brand-blue)]/20 bg-[var(--brand-blue)]/5'
+                : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white border-transparent'
             }`}
           >
             <Gamepad2 className="w-5 h-5" />
@@ -53,8 +53,8 @@ export const DeviceAdaptationBar: React.FC<DeviceAdaptationBarProps> = ({
             onClick={() => onTabChange('chat')}
             className={`flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl relative transition-all border ${
               currentTab === 'chat'
-                ? 'text-[var(--brand-blue)] font-bold border-[var(--brand-blue)]/20 bg-[var(--brand-blue)]/5'
-                : 'text-zinc-400 hover:text-white border-transparent'
+                ? 'text-[var(--brand-blue)] dark:text-cyan-300 font-bold border-[var(--brand-blue)]/20 bg-[var(--brand-blue)]/5'
+                : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white border-transparent'
             }`}
           >
             <div className="relative">
@@ -78,14 +78,14 @@ export const DeviceAdaptationBar: React.FC<DeviceAdaptationBarProps> = ({
             }}
             className={`flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl transition-all border ${
               showFavoritesOnly
-                ? 'text-[var(--brand-blue)] font-bold border-[var(--brand-blue)]/20 bg-[var(--brand-blue)]/5'
-                : 'text-zinc-400 hover:text-white border-transparent'
+                ? 'text-[var(--brand-blue)] dark:text-cyan-300 font-bold border-[var(--brand-blue)]/20 bg-[var(--brand-blue)]/5'
+                : 'text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white border-transparent'
             }`}
           >
             <div className="relative">
               <Heart className={`w-5 h-5 ${showFavoritesOnly ? 'fill-[var(--brand-blue)]' : ''}`} />
               {favoritesCount > 0 && (
-                <span className="absolute -top-1 -right-2 px-1 py-0.2 rounded-sm bg-[var(--brand-blue)]/30 text-[var(--brand-blue)] text-[9px] font-black border border-[var(--brand-blue)]/30">
+                <span className="absolute -top-1 -right-2 px-1 py-0.2 rounded-sm bg-[var(--brand-blue)]/30 text-[var(--brand-blue)] dark:text-cyan-300 text-[9px] font-black border border-[var(--brand-blue)]/30">
                   {favoritesCount}
                 </span>
               )}
@@ -99,7 +99,7 @@ export const DeviceAdaptationBar: React.FC<DeviceAdaptationBarProps> = ({
               if (currentTab !== 'games') onTabChange('games');
               onRandomGame();
             }}
-            className="flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl text-zinc-400 hover:text-[var(--brand-blue)] transition-all border border-transparent hover:border-white/10"
+            className="flex flex-col items-center justify-center gap-1 py-1 px-3 rounded-xl text-slate-500 dark:text-zinc-400 hover:text-[var(--brand-blue)] dark:hover:text-cyan-300 transition-all border border-transparent hover:border-slate-200 dark:hover:border-white/10"
           >
             <Shuffle className="w-5 h-5" />
             <span className="text-[10px] tracking-tight">Surprise</span>

@@ -94,13 +94,13 @@ const NavSearchInput: React.FC<NavSearchInputProps> = React.memo(({
         value={localVal}
         onChange={handleChange}
         placeholder={placeholder}
-        className="w-full bg-[#181824] hover:bg-[#1e1e2d] focus:bg-[#13131c] text-sm text-white placeholder-slate-400 rounded-xl pl-10 pr-10 py-2.5 border border-[#2a2a3c] focus:border-[var(--brand-blue)] focus:ring-1 focus:ring-[var(--brand-blue)] transition-colors duration-150 focus:outline-none shadow-inner"
+        className="w-full bg-slate-100 hover:bg-slate-200/70 focus:bg-white dark:bg-[#181824] dark:hover:bg-[#1e1e2d] dark:focus:bg-[#13131c] text-sm text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-10 pr-10 py-2.5 border border-slate-200 dark:border-[#2a2a3c] focus:border-[var(--brand-blue)] focus:ring-1 focus:ring-[var(--brand-blue)] transition-colors duration-150 focus:outline-none shadow-inner"
       />
       {localVal && (
         <button
           type="button"
           onClick={handleClear}
-          className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-white transition-colors cursor-pointer"
+          className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors cursor-pointer"
         >
           <X className="w-4 h-4" />
         </button>
@@ -204,7 +204,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                   className={`text-xs font-extrabold uppercase tracking-wider transition-all px-3 py-2 rounded-lg border whitespace-nowrap cursor-pointer ${
                     isActive 
                       ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10 border-[var(--brand-blue)]/30 shadow-sm' 
-                      : 'text-slate-300 hover:text-white border-transparent hover:bg-[#1a1a26]'
+                      : 'text-slate-500 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white border-transparent hover:bg-slate-100 dark:hover:bg-[#1a1a26]'
                   }`}
                 >
                   {tab.label}
@@ -219,13 +219,13 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
           </nav>
 
           {/* Quick Action Icons */}
-          <div className="flex items-center gap-1 sm:gap-1.5 sm:border-l border-[#242436] sm:pl-3">
+          <div className="flex items-center gap-1 sm:gap-1.5 sm:border-l border-slate-200 dark:border-[#242436] sm:pl-3">
             {onStartCall && (
               <div className="relative" ref={callMenuRef}>
                 <button
                   type="button"
                   onClick={() => setIsCallMenuOpen((open) => !open)}
-                  className={`min-w-[38px] min-h-[38px] flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold transition-all cursor-pointer ${isCallMenuOpen ? 'bg-[var(--brand-blue)]/15 text-[var(--brand-blue)]' : 'text-slate-400 hover:bg-[#1a1a26] hover:text-[var(--brand-blue)]'}`}
+                  className={`min-w-[38px] min-h-[38px] flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs font-bold transition-all cursor-pointer ${isCallMenuOpen ? 'bg-[var(--brand-blue)]/15 text-[var(--brand-blue)]' : 'text-slate-500 hover:bg-slate-100 hover:text-[var(--brand-blue)] dark:text-slate-400 dark:hover:bg-[#1a1a26]'}`}
                   title="Call someone online"
                   aria-expanded={isCallMenuOpen}
                   aria-haspopup="menu"
@@ -235,10 +235,10 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                   <ChevronDown className={`hidden sm:block h-3 w-3 transition-transform ${isCallMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {isCallMenuOpen && (
-                  <div className="fixed sm:absolute right-3 sm:right-0 top-14 sm:top-full z-50 mt-2 w-[min(17rem,calc(100vw-1.5rem))] rounded-xl border border-[#2a2a3c] bg-[#12121b] p-2 shadow-2xl" role="menu">
-                    <div className="mb-2 grid grid-cols-3 gap-1 rounded-lg bg-white/5 p-1">
+                  <div className="fixed sm:absolute right-3 sm:right-0 top-14 sm:top-full z-50 mt-2 w-[min(17rem,calc(100vw-1.5rem))] rounded-xl border border-slate-200 bg-white p-2 shadow-2xl dark:border-[#2a2a3c] dark:bg-[#12121b]" role="menu">
+                    <div className="mb-2 grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1 dark:bg-white/5">
                       {([['audio', Phone, 'Voice'], ['video', Video, 'Video'], ['group', Users, 'Group']] as const).map(([mode, Icon, label]) => (
-                        <button key={mode} type="button" onClick={() => setCallMode(mode)} className={`flex flex-col items-center gap-1 rounded-md px-1 py-1.5 text-[10px] font-semibold cursor-pointer ${callMode === mode ? 'bg-[var(--brand-blue)]/15 text-[var(--brand-blue)]' : 'text-slate-400 hover:text-white'}`}>
+                        <button key={mode} type="button" onClick={() => setCallMode(mode)} className={`flex flex-col items-center gap-1 rounded-md px-1 py-1.5 text-[10px] font-semibold cursor-pointer ${callMode === mode ? 'bg-[var(--brand-blue)]/15 text-[var(--brand-blue)]' : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'}`}>
                           <Icon className="h-3.5 w-3.5" />{label}
                         </button>
                       ))}
@@ -259,11 +259,11 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                             setIsCallMenuOpen(false);
                           }
                         }}
-                        className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-white/10 cursor-pointer"
+                        className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-slate-100 dark:hover:bg-white/10 cursor-pointer"
                       >
                         <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
-                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-white">{user.username || user.display_name || 'Online user'}</span>
-                        {callMode === 'group' ? (selectedGroupIds.includes(user.id) ? <Check className="h-3.5 w-3.5 text-[var(--brand-blue)]" /> : <span className="h-4 w-4 rounded border border-white/30" />) : callMode === 'video' ? <Video className="h-3.5 w-3.5 text-[var(--brand-blue)]" /> : <Phone className="h-3.5 w-3.5 text-[var(--brand-blue)]" />}
+                        <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-900 dark:text-white">{user.username || user.display_name || 'Online user'}</span>
+                        {callMode === 'group' ? (selectedGroupIds.includes(user.id) ? <Check className="h-3.5 w-3.5 text-[var(--brand-blue)]" /> : <span className="h-4 w-4 rounded border border-slate-300 dark:border-white/30" />) : callMode === 'video' ? <Video className="h-3.5 w-3.5 text-[var(--brand-blue)]" /> : <Phone className="h-3.5 w-3.5 text-[var(--brand-blue)]" />}
                       </button>
                     ))}
                     {callMode === 'group' && (
@@ -279,7 +279,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
             <button
               type="button"
               onClick={onRandomGame}
-              className="min-w-[38px] min-h-[38px] flex items-center justify-center p-2 text-slate-400 hover:text-[var(--brand-blue)] hover:bg-[#1a1a26] rounded-lg transition-all cursor-pointer"
+              className="min-w-[38px] min-h-[38px] flex items-center justify-center p-2 text-slate-500 hover:text-[var(--brand-blue)] hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-[#1a1a26] rounded-lg transition-all cursor-pointer"
               title="Play Random Game"
               aria-label="Play Random Game"
             >
@@ -292,7 +292,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
               className={`min-w-[38px] min-h-[38px] flex items-center justify-center p-2 rounded-lg transition-all cursor-pointer ${
                 showFavoritesOnly 
                   ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' 
-                  : 'text-slate-400 hover:text-rose-400 hover:bg-[#1a1a26]'
+                  : 'text-slate-500 hover:text-rose-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-rose-400 dark:hover:bg-[#1a1a26]'
               }`}
               title="Saved Games"
               aria-label="Filter saved games"
@@ -305,14 +305,14 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
               <button
                 type="button"
                 onClick={onToggleTheme}
-                className="min-w-[38px] min-h-[38px] flex items-center justify-center p-2 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-[#1a1a26] transition-all cursor-pointer"
+                className="min-w-[38px] min-h-[38px] flex items-center justify-center p-2 rounded-lg text-slate-500 hover:text-amber-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-amber-400 dark:hover:bg-[#1a1a26] transition-all cursor-pointer"
                 title={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
                 aria-label={`Switch to ${theme === 'dark' ? 'Light' : 'Dark'} Mode`}
               >
                 {theme === 'dark' ? (
                   <Sun className="w-4 h-4 text-amber-300" />
                 ) : (
-                  <Moon className="w-4 h-4 text-sky-400" />
+                  <Moon className="w-4 h-4 text-sky-600 dark:text-sky-400" />
                 )}
               </button>
             )}
@@ -321,7 +321,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
               <button
                 type="button"
                 onClick={onOpenThemeSelector}
-                className="min-w-[38px] min-h-[38px] flex items-center justify-center p-2 rounded-lg text-slate-400 hover:text-[var(--brand-blue)] hover:bg-[#1a1a26] transition-all cursor-pointer"
+                className="min-w-[38px] min-h-[38px] flex items-center justify-center p-2 rounded-lg text-slate-500 hover:text-[var(--brand-blue)] hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-[#1a1a26] transition-all cursor-pointer"
                 title={`Customize Theme & Font (${theme === 'dark' ? 'Dark' : 'Light'})`}
                 aria-label="Customize theme and font"
               >

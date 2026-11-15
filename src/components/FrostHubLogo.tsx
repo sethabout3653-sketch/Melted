@@ -53,7 +53,7 @@ export const FrostHubLogo: React.FC<FrostHubLogoProps> = ({
       </div>
       {variant === 'community' && (
         <span 
-          className={`text-slate-100 tracking-widest lowercase opacity-95 font-medium ${sizeClasses.community}`}
+          className={`text-slate-600 dark:text-slate-100 tracking-widest lowercase opacity-95 font-medium ${sizeClasses.community}`}
           style={{ fontFamily: 'Arial, "Helvetica Neue", Helvetica, sans-serif' }}
         >
           community

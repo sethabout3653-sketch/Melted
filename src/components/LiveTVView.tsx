@@ -94,7 +94,7 @@ interface QualityLevel {
   label: string;
 }
 
-const ChannelLogo: React.FC<{ logo?: string; name: string }> = React.memo(({ logo, name }) => {
+const ChannelLogo: React.FC<{ logo?: string; name: string; forceDark?: boolean }> = React.memo(({ logo, name, forceDark }) => {
   const [imgSrc, setImgSrc] = useState<string | undefined>(logo);
   const [triedProxy, setTriedProxy] = useState(false);
   const [hasError, setHasError] = useState(false);
@@ -123,8 +123,8 @@ const ChannelLogo: React.FC<{ logo?: string; name: string }> = React.memo(({ log
       .join('')
       .toUpperCase();
     return (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-slate-800/80 rounded-md text-[10px] font-bold tracking-wider text-slate-400 select-none">
-        {initials || <Tv className="w-4 h-4 text-slate-500" />}
+      <div className={`w-full h-full flex flex-col items-center justify-center rounded-md text-[10px] font-bold tracking-wider select-none ${forceDark ? 'bg-slate-800/80 text-slate-400' : 'bg-slate-200 dark:bg-slate-800/80 text-slate-500 dark:text-slate-400'}`}>
+        {initials || <Tv className={`w-4 h-4 ${forceDark ? 'text-slate-500' : 'text-slate-400 dark:text-slate-500'}`} />}
       </div>
     );
   }
@@ -245,8 +245,8 @@ const ChannelListItem: React.FC<{
         aria-label={isFavorite ? `Remove ${channel.name} from favorites` : `Save ${channel.name} to favorites`}
         className={`w-11 sm:w-10 shrink-0 flex items-center justify-center transition-colors cursor-pointer ${
           isFavorite
-            ? 'text-amber-400 hover:text-amber-300'
-            : 'text-slate-500 opacity-80 sm:opacity-0 sm:group-hover:opacity-100 hover:text-amber-400'
+            ? 'text-amber-500 dark:text-amber-400 hover:text-amber-600 dark:hover:text-amber-300'
+            : 'text-slate-500 opacity-80 sm:opacity-0 sm:group-hover:opacity-100 hover:text-amber-500 dark:hover:text-amber-400'
         }`}
         title={isFavorite ? 'Remove favorite' : 'Favorite channel'}
       >
@@ -1190,7 +1190,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
               <>
                 <div className="min-w-0 flex-1">
                   <p className="text-xs text-slate-900 dark:text-white font-semibold truncate">
-                    <span className="text-sky-300 mr-1.5">Now</span>
+                    <span className="text-sky-600 dark:text-sky-300 mr-1.5">Now</span>
                     {selectedEpg.now.title}
                   </p>
                   <p className="text-[10px] text-slate-500 tabular-nums">{formatProgrammeRange(selectedEpg.now)}</p>
@@ -1316,7 +1316,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
                       {selectedChannelNumber}
                     </div>
                     <div className="w-16 h-11 shrink-0 rounded-lg bg-black/70 border border-slate-800 p-1 flex items-center justify-center overflow-hidden self-center">
-                      <ChannelLogo logo={selectedChannel.logo} name={selectedChannel.name} />
+                      <ChannelLogo logo={selectedChannel.logo} name={selectedChannel.name} forceDark />
                     </div>
                     <div className="min-w-0 flex-1 flex flex-col justify-center">
                       <div className="flex items-center gap-2 min-w-0">
@@ -1599,7 +1599,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
                   <button
                     type="button"
                     onClick={() => setSearchQuery('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-300 cursor-pointer"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-900 dark:hover:text-slate-300 cursor-pointer"
                     aria-label="Clear search"
                   >
                     <X className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
@@ -1631,7 +1631,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
 
               {visibleChannels.length === 0 && (
                 <div className="py-12 text-center">
-                  <p className="text-xs font-semibold text-slate-400">No matching channels found.</p>
+                  <p className="text-xs font-semibold text-slate-400 dark:text-slate-500">No matching channels found.</p>
                 </div>
               )}
 

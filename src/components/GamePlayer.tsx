@@ -206,7 +206,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         className={`relative flex flex-col bg-black overflow-hidden transition-all ${
           isFullscreen 
             ? 'h-[100dvh] w-screen border-none rounded-none' 
-            : 'w-full h-[100dvh] sm:h-auto sm:max-w-5xl sm:aspect-video sm:max-h-[85vh] bg-slate-900 rounded-none sm:rounded-2xl shadow-2xl'
+            : 'w-full h-[100dvh] sm:h-auto sm:max-w-5xl sm:aspect-video sm:max-h-[85vh] bg-white dark:bg-slate-900 rounded-none sm:rounded-2xl shadow-2xl'
         }`}
       >
         
@@ -364,7 +364,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               <h4 className="text-slate-900 dark:text-white font-extrabold text-sm sm:text-base font-heading">
                 Starting Unblocked Stream...
               </h4>
-              <p className="text-slate-400 dark:text-slate-400 text-xs mt-1 max-w-xs font-bold uppercase tracking-widest">
+              <p className="text-slate-500 dark:text-slate-400 text-xs mt-1 max-w-xs font-bold uppercase tracking-widest">
                 Optimized for school networks
               </p>
               <button
@@ -420,22 +420,22 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
           {/* Fallback */}
           {hasError && (
-            <div className="absolute inset-0 bg-slate-900 flex flex-col items-center justify-center p-6 text-center z-20 space-y-4">
-              <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400">
+            <div className="absolute inset-0 bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-20 space-y-4">
+              <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-500 dark:text-red-400">
                 <AlertCircle className="w-6 h-6" />
               </div>
               <div>
-                <h4 className="text-base font-bold text-white font-heading">
+                <h4 className="text-base font-bold text-slate-900 dark:text-white font-heading">
                   Failed to Load Game Stream
                 </h4>
-                <p className="text-xs text-slate-400 mt-1 max-w-sm">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">
                   The upstream game server may be blocking direct embedding. Try opening in a Stealth Window or reload.
                 </p>
               </div>
               <div className="flex items-center gap-3 pt-2">
                 <button
                   onClick={reloadGame}
-                  className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white text-xs font-bold rounded-xl border border-slate-700 transition-all cursor-pointer"
+                  className="px-4 py-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-white text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
                 >
                   Try Again
                 </button>

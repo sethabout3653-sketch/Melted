@@ -169,9 +169,9 @@ const AudioAttachmentPlayer: React.FC<{
             value={currentTime}
             onChange={handleSeek}
             disabled={!duration}
-            className="w-full h-1.5 bg-[#1f1f2e] rounded-lg appearance-none cursor-pointer accent-[var(--brand-blue)] transition-all"
+            className="w-full h-1.5 bg-slate-200 dark:bg-[#1f1f2e] rounded-lg appearance-none cursor-pointer accent-[var(--brand-blue)] transition-all"
           />
-          <div className="flex items-center justify-between text-[10px] text-zinc-400 font-mono">
+          <div className="flex items-center justify-between text-[10px] text-slate-500 dark:text-zinc-400 font-mono">
             <span>{formatTime(currentTime)}</span>
             <span>{formatTime(duration)}</span>
           </div>
@@ -181,7 +181,7 @@ const AudioAttachmentPlayer: React.FC<{
         <button
           type="button"
           onClick={toggleMute}
-          className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
+          className="p-1.5 rounded-lg text-slate-400 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors cursor-pointer shrink-0"
           title={isMuted ? 'Unmute' : 'Mute'}
         >
           {isMuted ? <VolumeX className="w-4 h-4 text-red-400" /> : <Volume2 className="w-4 h-4" />}
@@ -192,7 +192,7 @@ const AudioAttachmentPlayer: React.FC<{
           <button
             type="button"
             onClick={onDownload}
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer shrink-0"
+            className="p-1.5 rounded-lg text-slate-400 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-white/5 transition-colors cursor-pointer shrink-0"
             title="Download Audio"
           >
             <Download className="w-4 h-4" />
@@ -851,13 +851,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
       textColor = 'text-amber-500 font-bold';
     } else if (u.current_channel === 'video-general' || u.current_channel === 'voice-general') {
       text = 'In General Voice';
-      textColor = 'text-cyan-400 font-semibold';
+      textColor = 'text-cyan-500 dark:text-cyan-400 font-semibold';
     } else if (u.current_channel && u.current_channel.startsWith('dm-')) {
       text = 'In Private Chat';
       textColor = 'text-emerald-500 font-semibold';
     } else if (u.activity === 'Typing...') {
       text = 'Typing...';
-      textColor = 'text-cyan-400 font-semibold animate-pulse';
+      textColor = 'text-cyan-500 dark:text-cyan-400 font-semibold animate-pulse';
     } else if (u.activity && u.activity !== 'Online' && u.activity !== 'Browsing Games' && u.activity !== 'In #general') {
       text = u.activity;
       textColor = 'text-purple-500 font-semibold';
@@ -1382,7 +1382,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
               </div>
 
               <motion.button
-                whileHover={{ x: 4, backgroundColor: activeChannel === 'video-general' ? undefined : 'rgba(241, 245, 249, 1)' }}
+                whileHover={{ x: 4 }}
                 whileTap={{ scale: 0.98 }}
                 onClick={() => handleChannelSelect('video-general')}
                 className={`w-full px-4 py-3 rounded-2xl flex items-center justify-between transition-all cursor-pointer border ${
@@ -1392,7 +1392,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                 }`}
               >
                 <div className="flex items-center gap-3">
-                  <Mic className={`w-4 h-4 ${activeChannel === 'video-general' ? 'text-white' : 'text-cyan-400'}`} />
+                  <Mic className={`w-4 h-4 ${activeChannel === 'video-general' ? 'text-white' : 'text-cyan-500 dark:text-cyan-400'}`} />
                   <span className="text-sm font-bold">General Voice</span>
                 </div>
                 <span className={`text-[10px] px-2 py-0.5 rounded-lg font-black border ${
@@ -1740,7 +1740,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                         <img 
                           src={pendingFile.previewUrl} 
                           alt="Attachment preview" 
-                          className="max-h-36 sm:max-h-40 max-w-full sm:max-w-xs rounded-xl object-contain bg-black/40 border border-white/10" 
+                          className="max-h-36 sm:max-h-40 max-w-full sm:max-w-xs rounded-xl object-contain bg-black/40 border border-slate-200 dark:border-white/10" 
                         />
                       </div>
                     )}
@@ -1752,7 +1752,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                           src={pendingFile.previewUrl} 
                           controls 
                           playsInline 
-                          className="max-h-36 sm:max-h-40 max-w-full sm:max-w-xs rounded-xl bg-black border border-white/10" 
+                          className="max-h-36 sm:max-h-40 max-w-full sm:max-w-xs rounded-xl bg-black border border-slate-200 dark:border-white/10" 
                         />
                       </div>
                     )}
@@ -1771,7 +1771,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     {/* If File/Other: Clean file info */}
                     {pendingFile.type === 'file' && (
                       <div className="flex-1 min-w-0 flex items-center gap-2.5 p-2.5 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
-                        <FileText className="w-6 h-6 text-cyan-400 shrink-0" />
+                        <FileText className="w-6 h-6 text-cyan-500 dark:text-cyan-400 shrink-0" />
                         <div className="min-w-0 flex-1">
                           <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">{pendingFile.filename}</p>
                           <p className="text-[11px] text-slate-500 dark:text-slate-400">{(pendingFile.size / 1024).toFixed(1)} KB</p>
@@ -2111,14 +2111,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
               {/* Screen Share Error Alert */}
               {screenShareError && (
-                <div className="mx-3 sm:mx-6 mt-3 p-3 bg-amber-500/15 border border-amber-500/30 rounded-2xl flex items-center justify-between text-xs text-amber-200 shrink-0">
+                <div className="mx-3 sm:mx-6 mt-3 p-3 bg-amber-500/15 border border-amber-500/30 rounded-2xl flex items-center justify-between text-xs text-amber-700 dark:text-amber-200 shrink-0">
                   <div className="flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                    <AlertCircle className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0" />
                     <span>{screenShareError}</span>
                   </div>
                   <button 
                     onClick={() => setScreenShareError(null)} 
-                    className="p-1 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+                    className="p-1 text-slate-400 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -2703,7 +2703,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <Mic className={`w-4 h-4 ${activeChannel === 'video-general' ? 'text-white' : 'text-cyan-400'}`} />
+                      <Mic className={`w-4 h-4 ${activeChannel === 'video-general' ? 'text-white' : 'text-cyan-500 dark:text-cyan-400'}`} />
                       <span className="text-sm font-bold">General Voice</span>
                     </div>
                   </motion.button>

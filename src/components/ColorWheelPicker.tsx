@@ -259,7 +259,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onCha
         <div className="flex-1 w-full space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-cyan-400" /> 360° Chromatic Wheel
+              <Sparkles className="w-3.5 h-3.5 text-cyan-500 dark:text-cyan-300" /> 360° Chromatic Wheel
             </span>
             <span className="px-2.5 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-[11px] font-mono font-bold text-slate-700 dark:text-slate-300">
               {hue}° Hue
@@ -275,7 +275,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onCha
               <Check className="w-5 h-5 stroke-[3]" />
             </div>
             <div className="flex-1 min-w-0">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Hex Code</span>
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Hex Code</span>
               <input
                 type="text"
                 value={color.toUpperCase()}
@@ -289,7 +289,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onCha
               />
             </div>
             <div className="text-right shrink-0">
-              <span className="text-[10px] font-bold text-slate-400 block">HSL</span>
+              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 block">HSL</span>
               <span className="font-mono text-xs text-slate-600 dark:text-slate-400 font-semibold">
                 {hue}°, {saturation}%, {lightness}%
               </span>
@@ -323,7 +323,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onCha
 
           {/* UI Live Component Preview */}
           <div className="p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-2">
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">
               Live Theme Preview
             </span>
             <div className="flex items-center gap-2 flex-wrap">

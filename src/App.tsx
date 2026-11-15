@@ -570,10 +570,10 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE * 2)}
-                  className="inline-flex items-center gap-3 px-8 py-3.5 bg-[#181824] hover:bg-[#202030] text-white font-bold text-xs uppercase tracking-wider rounded-xl border border-[#2a2a3e] hover:border-[var(--brand-blue)]/40 transition-all cursor-pointer font-heading shadow-md"
+                  className="inline-flex items-center gap-3 px-8 py-3.5 bg-white hover:bg-slate-50 text-slate-900 font-bold text-xs uppercase tracking-wider rounded-xl border border-slate-200 hover:border-[var(--brand-blue)]/40 transition-all cursor-pointer font-heading shadow-md dark:bg-[#181824] dark:hover:bg-[#202030] dark:text-white dark:border-[#2a2a3e]"
                 >
                   <span>Discover More</span>
-                  <span className="text-[10px] bg-[#090d16] px-2 py-0.5 rounded-md text-[var(--brand-blue)] font-extrabold">
+                  <span className="text-[10px] bg-slate-100 dark:bg-[#090d16] px-2 py-0.5 rounded-md text-[var(--brand-blue)] font-extrabold">
                     {visibleCount} / {filteredGames.length}
                   </span>
                   <ArrowRight className="w-4 h-4 text-[var(--brand-blue)]" />
@@ -584,9 +584,9 @@ export default function App() {
             </div>
 
             {/* Footer */}
-            <footer className="mt-16 border-t border-[#1f1f2e] bg-[#0d0d12] py-8 transition-colors">
+            <footer className="mt-16 border-t border-slate-200 bg-slate-50 dark:border-[#1f1f2e] dark:bg-[#0d0d12] py-8 transition-colors">
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400">
                   <button
                     type="button"
                     onClick={handleGoHome}
@@ -647,7 +647,7 @@ export default function App() {
           type="button"
           onClick={() => setCurrentTab('games')}
           className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
-            currentTab === 'games' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
+            currentTab === 'games' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
           }`}
         >
           <Gamepad2 className="w-5 h-5" />
@@ -658,7 +658,7 @@ export default function App() {
           type="button"
           onClick={() => setCurrentTab('movies')}
           className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
-            currentTab === 'movies' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
+            currentTab === 'movies' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
           }`}
         >
           <Film className="w-5 h-5" />
@@ -669,7 +669,7 @@ export default function App() {
           type="button"
           onClick={() => setCurrentTab('tv')}
           className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
-            currentTab === 'tv' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
+            currentTab === 'tv' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
           }`}
         >
           <Tv className="w-5 h-5" />
@@ -680,7 +680,7 @@ export default function App() {
           type="button"
           onClick={() => setCurrentTab('ai')}
           className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
-            currentTab === 'ai' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
+            currentTab === 'ai' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
           }`}
         >
           <Sparkles className="w-5 h-5" />
@@ -691,7 +691,7 @@ export default function App() {
           type="button"
           onClick={() => setCurrentTab('chat')}
           className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors relative cursor-pointer flex-1 py-1 rounded-xl ${
-            currentTab === 'chat' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-200'
+            currentTab === 'chat' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
           }`}
         >
           <div className="relative">
@@ -718,28 +718,28 @@ export default function App() {
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:bottom-6 left-1/2 -translate-x-1/2 z-[100] w-[calc(100vw-1rem)] max-w-md bg-slate-900/95 backdrop-blur-xl border border-white/10 rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-4 shadow-2xl"
+          className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:bottom-6 left-1/2 -translate-x-1/2 z-[100] w-[calc(100vw-1rem)] max-w-md bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-4 shadow-2xl"
         >
-          <div className="flex items-center gap-2 pr-2 sm:pr-4 border-r border-white/10 min-w-0">
+          <div className="flex items-center gap-2 pr-2 sm:pr-4 border-r border-slate-200 dark:border-white/10 min-w-0">
             <div className="w-8 h-8 rounded-xl bg-cyan-500 flex items-center justify-center shrink-0">
               <Mic className="w-4 h-4 text-white" />
             </div>
             <div className="flex flex-col min-w-0">
-              <span className="text-[10px] font-black text-white uppercase tracking-tighter">In Voice</span>
-              <span className="text-[9px] text-slate-400 font-bold truncate max-w-[80px]">General Voice</span>
+              <span className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-tighter">In Voice</span>
+              <span className="text-[9px] text-slate-500 dark:text-slate-400 font-bold truncate max-w-[80px]">General Voice</span>
             </div>
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
             <button 
               onClick={() => globalChat.setIsMuted(!globalChat.isMuted)}
-              className={`min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl transition-all ${globalChat.isMuted ? 'bg-red-500/20 text-red-500' : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'}`}
+              className={`min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl transition-all ${globalChat.isMuted ? 'bg-red-500/20 text-red-500' : 'bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/10'}`}
             >
               {globalChat.isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
             </button>
             <button 
               onClick={() => globalChat.setIsDeafened(!globalChat.isDeafened)}
-              className={`min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl transition-all ${globalChat.isDeafened ? 'bg-red-500/20 text-red-500' : 'bg-white/5 text-slate-400 hover:text-white hover:bg-white/10'}`}
+              className={`min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl transition-all ${globalChat.isDeafened ? 'bg-red-500/20 text-red-500' : 'bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/10'}`}
             >
               {globalChat.isDeafened ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
             </button>

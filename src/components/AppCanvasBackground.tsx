@@ -47,7 +47,7 @@ export const AppCanvasBackground: React.FC<AppCanvasBackgroundProps> = React.mem
         />
         {/* Scrim Overlay for 100% text readability */}
         <div 
-          className="absolute inset-0 bg-slate-950 transition-opacity duration-300"
+          className="absolute inset-0 bg-white dark:bg-slate-950 transition-opacity duration-300"
           style={{ opacity: bgOverlayOpacity }}
         />
       </div>
@@ -56,4 +56,3 @@ export const AppCanvasBackground: React.FC<AppCanvasBackgroundProps> = React.mem
 
   return null;
 });
-

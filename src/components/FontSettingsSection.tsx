@@ -237,7 +237,7 @@ export const FontSettingsSection: React.FC<FontSettingsSectionProps> = ({ classN
                 <div className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate">
                   {fontConfig.customFontName || 'Custom Font File'}
                 </div>
-                <div className="text-[10px] text-slate-400 uppercase tracking-wider">
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 uppercase tracking-wider">
                   {fontConfig.customFontFormat === 'opentype' ? 'OTF Font' : 'TTF Font'}
                 </div>
               </div>
@@ -287,7 +287,7 @@ export const FontSettingsSection: React.FC<FontSettingsSectionProps> = ({ classN
 
       {/* Live Font & Math Preview Box */}
       <div className="p-3.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm space-y-2">
-        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-400">
+        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider text-slate-400 dark:text-slate-500">
           <span>Live Typography Preview</span>
           <span className="text-cyan-500 dark:text-cyan-300 font-bold">
             {fontConfig.preset === 'custom'

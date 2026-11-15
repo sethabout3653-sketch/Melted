@@ -29,14 +29,14 @@ export class ErrorBoundary extends Component<Props, State> {
   public render() {
     if (this.state.hasError) {
       return (
-        <main role="alert" className="min-h-screen bg-slate-950 text-white flex items-center justify-center p-6">
-          <section className="max-w-lg w-full rounded-2xl border border-white/10 bg-white/5 p-6 shadow-2xl">
+        <main role="alert" className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white flex items-center justify-center p-6">
+          <section className="max-w-lg w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-6 shadow-2xl">
             <h1 className="text-xl font-bold">FrostHub couldn’t start</h1>
-            <p className="mt-2 text-sm text-slate-300">
+            <p className="mt-2 text-sm text-slate-600 dark:text-slate-300">
               The app hit a startup error. Reload the preview; if it persists, check the browser console for details.
             </p>
             {this.state.error?.message && (
-              <pre className="mt-4 max-h-40 overflow-auto rounded-lg bg-black/40 p-3 text-xs text-red-200 whitespace-pre-wrap">
+              <pre className="mt-4 max-h-40 overflow-auto rounded-lg bg-slate-100 dark:bg-black/40 p-3 text-xs text-red-700 dark:text-red-200 whitespace-pre-wrap">
                 {this.state.error.message}
               </pre>
             )}

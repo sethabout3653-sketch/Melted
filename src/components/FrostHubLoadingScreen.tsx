@@ -31,7 +31,7 @@ export const FrostHubLoadingScreen: React.FC = () => {
               duration: 0.35, 
               ease: [0.65, 0, 0.35, 1] 
             }}
-            className="absolute top-0 left-0 right-0 h-1/2 bg-[#070d1a] z-20 pointer-events-none"
+            className="absolute top-0 left-0 right-0 h-1/2 bg-white dark:bg-[#070d1a] z-20 pointer-events-none"
           />
           
           {/* Bottom Cinematic Shutter */}
@@ -42,7 +42,7 @@ export const FrostHubLoadingScreen: React.FC = () => {
               duration: 0.35, 
               ease: [0.65, 0, 0.35, 1] 
             }}
-            className="absolute bottom-0 left-0 right-0 h-1/2 bg-[#070d1a] z-20 pointer-events-none"
+            className="absolute bottom-0 left-0 right-0 h-1/2 bg-white dark:bg-[#070d1a] z-20 pointer-events-none"
           />
 
           {/* Flash Effect during split */}
