@@ -14,7 +14,8 @@ import {
   Sun, 
   Moon,
   Maximize2,
-  Type
+  Type,
+  Contrast
 } from 'lucide-react';
 import { 
   ThemeConfig, 
@@ -206,6 +207,35 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
             {/* TAB 1: ACCENT COLOR */}
             {activeTab === 'accent' && (
               <div className="space-y-6">
+                <button
+                  type="button"
+                  onClick={() => onUpdateConfig({ monochrome: !config.monochrome })}
+                  aria-pressed={config.monochrome}
+                  className={`w-full p-3 rounded-2xl border flex items-center justify-between gap-3 transition-all cursor-pointer ${
+                    config.monochrome
+                      ? 'border-cyan-400 ring-2 ring-cyan-400/30 bg-cyan-500/10 dark:bg-cyan-400/10'
+                      : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900'
+                  }`}
+                >
+                  <span className="flex items-center gap-3 min-w-0">
+                    <Contrast className="w-4 h-4 text-slate-700 dark:text-slate-200 shrink-0" />
+                    <span className="text-left min-w-0">
+                      <span className="block text-xs font-bold text-slate-900 dark:text-white">Black & White</span>
+                      <span className="block text-[11px] font-medium text-slate-500 dark:text-slate-400">Render the entire app in grayscale</span>
+                    </span>
+                  </span>
+                  <span
+                    className={`w-10 h-6 rounded-full p-0.5 flex items-center shrink-0 transition-colors ${
+                      config.monochrome ? 'bg-slate-900 dark:bg-white' : 'bg-slate-300 dark:bg-slate-700'
+                    }`}
+                  >
+                    <span
+                      className={`w-5 h-5 rounded-full bg-white dark:bg-slate-900 shadow transition-transform ${
+                        config.monochrome ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </span>
+                </button>
                 {/* Interactive 360 Chromatic Color Wheel */}
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-3">
