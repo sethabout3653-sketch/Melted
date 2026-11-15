@@ -85,18 +85,18 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
       {/* Thumbnail Container */}
       <div 
         onClick={() => onPlay(game)}
-        className="relative w-full aspect-[16/10] sm:aspect-[4/3] rounded-xl overflow-hidden bg-[#0d0d12] cursor-pointer border border-[#1d1d2b] shadow-inner group"
+        className="relative w-full aspect-[16/10] sm:aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 dark:bg-[#0d0d12] cursor-pointer border border-slate-200 dark:border-[#1d1d2b] shadow-inner group"
       >
         {!imageLoaded && !imageError && (
-          <div className="absolute inset-0 bg-[#1a1a28] animate-pulse" />
+          <div className="absolute inset-0 bg-slate-200 dark:bg-[#1a1a28] animate-pulse" />
         )}
 
         {imageError || !currentCover ? (
-          <div className="absolute inset-0 bg-[#0f0f18] flex flex-col items-center justify-center p-3 text-center select-none">
-            <div className="w-10 h-10 rounded-xl bg-[#1a1a26] border border-[#2a2a3c] flex items-center justify-center text-[var(--brand-blue)] mb-2 shadow-sm">
+          <div className="absolute inset-0 bg-slate-100 dark:bg-[#0f0f18] flex flex-col items-center justify-center p-3 text-center select-none">
+            <div className="w-10 h-10 rounded-xl bg-white dark:bg-[#1a1a26] border border-slate-200 dark:border-[#2a2a3c] flex items-center justify-center text-[var(--brand-blue)] mb-2 shadow-sm">
               <Gamepad2 className="w-5 h-5" />
             </div>
-            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider px-2 line-clamp-1">
+            <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 uppercase tracking-wider px-2 line-clamp-1">
               {game.name}
             </span>
           </div>

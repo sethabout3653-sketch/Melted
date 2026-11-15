@@ -2335,7 +2335,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
                           {/* Dedicated Remote Screen Share Tile (when screen share is on) */}
                           {hasScreen && (
-                            <div className="relative mx-auto rounded-3xl overflow-hidden bg-slate-900 dark:bg-slate-900 border border-cyan-400/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
+                            <div className="relative mx-auto rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border border-cyan-400/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px]">
                               <RemoteVideoPlayer 
                                 stream={scrStream} 
                                 username={`${u.username}'s Screen`}
