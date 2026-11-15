@@ -11,6 +11,7 @@ export interface ThemeConfig {
   bgImageUrl: string;
   bgBlur: number; // 0 to 20px
   bgOverlayOpacity: number; // 0.1 to 0.95
+  monochrome: boolean;
 }
 
 export const ACCENT_PRESETS = [
@@ -71,6 +72,7 @@ export const DEFAULT_THEME_CONFIG: ThemeConfig = {
   bgImageUrl: '',
   bgBlur: 0,
   bgOverlayOpacity: 0.5,
+  monochrome: false,
 };
 
 export function useThemeConfig() {
@@ -104,6 +106,8 @@ export function useThemeConfig() {
 
     // Dark Background configuration
     root.style.setProperty('--bg-dark-base', config.bgSolidColor || '#090d16');
+
+    root.classList.toggle('monochrome', config.monochrome);
   }, [config]);
 
   const updateConfig = useCallback((partial: Partial<ThemeConfig>) => {
