@@ -190,8 +190,8 @@ const ChannelListItem: React.FC<{
 
   return (
     <div
-      className={`group flex items-stretch h-16 border-b border-[#1a2232] transition-colors ${
-        isSelected ? 'bg-[var(--brand-blue)]/25' : 'hover:bg-[#161c2b]'
+      className={`group flex items-stretch h-16 border-b border-slate-200 dark:border-[#1a2232] transition-colors ${
+        isSelected ? 'bg-[var(--brand-blue)]/25' : 'hover:bg-slate-100 dark:hover:bg-[#161c2b]'
       }`}
     >
       <button
@@ -201,27 +201,27 @@ const ChannelListItem: React.FC<{
       >
         <div
           className={`w-14 shrink-0 text-center text-sm font-extrabold tabular-nums ${
-            isSelected ? 'text-amber-300' : 'text-slate-300'
+            isSelected ? 'text-amber-600 dark:text-amber-300' : 'text-slate-600 dark:text-slate-300'
           }`}
         >
           {number}
         </div>
-        <div className="w-14 h-10 shrink-0 rounded bg-black/70 border border-slate-800 flex items-center justify-center overflow-hidden p-1">
+        <div className="w-14 h-10 shrink-0 rounded bg-slate-100 dark:bg-black/70 border border-slate-200 dark:border-slate-800 flex items-center justify-center overflow-hidden p-1">
           <ChannelLogo logo={channel.logo} name={channel.name} />
         </div>
         <div className="min-w-0 flex-1 pl-3 pr-2">
-          <div className="text-xs font-bold text-white truncate">{channel.name}</div>
+          <div className="text-xs font-bold text-slate-900 dark:text-white truncate">{channel.name}</div>
           {nowProgramme ? (
             <>
               <div className="flex items-center gap-1.5 min-w-0">
-                <div className="text-[11px] text-slate-300 truncate">{nowProgramme.title}</div>
+                <div className="text-[11px] text-slate-600 dark:text-slate-300 truncate">{nowProgramme.title}</div>
                 {nowProgramme.rating && nowProgramme.rating.toLowerCase() !== 'none' && nowProgramme.rating.toLowerCase() !== 'n/a' && (
-                  <span className="shrink-0 px-1 rounded border border-slate-500 text-slate-200 text-[9px] font-extrabold leading-4">
+                  <span className="shrink-0 px-1 rounded border border-slate-400 dark:border-slate-500 text-slate-600 dark:text-slate-200 text-[9px] font-extrabold leading-4">
                     {nowProgramme.rating}
                   </span>
                 )}
               </div>
-              <div className="mt-1 h-1 w-full rounded-full bg-slate-700/80 overflow-hidden">
+              <div className="mt-1 h-1 w-full rounded-full bg-slate-200 dark:bg-slate-700/80 overflow-hidden">
                 <div
                   className="h-full bg-[var(--brand-blue)]"
                   style={{ width: `${programmeProgress(nowProgramme) * 100}%` }}
@@ -1154,9 +1154,9 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
     <div className="flex flex-col h-full min-h-0 flex-1 bg-slate-50 dark:bg-[#0b0e14] text-slate-900 dark:text-white overflow-hidden transition-colors">
       {/* Guide Header */}
       <div className="flex items-stretch bg-white dark:bg-[#070b14] border-b border-slate-200 dark:border-[#1c2a48] shrink-0 transition-colors">
-        <div className="hidden sm:flex items-center gap-2 px-4 border-r border-[#1c2a48] shrink-0">
+        <div className="hidden sm:flex items-center gap-2 px-4 border-r border-slate-200 dark:border-[#1c2a48] shrink-0">
           <Tv className="w-4 h-4 text-[var(--brand-blue)]" />
-          <span className="text-xs font-extrabold uppercase tracking-widest text-white">Live TV</span>
+          <span className="text-xs font-extrabold uppercase tracking-widest text-slate-900 dark:text-white">Live TV</span>
         </div>
 
         {isGuideVisible ? (
@@ -1171,8 +1171,8 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
                 onClick={() => setSelectedCategory(cat)}
                 className={`px-3 py-3 text-xs font-bold whitespace-nowrap border-b-2 transition-colors cursor-pointer shrink-0 ${
                   selectedCategory === cat
-                    ? 'border-[var(--brand-blue)] text-white'
-                    : 'border-transparent text-slate-400 hover:text-white'
+                    ? 'border-[var(--brand-blue)] text-slate-900 dark:text-white'
+                    : 'border-transparent text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
                 }`}
               >
                 {cat}
@@ -1189,7 +1189,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
             ) : selectedEpg?.now ? (
               <>
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs text-white font-semibold truncate">
+                  <p className="text-xs text-slate-900 dark:text-white font-semibold truncate">
                     <span className="text-sky-300 mr-1.5">Now</span>
                     {selectedEpg.now.title}
                   </p>
@@ -1197,7 +1197,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
                 </div>
                 {selectedEpg.next && (
                   <div className="min-w-0 flex-1 hidden sm:block">
-                    <p className="text-xs text-slate-300 font-semibold truncate">
+                    <p className="text-xs text-slate-700 dark:text-slate-300 font-semibold truncate">
                       <span className="mr-1.5">Next</span>
                       {selectedEpg.next.title}
                     </p>
@@ -1211,14 +1211,14 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
           </div>
         )}
 
-        <div className="hidden md:flex items-center px-4 text-xs font-bold tabular-nums text-slate-300 border-l border-[#1c2a48] shrink-0">
+        <div className="hidden md:flex items-center px-4 text-xs font-bold tabular-nums text-slate-700 dark:text-slate-300 border-l border-slate-200 dark:border-[#1c2a48] shrink-0">
           {clockLabel}
         </div>
 
         <button
           type="button"
           onClick={() => setIsGuideVisible((prev) => !prev)}
-          className="hidden lg:flex items-center gap-1.5 px-4 border-l border-[#1c2a48] text-xs font-semibold text-slate-300 hover:text-white hover:bg-[#101726] transition-colors cursor-pointer shrink-0"
+          className="hidden lg:flex items-center gap-1.5 px-4 border-l border-slate-200 dark:border-[#1c2a48] text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#101726] transition-colors cursor-pointer shrink-0"
           title={isGuideVisible ? 'Hide channel guide' : 'Show channel guide'}
         >
           {isGuideVisible ? (
@@ -1504,31 +1504,31 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
 
         {/* Mobile / Tablet Compact Channel Info & Quick Switcher Below Video */}
         {selectedChannel && !isFullscreen && (
-          <div className="lg:hidden bg-[#080c15] border-t border-[#1c2a48] px-3 py-2 shrink-0">
+          <div className="lg:hidden bg-white dark:bg-[#080c15] border-t border-slate-200 dark:border-[#1c2a48] px-3 py-2 shrink-0">
             <div className="flex items-center gap-2.5">
               <div className="flex items-center justify-center min-w-[2.75rem] h-8 px-1.5 rounded-lg bg-[var(--brand-blue)] text-white text-sm font-extrabold tabular-nums shrink-0">
                 {selectedChannelNumber}
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <h2 className="text-xs font-extrabold text-white truncate">
+                  <h2 className="text-xs font-extrabold text-slate-900 dark:text-white truncate">
                     {selectedChannel.name}
                   </h2>
                   {selectedEpg?.now?.rating && selectedEpg.now.rating.toLowerCase() !== 'none' && selectedEpg.now.rating.toLowerCase() !== 'n/a' && (
-                    <span className="px-1.5 py-0.5 bg-slate-900 border border-slate-500 rounded text-[9px] font-extrabold shrink-0 text-slate-200">
+                    <span className="px-1.5 py-0.5 bg-slate-100 dark:bg-slate-900 border border-slate-400 dark:border-slate-500 rounded text-[9px] font-extrabold shrink-0 text-slate-700 dark:text-slate-200">
                       {selectedEpg.now.rating}
                     </span>
                   )}
                 </div>
                 {selectedEpg?.now ? (
-                  <p className="text-[11px] text-slate-300 truncate">
+                  <p className="text-[11px] text-slate-600 dark:text-slate-300 truncate">
                     <span className="text-sky-300 font-semibold mr-1">Now:</span>
                     {selectedEpg.now.title}
                     {selectedEpg.next && (
-                      <span className="text-slate-400 ml-1.5">
+                      <span className="text-slate-500 dark:text-slate-400 ml-1.5">
                         • Next: {selectedEpg.next.title}{' '}
                         {selectedEpg.next.rating && selectedEpg.next.rating.toLowerCase() !== 'none' && selectedEpg.next.rating.toLowerCase() !== 'n/a' && (
-                          <span className="px-1 rounded border border-slate-500 text-[9px] font-extrabold text-slate-300">
+                          <span className="px-1 rounded border border-slate-400 dark:border-slate-500 text-[9px] font-extrabold text-slate-600 dark:text-slate-300">
                             {selectedEpg.next.rating}
                           </span>
                         )}
@@ -1536,7 +1536,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
                     )}
                   </p>
                 ) : selectedChannelMeta ? (
-                  <p className="text-[11px] text-slate-400 truncate">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
                     {selectedChannelMeta.category} • {selectedChannelMeta.network}
                   </p>
                 ) : null}
@@ -1546,7 +1546,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
                   type="button"
                   onClick={() => stepChannel(-1)}
                   aria-label="Previous channel"
-                  className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg bg-[#141926] border border-slate-700/80 text-slate-200 hover:text-white cursor-pointer"
+                  className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg bg-slate-100 dark:bg-[#141926] border border-slate-200 dark:border-slate-700/80 text-slate-700 hover:text-slate-900 dark:text-slate-200 dark:hover:text-white cursor-pointer"
                 >
                   <ChevronLeft className="w-4 h-4" />
                 </button>
@@ -1554,7 +1554,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
                   type="button"
                   onClick={() => stepChannel(1)}
                   aria-label="Next channel"
-                  className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg bg-[#141926] border border-slate-700/80 text-slate-200 hover:text-white cursor-pointer"
+                  className="min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg bg-slate-100 dark:bg-[#141926] border border-slate-200 dark:border-slate-700/80 text-slate-700 hover:text-slate-900 dark:text-slate-200 dark:hover:text-white cursor-pointer"
                 >
                   <ChevronRight className="w-4 h-4" />
                 </button>
@@ -1562,8 +1562,8 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
                   type="button"
                   onClick={() => toggleFavorite(selectedChannel.id)}
                   aria-label={favoriteSet.has(selectedChannel.id) ? 'Remove favorite' : 'Favorite channel'}
-                  className={`min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg bg-[#141926] border border-slate-700/80 transition-colors cursor-pointer ${
-                    favoriteSet.has(selectedChannel.id) ? 'text-amber-400' : 'text-slate-300 hover:text-amber-400'
+                  className={`min-w-[36px] min-h-[36px] flex items-center justify-center rounded-lg bg-slate-100 dark:bg-[#141926] border border-slate-200 dark:border-slate-700/80 transition-colors cursor-pointer ${
+                    favoriteSet.has(selectedChannel.id) ? 'text-amber-500 dark:text-amber-400' : 'text-slate-500 hover:text-amber-500 dark:text-slate-300 dark:hover:text-amber-400'
                   }`}
                 >
                   <Star className={`w-4 h-4 ${favoriteSet.has(selectedChannel.id) ? 'fill-current' : ''}`} />
@@ -1571,7 +1571,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
               </div>
             </div>
             {selectedEpg?.now && (
-              <div className="mt-1.5 h-1 w-full rounded-full bg-slate-800 overflow-hidden">
+              <div className="mt-1.5 h-1 w-full rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
                 <div
                   className="h-full bg-[var(--brand-blue)]"
                   style={{ width: `${programmeProgress(selectedEpg.now) * 100}%` }}
@@ -1608,7 +1608,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
               </div>
             </div>
 
-            <div className="flex items-center h-7 bg-[#0a0f1a] border-b border-[#1c2a48] text-[10px] font-bold uppercase tracking-wider text-slate-500 shrink-0">
+            <div className="flex items-center h-7 bg-slate-50 dark:bg-[#0a0f1a] border-b border-slate-200 dark:border-[#1c2a48] text-[10px] font-bold uppercase tracking-wider text-slate-500 shrink-0">
               <span className="w-14 text-center">Ch</span>
               <span className="w-14 shrink-0" />
               <span className="flex-1 pl-3">Program</span>
@@ -1639,7 +1639,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
                 <button
                   type="button"
                   onClick={() => setVisibleCount((prev) => prev + 80)}
-                  className="block w-[calc(100%-1.5rem)] mx-3 my-3 py-2.5 rounded-xl bg-[#161b26] hover:bg-[#1e2433] border border-[#242938] text-xs font-bold text-slate-300 hover:text-white transition-colors cursor-pointer"
+                  className="block w-[calc(100%-1.5rem)] mx-3 my-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#161b26] dark:hover:bg-[#1e2433] border border-slate-200 dark:border-[#242938] text-xs font-bold text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white transition-colors cursor-pointer"
                 >
                   Load More ({filteredChannels.length - visibleCount} remaining)
                 </button>

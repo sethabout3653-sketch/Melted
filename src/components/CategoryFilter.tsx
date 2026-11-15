@@ -50,7 +50,7 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = React.memo(({
   };
 
   return (
-    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-4 py-1.5 sm:py-2 border-b border-[#1f1f2e]">
+    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-4 py-1.5 sm:py-2 border-b border-slate-200 dark:border-[#1f1f2e]">
       {/* Category Navigation Bar / Chips */}
       <div 
         onWheel={handleWheel}
@@ -70,12 +70,12 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = React.memo(({
               className={`flex items-center gap-1.5 transition-colors duration-150 cursor-pointer min-h-[38px] sm:min-h-[34px] py-1.5 px-3 rounded-lg border text-xs font-bold font-heading whitespace-nowrap shrink-0 ${
                 isSelected 
                   ? 'bg-[var(--brand-blue)] text-slate-950 border-[var(--brand-blue)] font-extrabold shadow-md shadow-[var(--brand-blue-glow)]' 
-                  : 'bg-[#181822] hover:bg-[#20202e] text-slate-300 hover:text-white border-[#262638]'
+                  : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 border-slate-200 dark:bg-[#181822] dark:hover:bg-[#20202e] dark:text-slate-300 dark:hover:text-white dark:border-[#262638]'
               }`}
             >
               <span>{cat.label}</span>
               <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md tabular-nums ${
-                isSelected ? 'bg-black/20 text-slate-950' : 'bg-[#262638] text-slate-400'
+                isSelected ? 'bg-black/20 text-slate-950' : 'bg-slate-100 text-slate-500 dark:bg-[#262638] dark:text-slate-400'
               }`}>
                 {count}
               </span>
@@ -92,12 +92,12 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = React.memo(({
             value={sortBy}
             onChange={(e) => onSortChange(e.target.value as any)}
             aria-label="Sort games"
-            className="appearance-none bg-[#181822] hover:bg-[#20202e] text-white font-bold px-3 py-1.5 pr-8 rounded-lg border border-[#262638] focus:border-[var(--brand-blue)] focus:outline-none cursor-pointer text-xs shadow-sm transition-colors duration-150 min-h-[38px] sm:min-h-[34px]"
+            className="appearance-none bg-white hover:bg-slate-50 dark:bg-[#181822] dark:hover:bg-[#20202e] text-slate-900 dark:text-white font-bold px-3 py-1.5 pr-8 rounded-lg border border-slate-200 dark:border-[#262638] focus:border-[var(--brand-blue)] focus:outline-none cursor-pointer text-xs shadow-sm transition-colors duration-150 min-h-[38px] sm:min-h-[34px]"
           >
-            <option value="popular" className="bg-[#181822] text-white">Popularity</option>
-            <option value="alpha-asc" className="bg-[#181822] text-white">A-Z</option>
-            <option value="alpha-desc" className="bg-[#181822] text-white">Z-A</option>
-            <option value="random" className="bg-[#181822] text-white">Random</option>
+            <option value="popular" className="bg-white dark:bg-[#181822] text-slate-900 dark:text-white">Popularity</option>
+            <option value="alpha-asc" className="bg-white dark:bg-[#181822] text-slate-900 dark:text-white">A-Z</option>
+            <option value="alpha-desc" className="bg-white dark:bg-[#181822] text-slate-900 dark:text-white">Z-A</option>
+            <option value="random" className="bg-white dark:bg-[#181822] text-slate-900 dark:text-white">Random</option>
           </select>
           <ArrowUpDown className="w-3.5 h-3.5 text-[var(--brand-blue)] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
@@ -105,4 +105,3 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = React.memo(({
     </div>
   );
 });
-
