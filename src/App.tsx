@@ -43,6 +43,9 @@ import {
   Shuffle,
   Mic,
   MicOff,
+  Camera,
+  CameraOff,
+  MonitorUp,
   PhoneOff,
   Volume2,
   VolumeX,
@@ -296,11 +299,17 @@ export default function App() {
       result = result.filter((g) => g.category === selectedCategory);
     }
 
-    if (deferredQuery.trim()) {
-      const q = deferredQuery.toLowerCase();
-      result = result.filter(
-        (g) => g.name.toLowerCase().includes(q)
-      );
+    const queryTokens = deferredQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    if (queryTokens.length > 0) {
+      result = result.filter((game) => {
+        const searchableText = [
+          game.name,
+          game.category,
+          game.author,
+          ...(game.special || []),
+        ].filter(Boolean).join(' ').toLowerCase();
+        return queryTokens.every((token) => searchableText.includes(token));
+      });
     }
 
     // Sorting
@@ -374,8 +383,8 @@ export default function App() {
       <Navbar
         currentTab={currentTab}
         onTabChange={setCurrentTab}
-        searchQuery={currentTab === 'games' ? searchQuery : ''}
-        onSearchChange={currentTab === 'games' ? setSearchQuery : () => {}}
+        searchQuery={currentTab === 'chat' || currentTab === 'ai' ? '' : searchQuery}
+        onSearchChange={setSearchQuery}
         onRandomGame={handleRandomGame}
         favoritesCount={favorites.length}
         showFavoritesOnly={showFavoritesOnly}
@@ -425,7 +434,11 @@ export default function App() {
             exit="exit"
             className="flex-1 flex flex-col min-h-0 h-full w-full overflow-y-auto pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0"
           >
-            <MovieView onActiveMediaChange={setActiveMedia} />
+            <MovieView
+              onActiveMediaChange={setActiveMedia}
+              searchQuery={searchQuery}
+              onSearchChange={setSearchQuery}
+            />
           </motion.div>
         ) : currentTab === 'tv' ? (
           <motion.div
@@ -699,11 +712,36 @@ export default function App() {
           </div>
 
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            <button 
-              onClick={() => globalChat.setIsMuted(!globalChat.isMuted)}
+            <button
+              type="button"
+              onClick={() => {
+                const hasLiveMic = globalChat.localAudioStream?.getAudioTracks().some((track) => track.readyState === 'live');
+                if (!hasLiveMic) void globalChat.requestMicrophonePermission();
+                else globalChat.setIsMuted(!globalChat.isMuted);
+              }}
+              aria-label={globalChat.isMuted ? 'Unmute microphone' : 'Mute microphone'}
+              aria-pressed={!globalChat.isMuted}
               className={`min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl transition-all ${globalChat.isMuted ? 'bg-red-500/20 text-red-500' : 'bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/10'}`}
             >
               {globalChat.isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => void globalChat.toggleCamera()}
+              aria-label={globalChat.isVideoEnabled ? 'Turn camera off' : 'Turn camera on'}
+              aria-pressed={globalChat.isVideoEnabled}
+              className={`min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl transition-all ${globalChat.isVideoEnabled ? 'bg-cyan-500/20 text-cyan-500' : 'bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/10'}`}
+            >
+              {globalChat.isVideoEnabled ? <Camera className="w-4 h-4" /> : <CameraOff className="w-4 h-4" />}
+            </button>
+            <button
+              type="button"
+              onClick={() => void globalChat.toggleScreenShare()}
+              aria-label={globalChat.isScreenSharing ? 'Stop screen sharing' : 'Share screen'}
+              aria-pressed={globalChat.isScreenSharing}
+              className={`min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl transition-all ${globalChat.isScreenSharing ? 'bg-cyan-500/20 text-cyan-500' : 'bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/10'}`}
+            >
+              <MonitorUp className="w-4 h-4" />
             </button>
             <button 
               onClick={() => globalChat.setIsDeafened(!globalChat.isDeafened)}

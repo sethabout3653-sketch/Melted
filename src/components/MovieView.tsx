@@ -14,6 +14,8 @@ interface MovieServer {
 
 interface MovieViewProps {
   onActiveMediaChange?: (info: { title: string; mediaType: 'movie' | 'tv'; season?: number; episode?: number } | null) => void;
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
 }
 
 const MOVIE_SERVERS: MovieServer[] = [
@@ -23,9 +25,11 @@ const MOVIE_SERVERS: MovieServer[] = [
 
 type CatalogTab = 'all' | 'movies' | 'tv';
 
-export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => {
+export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange, searchQuery, onSearchChange }) => {
   const [activeTab, setActiveTab] = useState<CatalogTab>('all');
-  const [query, setQuery] = useState('');
+  const [internalQuery, setInternalQuery] = useState('');
+  const query = searchQuery ?? internalQuery;
+  const setQuery = onSearchChange ?? setInternalQuery;
   const [items, setItems] = useState<TMDBMedia[]>([]);
   const [featuredItem, setFeaturedItem] = useState<TMDBMedia | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -123,7 +127,10 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange }) => 
   }, [activeTab, page, query]);
 
   useEffect(() => {
-    if (!query.trim()) return;
+    if (!query.trim()) {
+      setSearchLoading(false);
+      return;
+    }
     let cancelled = false;
     if (page === 1) setSearchLoading(true);
     else setIsMoreLoading(true);

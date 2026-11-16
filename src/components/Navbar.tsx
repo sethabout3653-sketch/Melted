@@ -42,15 +42,11 @@ interface NavbarProps {
 interface NavSearchInputProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
-  onTabChange: (tab: 'games' | 'chat' | 'ai' | 'movies' | 'tv') => void;
-  currentTab: string;
 }
 
 const NavSearchInput: React.FC<NavSearchInputProps> = React.memo(({
   searchQuery,
   onSearchChange,
-  onTabChange,
-  currentTab,
 }) => {
   const [localVal, setLocalVal] = useState(searchQuery);
 
@@ -63,9 +59,6 @@ const NavSearchInput: React.FC<NavSearchInputProps> = React.memo(({
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setLocalVal(val);
-    if (currentTab !== 'games') {
-      onTabChange('games');
-    }
     React.startTransition(() => {
       onSearchChange(val);
     });
@@ -133,14 +126,12 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
           </button>
         </div>
 
-        {/* Zone 2: Central Search Bar (Hidden on narrow mobile & unless on games tab) */}
+        {/* Zone 2: Central Search Bar (Hidden on narrow mobile and non-content tabs) */}
         <div className="hidden sm:block flex-1 max-w-md lg:max-w-lg mx-1 sm:mx-3">
-          {currentTab === 'games' && (
+          {currentTab !== 'chat' && currentTab !== 'ai' && (
             <NavSearchInput
               searchQuery={searchQuery}
               onSearchChange={onSearchChange}
-              onTabChange={onTabChange}
-              currentTab={currentTab}
             />
           )}
         </div>

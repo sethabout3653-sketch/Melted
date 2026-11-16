@@ -462,12 +462,21 @@ export function useWebRTC({
       } catch {}
     }
 
-    // Ensure audio and video transceivers exist so SDP always negotiates media channels
-    if (!pc.getTransceivers().some((t) => t.receiver.track.kind === 'audio')) {
-      try { pc.addTransceiver('audio', { direction: 'sendrecv' }); } catch {}
+    // Keep negotiated receive transceivers available, and reuse them if capture starts later.
+    let audioTransceiver = pc.getTransceivers().find((t) => t.receiver.track.kind === 'audio');
+    if (!audioTransceiver) {
+      try { audioTransceiver = pc.addTransceiver('audio', { direction: 'sendrecv' }); } catch {}
     }
-    if (!pc.getTransceivers().some((t) => t.receiver.track.kind === 'video')) {
-      try { pc.addTransceiver('video', { direction: 'sendrecv' }); } catch {}
+    if (!newBundle.audioSender && audioTransceiver && !audioTransceiver.sender.track) {
+      newBundle.audioSender = audioTransceiver.sender;
+    }
+
+    let videoTransceiver = pc.getTransceivers().find((t) => t.receiver.track.kind === 'video');
+    if (!videoTransceiver) {
+      try { videoTransceiver = pc.addTransceiver('video', { direction: 'sendrecv' }); } catch {}
+    }
+    if (!newBundle.camSender && videoTransceiver && !videoTransceiver.sender.track) {
+      newBundle.camSender = videoTransceiver.sender;
     }
 
     pc.onicecandidate = (event) => {

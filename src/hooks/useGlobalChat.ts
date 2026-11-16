@@ -247,10 +247,16 @@ export function useGlobalChat({
 
   const requestMicrophonePermission = useCallback(async () => {
     try {
-      await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      micStreamRef.current?.getTracks().forEach((track) => track.stop());
+      micStreamRef.current = stream;
+      setLocalAudioStream(stream);
       setMicPermissionStatus('granted');
-    } catch {
+      setMicError(null);
+      setIsMuted(false);
+    } catch (error) {
       setMicPermissionStatus('denied');
+      setMicError(error instanceof Error ? error.message : 'Microphone permission was denied.');
     }
   }, []);
   const [isInVideo, setIsInVideo] = useState(false);
@@ -401,34 +407,28 @@ export function useGlobalChat({
   const joinVoiceChannel = useCallback(async (withVideo: boolean = false) => {
     let audioStream: MediaStream | null = null;
     let micGranted = false;
+    setMicError(null);
 
     try {
       audioStream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        video: false
+        video: false,
       });
       micGranted = true;
       setMicPermissionStatus('granted');
+      setIsMuted(false);
     } catch (micErr) {
-      console.warn('[useGlobalChat] Microphone not available or denied, generating fallback track:', micErr);
       try {
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioCtx) {
-          const ctx = new AudioCtx();
-          const osc = ctx.createOscillator();
-          const dst = ctx.createMediaStreamDestination();
-          const gain = ctx.createGain();
-          gain.gain.value = 0;
-          osc.connect(gain);
-          gain.connect(dst);
-          osc.start();
-          audioStream = dst.stream;
-        }
-      } catch (fallbackErr) {
-        console.warn('[useGlobalChat] Fallback audio context error:', fallbackErr);
+        audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        micGranted = true;
+        setMicPermissionStatus('granted');
+        setIsMuted(false);
+      } catch (retryError) {
+        console.warn('[useGlobalChat] Microphone capture failed:', retryError || micErr);
+        setMicError(retryError instanceof Error ? retryError.message : 'Microphone access was denied or no microphone is available.');
+        setIsMuted(true);
+        setMicPermissionStatus('denied');
       }
-      setIsMuted(true);
-      setMicPermissionStatus('denied');
     }
 
     micStreamRef.current = audioStream;
@@ -448,12 +448,14 @@ export function useGlobalChat({
       try {
         const videoStream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60, max: 60 } },
-          audio: false
+          audio: false,
         });
         cameraStreamRef.current = videoStream;
         setCameraStream(videoStream);
         setIsVideoEnabled(true);
+        setCameraError(null);
       } catch (camErr) {
+        setCameraError(camErr instanceof Error ? camErr.message : 'Camera access was denied or no camera is available.');
         console.warn('[useGlobalChat] Camera error:', camErr);
       }
     }
@@ -542,10 +544,11 @@ export function useGlobalChat({
       setCurrentUser(prev => ({ ...prev, has_video: false }));
       chat.updateUser({ has_video: false });
     } else {
+      setCameraError(null);
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60, max: 60 } },
-          audio: false
+          audio: false,
         });
         cameraStreamRef.current = stream;
         setCameraStream(stream);
@@ -553,6 +556,7 @@ export function useGlobalChat({
         setCurrentUser(prev => ({ ...prev, has_video: true }));
         chat.updateUser({ has_video: true });
       } catch (err) {
+        setCameraError(err instanceof Error ? err.message : 'Camera access was denied or no camera is available.');
         console.error('Failed to toggle camera:', err);
       }
     }
@@ -574,36 +578,45 @@ export function useGlobalChat({
         setIsScreenSharing(false);
         chat.updateUser({ is_screen_sharing: false });
       } else {
+        setScreenShareError(null);
         try {
+          if (!navigator.mediaDevices?.getDisplayMedia) {
+            throw new Error('Screen sharing is not supported by this browser.');
+          }
           const stream = await navigator.mediaDevices.getDisplayMedia({
             video: {
               width: { ideal: 1920, max: 1920 },
               height: { ideal: 1080, max: 1080 },
-              frameRate: { ideal: 60, max: 60 },
+              frameRate: { ideal: 30, max: 60 },
             },
             audio: true,
-          });
+            systemAudio: 'include',
+          } as DisplayMediaStreamOptions & { systemAudio: 'include' });
           screenStreamRef.current = stream;
           setScreenStream(stream);
           setIsScreenSharing(true);
           chat.updateUser({ is_screen_sharing: true });
-          stream.getTracks().forEach(track => {
-            track.onended = () => {
-              if (screenStreamRef.current) {
-                screenStreamRef.current.getTracks().forEach(t => t.stop());
-                screenStreamRef.current = null;
-              }
+          const screenVideoTrack = stream.getVideoTracks()[0];
+          if (screenVideoTrack) {
+            screenVideoTrack.onended = () => {
+              screenStreamRef.current?.getTracks().forEach(track => track.stop());
+              screenStreamRef.current = null;
               setScreenStream(null);
               setIsScreenSharing(false);
               chat.updateUser({ is_screen_sharing: false });
             };
-          });
+          }
+          if (stream.getAudioTracks().length === 0) {
+            setScreenShareError('Your browser did not capture tab/system audio. Choose a browser tab and enable “Share tab audio” in the share picker.');
+          }
         } catch (err: any) {
+          const message = err instanceof Error ? err.message : 'Screen share could not start.';
           if (err?.name !== 'NotAllowedError' && err?.name !== 'AbortError') {
             console.error('Failed to toggle screen share:', err);
+            setScreenShareError(message);
           }
           if (screenStreamRef.current) {
-            screenStreamRef.current.getTracks().forEach(t => t.stop());
+            screenStreamRef.current.getTracks().forEach(track => track.stop());
             screenStreamRef.current = null;
           }
           setScreenStream(null);
