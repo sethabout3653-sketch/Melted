@@ -22,7 +22,7 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   },
   {
     id: 'pbs-mpt-baltimore', name: 'MPT',
-    url: 'https://wmpbdt.lls.cdn.pbs.org/wmpbdt/fdb26654-eed0-4858-aa50-a84b538f4747/primary.m3u8',
+    url: 'https://2-fss-2.streamhoster.com/pl_138/amlst:201814-1291584/playlist.m3u8',
     category: 'Lifestyle', logo: 'https://yt3.googleusercontent.com/lIPxOIsrzPb61G88m_XBJz1U7fNAKJmKfxS7ql0iniY2A8gu0Mxtx1XXRf9TvLgw7F63id7w6Q=s900-c-k-c0x00ffffff-no-rj', description: 'Maryland Public Television (WMPB) live stream.'
   },
   {
@@ -143,10 +143,10 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
 {
   "id": "wbff-fox-45",
   "name": "FOX 45 Baltimore",
-  "url": "/api/proxy-stream?url=https%3A%2F%2Fcsm-e-cesinclairlusordlive-109260485.bln1.yospace.com%2Fcsm%2Fextlive%2Fsbgtvprd01%2Cwbff-fast-hls-1080p-amg.m3u8%3Fyo.oh%3DY3NtLWUtc2luY2xhaXItbGl2ZS11c2UxLWViLmJsbjEueW9zcGFjZS5jb20%3D",
+  "url": "/api/proxy-stream?url=https%3A%2F%2Fpubads.g.doubleclick.net%2Fssai%2Fevent%2FyIaKpob6TSe59B9MD2TnCg%2Fmaster.m3u8",
   "category": "News",
   "logo": "https://play-lh.googleusercontent.com/ergVDljVAJ6rn3BY7iWEtAJxe0HwoYyuwvhfzZitO0wTVaMEYOo0lvNDlKnYsMtpu-_sQwnVQyamh2uMIwlNDg",
-  "description": "FOX 45 Baltimore live stream."
+  "description": "FOX 45 Baltimore (WBFF) 24/7 News live stream (45.1 OTA network/syndicated feed is DRM-protected)."
 },
 
 {
@@ -203,7 +203,7 @@ const RAW_TV_CHANNELS: (TVChannel | undefined)[] = [
   "url": "https://livestream.pbskids.org/out/v1/14507d931bbe48a69287e4850e53443c/est.m3u8",
   "category": "Family",
   "logo": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTX0Cy8Om2kCYAkojjgCvXc_Fc-2l-CGhTwhwHtLfdO-YBbiGlY5Wy8bMA&s=10",
-  "description": "PBS Kids Live Educational Programming"
+  "description": "PBS Kids Live 24/7 Stream (MPT 22.3 OTA antenna feed is not publicly streamed)."
 },
 {
   "id": "baby-shark-tv",

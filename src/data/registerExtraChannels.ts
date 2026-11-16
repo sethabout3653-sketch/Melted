@@ -11,26 +11,6 @@ const EXTRA_TV_CHANNELS: TVChannel[] = [
     category: 'Educational', logo: logo('PBS.us'), description: 'Maryland Public Television (WMPB) live stream.'
   },
   {
-    id: 'pbs-kids-alaska', name: 'PBS Kids Alaska',
-    url: 'https://livestream.pbskids.org/out/v1/94b88ad58fc14f84a9382341f1c00b82/akst.m3u8',
-    category: 'Kids', logo: logo('PBSKidsAlaska.us'), description: 'PBS Kids live feed for Alaska; availability may vary by region.'
-  },
-  {
-    id: 'pbs-kids-east-central', name: 'PBS Kids Eastern/Central',
-    url: 'https://2-fss-2.streamhoster.com/pl_140/amlst:200914-1298290/playlist.m3u8',
-    category: 'Kids', logo: logo('PBSKidsEasternCentral.us'), description: 'PBS Kids live feed for Eastern/Central time zones.'
-  },
-  {
-    id: 'pbs-kids-mountain', name: 'PBS Kids Mountain',
-    url: 'https://livestream.pbskids.org/out/v1/3fe3030a2c8045a3932f4289d9eba3e6/mst.m3u8',
-    category: 'Kids', logo: logo('PBSKidsMountain.us'), description: 'PBS Kids live feed for the Mountain time zone.'
-  },
-  {
-    id: 'pbs-kids-pacific', name: 'PBS Kids Pacific',
-    url: 'https://livestream.pbskids.org/out/v1/11f2e6b73eaa4887b3746cb863960e79/pst.m3u8',
-    category: 'Kids', logo: logo('PBSKidsPacific.us'), description: 'PBS Kids live feed for the Pacific time zone.'
-  },
-  {
     id: 'pbs-ket-kentucky', name: 'PBS KET Kentucky',
     url: 'https://2-fss-2.streamhoster.com/pl_132/amlst:200914-1315486/playlist.m3u8',
     category: 'Educational', logo: logo('KentuckyEducationalTelevision.us'), description: 'Kentucky Educational Television live stream.'

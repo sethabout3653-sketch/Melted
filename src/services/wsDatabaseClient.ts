@@ -305,6 +305,60 @@ export function useWebSocketDatabase(currentUser: {
             handleFirestoreError(err, OperationType.GET, 'deletions', false);
           }
         );
+
+        // 3. Firestore Voice Presence Sync (cross-link support across any domain / Cloud Run instance)
+        const unsubscribePresence = onSnapshot(
+          collection(db, 'voice_presence'),
+          (snapshot) => {
+            const remoteUsers: DbUser[] = [];
+            const now = Date.now();
+            snapshot.forEach((d) => {
+              const uData = d.data() as DbUser;
+              if (uData && uData.id && uData.id !== currentUserRef.current.id && (now - (uData.updated_at || 0) < 60000)) {
+                remoteUsers.push(uData);
+              }
+            });
+            setUsers((prev) => {
+              const me = activeUserStateRef.current;
+              const all = [me, ...remoteUsers];
+              return deduplicateUsers(all, me.id);
+            });
+          },
+          () => {}
+        );
+
+        // 4. Firestore Cross-Link WebRTC Signaling
+        const myId = currentUserRef.current.id;
+        const sigQuery = query(collection(db, 'voice_signals'), where('targetUserId', '==', myId));
+        const unsubscribeSignals = onSnapshot(
+          sigQuery,
+          (snapshot) => {
+            snapshot.docChanges().forEach((change) => {
+              if (change.type === 'added') {
+                const s = change.doc.data();
+                const docId = change.doc.id;
+                if (s && s.fromUserId && s.fromUserId !== currentUserRef.current.id) {
+                  const sigKey = `${s.fromUserId}:${s.sigId || docId}`;
+                  if (!processedRtcSignalsRef.current.has(sigKey)) {
+                    processedRtcSignalsRef.current.add(sigKey);
+                    if (processedRtcSignalsRef.current.size > 200) {
+                      const [first] = processedRtcSignalsRef.current;
+                      processedRtcSignalsRef.current.delete(first);
+                    }
+                    if (onRtcSignalRef.current) {
+                      onRtcSignalRef.current(s.fromUserId, s.signal);
+                    }
+                  }
+                }
+                deleteDoc(change.doc.ref).catch(() => {});
+              }
+            });
+          },
+          () => {}
+        );
+
+        (window as any).__unsubPresence = unsubscribePresence;
+        (window as any).__unsubSignals = unsubscribeSignals;
       } catch (err) {
         console.warn('[Firebase] Initialization failed, WebSocket relay continues:', err);
         setIsFirebaseActive(false);
@@ -317,6 +371,16 @@ export function useWebSocketDatabase(currentUser: {
       cancelled = true;
       if (unsubscribeMessages) unsubscribeMessages();
       if (unsubscribeDeletions) unsubscribeDeletions();
+      try {
+        if ((window as any).__unsubPresence) {
+          (window as any).__unsubPresence();
+          (window as any).__unsubPresence = null;
+        }
+        if ((window as any).__unsubSignals) {
+          (window as any).__unsubSignals();
+          (window as any).__unsubSignals = null;
+        }
+      } catch {}
     };
   }, []);
 
@@ -433,6 +497,9 @@ export function useWebSocketDatabase(currentUser: {
           wsRef.current.send(JSON.stringify({ type: 'USER_DISCONNECT', userId: uId }));
           wsRef.current.close();
         }
+      } catch {}
+      try {
+        deleteDoc(doc(db, 'voice_presence', uId)).catch(() => {});
       } catch {}
       try {
         const payload = JSON.stringify({ id: uId });
@@ -635,7 +702,7 @@ export function useWebSocketDatabase(currentUser: {
         return sorted;
       });
 
-      // WebSocket / REST presence relay (NEVER stored in Firebase)
+      // WebSocket / REST presence relay
       safeSend({ type: 'SQL_UPDATE', table: 'users', id: u.id, set });
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
         fetch('/api/ws-db/update-user', {
@@ -643,6 +710,13 @@ export function useWebSocketDatabase(currentUser: {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: u.id, set }),
         }).catch(() => {});
+      }
+
+      // Firestore voice_presence sync across any link/container
+      try {
+        await setDoc(doc(db, 'voice_presence', u.id), cleanData(activeUserStateRef.current));
+      } catch (err) {
+        handleFirestoreError(err, OperationType.UPDATE, `voice_presence/${u.id}`);
       }
     },
     [safeSend]
@@ -811,13 +885,18 @@ export function useWebSocketDatabase(currentUser: {
       };
       Object.assign(activeUserStateRef.current, dbUser);
 
-      // WebSocket / REST ONLY (Firebase does not store user presence)
+      // WebSocket / REST relay
       safeSend({ type: 'REGISTER_USER', user: dbUser });
       fetch('/api/ws-db/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user: dbUser }),
       }).catch(() => {});
+
+      // Firestore voice_presence registration
+      try {
+        setDoc(doc(db, 'voice_presence', dbUser.id), cleanData(dbUser)).catch(() => {});
+      } catch {}
 
       setUsers((prev) => {
         const filtered = prev.filter((x) => x && x.id !== user.id);
@@ -837,7 +916,6 @@ export function useWebSocketDatabase(currentUser: {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       try {
         wsRef.current.send(JSON.stringify(payload));
-        return;
       } catch {}
     }
 
@@ -846,6 +924,18 @@ export function useWebSocketDatabase(currentUser: {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     }).catch(() => {});
+
+    // Also dispatch to Firestore voice_signals for cross-link reliability
+    try {
+      const sigDocId = `sig-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      setDoc(doc(db, 'voice_signals', sigDocId), {
+        fromUserId,
+        targetUserId,
+        signal,
+        sigId,
+        timestamp: Date.now(),
+      }).catch(() => {});
+    } catch {}
   }, []);
 
   const isConnected = isWsConnected || isHttpSyncActive || isFirebaseActive;

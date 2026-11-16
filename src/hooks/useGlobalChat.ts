@@ -142,7 +142,13 @@ export function useGlobalChat({
     messages,
     isConnected,
     registerUser,
+    updateUser,
+    sendRtcSignal,
+    setRtcSignalHandler,
+    setMediaHandlers,
   } = chat;
+  const updateUserRef = useRef(updateUser);
+  updateUserRef.current = updateUser;
 
   const lastMessageId = useRef<string | null>(null);
   const registeredKeyRef = useRef<string>('');
@@ -293,26 +299,26 @@ export function useGlobalChat({
     screenStream,
     isMuted,
     peers: activePeers,
-    sendRtcSignal: chat.sendRtcSignal,
-    setRtcSignalHandler: chat.setRtcSignalHandler,
-    setMediaHandlers: chat.setMediaHandlers,
+    sendRtcSignal,
+    setRtcSignalHandler,
+    setMediaHandlers,
   });
 
-  // Sync isMuted and isDeafened to tracks and server
+  // Sync isMuted and isDeafened to tracks and server without re-running on unrelated chat state ticks
   useEffect(() => {
     if (micStreamRef.current) {
       micStreamRef.current.getAudioTracks().forEach(t => t.enabled = !isMuted);
     }
     if (isInVideo) {
-      chat.updateUser({ is_muted: isMuted });
+      updateUserRef.current({ is_muted: isMuted });
     }
-  }, [isMuted, isInVideo, chat]);
+  }, [isMuted, isInVideo]);
 
   useEffect(() => {
     if (isInVideo) {
-      chat.updateUser({ is_deafened: isDeafened });
+      updateUserRef.current({ is_deafened: isDeafened });
     }
-  }, [isDeafened, isInVideo, chat]);
+  }, [isDeafened, isInVideo]);
 
   // Real-time Voice Activity Detection (Speaking detection)
   useEffect(() => {
@@ -320,7 +326,7 @@ export function useGlobalChat({
       if (isSpeakingRef.current) {
         isSpeakingRef.current = false;
         setIsSpeaking(false);
-        chat.updateUser({ is_speaking: false });
+        updateUserRef.current({ is_speaking: false });
       }
       return;
     }
@@ -361,14 +367,14 @@ export function useGlobalChat({
           if (!isSpeakingRef.current) {
             isSpeakingRef.current = true;
             setIsSpeaking(true);
-            chat.updateUser({ is_speaking: true });
+            updateUserRef.current({ is_speaking: true });
           }
         } else if (isSpeakingRef.current && !silenceTimer) {
           silenceTimer = setTimeout(() => {
             if (isSpeakingRef.current) {
               isSpeakingRef.current = false;
               setIsSpeaking(false);
-              chat.updateUser({ is_speaking: false });
+              updateUserRef.current({ is_speaking: false });
             }
             silenceTimer = null;
           }, 350);
@@ -391,10 +397,10 @@ export function useGlobalChat({
       if (isSpeakingRef.current) {
         isSpeakingRef.current = false;
         setIsSpeaking(false);
-        chat.updateUser({ is_speaking: false });
+        updateUserRef.current({ is_speaking: false });
       }
     };
-  }, [localAudioStream, isMuted, isDeafened, isInVideo, chat]);
+  }, [localAudioStream, isMuted, isDeafened, isInVideo]);
 
   // Combine streams for activeVideoStream
   useEffect(() => {
@@ -404,74 +410,108 @@ export function useGlobalChat({
     setActiveVideoStream(combined);
   }, [cameraStream, screenStream]);
 
-  const joinVoiceChannel = useCallback(async (withVideo: boolean = false) => {
-    let audioStream: MediaStream | null = null;
-    let micGranted = false;
-    setMicError(null);
+  const isJoiningVoiceRef = useRef(false);
+  const isInVideoRef = useRef(isInVideo);
+  isInVideoRef.current = isInVideo;
 
+  const joinVoiceChannel = useCallback(async (withVideo: boolean = false) => {
+    if (isJoiningVoiceRef.current || isInVideoRef.current) return;
+    isJoiningVoiceRef.current = true;
     try {
-      audioStream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        video: false,
-      });
-      micGranted = true;
-      setMicPermissionStatus('granted');
-      setIsMuted(false);
-    } catch (micErr) {
+      let audioStream: MediaStream | null = null;
+      let micGranted = false;
+      setMicError(null);
+
       try {
-        audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        audioStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          video: false,
+        });
         micGranted = true;
         setMicPermissionStatus('granted');
         setIsMuted(false);
-      } catch (retryError) {
-        console.warn('[useGlobalChat] Microphone capture failed:', retryError || micErr);
-        setMicError(retryError instanceof Error ? retryError.message : 'Microphone access was denied or no microphone is available.');
-        setIsMuted(true);
-        setMicPermissionStatus('denied');
+      } catch (micErr) {
+        try {
+          audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+          micGranted = true;
+          setMicPermissionStatus('granted');
+          setIsMuted(false);
+        } catch (retryError) {
+          console.warn('[useGlobalChat] Microphone capture failed:', retryError || micErr);
+          setMicError(retryError instanceof Error ? retryError.message : 'Microphone access was denied or no microphone is available.');
+          setIsMuted(true);
+          setMicPermissionStatus('denied');
+        }
       }
-    }
 
-    micStreamRef.current = audioStream;
-    setLocalAudioStream(audioStream);
-    setIsInVideo(true);
-
-    const nextChannel = 'video-general' as const;
-    const nextActivity = 'In General Voice';
-    
-    setCurrentUser(prev => ({ 
-      ...prev, 
-      current_channel: nextChannel,
-      activity: nextActivity
-    }));
-
-    if (withVideo) {
-      try {
-        const videoStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60, max: 60 } },
-          audio: false,
+      if (micStreamRef.current && micStreamRef.current !== audioStream) {
+        micStreamRef.current.getTracks().forEach((t) => {
+          t.onended = null;
+          t.enabled = false;
+          t.stop();
         });
-        cameraStreamRef.current = videoStream;
-        setCameraStream(videoStream);
-        setIsVideoEnabled(true);
-        setCameraError(null);
-      } catch (camErr) {
-        setCameraError(camErr instanceof Error ? camErr.message : 'Camera access was denied or no camera is available.');
-        console.warn('[useGlobalChat] Camera error:', camErr);
       }
-    }
+      micStreamRef.current = audioStream;
+      setLocalAudioStream(audioStream);
+      isInVideoRef.current = true;
+      setIsInVideo(true);
 
-    chat.updateUser({
-      current_channel: nextChannel,
-      activity: nextActivity,
-      has_video: withVideo && Boolean(cameraStreamRef.current),
-      is_muted: !micGranted,
-    });
-  }, [chat]);
+      const nextChannel = 'video-general' as const;
+      const nextActivity = 'In General Voice';
+
+      setCurrentUser(prev => ({
+        ...prev,
+        current_channel: nextChannel,
+        activity: nextActivity
+      }));
+
+      if (withVideo) {
+        try {
+          const videoStream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60, max: 60 } },
+            audio: false,
+          });
+          cameraStreamRef.current = videoStream;
+          setCameraStream(videoStream);
+          setIsVideoEnabled(true);
+          setCameraError(null);
+          const camTrack = videoStream.getVideoTracks()[0];
+          if (camTrack) {
+            camTrack.onended = () => {
+              cameraStreamRef.current?.getTracks().forEach((track) => {
+                track.onended = null;
+                track.enabled = false;
+                track.stop();
+              });
+              cameraStreamRef.current = null;
+              setCameraStream(null);
+              setIsVideoEnabled(false);
+              setCurrentUser((prev) => ({ ...prev, has_video: false }));
+              updateUserRef.current({ has_video: false });
+            };
+          }
+        } catch (camErr) {
+          setCameraError(camErr instanceof Error ? camErr.message : 'Camera access was denied or no camera is available.');
+          console.warn('[useGlobalChat] Camera error:', camErr);
+        }
+      }
+
+      updateUserRef.current({
+        current_channel: nextChannel,
+        activity: nextActivity,
+        has_video: withVideo && Boolean(cameraStreamRef.current),
+        is_muted: !micGranted,
+      });
+    } finally {
+      isJoiningVoiceRef.current = false;
+    }
+  }, []);
 
   const stopVoiceChannel = useCallback(() => {
     [micStreamRef, cameraStreamRef, screenStreamRef].forEach(ref => {
       if (ref.current) {
         ref.current.getTracks().forEach(t => {
+          t.onended = null;
           t.enabled = false;
           t.stop();
         });
@@ -479,55 +519,63 @@ export function useGlobalChat({
       }
     });
     cameraStream?.getTracks().forEach(t => {
+      t.onended = null;
       t.enabled = false;
       t.stop();
     });
     localAudioStream?.getTracks().forEach(t => {
+      t.onended = null;
       t.enabled = false;
       t.stop();
     });
     screenStream?.getTracks().forEach(t => {
+      t.onended = null;
       t.enabled = false;
       t.stop();
     });
+    isJoiningVoiceRef.current = false;
+    isInVideoRef.current = false;
     setLocalAudioStream(null);
     setCameraStream(null);
     setScreenStream(null);
     setIsInVideo(false);
     setIsVideoEnabled(false);
     setIsScreenSharing(false);
-    
+    setCameraError(null);
+    setScreenShareError(null);
+
     const nextChannel = 'text-general' as any;
     const nextActivity = 'Browsing Games';
 
-    setCurrentUser(prev => ({ 
-      ...prev, 
+    setCurrentUser(prev => ({
+      ...prev,
       current_channel: nextChannel,
       activity: nextActivity,
       has_video: false,
       is_screen_sharing: false,
     }));
 
-    chat.updateUser({
+    updateUserRef.current({
       current_channel: nextChannel,
       activity: nextActivity,
       has_video: false,
       is_screen_sharing: false,
     });
-  }, [chat, cameraStream, localAudioStream, screenStream]);
+  }, [cameraStream, localAudioStream, screenStream]);
 
   const presenceChannel = (currentUser as any).current_channel;
   useEffect(() => {
     if (isInVideo && presenceChannel !== 'video-general') {
       setCurrentUser(prev => ({ ...prev, current_channel: 'video-general' }));
-      chat.updateUser({ current_channel: 'video-general' });
+      updateUserRef.current({ current_channel: 'video-general' });
     }
-  }, [isInVideo, presenceChannel, chat]);
+  }, [isInVideo, presenceChannel]);
 
   const toggleCamera = useCallback(async () => {
     if (isVideoEnabled) {
       if (cameraStreamRef.current) {
         cameraStreamRef.current.getTracks().forEach(t => {
+          t.onended = null;
           t.enabled = false;
           t.stop();
         });
@@ -535,14 +583,16 @@ export function useGlobalChat({
       }
       if (cameraStream) {
         cameraStream.getTracks().forEach(t => {
+          t.onended = null;
           t.enabled = false;
           t.stop();
         });
       }
       setCameraStream(null);
       setIsVideoEnabled(false);
+      setCameraError(null);
       setCurrentUser(prev => ({ ...prev, has_video: false }));
-      chat.updateUser({ has_video: false });
+      updateUserRef.current({ has_video: false });
     } else {
       setCameraError(null);
       try {
@@ -554,13 +604,28 @@ export function useGlobalChat({
         setCameraStream(stream);
         setIsVideoEnabled(true);
         setCurrentUser(prev => ({ ...prev, has_video: true }));
-        chat.updateUser({ has_video: true });
+        updateUserRef.current({ has_video: true });
+        const camTrack = stream.getVideoTracks()[0];
+        if (camTrack) {
+          camTrack.onended = () => {
+            cameraStreamRef.current?.getTracks().forEach((track) => {
+              track.onended = null;
+              track.enabled = false;
+              track.stop();
+            });
+            cameraStreamRef.current = null;
+            setCameraStream(null);
+            setIsVideoEnabled(false);
+            setCurrentUser((prev) => ({ ...prev, has_video: false }));
+            updateUserRef.current({ has_video: false });
+          };
+        }
       } catch (err) {
         setCameraError(err instanceof Error ? err.message : 'Camera access was denied or no camera is available.');
         console.error('Failed to toggle camera:', err);
       }
     }
-  }, [isVideoEnabled, cameraStream, chat]);
+  }, [isVideoEnabled, cameraStream]);
 
   const isSharingRef = useRef(false);
 
@@ -571,12 +636,25 @@ export function useGlobalChat({
     try {
       if (isScreenSharing) {
         if (screenStreamRef.current) {
-          screenStreamRef.current.getTracks().forEach(t => t.stop());
+          screenStreamRef.current.getTracks().forEach(t => {
+            t.onended = null;
+            t.enabled = false;
+            t.stop();
+          });
           screenStreamRef.current = null;
+        }
+        if (screenStream) {
+          screenStream.getTracks().forEach(t => {
+            t.onended = null;
+            t.enabled = false;
+            t.stop();
+          });
         }
         setScreenStream(null);
         setIsScreenSharing(false);
-        chat.updateUser({ is_screen_sharing: false });
+        setScreenShareError(null);
+        setCurrentUser(prev => ({ ...prev, is_screen_sharing: false }));
+        updateUserRef.current({ is_screen_sharing: false });
       } else {
         setScreenShareError(null);
         try {
@@ -595,15 +673,22 @@ export function useGlobalChat({
           screenStreamRef.current = stream;
           setScreenStream(stream);
           setIsScreenSharing(true);
-          chat.updateUser({ is_screen_sharing: true });
+          setCurrentUser(prev => ({ ...prev, is_screen_sharing: true }));
+          updateUserRef.current({ is_screen_sharing: true });
           const screenVideoTrack = stream.getVideoTracks()[0];
           if (screenVideoTrack) {
             screenVideoTrack.onended = () => {
-              screenStreamRef.current?.getTracks().forEach(track => track.stop());
+              screenStreamRef.current?.getTracks().forEach(track => {
+                track.onended = null;
+                track.enabled = false;
+                track.stop();
+              });
               screenStreamRef.current = null;
               setScreenStream(null);
               setIsScreenSharing(false);
-              chat.updateUser({ is_screen_sharing: false });
+              setScreenShareError(null);
+              setCurrentUser(prev => ({ ...prev, is_screen_sharing: false }));
+              updateUserRef.current({ is_screen_sharing: false });
             };
           }
           if (stream.getAudioTracks().length === 0) {
@@ -616,18 +701,23 @@ export function useGlobalChat({
             setScreenShareError(message);
           }
           if (screenStreamRef.current) {
-            screenStreamRef.current.getTracks().forEach(track => track.stop());
+            screenStreamRef.current.getTracks().forEach(track => {
+              track.onended = null;
+              track.enabled = false;
+              track.stop();
+            });
             screenStreamRef.current = null;
           }
           setScreenStream(null);
           setIsScreenSharing(false);
-          chat.updateUser({ is_screen_sharing: false });
+          setCurrentUser(prev => ({ ...prev, is_screen_sharing: false }));
+          updateUserRef.current({ is_screen_sharing: false });
         }
       }
     } finally {
       isSharingRef.current = false;
     }
-  }, [isScreenSharing, chat]);
+  }, [isScreenSharing, screenStream]);
 
   return {
     currentUser,

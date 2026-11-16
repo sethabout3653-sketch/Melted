@@ -126,9 +126,9 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
           </button>
         </div>
 
-        {/* Zone 2: Central Search Bar (Hidden on narrow mobile and non-content tabs) */}
+        {/* Zone 2: Central Search Bar (Games tab only — Movies, Live TV, and Chat have dedicated in-tab searches) */}
         <div className="hidden sm:block flex-1 max-w-md lg:max-w-lg mx-1 sm:mx-3">
-          {currentTab !== 'chat' && currentTab !== 'ai' && (
+          {currentTab === 'games' && (
             <NavSearchInput
               searchQuery={searchQuery}
               onSearchChange={onSearchChange}

@@ -101,6 +101,7 @@ const ADULT_SWIM_SCHEDULE_URL = 'https://www.adultswim.com/api/schedule/marathon
 const EXPLICIT_XMLTV_CHANNEL_IDS: Record<string, string[]> = {
   'cartoon-network': ['Cartoon.Network.(HD).sg', 'Cartoon.Network.sg', 'CartoonNetwork.us'],
   'pbs-mpt-baltimore': ['WMPB-DT.us_locals1', 'WMPT-DT.us_locals1', 'WMPB.us', 'MPT.us', 'PBS.Stream.us2'],
+  'pbs-kids': ['PBS.Kids.Stream.us2', 'PBS.KIDS.HD.us2', 'PBSKids.us'],
   'wbff-fox-45': ['WBFF-DT.us_locals1', 'WBFF.us', 'WBFFDT.us'],
   'foxlivenow-us-2e4ee': ['plex.tv.LiveNOW.from.FOX.plex', 'LiveNOW.from.FOX.us'],
   'fox-livenow-us': ['plex.tv.LiveNOW.from.FOX.plex', 'LiveNOW.from.FOX.us'],

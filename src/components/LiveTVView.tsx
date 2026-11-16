@@ -289,6 +289,8 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
   const [clockNow, setClockNow] = useState(() => new Date());
   const cursorTimerRef = useRef<number | null>(null);
   const [cursorHidden, setCursorHidden] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const guideSearchInputRef = useRef<HTMLInputElement>(null);
 
 const EPG_STORAGE_KEY = 'frosthub_epg_cache';
 let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
@@ -1237,11 +1239,15 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
 
       {/* Main Content Area */}
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row overflow-hidden">
-        {/* Video Player Container */}
+        {/* Video Player Container (keeps video mounted while collapsing visually on mobile search focus so audio/stream never stops) */}
         <div
           ref={containerRef}
           onPointerMove={handlePlayerPointerMove}
-          className={`relative w-full aspect-video lg:aspect-auto lg:flex-1 bg-white dark:bg-black flex flex-col justify-between overflow-hidden shrink-0 lg:shrink select-none group/player ${
+          className={`relative w-full lg:aspect-auto lg:flex-1 bg-white dark:bg-black flex flex-col justify-between overflow-hidden select-none group/player transition-all duration-150 ${
+            isSearchFocused && !isFullscreen
+              ? 'h-0 min-h-0 opacity-0 pointer-events-none lg:h-auto lg:opacity-100 lg:pointer-events-auto lg:shrink'
+              : 'aspect-video shrink-0 lg:shrink opacity-100'
+          } ${
             cursorHidden ? 'cursor-none [&_*]:!cursor-none' : ''
           }`}
         >
@@ -1503,7 +1509,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
         </div>
 
         {/* Mobile / Tablet Compact Channel Info & Quick Switcher Below Video */}
-        {selectedChannel && !isFullscreen && (
+        {selectedChannel && !isFullscreen && !isSearchFocused && (
           <div className="lg:hidden bg-white dark:bg-[#080c15] border-t border-slate-200 dark:border-[#1c2a48] px-3 py-2 shrink-0">
             <div className="flex items-center gap-2.5">
               <div className="flex items-center justify-center min-w-[2.75rem] h-8 px-1.5 rounded-lg bg-[var(--brand-blue)] text-white text-sm font-extrabold tabular-nums shrink-0">
@@ -1586,23 +1592,54 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
           <div className="w-full lg:w-[390px] xl:w-[420px] flex-1 lg:flex-initial min-h-0 bg-white dark:bg-[#0f131b] border-t lg:border-t-0 lg:border-l border-slate-200 dark:border-[#1f1f2e] flex flex-col overflow-hidden transition-colors">
             {/* Search Header */}
             <div className="p-2.5 sm:p-3 border-b border-slate-100 dark:border-[#1f1f2e] shrink-0">
-              <div className="relative">
-                <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={`Search ${filteredChannels.length} channels...`}
-                  className="w-full pl-9 pr-9 py-2.5 sm:py-2 bg-slate-100 dark:bg-[#161b26] border border-slate-200 dark:border-[#242938] focus:border-[var(--brand-blue)] rounded-xl text-base sm:text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none transition-colors"
-                />
-                {searchQuery && (
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 min-w-0">
+                  <Search className="w-4 h-4 text-slate-400 dark:text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    ref={guideSearchInputRef}
+                    type="text"
+                    value={searchQuery}
+                    onFocus={() => setIsSearchFocused(true)}
+                    onBlur={(e) => {
+                      const next = e.relatedTarget as HTMLElement | null;
+                      if (next && next.dataset?.keepSearchOpen === 'true') return;
+                      window.setTimeout(() => {
+                        if (document.activeElement !== guideSearchInputRef.current) {
+                          setIsSearchFocused(false);
+                        }
+                      }, 120);
+                    }}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder={`Search ${filteredChannels.length} channels...`}
+                    className="w-full pl-9 pr-9 py-2.5 sm:py-2 bg-slate-100 dark:bg-[#161b26] border border-slate-200 dark:border-[#242938] focus:border-[var(--brand-blue)] rounded-xl text-base sm:text-xs text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none transition-colors"
+                  />
+                  {searchQuery && (
+                    <button
+                      type="button"
+                      data-keep-search-open="true"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        setSearchQuery('');
+                        guideSearchInputRef.current?.focus();
+                      }}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-900 dark:hover:text-slate-300 cursor-pointer"
+                      aria-label="Clear search"
+                    >
+                      <X className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                    </button>
+                  )}
+                </div>
+                {isSearchFocused && (
                   <button
                     type="button"
-                    onClick={() => setSearchQuery('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-900 dark:hover:text-slate-300 cursor-pointer"
-                    aria-label="Clear search"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      setIsSearchFocused(false);
+                      guideSearchInputRef.current?.blur();
+                    }}
+                    className="lg:hidden shrink-0 px-3 py-2 rounded-xl bg-slate-100 dark:bg-[#1a2030] border border-slate-200 dark:border-[#2a3248] text-xs font-bold text-[var(--brand-blue)] cursor-pointer"
                   >
-                    <X className="w-4 h-4 sm:w-3.5 sm:h-3.5" />
+                    Done
                   </button>
                 )}
               </div>

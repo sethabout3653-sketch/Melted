@@ -10,6 +10,7 @@ import { FrostHubLoadingScreen } from './components/FrostHubLoadingScreen';
 import { FrostHubLogo } from './components/FrostHubLogo';
 import { InAppNotificationToast } from './components/InAppNotificationToast';
 import { VoiceAudioEngine } from './components/VoiceAudioEngine';
+import { PersistentVoiceDock } from './components/PersistentVoiceDock';
 import { getAllGames, resolveGameUrl, getUGSGames, getCKVGames, mergeUgsGames, getPlayableGameUrl } from './services/gameService';
 import { tabTransition, containerVariants, entryVariants } from './utils/animations';
 import { useCloak, launchAboutBlank } from './hooks/useCloak';
@@ -41,15 +42,6 @@ import {
   Sun,
   Moon,
   Shuffle,
-  Mic,
-  MicOff,
-  Camera,
-  CameraOff,
-  MonitorUp,
-  PhoneOff,
-  Volume2,
-  VolumeX,
-  Maximize2,
   Film,
   Tv,
   X
@@ -218,45 +210,47 @@ export default function App() {
     setActiveGame(null);
   }, []);
 
-  // Keep user activity tracker synchronized with current tab, active game, active media, and voice state
+  // Keep user activity tracker synchronized with current tab, active game, active media, search, and voice state
   useEffect(() => {
-    const inVoice = Boolean(globalChat.isInVideo || globalChat.activeChannel === 'video-general');
+    try {
+      const inVoice = Boolean(globalChat.isInVideo || globalChat.activeChannel === 'video-general');
+      const activeChName = globalChat.activeChannel || 'text-general';
 
-    if (inVoice) {
+      let activityLabel = 'Browsing FrostHub';
+
       if (activeGame) {
-        globalChat.updateUser({ activity: `Playing ${activeGame.name}`, current_channel: 'video-general' });
+        activityLabel = `Playing ${activeGame.name} (${activeGame.category || 'Game'})`;
       } else if (activeMedia) {
         const isTV = activeMedia.mediaType === 'tv';
-        const mediaLabel = isTV && activeMedia.season && activeMedia.episode
-          ? `Watching ${activeMedia.title} (S${activeMedia.season} E${activeMedia.episode})`
-          : `Watching ${activeMedia.title}`;
-        globalChat.updateUser({ activity: mediaLabel, current_channel: 'video-general' });
-      } else {
-        globalChat.updateUser({ activity: 'In General Voice', current_channel: 'video-general' });
+        activityLabel = isTV && activeMedia.season && activeMedia.episode
+          ? `Watching ${activeMedia.title} (Season ${activeMedia.season}, Episode ${activeMedia.episode})`
+          : `Watching Movie: ${activeMedia.title}`;
+      } else if (currentTab === 'chat') {
+        activityLabel = inVoice ? 'In General Voice Channel' : `Chatting in #${activeChName}`;
+      } else if (currentTab === 'ai') {
+        activityLabel = 'Chatting with Frosted AI Assistant';
+      } else if (currentTab === 'movies') {
+        activityLabel = 'Browsing Movies & Shows Library';
+      } else if (currentTab === 'tv') {
+        activityLabel = 'Watching Live TV Channels';
+      } else if (currentTab === 'games') {
+        if (searchQuery.trim()) {
+          activityLabel = `Searching games for "${searchQuery.trim()}"`;
+        } else if (showFavoritesOnly) {
+          activityLabel = 'Browsing Favorite Games';
+        } else if (selectedCategory !== 'All') {
+          activityLabel = `Browsing ${selectedCategory} Games`;
+        } else {
+          activityLabel = `Browsing all ${allGames.length} games`;
+        }
       }
-      return;
-    }
 
-    if (activeMedia) {
-      const isTV = activeMedia.mediaType === 'tv';
-      const mediaLabel = isTV && activeMedia.season && activeMedia.episode
-        ? `Watching ${activeMedia.title} (S${activeMedia.season} E${activeMedia.episode})`
-        : `Watching ${activeMedia.title}`;
-      globalChat.updateUser({ activity: mediaLabel, current_channel: 'text-general' });
-    } else if (activeGame) {
-      globalChat.updateUser({ activity: `Playing ${activeGame.name}`, current_channel: 'text-general' });
-    } else if (currentTab === 'chat') {
-      globalChat.updateUser({ activity: 'In Community Chat', current_channel: 'text-general' });
-    } else if (currentTab === 'ai') {
-      globalChat.updateUser({ activity: 'Using AI Assistant', current_channel: 'text-general' });
-    } else if (currentTab === 'movies') {
-      globalChat.updateUser({ activity: 'Browsing Movies & Shows', current_channel: 'text-general' });
-    } else if (currentTab === 'tv') {
-      globalChat.updateUser({ activity: 'Watching Live TV', current_channel: 'text-general' });
-    } else {
-      globalChat.updateUser({ activity: 'Browsing Games', current_channel: 'text-general' });
-    }
-  }, [currentTab, activeGame, activeMedia, globalChat.isInVideo, globalChat.activeChannel]);
+      globalChat.updateUser({
+        activity: activityLabel,
+        current_channel: inVoice ? 'video-general' : (activeChName === 'video-general' || activeChName === 'voice-general' ? activeChName : 'text-general'),
+      });
+    } catch {}
+  }, [currentTab, activeGame, activeMedia, searchQuery, selectedCategory, showFavoritesOnly, allGames.length, globalChat.isInVideo, globalChat.activeChannel]);
 
   const handleGoHome = useCallback(() => {
     setSelectedCategory('All');
@@ -347,6 +341,10 @@ export default function App() {
   const visibleGames = useMemo(() => filteredGames.slice(0, visibleCount), [filteredGames, visibleCount]);
   const hasMore = visibleCount < filteredGames.length;
 
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [deferredQuery, selectedCategory, showFavoritesOnly]);
+
   // Sync scrolling and overflow based on active tab or game
   useEffect(() => {
     if (currentTab === 'chat' || activeGame) {
@@ -383,8 +381,8 @@ export default function App() {
       <Navbar
         currentTab={currentTab}
         onTabChange={setCurrentTab}
-        searchQuery={currentTab === 'chat' || currentTab === 'ai' ? '' : searchQuery}
-        onSearchChange={setSearchQuery}
+        searchQuery={currentTab === 'games' ? searchQuery : ''}
+        onSearchChange={currentTab === 'games' ? setSearchQuery : () => {}}
         onRandomGame={handleRandomGame}
         favoritesCount={favorites.length}
         showFavoritesOnly={showFavoritesOnly}
@@ -434,11 +432,7 @@ export default function App() {
             exit="exit"
             className="flex-1 flex flex-col min-h-0 h-full w-full overflow-y-auto pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0"
           >
-            <MovieView
-              onActiveMediaChange={setActiveMedia}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-            />
+            <MovieView onActiveMediaChange={setActiveMedia} />
           </motion.div>
         ) : currentTab === 'tv' ? (
           <motion.div
@@ -449,7 +443,7 @@ export default function App() {
             exit="exit"
             className="flex-1 flex flex-col min-h-0 h-full w-full pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0"
           >
-            <LiveTVView searchQuery={searchQuery} onSearchChange={setSearchQuery} />
+            <LiveTVView />
           </motion.div>
         ) : (
           <motion.main
@@ -460,9 +454,9 @@ export default function App() {
             exit="exit"
             className="flex-1 w-full overflow-y-auto"
           >
-            <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 sm:py-6 pb-24 lg:pb-16">
-            {/* Mobile Search Input (since top navbar search hides on narrow mobile) */}
-            <div className="sm:hidden mb-3">
+            <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pb-24 lg:pb-16 sm:pt-6">
+            {/* Mobile Search Input (sticky at top of Games view when scrolling/searching) */}
+            <div className="sm:hidden sticky top-0 z-20 -mx-3 px-3 py-2.5 bg-white/95 dark:bg-[#090d16]/95 backdrop-blur-md border-b border-slate-200/70 dark:border-white/5 mb-2">
               <div className="relative">
                 <Search className="w-4 h-4 text-[var(--brand-blue)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
@@ -470,7 +464,7 @@ export default function App() {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={`Search ${allGames.length} games...`}
-                  className="w-full bg-white dark:bg-[#13151f] text-base text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-10 pr-10 py-2.5 border border-slate-200 dark:border-[#24283b] focus:border-[var(--brand-blue)] focus:outline-none shadow-sm"
+                  className="w-full bg-slate-100/90 dark:bg-[#13151f] text-base text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-10 pr-10 py-2 border border-slate-200 dark:border-[#24283b] focus:border-[var(--brand-blue)] focus:outline-none shadow-sm"
                 />
                 {searchQuery && (
                   <button
@@ -485,8 +479,8 @@ export default function App() {
               </div>
             </div>
 
-            {/* Categories & Sorting - Directly at top below header */}
-            <div className="mb-4 sm:mb-6">
+            {/* Categories & Sorting - Hidden on narrow mobile while actively typing a search so results appear right under the search bar */}
+            <div className={`${searchQuery.trim() ? 'hidden sm:block' : ''} mb-4 sm:mb-6`}>
               <CategoryFilter
                 selectedCategory={selectedCategory}
                 onSelectCategory={handleSelectCategory}
@@ -498,18 +492,18 @@ export default function App() {
 
             {/* Search status */}
             {searchQuery && (
-              <div className="mb-10 flex items-center justify-between bg-white dark:bg-slate-900 px-6 py-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
-                <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300 font-medium">
-                  <Search className="w-5 h-5 text-cyan-500 dark:text-cyan-300" />
+              <div className="mb-4 sm:mb-8 flex items-center justify-between bg-white dark:bg-slate-900 px-4 sm:px-6 py-2.5 sm:py-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                <div className="flex items-center gap-2.5 sm:gap-3 text-xs sm:text-sm text-slate-600 dark:text-slate-300 font-medium">
+                  <Search className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-500 dark:text-cyan-300 shrink-0" />
                   <span>
                     Found <strong className="text-slate-900 dark:text-white">{filteredGames.length}</strong> matches for &ldquo;{searchQuery}&rdquo;
                   </span>
                 </div>
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="text-xs text-cyan-500 dark:text-cyan-300 hover:text-blue-700 font-bold cursor-pointer border border-blue-100 dark:border-blue-800 px-3 py-1.5 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+                  className="text-xs text-cyan-500 dark:text-cyan-300 hover:text-blue-700 font-bold cursor-pointer border border-blue-100 dark:border-blue-800 px-3 py-1 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors shrink-0"
                 >
-                  Clear search
+                  Clear
                 </button>
               </div>
             )}
@@ -696,78 +690,13 @@ export default function App() {
 
       {/* Persistent Voice Session Overlay - visible if in voice but NOT on chat tab */}
       {globalChat.isInVideo && currentTab !== 'chat' && (
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:bottom-6 left-1/2 -translate-x-1/2 z-[100] w-[calc(100vw-1rem)] max-w-md bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200 dark:border-white/10 rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3 flex items-center justify-between gap-2 sm:gap-4 shadow-2xl"
-        >
-          <div className="flex items-center gap-2 pr-2 sm:pr-4 border-r border-slate-200 dark:border-white/10 min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-cyan-500 flex items-center justify-center shrink-0">
-              <Mic className="w-4 h-4 text-white" />
-            </div>
-            <div className="flex flex-col min-w-0">
-              <span className="text-[10px] font-black text-slate-900 dark:text-white uppercase tracking-tighter">In Voice</span>
-              <span className="text-[9px] text-slate-500 dark:text-slate-400 font-bold truncate max-w-[80px]">General Voice</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => {
-                const hasLiveMic = globalChat.localAudioStream?.getAudioTracks().some((track) => track.readyState === 'live');
-                if (!hasLiveMic) void globalChat.requestMicrophonePermission();
-                else globalChat.setIsMuted(!globalChat.isMuted);
-              }}
-              aria-label={globalChat.isMuted ? 'Unmute microphone' : 'Mute microphone'}
-              aria-pressed={!globalChat.isMuted}
-              className={`min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl transition-all ${globalChat.isMuted ? 'bg-red-500/20 text-red-500' : 'bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/10'}`}
-            >
-              {globalChat.isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-            </button>
-            <button
-              type="button"
-              onClick={() => void globalChat.toggleCamera()}
-              aria-label={globalChat.isVideoEnabled ? 'Turn camera off' : 'Turn camera on'}
-              aria-pressed={globalChat.isVideoEnabled}
-              className={`min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl transition-all ${globalChat.isVideoEnabled ? 'bg-cyan-500/20 text-cyan-500' : 'bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/10'}`}
-            >
-              {globalChat.isVideoEnabled ? <Camera className="w-4 h-4" /> : <CameraOff className="w-4 h-4" />}
-            </button>
-            <button
-              type="button"
-              onClick={() => void globalChat.toggleScreenShare()}
-              aria-label={globalChat.isScreenSharing ? 'Stop screen sharing' : 'Share screen'}
-              aria-pressed={globalChat.isScreenSharing}
-              className={`min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl transition-all ${globalChat.isScreenSharing ? 'bg-cyan-500/20 text-cyan-500' : 'bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/10'}`}
-            >
-              <MonitorUp className="w-4 h-4" />
-            </button>
-            <button 
-              onClick={() => globalChat.setIsDeafened(!globalChat.isDeafened)}
-              className={`min-w-[36px] min-h-[36px] flex items-center justify-center rounded-xl transition-all ${globalChat.isDeafened ? 'bg-red-500/20 text-red-500' : 'bg-slate-100 text-slate-500 hover:text-slate-900 hover:bg-slate-200 dark:bg-white/5 dark:text-slate-400 dark:hover:text-white dark:hover:bg-white/10'}`}
-            >
-              {globalChat.isDeafened ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
-            </button>
-            <button 
-              onClick={() => globalChat.stopVoiceChannel()}
-              className="min-w-[36px] min-h-[36px] flex items-center justify-center bg-red-600 hover:bg-red-500 text-white rounded-xl transition-all shadow-lg shadow-red-600/20"
-            >
-              <PhoneOff className="w-4 h-4" />
-            </button>
-            <button 
-              onClick={() => {
-                setTargetChatChannel('video-general');
-                setCurrentTab('chat');
-              }}
-              className="px-2.5 sm:px-3.5 py-2 bg-cyan-500 hover:bg-cyan-400 text-white text-[10px] font-black rounded-xl uppercase tracking-tighter transition-all flex items-center gap-1.5 shadow-lg shadow-cyan-500/20 cursor-pointer"
-              title="Maximize Voice"
-            >
-              <Maximize2 className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Maximize</span>
-            </button>
-          </div>
-        </motion.div>
+        <PersistentVoiceDock
+          globalChat={globalChat}
+          onMaximizeToVoice={() => {
+            setTargetChatChannel('video-general');
+            setCurrentTab('chat');
+          }}
+        />
       )}
 
       {/* Theme & Style Selector Modal */}

@@ -459,13 +459,21 @@ export function mergeUgsGames(
 }
 
 export function getPlayableGameUrl(game: GameItem): string {
-  if (game.resolvedUrl) return game.resolvedUrl;
-  if (!game.url) return '';
+  if (!game) return '';
+  // Native GN-Math games are fine and use standard resolution
+  if (game.source === 'native') {
+    return game.resolvedUrl || resolveGameUrl(game.url, game.id);
+  }
+  if (game.url && (game.url.startsWith('http://') || game.url.startsWith('https://'))) {
+    return game.url;
+  }
   if (game.source === 'ugs' || game.url.startsWith('/ugs/')) {
-    return resolveUgsUrl(game.url);
+    const clean = game.url.replace(/^\/ugs\//, '').replace(/^\//, '');
+    return `/api/ugs/${clean}`;
   }
   if (game.source === 'CKV' || game.url.startsWith('/ckv/')) {
-    return `https://wanocapy.github.io/ChickenKingsVault/${game.url.replace(/^\/ckv\//, '')}`;
+    const clean = game.url.replace(/^\/ckv\//, '').replace(/^\//, '');
+    return `/api/ckv/${clean}`;
   }
   return resolveGameUrl(game.url, game.id);
 }

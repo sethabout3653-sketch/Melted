@@ -11,6 +11,14 @@ import Groq from 'groq-sdk';
 import { processGameHtml, getScaffoldingBuffer } from './src/server/scaffoldingLoader';
 import { initSethsrcEngine } from './src/server/sethsrcEngine';
 
+// Prevent server crashes from unhandled fetch terminations / ECONNRESET errors
+process.on('uncaughtException', (err) => {
+  console.warn('[Server Uncaught Exception - Handled]:', err?.message || err);
+});
+process.on('unhandledRejection', (reason) => {
+  console.warn('[Server Unhandled Rejection - Handled]:', reason);
+});
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 

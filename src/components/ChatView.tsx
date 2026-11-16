@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Hash, 
@@ -32,7 +33,9 @@ import {
   Hand,
   MessageCircle,
   Trash2,
-  Maximize2
+  Maximize2,
+  Minimize2,
+  User
 } from 'lucide-react';
 
 import { UserAvatar } from './UserAvatar';
@@ -248,20 +251,40 @@ const RemoteVideoPlayer: React.FC<{
   renderAvatar?: (u: any, sizeClass: string) => React.ReactNode;
   onOrientationChange?: (isVertical: boolean) => void;
   onBlackStateChange?: (isBlack: boolean) => void;
+  onToggleFullscreen?: () => void;
   isScreen?: boolean;
   isVertical?: boolean;
   isSpeaking?: boolean;
-}> = ({ stream, username, avatarColor, user, renderAvatar, onOrientationChange, onBlackStateChange, isScreen = false, isVertical = false, isSpeaking = false }) => {
+}> = ({ stream, username, user, renderAvatar, onOrientationChange, onBlackStateChange, onToggleFullscreen, isScreen = false, isSpeaking = false }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [hasVideoFrame, setHasVideoFrame] = useState(false);
   const [isBlack, setIsBlack] = useState(!isScreen);
+
+  const onOrientationChangeRef = useRef(onOrientationChange);
+  useEffect(() => {
+    onOrientationChangeRef.current = onOrientationChange;
+  }, [onOrientationChange]);
+
+  const onBlackStateChangeRef = useRef(onBlackStateChange);
+  useEffect(() => {
+    onBlackStateChangeRef.current = onBlackStateChange;
+  }, [onBlackStateChange]);
+
+  const lastReportedBlackRef = useRef<boolean | null>(null);
+  const reportBlackState = useCallback((nextBlack: boolean) => {
+    setIsBlack((prev) => (prev === nextBlack ? prev : nextBlack));
+    if (lastReportedBlackRef.current !== nextBlack) {
+      lastReportedBlackRef.current = nextBlack;
+      onBlackStateChangeRef.current?.(nextBlack);
+    }
+  }, []);
 
   const checkOrientation = useCallback(() => {
     const video = videoRef.current;
     if (video && video.videoWidth > 0 && video.videoHeight > 0) {
       setHasVideoFrame(true);
       const vertical = video.videoHeight > video.videoWidth;
-      onOrientationChange?.(vertical);
+      onOrientationChangeRef.current?.(vertical);
       return;
     }
     const track = stream?.getVideoTracks()[0];
@@ -269,9 +292,9 @@ const RemoteVideoPlayer: React.FC<{
     if (settings && settings.width && settings.height) {
       setHasVideoFrame(true);
       const vertical = settings.height > settings.width;
-      onOrientationChange?.(vertical);
+      onOrientationChangeRef.current?.(vertical);
     }
-  }, [onOrientationChange, stream]);
+  }, [stream]);
 
   const checkOrientationRef = useRef(checkOrientation);
   useEffect(() => {
@@ -283,23 +306,19 @@ const RemoteVideoPlayer: React.FC<{
     if (!video) return;
 
     if (!stream) {
+      video.pause();
       video.srcObject = null;
-      try {
-        video.load();
-      } catch {}
       setHasVideoFrame(false);
-      setIsBlack(true);
-      onBlackStateChange?.(true);
+      reportBlackState(true);
       return;
     }
 
     const allVideoTracks = stream.getVideoTracks();
     const liveTracks = allVideoTracks.filter((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled && !t.muted);
-    
+
     if (liveTracks.length === 0) {
       setHasVideoFrame(false);
-      setIsBlack(true);
-      onBlackStateChange?.(true);
+      reportBlackState(true);
     }
 
     if (video.srcObject !== stream) {
@@ -311,13 +330,26 @@ const RemoteVideoPlayer: React.FC<{
 
     const checkFrame = () => {
       const vid = videoRef.current;
-      if (!vid) return;
+      if (!vid || !stream) return;
+
+      const currentTracks = stream.getVideoTracks();
+      const hasLiveEnabledTrack = currentTracks.some((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled);
+      if (!hasLiveEnabledTrack) {
+        setHasVideoFrame(false);
+        reportBlackState(true);
+        return;
+      }
 
       if (isScreen) {
+        const hasUnmutedScreenTrack = currentTracks.some((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled && !t.muted);
+        if (!hasUnmutedScreenTrack) {
+          setHasVideoFrame(false);
+          reportBlackState(true);
+          return;
+        }
         if (vid.videoWidth > 0 && vid.videoHeight > 0) {
           setHasVideoFrame(true);
-          setIsBlack(false);
-          onBlackStateChange?.(false);
+          reportBlackState(false);
           checkOrientationRef.current();
         }
         return;
@@ -325,15 +357,13 @@ const RemoteVideoPlayer: React.FC<{
 
       if (vid.videoWidth > 0 && vid.videoHeight > 0 && vid.readyState >= 2 && !vid.paused && !vid.ended) {
         const frameIsBlack = checkIsVideoFrameBlack(vid);
-        setIsBlack(frameIsBlack);
-        onBlackStateChange?.(frameIsBlack);
+        reportBlackState(frameIsBlack);
         if (!frameIsBlack) {
           setHasVideoFrame(true);
           checkOrientationRef.current();
         }
       } else {
-        setIsBlack(true);
-        onBlackStateChange?.(true);
+        reportBlackState(true);
       }
     };
 
@@ -355,9 +385,8 @@ const RemoteVideoPlayer: React.FC<{
     };
 
     const handleMuteOrEnd = () => {
-      setIsBlack(true);
       setHasVideoFrame(false);
-      onBlackStateChange?.(true);
+      reportBlackState(true);
     };
 
     allVideoTracks.forEach((t: MediaStreamTrack) => {
@@ -418,10 +447,17 @@ const RemoteVideoPlayer: React.FC<{
       window.removeEventListener('click', onUserGesture);
       window.removeEventListener('touchstart', onUserGesture);
       window.removeEventListener('keydown', onUserGesture);
+      video.pause();
+      video.srcObject = null;
     };
-  }, [stream, isScreen, onBlackStateChange]);
+  }, [stream, isScreen, reportBlackState]);
 
-  const enterFullscreen = () => {
+  const enterFullscreen = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    if (onToggleFullscreen) {
+      onToggleFullscreen();
+      return;
+    }
     const target = videoRef.current?.closest('[data-screen-tile]') ?? videoRef.current?.parentElement;
     if (!target || !document.fullscreenEnabled) return;
     target.requestFullscreen().catch((error) => {
@@ -430,14 +466,17 @@ const RemoteVideoPlayer: React.FC<{
   };
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-white dark:bg-slate-900">
-      {isScreen && (
+    <div 
+      onDoubleClick={enterFullscreen}
+      className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-white dark:bg-slate-900 cursor-pointer"
+    >
+      {(isScreen || onToggleFullscreen) && (
         <button
           type="button"
           onClick={enterFullscreen}
           aria-label={`View ${username} in fullscreen`}
-          title="View shared screen fullscreen"
-          className="absolute right-3 top-3 z-30 grid h-10 w-10 place-items-center rounded-xl border border-white/20 bg-slate-950/75 text-white shadow-lg transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+          title={isScreen ? 'View shared screen fullscreen' : 'View camera fullscreen'}
+          className="absolute right-3 top-3 z-30 grid h-9 w-9 place-items-center rounded-xl border border-white/20 bg-slate-950/75 text-white shadow-lg transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 cursor-pointer"
         >
           <Maximize2 className="h-4 w-4" aria-hidden="true" />
         </button>
@@ -465,12 +504,10 @@ const RemoteVideoPlayer: React.FC<{
           if (video && video.videoWidth > 0) {
             if (isScreen) {
               setHasVideoFrame(true);
-              setIsBlack(false);
-              onBlackStateChange?.(false);
+              reportBlackState(false);
             } else {
               const black = checkIsVideoFrameBlack(video);
-              setIsBlack(black);
-              onBlackStateChange?.(black);
+              reportBlackState(black);
               if (!black) setHasVideoFrame(true);
             }
           }
@@ -480,12 +517,10 @@ const RemoteVideoPlayer: React.FC<{
           if (video && video.videoWidth > 0) {
             if (isScreen) {
               setHasVideoFrame(true);
-              setIsBlack(false);
-              onBlackStateChange?.(false);
+              reportBlackState(false);
             } else {
               const black = checkIsVideoFrameBlack(video);
-              setIsBlack(black);
-              onBlackStateChange?.(black);
+              reportBlackState(black);
               if (!black) setHasVideoFrame(true);
             }
           }
@@ -495,19 +530,17 @@ const RemoteVideoPlayer: React.FC<{
           if (video) {
             if (isScreen) {
               setHasVideoFrame(true);
-              setIsBlack(false);
-              onBlackStateChange?.(false);
+              reportBlackState(false);
             } else {
               const black = checkIsVideoFrameBlack(video);
-              setIsBlack(black);
-              onBlackStateChange?.(black);
+              reportBlackState(black);
               if (!black) setHasVideoFrame(true);
             }
           }
           checkOrientation();
         }}
         onResize={checkOrientation}
-        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl ${isScreen || (!isBlack && hasVideoFrame && stream) ? 'opacity-100' : 'opacity-0 pointer-events-none'} transition-opacity duration-200`}
+        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl ${(!isBlack && hasVideoFrame && stream) ? 'opacity-100' : 'opacity-0 pointer-events-none'} transition-opacity duration-200`}
       />
     </div>
   );
@@ -520,13 +553,33 @@ const LocalVideoPlayer: React.FC<{
   renderAvatar: (u: any, sizeClass: string) => React.ReactNode;
   onOrientationChange?: (isVertical: boolean) => void;
   onBlackStateChange?: (isBlack: boolean) => void;
+  onToggleFullscreen?: () => void;
   isMirrored?: boolean;
   isScreen?: boolean;
   isSpeaking?: boolean;
-}> = ({ stream, user, renderAvatar, onOrientationChange, onBlackStateChange, isMirrored = true, isScreen = false, isSpeaking = false }) => {
+}> = ({ stream, user, renderAvatar, onOrientationChange, onBlackStateChange, onToggleFullscreen, isMirrored = true, isScreen = false, isSpeaking = false }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [hasFrame, setHasFrame] = useState(false);
   const [isBlack, setIsBlack] = useState(!isScreen);
+
+  const onOrientationChangeRef = useRef(onOrientationChange);
+  useEffect(() => {
+    onOrientationChangeRef.current = onOrientationChange;
+  }, [onOrientationChange]);
+
+  const onBlackStateChangeRef = useRef(onBlackStateChange);
+  useEffect(() => {
+    onBlackStateChangeRef.current = onBlackStateChange;
+  }, [onBlackStateChange]);
+
+  const lastReportedBlackRef = useRef<boolean | null>(null);
+  const reportBlackState = useCallback((nextBlack: boolean) => {
+    setIsBlack((prev) => (prev === nextBlack ? prev : nextBlack));
+    if (lastReportedBlackRef.current !== nextBlack) {
+      lastReportedBlackRef.current = nextBlack;
+      onBlackStateChangeRef.current?.(nextBlack);
+    }
+  }, []);
 
   const checkOrientation = useCallback(() => {
     const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -534,7 +587,7 @@ const LocalVideoPlayer: React.FC<{
     if (video && video.videoWidth > 0 && video.videoHeight > 0) {
       setHasFrame(true);
       const vertical = video.videoHeight > video.videoWidth;
-      onOrientationChange?.(vertical);
+      onOrientationChangeRef.current?.(vertical);
       return;
     }
     const track = stream?.getVideoTracks()[0];
@@ -542,13 +595,13 @@ const LocalVideoPlayer: React.FC<{
     if (settings && settings.width && settings.height) {
       setHasFrame(true);
       const vertical = settings.height > settings.width;
-      onOrientationChange?.(vertical);
+      onOrientationChangeRef.current?.(vertical);
       return;
     }
     if (isMobile && typeof window !== 'undefined' && window.innerHeight > window.innerWidth) {
-      onOrientationChange?.(true);
+      onOrientationChangeRef.current?.(true);
     }
-  }, [onOrientationChange, stream]);
+  }, [stream]);
 
   const checkOrientationRef = useRef(checkOrientation);
   useEffect(() => {
@@ -560,13 +613,10 @@ const LocalVideoPlayer: React.FC<{
     if (!video) return;
 
     if (!stream) {
+      video.pause();
       video.srcObject = null;
-      try {
-        video.load();
-      } catch {}
       setHasFrame(false);
-      setIsBlack(true);
-      onBlackStateChange?.(true);
+      reportBlackState(true);
       return;
     }
 
@@ -574,8 +624,7 @@ const LocalVideoPlayer: React.FC<{
     const liveTracks = allVideoTracks.filter((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled && !t.muted);
     if (liveTracks.length === 0) {
       setHasFrame(false);
-      setIsBlack(true);
-      onBlackStateChange?.(true);
+      reportBlackState(true);
     }
 
     if (video.srcObject !== stream) {
@@ -587,13 +636,19 @@ const LocalVideoPlayer: React.FC<{
 
     const checkFrame = () => {
       const vid = videoRef.current;
-      if (!vid) return;
+      if (!vid || !stream) return;
+
+      const hasLiveEnabledTrack = stream.getVideoTracks().some((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled);
+      if (!hasLiveEnabledTrack) {
+        setHasFrame(false);
+        reportBlackState(true);
+        return;
+      }
 
       if (isScreen) {
         if (vid.videoWidth > 0 && vid.videoHeight > 0) {
           setHasFrame(true);
-          setIsBlack(false);
-          onBlackStateChange?.(false);
+          reportBlackState(false);
           checkOrientationRef.current();
         }
         return;
@@ -601,15 +656,13 @@ const LocalVideoPlayer: React.FC<{
 
       if (vid.videoWidth > 0 && vid.videoHeight > 0 && vid.readyState >= 2 && !vid.paused && !vid.ended) {
         const frameIsBlack = checkIsVideoFrameBlack(vid);
-        setIsBlack(frameIsBlack);
-        onBlackStateChange?.(frameIsBlack);
+        reportBlackState(frameIsBlack);
         if (!frameIsBlack) {
           setHasFrame(true);
           checkOrientationRef.current();
         }
       } else {
-        setIsBlack(true);
-        onBlackStateChange?.(true);
+        reportBlackState(true);
       }
     };
 
@@ -618,9 +671,8 @@ const LocalVideoPlayer: React.FC<{
     }).catch(() => {});
 
     const handleMuteOrEnd = () => {
-      setIsBlack(true);
       setHasFrame(false);
-      onBlackStateChange?.(true);
+      reportBlackState(true);
     };
 
     allVideoTracks.forEach((t: MediaStreamTrack) => {
@@ -658,11 +710,30 @@ const LocalVideoPlayer: React.FC<{
       video.removeEventListener('playing', checkFrame);
       video.removeEventListener('pause', checkFrame);
       video.removeEventListener('emptied', handleMuteOrEnd);
+      video.pause();
+      video.srcObject = null;
     };
-  }, [stream, isScreen, onBlackStateChange]);
+  }, [stream, isScreen, reportBlackState]);
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-white dark:bg-slate-900">
+    <div 
+      onDoubleClick={onToggleFullscreen}
+      className={`relative w-full h-full flex items-center justify-center overflow-hidden rounded-3xl bg-white dark:bg-slate-900 ${onToggleFullscreen ? 'cursor-pointer' : ''}`}
+    >
+      {onToggleFullscreen && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleFullscreen();
+          }}
+          aria-label="View your camera in fullscreen"
+          title="View camera fullscreen"
+          className="absolute right-3 top-3 z-30 grid h-9 w-9 place-items-center rounded-xl border border-white/20 bg-slate-950/75 text-white shadow-lg transition hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300 cursor-pointer"
+        >
+          <Maximize2 className="h-4 w-4" aria-hidden="true" />
+        </button>
+      )}
       {!isScreen && (isBlack || !stream || !hasFrame) && (
         <div className="absolute inset-0 flex items-center justify-center bg-white dark:bg-slate-900 z-10 transition-opacity duration-200">
           <div className="relative flex items-center justify-center">
@@ -683,9 +754,361 @@ const LocalVideoPlayer: React.FC<{
           (e.target as HTMLVideoElement).play().catch(() => {});
         }}
         onResize={checkOrientation}
-        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl ${isMirrored && !isScreen ? 'transform scale-x-[-1]' : ''} ${isScreen || (!isBlack && stream && hasFrame) ? 'opacity-100' : 'opacity-0 pointer-events-none'} transition-opacity duration-200`}
+        className={`w-full h-full ${isScreen ? 'object-contain' : 'object-cover'} rounded-3xl ${isMirrored && !isScreen ? 'transform scale-x-[-1]' : ''} ${(!isBlack && stream && hasFrame) ? 'opacity-100' : 'opacity-0 pointer-events-none'} transition-opacity duration-200`}
       />
     </div>
+  );
+};
+
+// Fullscreen Stage Portal Overlay (supports Camera video, Screen Share, and Avatar "Myself" / Peer modes)
+const FullscreenStageOverlay: React.FC<{
+  media: {
+    key: string;
+    type: 'self' | 'remote-cam' | 'remote-screen' | 'remote-peer';
+    stream?: MediaStream | null;
+    hasLiveVideo: boolean;
+    label: string;
+    user: any;
+    isMirrored: boolean;
+    isScreen: boolean;
+    isSpeaking: boolean;
+    isMuted: boolean;
+    isSelf: boolean;
+  };
+  renderAvatar: (u: any, sizeClass: string) => React.ReactNode;
+  onClose: () => void;
+  toggleMute?: () => void;
+  toggleCamera?: () => void;
+  isMuted?: boolean;
+  isVideoEnabled?: boolean;
+  toggleHandRaise?: () => void;
+  isHandRaised?: boolean;
+}> = ({
+  media,
+  renderAvatar,
+  onClose,
+  toggleMute,
+  toggleCamera,
+  isMuted = false,
+  isVideoEnabled = false,
+  toggleHandRaise,
+  isHandRaised = false,
+}) => {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const [fitMode, setFitMode] = useState<'contain' | 'cover'>('contain');
+  const [isBlackFrame, setIsBlackFrame] = useState(false);
+  const [isNativeFs, setIsNativeFs] = useState(false);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+
+    if (!media.stream || !media.hasLiveVideo) {
+      el.pause();
+      el.srcObject = null;
+      setIsBlackFrame(true);
+      return;
+    }
+
+    if (el.srcObject !== media.stream) {
+      el.srcObject = media.stream;
+    }
+    el.muted = true;
+    el.defaultMuted = true;
+
+    const checkFrame = () => {
+      const vid = videoRef.current;
+      if (!vid || !media.stream) return;
+      if (vid.videoWidth > 0 && vid.videoHeight > 0) {
+        if (media.isScreen) {
+          setIsBlackFrame(false);
+        } else {
+          const black = checkIsVideoFrameBlack(vid);
+          setIsBlackFrame(black);
+        }
+      }
+    };
+
+    el.play().then(checkFrame).catch(() => {});
+
+    el.addEventListener('loadeddata', checkFrame);
+    el.addEventListener('canplay', checkFrame);
+    el.addEventListener('playing', checkFrame);
+
+    const interval = setInterval(checkFrame, 1000);
+
+    return () => {
+      clearInterval(interval);
+      el.removeEventListener('loadeddata', checkFrame);
+      el.removeEventListener('canplay', checkFrame);
+      el.removeEventListener('playing', checkFrame);
+      el.pause();
+      el.srcObject = null;
+    };
+  }, [media.stream, media.hasLiveVideo, media.isScreen]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    const handleFsChange = () => {
+      setIsNativeFs(Boolean(document.fullscreenElement));
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    document.addEventListener('fullscreenchange', handleFsChange);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('fullscreenchange', handleFsChange);
+      if (document.fullscreenElement) {
+        document.exitFullscreen?.().catch(() => {});
+      }
+    };
+  }, [onClose]);
+
+  const toggleNativeFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) {
+      if (containerRef.current?.requestFullscreen) {
+        containerRef.current.requestFullscreen().catch(() => {
+          document.documentElement.requestFullscreen?.().catch(() => {});
+        });
+      } else {
+        document.documentElement.requestFullscreen?.().catch(() => {});
+      }
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  }, []);
+
+  const shouldRenderVideo = Boolean(
+    media.hasLiveVideo &&
+    media.stream &&
+    (!isBlackFrame || media.isScreen)
+  );
+
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
+    <div
+      ref={containerRef}
+      className="fixed inset-0 z-[999999] bg-slate-950 text-white flex flex-col justify-between overflow-hidden select-none"
+    >
+      {/* Top Floating Glass Bar */}
+      <div className="absolute top-0 inset-x-0 p-3 sm:p-5 z-30 flex items-center justify-between bg-gradient-to-b from-slate-950/95 via-slate-950/70 to-transparent pointer-events-none">
+        <div className="flex items-center gap-2 sm:gap-2.5 pointer-events-auto min-w-0">
+          {/* Mode Pill */}
+          <div className="px-3 py-1.5 rounded-xl bg-slate-900/90 backdrop-blur-md border border-white/10 text-white text-xs font-bold flex items-center gap-2 shadow-xl shrink-0">
+            {media.isScreen ? (
+              <>
+                <Monitor className="w-3.5 h-3.5 text-cyan-400" />
+                <span className="text-cyan-200">Screen Share</span>
+              </>
+            ) : media.isSelf ? (
+              <>
+                <User className="w-3.5 h-3.5 text-amber-400" />
+                <span className="text-amber-200">Myself</span>
+              </>
+            ) : (
+              <>
+                <Video className="w-3.5 h-3.5 text-emerald-400" />
+                <span className="text-emerald-200">Camera</span>
+              </>
+            )}
+          </div>
+
+          <div className="px-3 py-1.5 rounded-xl bg-slate-900/80 backdrop-blur-md border border-white/10 text-white text-xs sm:text-sm font-black flex items-center gap-2 shadow-xl truncate max-w-[160px] sm:max-w-md">
+            <span className="truncate">{media.label}</span>
+          </div>
+
+          {/* Speaking Indicator */}
+          {media.isSpeaking && (
+            <div className="px-2.5 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/50 text-amber-300 text-xs font-bold flex items-center gap-1.5 shadow-lg animate-pulse shrink-0">
+              <span className="w-2 h-2 rounded-full bg-amber-400 shadow-[0_0_8px_#f59e0b]" />
+              <span className="hidden sm:inline">Speaking</span>
+            </div>
+          )}
+
+          {/* Muted Indicator */}
+          {media.isMuted && (
+            <div className="px-2.5 py-1.5 rounded-xl bg-red-500/20 border border-red-500/40 text-red-300 text-xs font-bold flex items-center gap-1.5 shadow-lg shrink-0">
+              <MicOff className="w-3.5 h-3.5 text-red-400" />
+              <span className="hidden sm:inline">Muted</span>
+            </div>
+          )}
+        </div>
+
+        {/* Action Controls Top Right */}
+        <div className="flex items-center gap-2 pointer-events-auto shrink-0 ml-2">
+          {shouldRenderVideo && (
+            <button
+              type="button"
+              onClick={() => setFitMode((m) => (m === 'contain' ? 'cover' : 'contain'))}
+              aria-label="Toggle fit mode"
+              title={fitMode === 'contain' ? 'Switch to Fill screen' : 'Switch to Fit screen'}
+              className="px-3 py-2 rounded-xl border border-white/20 bg-slate-900/80 hover:bg-slate-800 text-white text-xs font-bold shadow-xl backdrop-blur-md transition flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>{fitMode === 'contain' ? 'Fill' : 'Fit'}</span>
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={toggleNativeFullscreen}
+            aria-label="Toggle native fullscreen"
+            title="Toggle native fullscreen"
+            className="p-2 rounded-xl border border-white/20 bg-slate-900/80 hover:bg-slate-800 text-white shadow-xl backdrop-blur-md transition cursor-pointer"
+          >
+            {isNativeFs ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+          </button>
+
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Exit fullscreen"
+            title="Exit fullscreen (Esc)"
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-white/20 bg-red-600/90 hover:bg-red-500 text-white text-xs font-black shadow-xl backdrop-blur-md transition cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+            <span>Exit</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main Center Stage */}
+      <div
+        onDoubleClick={() => {
+          if (shouldRenderVideo) {
+            setFitMode((m) => (m === 'contain' ? 'cover' : 'contain'));
+          }
+        }}
+        className="relative flex-1 w-full h-full flex items-center justify-center overflow-hidden bg-slate-950"
+      >
+        {/* Live Video Element */}
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          className={`w-full h-full ${
+            fitMode === 'contain' ? 'object-contain' : 'object-cover'
+          } ${media.isMirrored && !media.isScreen ? 'transform scale-x-[-1]' : ''} ${
+            shouldRenderVideo ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          } transition-opacity duration-300`}
+        />
+
+        {/* Fallback / Avatar Display (when video is off, black, or loading) */}
+        {!shouldRenderVideo && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-6 text-center z-10 animate-fadeIn">
+            <div className="relative flex items-center justify-center mb-6">
+              <div
+                className={`transition-all duration-300 rounded-full ${
+                  media.isSpeaking
+                    ? 'ring-4 ring-amber-500 shadow-[0_0_60px_rgba(245,158,11,0.5)] animate-pulse'
+                    : 'shadow-2xl'
+                }`}
+              >
+                {renderAvatar(media.user, 'w-32 h-32 sm:w-48 sm:h-48 text-5xl sm:text-7xl')}
+              </div>
+              {media.isSpeaking && (
+                <div className="absolute -bottom-2 px-3 py-1 rounded-full bg-amber-500 text-slate-950 font-black text-xs uppercase tracking-wider shadow-lg flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-slate-950 animate-ping" />
+                  Speaking
+                </div>
+              )}
+            </div>
+
+            <h2 className="text-2xl sm:text-4xl font-black text-white font-heading tracking-tight mb-2">
+              {media.label}
+            </h2>
+
+            <p className="text-sm sm:text-base text-slate-400 max-w-md font-medium">
+              {media.isSelf ? (
+                isVideoEnabled ? (
+                  'Starting camera video stream...'
+                ) : (
+                  'Your camera is currently turned off. You can turn it on using the button below.'
+                )
+              ) : media.isScreen ? (
+                'Screen share is loading or stopped.'
+              ) : (
+                'Camera is currently turned off.'
+              )}
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* Bottom Floating Action Bar */}
+      <div className="absolute bottom-0 inset-x-0 p-4 sm:p-6 z-30 flex items-center justify-center bg-gradient-to-t from-slate-950/95 via-slate-950/70 to-transparent pointer-events-none">
+        {media.isSelf ? (
+          <div className="flex items-center gap-2 sm:gap-3 p-2 rounded-2xl bg-slate-900/90 backdrop-blur-xl border border-white/10 shadow-2xl pointer-events-auto">
+            {/* Quick Mic Toggle */}
+            {toggleMute && (
+              <button
+                type="button"
+                onClick={toggleMute}
+                aria-label={isMuted ? 'Unmute microphone' : 'Mute microphone'}
+                className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+                  isMuted
+                    ? 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-600/30'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white'
+                }`}
+              >
+                {isMuted ? <MicOff className="w-4 h-4 text-white" /> : <Mic className="w-4 h-4 text-emerald-400" />}
+                <span>{isMuted ? 'Unmute Mic' : 'Mute Mic'}</span>
+              </button>
+            )}
+
+            {/* Quick Camera Toggle */}
+            {toggleCamera && (
+              <button
+                type="button"
+                onClick={toggleCamera}
+                aria-label={isVideoEnabled ? 'Turn off camera' : 'Turn on camera'}
+                className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+                  isVideoEnabled
+                    ? 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-lg shadow-cyan-600/30'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white'
+                }`}
+              >
+                {isVideoEnabled ? <VideoOff className="w-4 h-4 text-white" /> : <Video className="w-4 h-4 text-cyan-400" />}
+                <span>{isVideoEnabled ? 'Turn Off Camera' : 'Turn On Camera'}</span>
+              </button>
+            )}
+
+            {/* Quick Hand Raise Toggle */}
+            {toggleHandRaise && (
+              <button
+                type="button"
+                onClick={toggleHandRaise}
+                aria-label={isHandRaised ? 'Lower hand' : 'Raise hand'}
+                className={`flex items-center gap-2 px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+                  isHandRaised
+                    ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-lg shadow-amber-500/30'
+                    : 'bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white'
+                }`}
+              >
+                <Hand className={`w-4 h-4 ${isHandRaised ? 'text-slate-950' : 'text-amber-400'}`} />
+                <span>{isHandRaised ? 'Lower Hand' : 'Raise Hand'}</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center gap-3 px-4 py-2 rounded-2xl bg-slate-900/80 backdrop-blur-xl border border-white/10 shadow-2xl pointer-events-auto text-xs font-semibold text-slate-300">
+            <span className="flex items-center gap-2">
+              <span className={`w-2.5 h-2.5 rounded-full ${media.isSpeaking ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400'}`} />
+              {media.isSpeaking ? 'Speaking right now' : media.isMuted ? 'Participant muted' : 'Connected'}
+            </span>
+          </div>
+        )}
+      </div>
+    </div>,
+    document.body
   );
 };
 
@@ -1029,6 +1452,89 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
   const [peerOrientations, setPeerOrientations] = useState<Record<string, boolean>>({});
   const [peerCameraBlack, setPeerCameraBlack] = useState<Record<string, boolean>>({});
   const [localCameraBlack, setLocalCameraBlack] = useState<boolean>(true);
+  const [fullscreenKey, setFullscreenKey] = useState<string | null>(null);
+
+  const handleEnterFullscreen = useCallback((key: string) => {
+    setFullscreenKey((prev) => (prev === key ? null : key));
+    if (typeof document !== 'undefined' && document.fullscreenEnabled && !document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.().catch(() => {});
+    }
+  }, []);
+
+  const activeFullscreenMedia = useMemo(() => {
+    if (!fullscreenKey || !isInVideo) return null;
+
+    // You cannot full screen yourself
+    if (fullscreenKey === 'self' || fullscreenKey === 'local-camera' || fullscreenKey === 'local-avatar') {
+      return null;
+    }
+
+    if (fullscreenKey.startsWith('remote-cam:')) {
+      const peerId = fullscreenKey.slice('remote-cam:'.length);
+      const peer = voiceUsers.find((u: any) => u.id === peerId);
+      if (!peer) return null;
+      const camStream = remoteCameraStreams[peerId];
+      const isLive = Boolean(
+        camStream &&
+        camStream.getVideoTracks().some((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled)
+      );
+      // When camera is not on, do not allow fullscreen
+      if (!isLive || !camStream) return null;
+      return {
+        key: fullscreenKey,
+        type: 'remote-cam' as const,
+        stream: camStream,
+        hasLiveVideo: true,
+        label: `${peer.username}'s Camera`,
+        user: peer,
+        isScreen: false,
+        isMirrored: false,
+        isSpeaking: Boolean(remoteSpeaking[peerId] || peer.is_speaking),
+        isMuted: Boolean(peer.is_muted),
+        isSelf: false,
+      };
+    }
+
+    if (fullscreenKey.startsWith('remote-screen:')) {
+      const peerId = fullscreenKey.slice('remote-screen:'.length);
+      const peer = voiceUsers.find((u: any) => u.id === peerId);
+      if (!peer) return null;
+      const scrStream = remoteScreenStreams[peerId];
+      const isLive = Boolean(
+        scrStream &&
+        scrStream.getVideoTracks().some((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled)
+      );
+      if (!isLive || !scrStream) return null;
+      return {
+        key: fullscreenKey,
+        type: 'remote-screen' as const,
+        stream: scrStream,
+        hasLiveVideo: true,
+        label: `${peer.username}'s Screen`,
+        user: peer,
+        isScreen: true,
+        isMirrored: false,
+        isSpeaking: Boolean(remoteSpeaking[peerId] || peer.is_speaking),
+        isMuted: Boolean(peer.is_muted),
+        isSelf: false,
+      };
+    }
+
+    return null;
+  }, [
+    fullscreenKey,
+    isInVideo,
+    voiceUsers,
+    remoteCameraStreams,
+    remoteScreenStreams,
+    remoteSpeaking
+  ]);
+
+  useEffect(() => {
+    if (fullscreenKey && !activeFullscreenMedia) {
+      setFullscreenKey(null);
+    }
+  }, [fullscreenKey, activeFullscreenMedia]);
 
   // GIF items state
   const [gifs, setGifs] = useState<any[]>([]);
@@ -1162,7 +1668,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
       if (!isInVideo) {
         joinVoiceChannel(false);
       }
-    } else {
+    } else if (!isInVideo) {
       let newActivity = 'In #general';
       if (channel.startsWith('dm-')) newActivity = 'In Private Chat';
       setCurrentUser((prev: any) => ({ ...prev, current_channel: channel as any, activity: newActivity }));
@@ -1617,6 +2123,21 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                 ref={chatScrollRef}
                 className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 md:p-6 space-y-4 sm:space-y-6"
               >
+                {messageSearch.trim() && (
+                  <div className="sticky top-0 z-10 flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-cyan-50/95 dark:bg-slate-900/95 border border-cyan-200 dark:border-cyan-500/30 backdrop-blur-md text-xs">
+                    <span className="font-semibold text-slate-700 dark:text-slate-200 truncate">
+                      {activeChannelMessages.length} {activeChannelMessages.length === 1 ? 'match' : 'matches'} for &ldquo;{messageSearch}&rdquo;
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setMessageSearch('')}
+                      className="text-[11px] font-bold text-cyan-600 dark:text-cyan-400 hover:underline shrink-0 cursor-pointer"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
+
                 {messageSearch.trim() && activeChannelMessages.length === 0 && (
                   <div className="py-12 text-center text-xs font-medium text-slate-400 dark:text-slate-500">
                     No messages matching &ldquo;{messageSearch}&rdquo;
@@ -1856,10 +2377,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
               {/* GIPHY POPOVER MODAL */}
               {isGiphyOpen && (
-                <div className="absolute bottom-16 sm:bottom-20 left-2 right-2 sm:left-4 sm:right-4 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-3 sm:p-4 max-w-xl mx-auto max-h-[min(68dvh,28rem)] flex flex-col space-y-2.5 sm:space-y-3 backdrop-blur-xl">
+                <div className="absolute bottom-16 sm:bottom-20 left-2 right-2 sm:left-4 sm:right-4 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-3 sm:p-4 max-w-xl mx-auto max-h-[min(60dvh,26rem)] flex flex-col space-y-2.5 sm:space-y-3 backdrop-blur-xl">
                   
                   {/* Modal Header */}
-                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800 shrink-0">
                     <span className="text-sm font-bold text-slate-900 dark:text-white">GIFs</span>
                     <button 
                       onClick={() => setIsGiphyOpen(false)}
@@ -1870,7 +2391,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                   </div>
 
                   {/* Search Bar Input */}
-                  <div className="relative">
+                  <div className="relative shrink-0">
                     <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
                     <input 
                       type="text" 
@@ -1897,7 +2418,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                   </div>
 
                   {/* Category Pills Bar */}
-                  <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none">
+                  <div className="flex items-center gap-2 overflow-x-auto pb-1.5 scrollbar-none shrink-0">
                     {GIPHY_CATEGORIES.map((cat) => {
                       const isActive = activeCategoryLabel === cat.label || (cat.query && giphySearch.toLowerCase() === cat.query.toLowerCase());
                       return (
@@ -2190,7 +2711,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                       const isLocalCameraActive = Boolean(
                         isVideoEnabled && 
                         cameraStream && 
-                        cameraStream.getVideoTracks().some((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled && !t.muted)
+                        cameraStream.getVideoTracks().some((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled)
                       );
                       const isLocalDisplayingVideo = isLocalCameraActive && !localCameraBlack;
 
@@ -2214,7 +2735,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                                 isSpeaking={isUserSpeaking(currentUser.id)}
                               />
 
-                              {/* Orientation Badge (only shown when live camera is visible and not black) */}
+                              {/* Orientation Badge */}
                               {isLocalDisplayingVideo && (
                                 <div className="absolute top-3 right-3 px-2.5 py-1 rounded-xl bg-slate-950/70 backdrop-blur-md border border-white/10 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none">
                                   {localIsVertical ? (
@@ -2317,14 +2838,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                       const scrStream = remoteScreenStreams[u.id];
 
                       const hasCamera = Boolean(
-                        u.has_video &&
                         camStream &&
-                        camStream.getVideoTracks().some((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled && !t.muted)
+                        camStream.getVideoTracks().some((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled)
                       );
                       const hasScreen = Boolean(
-                        u.is_screen_sharing &&
                         scrStream &&
-                        scrStream.getVideoTracks().some((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled && !t.muted)
+                        scrStream.getVideoTracks().some((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled)
                       );
                       const isPeerCameraVertical = Boolean(peerOrientations[`${u.id}-camera`]);
                       const isPeerCameraBlack = Boolean(peerCameraBlack[u.id]);
@@ -2334,7 +2853,9 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                         <React.Fragment key={u.id}>
                           {/* Dedicated Remote Camera Tile (when camera is on) */}
                           {hasCamera && (
-                            <div className={`relative mx-auto rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl ${
+                            <div 
+                              onDoubleClick={() => handleEnterFullscreen(`remote-cam:${u.id}`)}
+                              className={`relative mx-auto rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border transition-all duration-300 flex flex-col items-center justify-center shadow-2xl cursor-pointer ${
                               isPeerDisplayingVideo && isPeerCameraVertical 
                                 ? 'aspect-[9/16] w-full max-w-[260px] sm:max-w-[320px] max-h-[520px]' 
                                 : 'aspect-video w-full max-w-[500px]'
@@ -2347,15 +2868,16 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                                 avatarColor={u.avatar_color}
                                 user={u}
                                 renderAvatar={renderAvatar}
-                                onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [`${u.id}-camera`]: vert }))}
-                                onBlackStateChange={(isBlack) => setPeerCameraBlack((prev) => ({ ...prev, [u.id]: isBlack }))}
+                                onOrientationChange={(vert) => setPeerOrientations((prev) => (prev[`${u.id}-camera`] === vert ? prev : { ...prev, [`${u.id}-camera`]: vert }))}
+                                onBlackStateChange={(isBlack) => setPeerCameraBlack((prev) => (prev[u.id] === isBlack ? prev : { ...prev, [u.id]: isBlack }))}
+                                onToggleFullscreen={() => handleEnterFullscreen(`remote-cam:${u.id}`)}
                                 isScreen={false}
                                 isSpeaking={isPeerSpeaking}
                               />
 
-                              {/* Orientation Badge (only shown when camera is active and not black) */}
+                              {/* Orientation Badge (shifted left of fullscreen button) */}
                               {isPeerDisplayingVideo && (
-                                <div className="absolute top-3 right-3 px-2.5 py-1 rounded-xl bg-slate-950/70 backdrop-blur-md border border-white/10 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none">
+                                <div className="absolute top-3 right-14 px-2.5 py-1 rounded-xl bg-slate-950/70 backdrop-blur-md border border-white/10 text-white text-[11px] font-bold flex items-center gap-1.5 z-20 shadow-lg pointer-events-none">
                                   {isPeerCameraVertical ? (
                                     <>
                                       <Smartphone className="w-3.5 h-3.5 text-amber-400" />
@@ -2389,12 +2911,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
                           {/* Dedicated Remote Screen Share Tile (when screen share is on) */}
                           {hasScreen && (
-                            <div data-screen-tile className="relative mx-auto rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border border-cyan-400/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px] fullscreen:fixed fullscreen:inset-0 fullscreen:z-[9999] fullscreen:w-screen fullscreen:h-screen fullscreen:max-w-none fullscreen:aspect-auto fullscreen:rounded-none fullscreen:bg-black">
+                            <div 
+                              data-screen-tile 
+                              onDoubleClick={() => handleEnterFullscreen(`remote-screen:${u.id}`)}
+                              className="relative mx-auto rounded-3xl overflow-hidden bg-white dark:bg-slate-900 border border-cyan-400/30 transition-all duration-300 flex flex-col items-center justify-center shadow-2xl aspect-video w-full max-w-[500px] cursor-pointer"
+                            >
                               <RemoteVideoPlayer 
                                 stream={scrStream} 
                                 username={`${u.username}'s Screen`}
                                 avatarColor={u.avatar_color}
-                                onOrientationChange={(vert) => setPeerOrientations((prev) => ({ ...prev, [`${u.id}-screen`]: vert }))}
+                                onOrientationChange={(vert) => setPeerOrientations((prev) => (prev[`${u.id}-screen`] === vert ? prev : { ...prev, [`${u.id}-screen`]: vert }))}
+                                onToggleFullscreen={() => handleEnterFullscreen(`remote-screen:${u.id}`)}
                                 isScreen={true}
                               />
                               <div className="absolute inset-x-0 bottom-0 p-3 sm:p-4 bg-gradient-to-t from-slate-950/90 via-slate-950/40 to-transparent flex items-end justify-between z-20 pointer-events-none">
@@ -2916,6 +3443,25 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
             </div>
           </div>
         </div>
+      )}
+
+      {/* Fullscreen Stage (Camera / Myself / Peer / Screen Share) Portal */}
+      {activeFullscreenMedia && (
+        <FullscreenStageOverlay
+          media={activeFullscreenMedia}
+          renderAvatar={renderAvatar}
+          onClose={() => setFullscreenKey(null)}
+          toggleMute={() => {
+            const hasLiveMic = globalChat.localAudioStream?.getAudioTracks().some((track: MediaStreamTrack) => track.readyState === 'live');
+            if (!hasLiveMic) void globalChat.requestMicrophonePermission();
+            else globalChat.setIsMuted(!globalChat.isMuted);
+          }}
+          toggleCamera={() => void globalChat.toggleCamera()}
+          isMuted={isMuted}
+          isVideoEnabled={isVideoEnabled}
+          toggleHandRaise={toggleHandRaise}
+          isHandRaised={Boolean(currentUser.is_hand_raised)}
+        />
       )}
 
     </div>

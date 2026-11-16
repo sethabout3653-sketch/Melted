@@ -394,7 +394,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   const win = iframeRef.current.contentWindow;
                   restoreAutoSaveToIframe(game.id, win);
                   
-                  // Inject Scaffolding compatibility layer
+                  // Inject Scaffolding compatibility layer (safely handled for same-origin vs cross-origin frames)
                   try {
                     const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
                     if (doc) {
@@ -402,8 +402,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                         injectScaffolding(doc);
                       });
                     }
-                  } catch (e) {
-                    console.warn('Could not inject scaffolding:', e);
+                  } catch {
+                    // Cross-origin frames (such as external workers/domains) restrict document access by browser security design; ignore silently.
                   }
 
                   try {

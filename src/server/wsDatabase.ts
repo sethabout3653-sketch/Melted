@@ -356,7 +356,7 @@ export function initWebSocketDatabase(server: Server) {
 
               if (!delivered) {
                 globalWsDb.addPendingSignal({
-                  id: 'sig-' + Date.now(),
+                  id: `sig-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
                   fromUserId: msg.fromUserId || boundUserId || 'anon',
                   targetUserId: msg.targetUserId,
                   type: 'RTC_SIGNAL',
