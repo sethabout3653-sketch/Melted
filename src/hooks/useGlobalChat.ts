@@ -59,12 +59,11 @@ export function useGlobalChat({
   firebaseUserId?: string | null;
 }) {
   const [currentUser, setCurrentUser] = useState(() => {
-    // Clean up old/stale/corrupted localStorage keys while keeping valid ones
+    // Clean up legacy frosted_ keys without touching saved favorites, game saves, or Scramjet cookies
     try {
-      const validKeys = ['frosthub_chat_user_id', 'frosthub_chat_username', 'frosthub_chat_usercolor', 'frosthub_chat_avatar_url'];
       const allKeys = Object.keys(localStorage);
       allKeys.forEach((key) => {
-        if (key.startsWith('frosted_') || (key.startsWith('frosthub_') && !validKeys.includes(key))) {
+        if (key.startsWith('frosted_')) {
           localStorage.removeItem(key);
         }
       });

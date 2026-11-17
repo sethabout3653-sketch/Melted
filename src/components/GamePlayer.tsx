@@ -11,7 +11,12 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { GameItem } from '../types/game';
-import { getPlayableGameUrl } from '../services/gameService';
+import {
+  getPlayableGameUrl,
+  getScramjetTargetUrl,
+  shouldUseScramjetByDefault,
+} from '../services/gameService';
+import { launchInScramjetFrame, flushScramjetCookies } from '../services/scramjetProxyService';
 import { launchAboutBlank } from '../hooks/useCloak';
 import { storeGameSave, restoreAutoSaveToIframe, flushPendingSaves } from '../services/saveService';
 
@@ -28,13 +33,26 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   onToggleFavorite,
   isFavorite,
 }) => {
-  const [playableUrl, setPlayableUrl] = useState<string>('');
+  const [useScramjet, setUseScramjet] = useState<boolean>(() => shouldUseScramjetByDefault(game));
+  const [directUrl, setDirectUrl] = useState<string>('');
+  const [stealthUrl, setStealthUrl] = useState<string>('');
+  const [reloadNonce, setReloadNonce] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const prevGameIdRef = useRef<number | string | null>(null);
+
+  // Sync default Scramjet mode whenever switching to a different game
+  useEffect(() => {
+    if (prevGameIdRef.current !== game.id) {
+      prevGameIdRef.current = game.id;
+      setUseScramjet(shouldUseScramjetByDefault(game));
+      setReloadNonce(0);
+    }
+  }, [game]);
 
   // Background Auto-Save Sync Listener from Iframe Game Stream
   useEffect(() => {
@@ -50,6 +68,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     return () => {
       window.removeEventListener('message', handleMessage);
       flushPendingSaves(game.id, game.name);
+      flushScramjetCookies(true);
     };
   }, [game.id, game.name]);
 
@@ -130,41 +149,68 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  const resolvedGameIdRef = useRef<number | string | null>(null);
-
-  // Resolve Playable URL on mount or when game changes
+  // Launch via Scramjet v2 or Direct URL
   useEffect(() => {
     let active = true;
-    
-    // Avoid re-running if we're already playing this exact game id and playableUrl is set
-    if (resolvedGameIdRef.current === game.id && playableUrl) {
-      return;
-    }
-
-    resolvedGameIdRef.current = game.id;
     setIsLoading(true);
     setHasError(false);
 
-    const targetUrl = getPlayableGameUrl(game);
-    if (targetUrl) {
-      console.log('DEBUG: Playable URL found:', targetUrl);
-      setPlayableUrl(targetUrl);
+    const fallbackUrl = getPlayableGameUrl(game);
+    const scramjetTarget = getScramjetTargetUrl(game);
+
+    const safetyTimer = setTimeout(() => {
+      if (active) setIsLoading(false);
+    }, 3500);
+
+    if (useScramjet && scramjetTarget) {
+      setDirectUrl('');
+      setStealthUrl(scramjetTarget);
+
+      // Wait a microtask to ensure the keyed iframe ref is mounted cleanly
+      const launchTimer = setTimeout(async () => {
+        if (!active || !iframeRef.current) return;
+        try {
+          const { proxiedSrc } = await launchInScramjetFrame(iframeRef.current, scramjetTarget);
+          if (!active) return;
+          if (proxiedSrc) {
+            setStealthUrl(proxiedSrc);
+          }
+        } catch (err) {
+          console.warn('[GamePlayer] Scramjet v2 unavailable, falling back to direct stream:', err);
+          if (!active) return;
+          setUseScramjet(false);
+          if (fallbackUrl) {
+            setDirectUrl(fallbackUrl);
+            setStealthUrl(fallbackUrl);
+          } else {
+            setHasError(true);
+          }
+          setIsLoading(false);
+        }
+      }, 0);
+
+      return () => {
+        active = false;
+        clearTimeout(launchTimer);
+        clearTimeout(safetyTimer);
+      };
+    }
+
+    if (fallbackUrl) {
+      setDirectUrl(fallbackUrl);
+      setStealthUrl(fallbackUrl);
     } else {
-      console.error('DEBUG: No playable URL found for game:', game);
+      setDirectUrl('');
+      setStealthUrl('');
       setHasError(true);
     }
     setIsLoading(false);
-
-    // Safety timeout for school Chromebooks: never show loading screen for more than 2.0s
-    const safetyTimer = setTimeout(() => {
-      if (active) setIsLoading(false);
-    }, 2000);
 
     return () => {
       active = false;
       clearTimeout(safetyTimer);
     };
-  }, [game.id, game.resolvedUrl, game.url, game.name, playableUrl]);
+  }, [game.id, game.resolvedUrl, game.url, game.name, useScramjet, reloadNonce]);
 
   if (!game) return null;
 
@@ -183,19 +229,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const reloadGame = () => {
     setIsLoading(true);
     setHasError(false);
-    const targetUrl = getPlayableGameUrl(game);
-    if (targetUrl) {
-      setPlayableUrl(targetUrl);
-      if (iframeRef.current) {
-        // Use a timestamp to force fresh load through proxy
-        const separator = targetUrl.includes('?') ? '&' : '?';
-        iframeRef.current.src = `${targetUrl}${separator}reload=${Date.now()}`;
-      }
-    } else {
-      setHasError(true);
-    }
-    setIsLoading(false);
+    setReloadNonce((n) => n + 1);
   };
+
+  const activeLaunchUrl = stealthUrl || directUrl || getPlayableGameUrl(game);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 animate-in fade-in duration-150 p-0 sm:p-4">
@@ -261,12 +298,12 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               </motion.button>
 
               {/* Stealth about:blank button */}
-              {playableUrl && (
+              {activeLaunchUrl && (
                 <motion.button
                   type="button"
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => launchAboutBlank(playableUrl, game.name)}
+                  onClick={() => launchAboutBlank(activeLaunchUrl, game.name)}
                   className="hidden sm:flex items-center gap-1.5 px-3 min-h-[40px] bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-[var(--brand-blue)] dark:hover:text-[var(--brand-blue)] hover:border-blue-200 dark:hover:border-blue-700 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
                   title="Open stealth tab (about:blank cloak)"
                 >
@@ -362,10 +399,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 </div>
               </div>
               <h4 className="text-slate-900 dark:text-white font-extrabold text-sm sm:text-base font-heading">
-                Starting Unblocked Stream...
+                {useScramjet ? 'Connecting via Scramjet v2 Proxy...' : 'Starting Unblocked Stream...'}
               </h4>
               <p className="text-slate-500 dark:text-slate-400 text-xs mt-1 max-w-xs font-bold uppercase tracking-widest">
-                Optimized for school networks
+                {useScramjet ? 'Wisp + Epoxy encrypted tunnel' : 'Optimized for school networks'}
               </p>
               <button
                 onClick={() => setIsLoading(false)}
@@ -377,10 +414,11 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           )}
 
           {/* Iframe */}
-          {playableUrl && (
+          {(useScramjet || directUrl) && (
             <iframe
+              key={`${game.id}-${useScramjet ? 'sj' : 'direct'}-${reloadNonce}`}
               ref={iframeRef}
-              src={playableUrl || undefined}
+              src={useScramjet ? undefined : (reloadNonce > 0 && directUrl ? `${directUrl}${directUrl.includes('?') ? '&' : '?'}reload=${reloadNonce}` : directUrl)}
               title={game.name}
               tabIndex={0}
               loading="eager"
@@ -393,17 +431,19 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 if (iframeRef.current?.contentWindow) {
                   const win = iframeRef.current.contentWindow;
                   restoreAutoSaveToIframe(game.id, win);
-                  
-                  // Inject Scaffolding compatibility layer (safely handled for same-origin vs cross-origin frames)
-                  try {
-                    const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
-                    if (doc) {
-                      import('../utils/scaffolding-loader').then(({ injectScaffolding }) => {
-                        injectScaffolding(doc);
-                      });
+
+                  // Inject Scaffolding compatibility layer for direct non-Scramjet frames when same-origin
+                  if (!useScramjet) {
+                    try {
+                      const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
+                      if (doc) {
+                        import('../utils/scaffolding-loader').then(({ injectScaffolding }) => {
+                          injectScaffolding(doc);
+                        });
+                      }
+                    } catch {
+                      // Cross-origin frames restrict document access by browser security design; ignore silently.
                     }
-                  } catch {
-                    // Cross-origin frames (such as external workers/domains) restrict document access by browser security design; ignore silently.
                   }
 
                   try {
@@ -429,7 +469,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   Failed to Load Game Stream
                 </h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">
-                  The upstream game server may be blocking direct embedding. Try opening in a Stealth Window or reload.
+                  The upstream game server may be blocking direct embedding. Try reloading or opening in a Stealth Window.
                 </p>
               </div>
               <div className="flex items-center gap-3 pt-2">
@@ -439,9 +479,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 >
                   Try Again
                 </button>
-                {playableUrl && (
+                {activeLaunchUrl && (
                   <button
-                    onClick={() => launchAboutBlank(playableUrl, game.name)}
+                    onClick={() => launchAboutBlank(activeLaunchUrl, game.name)}
                     className="px-4 py-2 bg-[var(--brand-blue)] hover:bg-[var(--brand-blue-hover)] text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-lg shadow-[var(--brand-blue-glow)]"
                   >
                     Open Stealth Window

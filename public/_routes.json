@@ -2,7 +2,11 @@
   "version": 1,
   "include": [
     "/api/*",
-    "/ws-db"
+    "/ws-db",
+    "/wisp/*",
+    "/scramjet/*",
+    "/controller/*",
+    "/sj-sw.js"
   ],
   "exclude": [
     "/assets/*",

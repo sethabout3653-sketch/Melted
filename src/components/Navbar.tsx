@@ -15,8 +15,8 @@ import { GameCategory } from '../types/game';
 import { containerVariants, slideInVariants } from '../utils/animations';
 
 interface NavbarProps {
-  currentTab: 'games' | 'chat' | 'ai' | 'movies' | 'tv';
-  onTabChange: (tab: 'games' | 'chat' | 'ai' | 'movies' | 'tv') => void;
+  currentTab: 'games' | 'chat' | 'ai' | 'movies' | 'tv' | 'browser';
+  onTabChange: (tab: 'games' | 'chat' | 'ai' | 'movies' | 'tv' | 'browser') => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onRandomGame: () => void;
@@ -143,6 +143,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
               { id: 'games', label: 'Games' },
               { id: 'movies', label: 'Movies' },
               { id: 'tv', label: 'Live TV' },
+              { id: 'browser', label: 'Browser' },
               { id: 'ai', label: 'AI Assistant' },
               { id: 'chat', label: 'Community' },
             ].map((tab) => {

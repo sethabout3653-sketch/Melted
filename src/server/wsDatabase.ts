@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
-import type { Server } from 'http';
+import type { IncomingMessage, Server } from 'http';
+import type { Duplex } from 'stream';
 
 export interface DbUser {
   id: string;
@@ -149,8 +150,8 @@ export function broadcastTable(tableName: string, data: any) {
   });
 }
 
-export function initWebSocketDatabase(server: Server) {
-  const wss = new WebSocketServer({ server, path: '/ws-db' });
+export function initWebSocketDatabase(_server?: Server) {
+  const wss = new WebSocketServer({ noServer: true });
   activeWss = wss;
 
   const disconnectTimers = new Map<string, NodeJS.Timeout>();
@@ -447,4 +448,10 @@ export function initWebSocketDatabase(server: Server) {
   });
 
   console.log(`🔌 Pure WebSocket Database mounted at /ws-db`);
+
+  return (req: IncomingMessage, socket: Duplex, head: Buffer) => {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      wss.emit('connection', ws, req);
+    });
+  };
 }

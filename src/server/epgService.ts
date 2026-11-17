@@ -684,7 +684,7 @@ async function fetchAndParseXmltvFeed(source: FeedSource, windowStart: number, w
 
       if (programmes.size > 0) return { tag: source.tag, channels, programmes };
     } catch (err: any) {
-      console.warn(`[EPG] Failed loading XMLTV feed ${targetUrl}: ${err?.message || err}`);
+      console.debug(`[EPG] Feed ${targetUrl} unavailable or skipped: ${err?.message || err}`);
     }
   }
   return { tag: source.tag, channels, programmes };
@@ -766,7 +766,7 @@ async function fetchSelectiveXmltvStream(
       }
     }
   } catch (err: any) {
-    console.warn(`[EPG] Failed streaming selective feed ${spec.url}: ${err?.message || err}`);
+    console.debug(`[EPG] Selective feed ${spec.url} unavailable or skipped: ${err?.message || err}`);
   }
   return { tag: spec.tag, channels, programmes };
 }

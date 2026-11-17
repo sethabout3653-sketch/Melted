@@ -478,6 +478,37 @@ export function getPlayableGameUrl(game: GameItem): string {
   return resolveGameUrl(game.url, game.id);
 }
 
+/**
+ * GN-Math native games run directly by default ("except gn-math games they are fine").
+ * External URLs (e.g. Undertale & Deltarune workers.dev), UGS, and CKV games run via Scramjet v2.
+ */
+export function shouldUseScramjetByDefault(game: GameItem): boolean {
+  if (!game) return false;
+  // GN-Math native game embeds run directly as-is
+  if (game.source === 'native') {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Resolves the absolute upstream target URL required by Scramjet frame.go(url).
+ */
+export function getScramjetTargetUrl(game: GameItem): string {
+  if (!game) return '';
+  if (game.url && (game.url.startsWith('http://') || game.url.startsWith('https://'))) {
+    return game.url;
+  }
+  if (game.source === 'CKV' || game.url.startsWith('/ckv/')) {
+    const clean = game.url.replace(/^\/ckv\//, '').replace(/^\//, '');
+    return `https://wanocapy.github.io/ChickenKingsVault/${clean}`;
+  }
+  if (game.source === 'ugs' || game.url.startsWith('/ugs/')) {
+    return resolveUgsUrl(game.url);
+  }
+  return game.resolvedUrl || resolveGameUrl(game.url, game.id);
+}
+
 export function getAllGames(): GameItem[] {
   // 1. ALL EXISTING GN-MATH GAMES PRESERVED EXACTLY AS-IS (ZERO TOUCHED)
   const validGames = (rawGamesData as RawGame[]).filter(

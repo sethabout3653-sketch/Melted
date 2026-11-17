@@ -7,6 +7,7 @@ import http from 'http';
 import https from 'https';
 import { Readable } from 'stream';
 import { initWebSocketDatabase, globalWsDb, broadcastTable, broadcastWss, sendToUserSockets } from './src/server/wsDatabase';
+import { server as wispServer } from '@mercuryworkshop/wisp-js/server';
 import Groq from 'groq-sdk';
 import { processGameHtml, getScaffoldingBuffer } from './src/server/scaffoldingLoader';
 import { initSethsrcEngine } from './src/server/sethsrcEngine';
@@ -31,6 +32,256 @@ const IS_PROD = process.env.NODE_ENV === 'production';
 // Initialize Sethsrc HLS Streaming & Reverse Proxy Engine
 initSethsrcEngine(app, __dirname);
 
+// Mount Scramjet 2.0.67-alpha.2 runtime, WASM, and Controller assets
+const scramjetDistDir = path.resolve(__dirname, 'node_modules/@mercuryworkshop/scramjet/dist');
+const controllerDistDir = path.resolve(__dirname, 'node_modules/@mercuryworkshop/scramjet-controller/dist');
+
+app.use('/scramjet', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  if (req.path.endsWith('.wasm')) {
+    res.setHeader('Content-Type', 'application/wasm');
+  } else if (req.path.endsWith('.js') || req.path.endsWith('.mjs')) {
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  }
+  next();
+}, express.static(scramjetDistDir, { maxAge: '1h' }));
+
+app.use('/controller', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Service-Worker-Allowed', '/');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  if (req.path.endsWith('.js') || req.path.endsWith('.mjs')) {
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  }
+  next();
+}, express.static(controllerDistDir, { maxAge: 0 }));
+
+app.get('/sj-sw.js', (_req, res) => {
+  const swPath = IS_PROD
+    ? path.resolve(__dirname, 'dist/sj-sw.js')
+    : path.resolve(__dirname, 'public/sj-sw.js');
+  const fallbackSwPath = path.resolve(__dirname, 'public/sj-sw.js');
+  const targetSwPath = fs.existsSync(swPath) ? swPath : fallbackSwPath;
+  res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+  res.setHeader('Service-Worker-Allowed', '/');
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.sendFile(targetSwPath);
+});
+
+// Server-side raw HTTP/1.1+HTTPS fallback for Scramjet when Epoxy WASM HTTP/2 hits PROTOCOL_ERROR
+app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), async (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-SJ-Url, X-SJ-Method, X-SJ-Headers');
+  res.setHeader('Access-Control-Expose-Headers', 'X-SJ-Meta');
+
+  try {
+    const rawUrl = String(req.headers['x-sj-url'] || '').trim();
+    const method = String(req.headers['x-sj-method'] || 'GET').toUpperCase();
+    const rawHeadersB64 = String(req.headers['x-sj-headers'] || '').trim();
+
+    if (!rawUrl) {
+      return res.status(400).json({ error: 'Missing X-SJ-Url' });
+    }
+
+    let targetUrl: URL;
+    try {
+      targetUrl = new URL(rawUrl);
+    } catch {
+      return res.status(400).json({ error: 'Invalid target URL' });
+    }
+
+    if (targetUrl.protocol !== 'http:' && targetUrl.protocol !== 'https:') {
+      return res.status(400).json({ error: 'Unsupported protocol' });
+    }
+
+    const host = targetUrl.hostname.toLowerCase();
+    if (
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host === '::1' ||
+      host === '0.0.0.0' ||
+      host.startsWith('10.') ||
+      host.startsWith('192.168.') ||
+      host.startsWith('169.254.') ||
+      /^172\.(1[6-9]|2\d|3[0-1])\./.test(host)
+    ) {
+      return res.status(403).json({ error: 'Private/loopback host blocked' });
+    }
+
+    let parsedHeaders: [string, string][] = [];
+    if (rawHeadersB64) {
+      try {
+        const json = Buffer.from(rawHeadersB64, 'base64').toString('utf8');
+        const arr = JSON.parse(json);
+        if (Array.isArray(arr)) {
+          parsedHeaders = arr.filter(
+            (pair): pair is [string, string] =>
+              Array.isArray(pair) && pair.length >= 2 && typeof pair[0] === 'string' && typeof pair[1] === 'string'
+          );
+        }
+      } catch {}
+    }
+
+    const forbiddenForwardHeaders = new Set([
+      'host',
+      'connection',
+      'keep-alive',
+      'proxy-connection',
+      'transfer-encoding',
+      'upgrade',
+      'http2-settings',
+      'te',
+      'content-length',
+      'accept-encoding',
+    ]);
+
+    const forwardHeaders = new Headers();
+    const cookieParts: string[] = [];
+    for (const [k, v] of parsedHeaders) {
+      const lower = k.toLowerCase().trim();
+      if (!lower || lower.startsWith(':') || forbiddenForwardHeaders.has(lower)) continue;
+      const cleanVal = v.replace(/[\r\n\0]+/g, ' ').trim();
+      if (lower === 'cookie') {
+        if (cleanVal) cookieParts.push(cleanVal);
+      } else {
+        try {
+          forwardHeaders.set(lower, cleanVal);
+        } catch {}
+      }
+    }
+    if (cookieParts.length > 0) {
+      forwardHeaders.set('cookie', cookieParts.join('; '));
+    }
+    if (!forwardHeaders.has('user-agent')) {
+      forwardHeaders.set(
+        'user-agent',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+      );
+    }
+    if (!forwardHeaders.has('accept-language')) {
+      forwardHeaders.set('accept-language', 'en-US,en;q=0.9');
+    }
+
+    // Set genuine origin/referer for YouTube & TikTok video endpoints to prevent 403 Forbidden
+    if (host.includes('youtube.com') || host.includes('googlevideo.com') || host.includes('ytimg.com')) {
+      if (!forwardHeaders.has('referer')) forwardHeaders.set('referer', 'https://www.youtube.com/');
+      if (!forwardHeaders.has('origin') && method !== 'GET' && method !== 'HEAD') {
+        forwardHeaders.set('origin', 'https://www.youtube.com');
+      }
+    } else if (host.includes('tiktok.com') || host.includes('tiktokcdn.com') || host.includes('byteoversea.com')) {
+      if (!forwardHeaders.has('referer')) forwardHeaders.set('referer', 'https://www.tiktok.com/');
+      if (!forwardHeaders.has('origin') && method !== 'GET' && method !== 'HEAD') {
+        forwardHeaders.set('origin', 'https://www.tiktok.com');
+      }
+    }
+
+    const hasBody = method !== 'GET' && method !== 'HEAD' && Buffer.isBuffer(req.body) && req.body.length > 0;
+    const upstreamRes = await fetch(targetUrl.href, {
+      method,
+      headers: forwardHeaders,
+      body: hasBody ? new Uint8Array(req.body) : undefined,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(60000),
+    });
+
+    const outHeaders: [string, string][] = [];
+    const setCookies = typeof (upstreamRes.headers as any).getSetCookie === 'function'
+      ? ((upstreamRes.headers as any).getSetCookie() as string[])
+      : [];
+
+    // Strip iframe-breaking framing policies and CSP headers that trigger Trusted Types crashes
+    const strippedUpstreamHeaders = new Set([
+      'set-cookie',
+      'content-encoding',
+      'content-length',
+      'transfer-encoding',
+      'content-security-policy',
+      'content-security-policy-report-only',
+      'x-frame-options',
+      'cross-origin-opener-policy',
+      'cross-origin-embedder-policy',
+      'cross-origin-resource-policy',
+      'permissions-policy',
+      'feature-policy',
+      'clear-site-data',
+      'origin-agent-cluster',
+    ]);
+
+    for (const [k, v] of upstreamRes.headers.entries()) {
+      const lower = k.toLowerCase().trim();
+      if (strippedUpstreamHeaders.has(lower)) {
+        continue;
+      }
+      outHeaders.push([k, v]);
+    }
+    for (const sc of setCookies) {
+      outHeaders.push(['set-cookie', sc]);
+    }
+
+    const isDocument = forwardHeaders.get('sec-fetch-dest') === 'document' || forwardHeaders.get('accept')?.includes('text/html');
+    const finalStatus = (upstreamRes.status === 404 && !isDocument) ? 204 : upstreamRes.status;
+    const finalStatusText = finalStatus === 204 ? 'No Content' : (upstreamRes.statusText || '');
+
+    const arrayBuf = await upstreamRes.arrayBuffer();
+    const rawBodyBuf = Buffer.from(arrayBuf);
+    const isNullBodyStatus =
+      finalStatus === 101 ||
+      finalStatus === 204 ||
+      finalStatus === 205 ||
+      finalStatus === 304 ||
+      method === 'HEAD';
+    const bodyBuf = isNullBodyStatus ? Buffer.alloc(0) : rawBodyBuf;
+    if (!isNullBodyStatus) {
+      outHeaders.push(['content-length', String(bodyBuf.length)]);
+    }
+
+    let metaB64 = Buffer.from(
+      JSON.stringify({
+        status: finalStatus,
+        statusText: finalStatusText,
+        headers: outHeaders,
+      }),
+      'utf8'
+    ).toString('base64');
+
+    // Keep X-SJ-Meta safely under Node's 16KB header limit if a site sends excessive non-critical headers
+    if (metaB64.length > 12000) {
+      const critical = outHeaders.filter(([k]) => {
+        const l = k.toLowerCase();
+        return (
+          l === 'set-cookie' ||
+          l === 'location' ||
+          l === 'content-type' ||
+          l === 'content-range' ||
+          l === 'accept-ranges' ||
+          l === 'content-length' ||
+          l === 'referrer-policy' ||
+          l === 'cache-control'
+        );
+      });
+      metaB64 = Buffer.from(
+        JSON.stringify({
+          status: upstreamRes.status,
+          statusText: upstreamRes.statusText || '',
+          headers: critical,
+        }),
+        'utf8'
+      ).toString('base64');
+    }
+
+    res.setHeader('X-SJ-Meta', metaB64);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(200).send(bodyBuf);
+  } catch (err: any) {
+    const cleanMsg = String(err?.message || err || 'Upstream fetch failed').replace(/<[^>]+>/g, '').slice(0, 150);
+    return res.status(502).json({ error: 'Upstream proxy fetch failed', message: cleanMsg });
+  }
+});
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -38,7 +289,8 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use('/api', (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-SJ-Url, X-SJ-Method, X-SJ-Headers');
+  res.setHeader('Access-Control-Expose-Headers', 'X-SJ-Meta');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
@@ -140,6 +392,104 @@ app.post('/api/favorites', (req, res) => {
     res.json({ success: true, ...updated });
   } catch (err: any) {
     res.status(500).json({ error: 'Failed to save favorites', message: err?.message });
+  }
+});
+
+// Scramjet Persistent Website Cookies Store (merge-only, never resets cookies)
+const scramjetCookiesStorePath = path.join(uploadsDir, 'scramjet_cookies_store.json');
+const getScramjetCookiesStore = (): Record<string, { cookies: Record<string, any>; updatedAt: number }> => {
+  try {
+    if (fs.existsSync(scramjetCookiesStorePath)) {
+      return JSON.parse(fs.readFileSync(scramjetCookiesStorePath, 'utf8'));
+    }
+  } catch {}
+  return {};
+};
+
+const saveScramjetCookiesStore = (data: Record<string, any>) => {
+  try {
+    fs.writeFileSync(scramjetCookiesStorePath, JSON.stringify(data), 'utf8');
+  } catch (e) {
+    console.warn('Failed to write Scramjet cookies store:', e);
+  }
+};
+
+app.get('/api/scramjet-cookies', (req, res) => {
+  try {
+    const userId = (req.query.userId as string) || 'default';
+    const store = getScramjetCookiesStore();
+    const entry = store[userId] || { cookies: {}, updatedAt: 0 };
+    res.json({ success: true, cookies: entry.cookies || {}, updatedAt: entry.updatedAt || 0 });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to read Scramjet cookies', message: err?.message });
+  }
+});
+
+app.post('/api/scramjet-cookies', (req, res) => {
+  try {
+    const { userId = 'default', cookies } = req.body || {};
+    if (!cookies || typeof cookies !== 'object') {
+      return res.status(400).json({ error: 'Missing cookies object' });
+    }
+    const store = getScramjetCookiesStore();
+    const existing = store[userId]?.cookies || {};
+    const merged = { ...existing, ...cookies };
+    const updatedAt = Date.now();
+    store[userId] = { cookies: merged, updatedAt };
+    saveScramjetCookiesStore(store);
+    res.json({ success: true, cookies: merged, updatedAt });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to save Scramjet cookies', message: err?.message });
+  }
+});
+
+// Persistent Browser Bookmarks Store
+const browserBookmarksStorePath = path.join(uploadsDir, 'browser_bookmarks_store.json');
+const getBrowserBookmarksStore = (): Record<string, { bookmarks: any[]; updatedAt: number }> => {
+  try {
+    if (fs.existsSync(browserBookmarksStorePath)) {
+      return JSON.parse(fs.readFileSync(browserBookmarksStorePath, 'utf8'));
+    }
+  } catch {}
+  return {};
+};
+
+const saveBrowserBookmarksStore = (data: Record<string, any>) => {
+  try {
+    fs.writeFileSync(browserBookmarksStorePath, JSON.stringify(data, null, 2), 'utf8');
+  } catch (e) {
+    console.warn('Failed to write browser bookmarks store:', e);
+  }
+};
+
+app.get('/api/browser-bookmarks', (req, res) => {
+  try {
+    const userId = (req.query.userId as string) || 'default';
+    const store = getBrowserBookmarksStore();
+    const entry = store[userId] || { bookmarks: [], updatedAt: 0 };
+    res.json({ success: true, bookmarks: entry.bookmarks || [], updatedAt: entry.updatedAt || 0 });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to read bookmarks', message: err?.message });
+  }
+});
+
+app.post('/api/browser-bookmarks', (req, res) => {
+  try {
+    const { userId = 'default', bookmarks, updatedAt } = req.body || {};
+    if (!Array.isArray(bookmarks)) {
+      return res.status(400).json({ error: 'Missing bookmarks array' });
+    }
+    const store = getBrowserBookmarksStore();
+    const existing = store[userId];
+    const nextTs = typeof updatedAt === 'number' && Number.isFinite(updatedAt) ? updatedAt : Date.now();
+    if (existing && typeof existing.updatedAt === 'number' && existing.updatedAt > nextTs) {
+      return res.json({ success: true, ...existing });
+    }
+    store[userId] = { bookmarks, updatedAt: nextTs };
+    saveBrowserBookmarksStore(store);
+    res.json({ success: true, bookmarks, updatedAt: nextTs });
+  } catch (err: any) {
+    res.status(500).json({ error: 'Failed to save bookmarks', message: err?.message });
   }
 });
 
@@ -1471,8 +1821,29 @@ app.all('/api/*', (req, res) => {
 async function startServer() {
   const server = http.createServer(app);
 
-  // Initialize Pure WebSocket Database on /ws-db
-  initWebSocketDatabase(server);
+  // Initialize Pure WebSocket Database upgrade handler on /ws-db
+  const handleWsDbUpgrade = initWebSocketDatabase(server);
+
+  // Unified WebSocket upgrade router (/ws-db and /wisp/)
+  server.on('upgrade', (req, socket, head) => {
+    const reqUrl = req.url || '/';
+    const pathname = reqUrl.split('?')[0];
+
+    if (pathname === '/ws-db') {
+      handleWsDbUpgrade(req, socket, head);
+      return;
+    }
+
+    if (pathname === '/wisp' || pathname.startsWith('/wisp/')) {
+      if (pathname === '/wisp') {
+        req.url = reqUrl.replace(/^\/wisp/, '/wisp/');
+      }
+      wispServer.routeRequest(req, socket, head);
+      return;
+    }
+
+    socket.destroy();
+  });
 
   if (!IS_PROD) {
     const { createServer: createViteServer } = await import('vite');
@@ -1491,6 +1862,7 @@ async function startServer() {
 
   server.listen(Number(PORT), '0.0.0.0', () => {
     console.log(`🔥 Frosted server running on http://0.0.0.0:${PORT} (Mode: ${IS_PROD ? 'Production' : 'Development'})`);
+    console.log(`🛰️  Scramjet v2.0.67-alpha.2 & Wisp server mounted at /wisp/`);
   });
 }
 

@@ -17,6 +17,11 @@
   "dependencies": {
     "@distube/ytdl-core": "^5.2.1",
     "@giphy/js-fetch-api": "^5.8.0",
+    "@mercuryworkshop/epoxy-transport": "3.0.2",
+    "@mercuryworkshop/libcurl-transport": "2.0.6",
+    "@mercuryworkshop/scramjet": "2.0.67-alpha.2",
+    "@mercuryworkshop/scramjet-controller": "0.0.14",
+    "@mercuryworkshop/wisp-js": "0.5.3",
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.3",
     "@types/hls.js": "^0.13.3",
