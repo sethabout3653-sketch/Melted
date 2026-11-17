@@ -1133,10 +1133,12 @@ const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
 }) => {
   const [localText, setLocalText] = useState('');
   const typingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingSentRef = useRef(0);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    lastTypingSentRef.current = 0;
     updateUser({ activity: 'Online', typing_channel: undefined, typing_at: 0 });
     if (!localText.trim() && !pendingFile) return;
     onSendMessage(localText);
@@ -1150,20 +1152,26 @@ const ChatInputForm: React.FC<ChatInputFormProps> = React.memo(({
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
 
     if (value.trim().length > 0) {
-      updateUser({ 
-        typing_channel: activeChannel, 
-        typing_at: Date.now(), 
-        activity: 'Typing...' 
-      });
+      const now = Date.now();
+      if (now - lastTypingSentRef.current >= 2000) {
+        lastTypingSentRef.current = now;
+        updateUser({
+          typing_channel: activeChannel,
+          typing_at: now,
+          activity: 'Typing...'
+        });
+      }
 
       typingTimeoutRef.current = setTimeout(() => {
-        updateUser({ 
-          typing_channel: undefined, 
-          typing_at: 0, 
-          activity: 'Online' 
+        lastTypingSentRef.current = 0;
+        updateUser({
+          typing_channel: undefined,
+          typing_at: 0,
+          activity: 'Online'
         });
       }, 2200);
     } else {
+      lastTypingSentRef.current = 0;
       updateUser({ 
         typing_channel: undefined, 
         typing_at: 0, 
