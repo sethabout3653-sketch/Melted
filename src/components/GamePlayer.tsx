@@ -7,7 +7,6 @@ import {
   Minimize2, 
   X, 
   EyeOff, 
-  Zap, 
   AlertCircle
 } from 'lucide-react';
 import { GameItem } from '../types/game';
@@ -37,7 +36,6 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const [directUrl, setDirectUrl] = useState<string>('');
   const [stealthUrl, setStealthUrl] = useState<string>('');
   const [reloadNonce, setReloadNonce] = useState<number>(0);
-  const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -152,15 +150,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   // Launch via Scramjet v2 or Direct URL
   useEffect(() => {
     let active = true;
-    setIsLoading(true);
     setHasError(false);
 
     const fallbackUrl = getPlayableGameUrl(game);
     const scramjetTarget = getScramjetTargetUrl(game);
-
-    const safetyTimer = setTimeout(() => {
-      if (active) setIsLoading(false);
-    }, 3500);
 
     if (useScramjet && scramjetTarget) {
       setDirectUrl('');
@@ -185,14 +178,12 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           } else {
             setHasError(true);
           }
-          setIsLoading(false);
         }
       }, 0);
 
       return () => {
         active = false;
         clearTimeout(launchTimer);
-        clearTimeout(safetyTimer);
       };
     }
 
@@ -204,11 +195,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       setStealthUrl('');
       setHasError(true);
     }
-    setIsLoading(false);
-
     return () => {
       active = false;
-      clearTimeout(safetyTimer);
     };
   }, [game.id, game.resolvedUrl, game.url, game.name, useScramjet, reloadNonce]);
 
@@ -227,7 +215,6 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   };
 
   const reloadGame = () => {
-    setIsLoading(true);
     setHasError(false);
     setReloadNonce((n) => n + 1);
   };
@@ -390,29 +377,6 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             </div>
           )}
 
-          {/* Loading Screen Overlay */}
-          {isLoading && !hasError && (
-            <div className="absolute inset-0 bg-white/95 dark:bg-slate-950/95 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-10 select-none animate-in fade-in duration-200">
-              <div className="relative mb-4">
-                <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-900/40 border border-blue-100 dark:border-blue-800 flex items-center justify-center text-[var(--brand-blue)] dark:text-[var(--brand-blue)] shadow-xl shadow-[var(--brand-blue-glow)]">
-                  <Zap className="w-7 h-7 fill-current" />
-                </div>
-              </div>
-              <h4 className="text-slate-900 dark:text-white font-extrabold text-sm sm:text-base font-heading">
-                {useScramjet ? 'Connecting via Scramjet v2 Proxy...' : 'Starting Unblocked Stream...'}
-              </h4>
-              <p className="text-slate-500 dark:text-slate-400 text-xs mt-1 max-w-xs font-bold uppercase tracking-widest">
-                {useScramjet ? 'Wisp + Epoxy encrypted tunnel' : 'Optimized for school networks'}
-              </p>
-              <button
-                onClick={() => setIsLoading(false)}
-                className="mt-6 px-4 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white text-[11px] font-black uppercase tracking-widest transition-all cursor-pointer border border-slate-100 dark:border-slate-700"
-              >
-                Skip / Play Now
-              </button>
-            </div>
-          )}
-
           {/* Iframe */}
           {(useScramjet || directUrl) && (
             <iframe
@@ -426,7 +390,6 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               allow="fullscreen; autoplay; gamepad; focus-without-user-activation; clipboard-read; clipboard-write; microphone; camera; pointer-lock; xr-spatial-tracking; screen-wake-lock; display-capture; encrypted-media; picture-in-picture; midi; accelerometer; gyroscope; speaker-selection"
               allowFullScreen
               onLoad={() => {
-                setIsLoading(false);
                 // Silently restore saved game data into iframe scope on load
                 if (iframeRef.current?.contentWindow) {
                   const win = iframeRef.current.contentWindow;
@@ -452,7 +415,6 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 }
               }}
               onError={() => {
-                setIsLoading(false);
                 setHasError(true);
               }}
             />
