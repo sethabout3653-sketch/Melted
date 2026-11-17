@@ -22,7 +22,6 @@ import { ThemeSelectorModal } from './components/ThemeSelectorModal';
 import { AppCanvasBackground } from './components/AppCanvasBackground';
 import { MovieView } from './components/MovieView';
 import { LiveTVView } from './components/LiveTVView';
-import { BrowserTab } from './components/BrowserTab';
 import {
   getEffectiveUserId,
   getStoredGameFavorites,
@@ -45,14 +44,13 @@ import {
   Shuffle,
   Film,
   Tv,
-  Globe,
   X
 } from 'lucide-react';
 
 const PAGE_SIZE = 36;
 
 export default function App() {
-  const [currentTab, setCurrentTab] = useState<'games' | 'chat' | 'ai' | 'movies' | 'tv' | 'browser'>('games');
+  const [currentTab, setCurrentTab] = useState<'games' | 'chat' | 'ai' | 'movies' | 'tv'>('games');
   const [searchQuery, setSearchQuery] = useState('');
   const deferredQuery = useDeferredValue(searchQuery);
 
@@ -235,8 +233,6 @@ export default function App() {
         activityLabel = 'Browsing Movies & Shows Library';
       } else if (currentTab === 'tv') {
         activityLabel = 'Watching Live TV Channels';
-      } else if (currentTab === 'browser') {
-        activityLabel = 'Browsing the Web';
       } else if (currentTab === 'games') {
         if (searchQuery.trim()) {
           activityLabel = `Searching games for "${searchQuery.trim()}"`;
@@ -351,7 +347,7 @@ export default function App() {
 
   // Sync scrolling and overflow based on active tab or game
   useEffect(() => {
-    if (currentTab === 'chat' || currentTab === 'browser' || activeGame) {
+    if (currentTab === 'chat' || activeGame) {
       document.body.style.overflow = 'hidden';
       document.documentElement.style.overflow = 'hidden';
     } else {
@@ -448,17 +444,6 @@ export default function App() {
             className="flex-1 flex flex-col min-h-0 h-full w-full pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0"
           >
             <LiveTVView />
-          </motion.div>
-        ) : currentTab === 'browser' ? (
-          <motion.div
-            key="browser-tab-view"
-            variants={tabTransition}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-hidden pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0"
-          >
-            <BrowserTab />
           </motion.div>
         ) : (
           <motion.main
@@ -664,17 +649,6 @@ export default function App() {
         >
           <Tv className="w-5 h-5" />
           <span className="text-[10px] font-bold uppercase tracking-tight">Live TV</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setCurrentTab('browser')}
-          className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
-            currentTab === 'browser' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
-          }`}
-        >
-          <Globe className="w-5 h-5" />
-          <span className="text-[10px] font-bold uppercase tracking-tight">Browser</span>
         </button>
 
         <button
