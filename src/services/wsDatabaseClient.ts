@@ -196,6 +196,8 @@ export function useWebSocketDatabase(currentUser: {
   activity?: string;
 }) {
   const [users, setUsers] = useState<DbUser[]>([]);
+  const serverUsersRef = useRef<DbUser[]>([]);
+  const firestoreUsersRef = useRef<DbUser[]>([]);
   // Chat messages live in Firebase Firestore and are relayed live via WebSockets (no localStorage message store)
   const [messages, setMessages] = useState<DbMessage[]>([]);
   const [isWsConnected, setIsWsConnected] = useState(false);
@@ -238,6 +240,14 @@ export function useWebSocketDatabase(currentUser: {
       avatar_url: currentUser.avatar_url || '',
     });
   }, [currentUser.id, currentUser.username, currentUser.avatar_color, currentUser.avatar_url]);
+
+  const publishUsers = useCallback(() => {
+    const me = { ...activeUserStateRef.current };
+    const others = [...serverUsersRef.current, ...firestoreUsersRef.current].filter((u) => u && u.id !== me.id);
+    const next = deduplicateUsers([me, ...others], me.id);
+    setUsers(next);
+    return next;
+  }, []);
 
   // --- Firebase Listeners (ONLY saves & syncs persisted chat messages and deletions) ---
   useEffect(() => {
@@ -318,11 +328,8 @@ export function useWebSocketDatabase(currentUser: {
                 remoteUsers.push(uData);
               }
             });
-            setUsers((prev) => {
-              const me = activeUserStateRef.current;
-              const all = [me, ...remoteUsers];
-              return deduplicateUsers(all, me.id);
-            });
+            firestoreUsersRef.current = remoteUsers;
+            publishUsers();
           },
           () => {}
         );
@@ -423,7 +430,8 @@ export function useWebSocketDatabase(currentUser: {
         const data = event.data;
         if (!data) return;
         if (data.type === 'SYNC_USERS' && Array.isArray(data.users)) {
-          setUsers(deduplicateUsers(data.users, currentUserRef.current.id));
+          serverUsersRef.current = data.users;
+          publishUsers();
         } else if (data.type === 'SYNC_MESSAGES' && Array.isArray(data.messages)) {
           setMessages((prev) => mergeMessages(prev, data.messages, deletedIdsRef.current));
         } else if (data.type === 'SYNC_DELETIONS' && data.deletedId) {
@@ -450,11 +458,8 @@ export function useWebSocketDatabase(currentUser: {
         if (data.success) {
           setIsHttpSyncActive(true);
           if (Array.isArray(data.users)) {
-            const serverUsers = data.users;
-            const me = activeUserStateRef.current;
-            const hasMe = serverUsers.some((user: DbUser) => user.id === me.id);
-            const nextUsers = hasMe ? serverUsers : [me, ...serverUsers];
-            setUsers(deduplicateUsers(nextUsers, me.id));
+            serverUsersRef.current = data.users;
+            publishUsers();
           }
         }
       }
@@ -485,7 +490,7 @@ export function useWebSocketDatabase(currentUser: {
         }
       }
     } catch {}
-  }, []);
+  }, [publishUsers]);
 
   // Immediate presence disconnect when window/tab is closed
   useEffect(() => {
@@ -582,19 +587,13 @@ export function useWebSocketDatabase(currentUser: {
           if (msg.type === 'PONG') return;
           if (msg.type === 'DB_INIT') {
             if (Array.isArray(msg.tables?.users)) {
-              const serverUsers = msg.tables.users;
-              const me = activeUserStateRef.current;
-              const hasMe = serverUsers.some((user: DbUser) => user.id === me.id);
-              const nextUsers = hasMe ? serverUsers : [me, ...serverUsers];
-              setUsers(deduplicateUsers(nextUsers, me.id));
+              serverUsersRef.current = msg.tables.users;
+              publishUsers();
             }
           } else if (msg.type === 'DB_SYNC') {
             if (msg.table === 'users' && Array.isArray(msg.data)) {
-              const serverUsers = msg.data;
-              const me = activeUserStateRef.current;
-              const hasMe = serverUsers.some((user: DbUser) => user.id === me.id);
-              const nextUsers = hasMe ? serverUsers : [me, ...serverUsers];
-              setUsers(deduplicateUsers(nextUsers, me.id));
+              serverUsersRef.current = msg.data;
+              publishUsers();
             } else if (msg.table === 'messages' && Array.isArray(msg.data)) {
               // Real-time live relay via WebSocket
               setMessages((prev) => mergeMessages(prev, msg.data, deletedIdsRef.current));
@@ -661,7 +660,7 @@ export function useWebSocketDatabase(currentUser: {
         }, 2500);
       }
     }
-  }, [startHeartbeat, stopHeartbeat]);
+  }, [startHeartbeat, stopHeartbeat, publishUsers]);
 
   useEffect(() => {
     fetchHttpSync();
@@ -694,13 +693,8 @@ export function useWebSocketDatabase(currentUser: {
       Object.assign(activeUserStateRef.current, set);
       activeUserStateRef.current.updated_at = Date.now();
 
-      // Local State
-      setUsers((prev) => {
-        const next = prev.map((user) => (user.id === u.id ? { ...user, ...set, updated_at: Date.now() } : user));
-        const sorted = deduplicateUsers(next, u.id);
-        broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: sorted });
-        return sorted;
-      });
+      const next = publishUsers();
+      broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: next });
 
       // WebSocket / REST presence relay
       safeSend({ type: 'SQL_UPDATE', table: 'users', id: u.id, set });
@@ -719,7 +713,7 @@ export function useWebSocketDatabase(currentUser: {
         handleFirestoreError(err, OperationType.UPDATE, `voice_presence/${u.id}`);
       }
     },
-    [safeSend]
+    [safeSend, publishUsers]
   );
 
   const insertMessage = useCallback(
@@ -898,14 +892,10 @@ export function useWebSocketDatabase(currentUser: {
         setDoc(doc(db, 'voice_presence', dbUser.id), cleanData(dbUser)).catch(() => {});
       } catch {}
 
-      setUsers((prev) => {
-        const filtered = prev.filter((x) => x && x.id !== user.id);
-        const next = deduplicateUsers([dbUser, ...filtered], user.id);
-        broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: next });
-        return next;
-      });
+      const next = publishUsers();
+      broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: next });
     },
-    [safeSend]
+    [safeSend, publishUsers]
   );
 
   const sendRtcSignal = useCallback((targetUserId: string, signal: any) => {
