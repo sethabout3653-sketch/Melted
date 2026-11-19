@@ -69,32 +69,44 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
   onSearchChange,
   onGoHome,
   onOpenMenu,
-}) => (
-  <header className="sticky top-0 z-50 w-full shrink-0 bg-white/70 dark:bg-white/[0.04] backdrop-blur-xl border-b border-slate-200/70 dark:border-white/10 text-slate-900 dark:text-white transition-colors">
-    <div className="h-14 lg:h-[4.25rem] px-3 sm:px-6 lg:px-8 flex items-center gap-2 sm:gap-4">
-      <button
-        type="button"
-        onClick={onOpenMenu}
-        aria-label="Open menu"
-        className="lg:hidden min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5 cursor-pointer shrink-0"
-      >
-        <Menu className="w-5 h-5" />
-      </button>
+}) => {
+  const isVisible = currentTab === 'games';
 
-      <button
-        type="button"
-        onClick={onGoHome}
-        aria-label="Go to FrostHub home"
-        className="lg:hidden shrink-0 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-blue)]"
+  return (
+    <header className="sticky top-0 z-50 w-full shrink-0 text-slate-900 dark:text-white">
+      <div
+        className={`grid transition-[grid-template-rows,opacity,visibility] duration-300 ease-in-out ${
+          isVisible ? 'grid-rows-[1fr] opacity-100 visible' : 'grid-rows-[0fr] opacity-0 invisible'
+        }`}
       >
-        <FrostHubLogo size="sm" />
-      </button>
+        <div className="min-h-0 overflow-hidden bg-white/70 dark:bg-white/[0.04] backdrop-blur-xl border-b border-slate-200/70 dark:border-white/10 transition-colors">
+          <div className="h-14 lg:h-[4.25rem] px-3 sm:px-6 lg:px-8 flex items-center gap-2 sm:gap-4">
+            <button
+              type="button"
+              onClick={onOpenMenu}
+              aria-label="Open menu"
+              className="lg:hidden min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5 cursor-pointer shrink-0"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
 
-      <div className="flex-1 min-w-0 max-w-2xl">
-        {currentTab === 'games' && (
-          <NavSearchInput searchQuery={searchQuery} onSearchChange={onSearchChange} />
-        )}
+            <button
+              type="button"
+              onClick={onGoHome}
+              aria-label="Go to FrostHub home"
+              className="lg:hidden shrink-0 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-blue)]"
+            >
+              <FrostHubLogo size="sm" />
+            </button>
+
+            <div className="flex-1 min-w-0 max-w-3xl">
+              {isVisible && (
+                <NavSearchInput searchQuery={searchQuery} onSearchChange={onSearchChange} />
+              )}
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-  </header>
-));
+    </header>
+  );
+});
