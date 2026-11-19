@@ -2,16 +2,15 @@ import { Variants, Transition } from 'motion/react';
 
 // Highly optimized spring physics for 60fps GPU-composited motion
 export const hoverTransition: Transition = {
-  type: "spring",
-  stiffness: 400,
-  damping: 25,
-  mass: 0.8,
+  type: "tween",
+  duration: 0.35,
+  ease: [0.22, 1, 0.36, 1],
 };
 
 // Pure transform-based hover effect without expensive boxShadow repaints
 export const cardHover = {
-  scale: 1.03,
-  y: -5,
+  scale: 1.02,
+  y: -4,
   transition: hoverTransition,
 };
 
@@ -19,26 +18,25 @@ export const cardHover = {
 export const entryVariants: Variants = {
   hidden: {
     opacity: 0,
-    y: 12,
+    y: 24,
   },
   visible: (i: number = 0) => ({
     opacity: 1,
     y: 0,
     transition: {
-      type: "spring",
-      stiffness: 350,
-      damping: 28,
-      delay: Math.min(i * 0.015, 0.15), // Cap delay to prevent long queue lag
+      duration: 0.6,
+      ease: [0.16, 1, 0.3, 1],
+      delay: Math.min(i * 0.04, 0.3),
     },
   }),
 };
 
 export const slideInVariants: Variants = {
-  hidden: { x: -12, opacity: 0 },
+  hidden: { x: -28, opacity: 0 },
   visible: {
     x: 0,
     opacity: 1,
-    transition: { type: "spring", stiffness: 350, damping: 28 },
+    transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] },
   },
 };
 
@@ -48,22 +46,23 @@ export const containerVariants: Variants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.02,
-      delayChildren: 0.02,
+      staggerChildren: 0.05,
+      delayChildren: 0.05,
     },
   },
 };
 
 // Pure transform and opacity tab transition with zero filter/blur rasterization
 export const tabTransition: Variants = {
-  initial: { opacity: 0, y: 4 },
+  initial: { opacity: 0, y: 14, scale: 0.985 },
   animate: { 
     opacity: 1, 
     y: 0,
-    transition: { duration: 0.15, ease: "easeOut" }
+    scale: 1,
+    transition: { duration: 0.45, ease: [0.16, 1, 0.3, 1] }
   },
   exit: { 
     opacity: 0,
-    transition: { duration: 0.1, ease: "easeIn" }
+    transition: { duration: 0.25, ease: [0.7, 0, 0.84, 0] }
   },
 };

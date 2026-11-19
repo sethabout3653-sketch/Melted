@@ -1894,7 +1894,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
           <div className="flex items-center justify-center py-4 pb-6 border-b border-slate-200 dark:border-slate-800 shrink-0 w-full">
             <motion.div 
               whileHover={{ scale: 1.05 }}
-              transition={{ type: "spring", stiffness: 400, damping: 10 }}
+              transition={{ type: "spring", stiffness: 180, damping: 18 }}
               className="cursor-pointer"
             >
               <FrostHubLogo variant="community" size="lg" />
@@ -2487,7 +2487,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                       initial={{ opacity: 0, y: 4, height: 0 }}
                       animate={{ opacity: 1, y: 0, height: 'auto' }}
                       exit={{ opacity: 0, y: 4, height: 0 }}
-                      transition={{ duration: 0.15 }}
+                      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
                       className="px-2 pb-2 flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-slate-400 overflow-hidden select-none"
                     >
                       {/* Animated Bouncing Dots */}
@@ -3231,14 +3231,14 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
-              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
               className="relative w-72 max-w-[85vw] h-full bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-6 flex flex-col z-10 shadow-2xl overflow-hidden"
             >
               <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0">
                 <div className="flex items-center">
                   <motion.div 
                     whileHover={{ scale: 1.05 }}
-                    transition={{ type: "spring", stiffness: 400, damping: 10 }}
+                    transition={{ type: "spring", stiffness: 180, damping: 18 }}
                     className="cursor-pointer"
                   >
                     <FrostHubLogo variant="community" size="md" />
