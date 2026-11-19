@@ -108,7 +108,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
 }) => {
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-white/95 dark:bg-[#0d0d12]/95 backdrop-blur-md border-b border-slate-200 dark:border-[#1e1e2d] text-slate-900 dark:text-white shrink-0 shadow-md transition-colors">
+    <header className="sticky top-0 z-50 w-full bg-white/70 dark:bg-white/[0.04] backdrop-blur-xl border-b border-slate-200/70 dark:border-white/10 text-slate-900 dark:text-white shrink-0 shadow-lg shadow-black/5 transition-colors">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-14 sm:h-[4.25rem] flex items-center justify-between gap-2 sm:gap-6">
         
         {/* Zone 1: FrostHub Logo */}
