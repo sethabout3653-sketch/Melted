@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useDeferredValue, useCallback, useRef } from 'react';
 import { Navbar } from './components/Navbar';
+import { AppSidebar, MobileMenu } from './components/AppSidebar';
 import { motion, AnimatePresence } from 'motion/react';
 import { CategoryFilter } from './components/CategoryFilter';
 import { GameCard } from './components/GameCard';
@@ -29,23 +30,7 @@ import {
   toggleGameFavorite,
 } from './services/favoritesService';
 import { GameItem, GameCategory } from './types/game';
-import { 
-  Search, 
-  ShieldCheck, 
-  Zap, 
-  ArrowRight,
-  Gamepad2,
-  MessageSquare,
-  Sparkles,
-  Heart,
-  Palette,
-  Sun,
-  Moon,
-  Shuffle,
-  Film,
-  Tv,
-  X
-} from 'lucide-react';
+import { Search, ArrowRight, Gamepad2 } from 'lucide-react';
 
 const PAGE_SIZE = 72;
 
@@ -103,11 +88,9 @@ export default function App() {
   }, []);
 
   // Tab cloaking system
-  const {
-    activePreset,
-    applyPreset,
-    presets,
-  } = useCloak();
+  useCloak();
+
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   // Master Games State - Pre-populated with initial catalogue so UI renders instantly
   const [allGames, setAllGames] = useState<GameItem[]>(() => {
@@ -403,16 +386,29 @@ export default function App() {
     };
   }, [currentTab, activeGame]);
 
+  const navProps = {
+    currentTab,
+    onTabChange: setCurrentTab,
+    onGoHome: handleGoHome,
+    onlineCount: globalChat.users.length,
+    showFavoritesOnly,
+    onToggleFavoritesOnly: handleToggleFavoritesOnly,
+    onRandomGame: handleRandomGame,
+    theme,
+    onToggleTheme: toggleTheme,
+    onOpenThemeSelector: handleOpenThemeSelector,
+  };
+
   return (
     <>
       <FrostHubLoadingScreen />
       <AppCanvasBackground themeConfig={themeConfig} isDark={theme === 'dark'} />
       <div 
-        className={`relative z-10 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-white dark:border-slate-900 transition-colors overflow-hidden ${
+        className={`relative z-10 text-slate-900 dark:text-slate-100 flex font-sans selection:bg-cyan-500 selection:text-white dark:border-slate-900 transition-colors overflow-hidden ${
           themeConfig.bgMode !== 'solid' || themeConfig.bgSolidColor !== '#090d16'
             ? 'bg-white/90 dark:bg-transparent'
             : 'bg-[#f8fafc] dark:bg-slate-950'
-        } h-[100dvh] max-h-[100dvh]`}
+        } h-[100dvh] max-h-[100dvh] pb-[env(safe-area-inset-bottom)]`}
         style={
           theme === 'dark' && themeConfig.bgMode === 'solid'
             ? { backgroundColor: themeConfig.bgSolidColor }
@@ -420,27 +416,16 @@ export default function App() {
         }
       >
         
-        {/* Top Navigation Bar */}
-      <Navbar
-        currentTab={currentTab}
-        onTabChange={setCurrentTab}
-        searchQuery={currentTab === 'games' ? searchQuery : ''}
-        onSearchChange={currentTab === 'games' ? setSearchQuery : () => {}}
-        onRandomGame={handleRandomGame}
-        favoritesCount={favorites.length}
-        showFavoritesOnly={showFavoritesOnly}
-        onToggleFavoritesOnly={handleToggleFavoritesOnly}
-        activePreset={activePreset}
-        presets={presets}
-        onSelectPreset={applyPreset}
-        totalGames={allGames.length}
-        onGoHome={handleGoHome}
-        onlineCount={globalChat.users.length}
-        isConnected={globalChat.isConnected}
-        theme={theme}
-        onToggleTheme={toggleTheme}
-        onOpenThemeSelector={handleOpenThemeSelector}
-      />
+        <AppSidebar {...navProps} />
+
+        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+        <Navbar
+          currentTab={currentTab}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onGoHome={handleGoHome}
+          onOpenMenu={() => setIsMenuOpen(true)}
+        />
 
       {/* Main Content Scrollable Area with Smooth Transitions */}
       <AnimatePresence mode="wait">
@@ -451,7 +436,7 @@ export default function App() {
             initial="initial"
             animate="animate"
             exit="exit"
-            className="flex-1 flex flex-col min-h-0 h-full w-full pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0"
+            className="flex-1 flex flex-col min-h-0 h-full w-full"
           >
             <ChatView globalChat={globalChat} initialChannel={targetChatChannel} />
           </motion.div>
@@ -462,7 +447,7 @@ export default function App() {
             initial="initial"
             animate="animate"
             exit="exit"
-            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-hidden pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0"
+            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-hidden"
           >
             <AIAssistantView />
           </motion.div>
@@ -473,7 +458,7 @@ export default function App() {
             initial="initial"
             animate="animate"
             exit="exit"
-            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-y-auto pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0"
+            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-y-auto"
           >
             <MovieView onActiveMediaChange={setActiveMedia} />
           </motion.div>
@@ -484,7 +469,7 @@ export default function App() {
             initial="initial"
             animate="animate"
             exit="exit"
-            className="flex-1 flex flex-col min-h-0 h-full w-full pb-[calc(4.25rem+env(safe-area-inset-bottom))] lg:pb-0"
+            className="flex-1 flex flex-col min-h-0 h-full w-full"
           >
             <LiveTVView />
           </motion.div>
@@ -499,32 +484,8 @@ export default function App() {
             className="flex-1 w-full overflow-y-auto"
           >
             <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pb-24 lg:pb-16 sm:pt-6">
-            {/* Mobile Search Input (sticky at top of Games view when scrolling/searching) */}
-            <div className="sm:hidden sticky top-0 z-20 -mx-3 px-3 py-2.5 bg-white/95 dark:bg-[#090d16]/95 backdrop-blur-md border-b border-slate-200/70 dark:border-white/5 mb-2">
-              <div className="relative">
-                <Search className="w-4 h-4 text-[var(--brand-blue)] absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={`Search ${allGames.length} games`}
-                  className="w-full bg-slate-100/90 dark:bg-[#13151f] text-base text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-10 pr-10 py-2 border border-slate-200 dark:border-[#24283b] focus:border-[var(--brand-blue)] focus:outline-none shadow-sm"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery('')}
-                    aria-label="Clear search"
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-white cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Categories & Sorting - Hidden on narrow mobile while actively typing a search so results appear right under the search bar */}
-            <div className={`${searchQuery.trim() ? 'hidden sm:block' : ''} mb-4 sm:mb-6`}>
+            {/* Categories & Sorting */}
+            <div className="mb-4 sm:mb-6">
               <CategoryFilter
                 selectedCategory={selectedCategory}
                 onSelectCategory={handleSelectCategory}
@@ -643,7 +604,7 @@ export default function App() {
           </motion.main>
         )}
       </AnimatePresence>
-
+        </div>
 
       {/* Game Player Modal */}
       {activeGame && (
@@ -667,70 +628,7 @@ export default function App() {
         }}
       />
 
-      {/* Sleek Responsive Mobile & Tablet Navigation Bar (5 clean tabs, Style lives in top Navbar) */}
-      <nav aria-label="Mobile Navigation" className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 dark:bg-[#0d0d12]/95 backdrop-blur-xl border-t border-slate-200 dark:border-[#1e1e2d] px-2 py-1.5 pb-[max(0.45rem,env(safe-area-inset-bottom))] flex items-center justify-around gap-1 shadow-[0_-10px_40px_rgba(0,0,0,0.2)] transition-colors">
-        <button
-          type="button"
-          onClick={() => setCurrentTab('games')}
-          className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
-            currentTab === 'games' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
-          }`}
-        >
-          <Gamepad2 className="w-5 h-5" />
-          <span className="text-[11px] font-medium">Games</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setCurrentTab('movies')}
-          className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
-            currentTab === 'movies' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
-          }`}
-        >
-          <Film className="w-5 h-5" />
-          <span className="text-[11px] font-medium">Movies</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setCurrentTab('tv')}
-          className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
-            currentTab === 'tv' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
-          }`}
-        >
-          <Tv className="w-5 h-5" />
-          <span className="text-[11px] font-medium">Live TV</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setCurrentTab('ai')}
-          className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors cursor-pointer flex-1 py-1 rounded-xl ${
-            currentTab === 'ai' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
-          }`}
-        >
-          <Sparkles className="w-5 h-5" />
-          <span className="text-[11px] font-medium">AI</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setCurrentTab('chat')}
-          className={`flex flex-col items-center justify-center gap-0.5 min-h-[44px] transition-colors relative cursor-pointer flex-1 py-1 rounded-xl ${
-            currentTab === 'chat' ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' : 'text-slate-400 dark:text-slate-500 hover:text-slate-700 dark:hover:text-slate-200'
-          }`}
-        >
-          <div className="relative">
-            <MessageSquare className="w-5 h-5" />
-            {globalChat.users.length > 0 && (
-              <span className="absolute -top-1.5 -right-2.5 bg-[var(--brand-blue)] text-slate-950 text-[9px] font-black min-w-[16px] h-4 px-1 rounded flex items-center justify-center tabular-nums">
-                {globalChat.users.length}
-              </span>
-            )}
-          </div>
-          <span className="text-[11px] font-medium">Community</span>
-        </button>
-      </nav>
+      <MobileMenu isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} {...navProps} />
 
       {/* Global Voice Audio Engine - Stays mounted across all tabs */}
       <VoiceAudioEngine 
