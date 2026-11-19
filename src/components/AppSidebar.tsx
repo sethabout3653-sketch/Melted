@@ -157,7 +157,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ isOpen, onClose, ...nav 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.15 }}
+        transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
       >
         <div aria-hidden="true" onClick={onClose} className="absolute inset-0 bg-black/50" />
         <motion.aside
@@ -167,7 +167,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ isOpen, onClose, ...nav 
           initial={{ x: '-100%' }}
           animate={{ x: 0 }}
           exit={{ x: '-100%' }}
-          transition={{ type: 'spring', stiffness: 400, damping: 40 }}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           className="absolute inset-y-0 left-0 w-72 max-w-[85vw] flex flex-col bg-white dark:bg-[#0d0d12] shadow-2xl"
         >
           <div className="h-14 flex items-center justify-between px-4 border-b border-slate-200 dark:border-white/10 shrink-0">

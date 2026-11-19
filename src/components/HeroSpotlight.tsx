@@ -90,7 +90,7 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = React.memo(({
               animate={{ opacity: 1, scale: 1, rotate: 0 }}
               exit={{ opacity: 0, scale: 1.2, rotate: 3 }}
               whileHover={cardHover}
-              transition={{ type: "spring", stiffness: 300, damping: 25 }}
+              transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
               className="relative aspect-square sm:aspect-[4/3] rounded-[48px] overflow-hidden bg-slate-50 dark:bg-slate-950 border-4 border-white dark:border-slate-800 shadow-2xl shadow-slate-200/60 dark:shadow-none group cursor-pointer will-change-transform"
               onClick={() => onPlay(activeGame)}
             >
