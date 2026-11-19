@@ -557,37 +557,7 @@ function generateSoundboardSvgCover(): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-function generateYoutubeSvgCover(): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
-    <defs>
-      <linearGradient id="ytBg" x1="0%" y1="0%" x2="100%" y2="100%">
-        <stop offset="0%" stop-color="#0b0d14" />
-        <stop offset="55%" stop-color="#1a0d12" />
-        <stop offset="100%" stop-color="#090b10" />
-      </linearGradient>
-      <radialGradient id="ytGlow" cx="50%" cy="42%" r="55%">
-        <stop offset="0%" stop-color="#ff0033" stop-opacity="0.34" />
-        <stop offset="60%" stop-color="#ff0033" stop-opacity="0.08" />
-        <stop offset="100%" stop-color="#ff0033" stop-opacity="0" />
-      </radialGradient>
-      <linearGradient id="ytPlayBg" x1="0%" y1="0%" x2="0%" y2="100%">
-        <stop offset="0%" stop-color="#ff1a3c" />
-        <stop offset="100%" stop-color="#cc0022" />
-      </linearGradient>
-    </defs>
-    <rect width="400" height="300" fill="url(#ytBg)" />
-    <rect width="400" height="300" fill="url(#ytGlow)" />
-    <rect x="136" y="76" width="128" height="88" rx="24" fill="url(#ytPlayBg)" />
-    <polygon points="186,101 186,139 222,120" fill="#FFFFFF" />
-    <text x="200" y="206" text-anchor="middle" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="28" letter-spacing="-0.5">YouTube</text>
-    <rect x="148" y="222" width="104" height="22" rx="11" fill="#ff0033" fill-opacity="0.18" stroke="#ff0033" stroke-width="1" stroke-opacity="0.45" />
-    <text x="200" y="237" text-anchor="middle" fill="#ff6b81" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="10" letter-spacing="1.4">SCRAMJET TEST</text>
-  </svg>`;
-  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
-}
-
 const SOUNDBOARD_COVER_URL = 'https://cdn.aptoide.com/imgs/d/e/c/dec9bc1d63944581077bfa41b5188aa3_icon.png';
-const YOUTUBE_COVER_URL = generateYoutubeSvgCover();
 
 const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
   {
@@ -604,21 +574,6 @@ const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
     fallbackCover: generateSoundboardSvgCover(),
     localCover: SOUNDBOARD_COVER_URL,
     resolvedUrl: 'https://www.myinstants.com/en/index/us/',
-  },
-  {
-    id: 900002,
-    name: 'YouTube',
-    cover: YOUTUBE_COVER_URL,
-    url: 'https://www.youtube.com/',
-    author: 'YouTube',
-    special: ['youtube', 'video', 'streaming', 'test', 'scramjet'],
-    featured: true,
-    source: 'scramjet',
-    category: 'Featured',
-    resolvedCover: YOUTUBE_COVER_URL,
-    fallbackCover: YOUTUBE_COVER_URL,
-    localCover: YOUTUBE_COVER_URL,
-    resolvedUrl: 'https://www.youtube.com/',
   },
 ];
 
