@@ -273,7 +273,7 @@ export const PersistentVoiceDock: React.FC<PersistentVoiceDockProps> = ({
       <motion.div
         initial={{ opacity: 0, y: 12, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
-        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:bottom-5 right-3 sm:right-5 z-[1000000] flex items-center gap-1.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200 dark:border-white/15 rounded-full px-3 py-2 shadow-2xl"
+        className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] lg:bottom-5 right-3 sm:right-5 z-[1000000] flex items-center gap-1.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200 dark:border-white/15 rounded-full px-3 py-2 shadow-2xl"
       >
         <span className={`w-2.5 h-2.5 rounded-full ${globalChat.isSpeaking ? 'bg-emerald-500 animate-pulse' : 'bg-[var(--brand-blue)]'}`} />
         <button
@@ -306,7 +306,7 @@ export const PersistentVoiceDock: React.FC<PersistentVoiceDockProps> = ({
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom))] lg:bottom-5 left-1/2 -translate-x-1/2 z-[1000000] w-[calc(100vw-1rem)] max-w-lg flex flex-col gap-2"
+      className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] lg:bottom-5 left-1/2 -translate-x-1/2 z-[1000000] w-[calc(100vw-1rem)] max-w-lg flex flex-col gap-2"
     >
       <AnimatePresence>
         {activeError && activeError !== dismissedError && (

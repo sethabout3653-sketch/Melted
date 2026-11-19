@@ -75,7 +75,7 @@ export const InAppNotificationToast: React.FC<InAppNotificationToastProps> = ({
   return (
     <div 
       role="alert"
-      className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] lg:bottom-6 left-1/2 -translate-x-1/2 z-[300] w-[calc(100vw-1.5rem)] max-w-sm bg-white dark:bg-[#14141f] border border-slate-200 dark:border-[#2a2a3c] rounded-2xl shadow-2xl p-3 sm:p-3.5 flex items-center justify-between gap-3 animate-in slide-in-from-bottom-4 duration-300 overflow-hidden"
+      className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] lg:bottom-6 left-1/2 -translate-x-1/2 z-[300] w-[calc(100vw-1.5rem)] max-w-sm bg-white dark:bg-[#14141f] border border-slate-200 dark:border-[#2a2a3c] rounded-2xl shadow-2xl p-3 sm:p-3.5 flex items-center justify-between gap-3 animate-in slide-in-from-bottom-4 duration-300 overflow-hidden"
     >
       <button
         type="button"
