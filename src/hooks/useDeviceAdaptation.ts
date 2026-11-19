@@ -55,7 +55,14 @@ export function useDeviceAdaptation(): DeviceAdaptationInfo {
 
   useEffect(() => {
     const handleResize = () => {
-      setDeviceInfo(detectDevice());
+      const next = detectDevice();
+      setDeviceInfo((prev) =>
+        prev.deviceType === next.deviceType &&
+        prev.orientation === next.orientation &&
+        prev.isTouch === next.isTouch
+          ? prev
+          : next
+      );
     };
 
     window.addEventListener('resize', handleResize);
@@ -69,4 +76,3 @@ export function useDeviceAdaptation(): DeviceAdaptationInfo {
 
   return deviceInfo;
 }
-

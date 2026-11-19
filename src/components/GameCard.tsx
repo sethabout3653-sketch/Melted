@@ -79,7 +79,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
       whileHover={cardHover}
       whileTap={{ scale: 0.98 }}
       transition={hoverTransition}
-      className={`group relative bg-white/80 dark:bg-white/[0.04] backdrop-blur-md border border-slate-200/80 dark:border-white/10 shadow-sm dark:shadow-none hover:border-[var(--brand-blue)] hover:shadow-lg hover:shadow-black/5 rounded-2xl p-2 flex flex-col will-change-transform transition-colors duration-150 ${
+      className={`group relative bg-white/90 dark:bg-[#10101a] border border-slate-200/80 dark:border-white/10 shadow-sm dark:shadow-none hover:border-[var(--brand-blue)] hover:shadow-lg hover:shadow-black/5 rounded-2xl p-2 flex flex-col transition-colors duration-150 ${
         variant === 'large' ? 'md:col-span-2 md:row-span-2' : ''
       }`}
     >
@@ -124,7 +124,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
             onToggleFavorite(game.id);
           }}
           aria-label={isFavorite ? `Remove ${game.name} from favorites` : `Add ${game.name} to favorites`}
-          className={`absolute top-1.5 right-1.5 min-w-[38px] min-h-[38px] sm:min-w-[34px] sm:min-h-[34px] flex items-center justify-center rounded-xl backdrop-blur-md transition-colors duration-150 cursor-pointer z-10 border shadow-md ${
+          className={`absolute top-1.5 right-1.5 min-w-[38px] min-h-[38px] sm:min-w-[34px] sm:min-h-[34px] flex items-center justify-center rounded-xl transition-colors duration-150 cursor-pointer z-10 border shadow-md ${
             isFavorite 
               ? 'bg-[var(--brand-blue)] border-[var(--brand-blue)] text-[#090d16]' 
               : 'bg-[#090d16]/75 border-[#222232] text-slate-300 hover:text-white'
