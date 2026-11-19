@@ -540,12 +540,12 @@ export default function App() {
                 <div className="flex items-center gap-2.5 sm:gap-3 text-xs sm:text-sm text-slate-600 dark:text-slate-300 font-medium">
                   <Search className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-500 dark:text-cyan-300 shrink-0" />
                   <span>
-                    Found <strong className="text-slate-900 dark:text-white">{filteredGames.length}</strong> matches for &ldquo;{searchQuery}&rdquo;
+                    <strong className="text-slate-900 dark:text-white">{filteredGames.length}</strong> {filteredGames.length === 1 ? 'result' : 'results'} for &ldquo;{searchQuery}&rdquo;
                   </span>
                 </div>
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="text-xs text-cyan-500 dark:text-cyan-300 hover:text-blue-700 font-bold cursor-pointer border border-blue-100 dark:border-blue-800 px-3 py-1 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors shrink-0"
+                  className="text-sm text-cyan-500 dark:text-cyan-300 hover:text-blue-700 font-semibold cursor-pointer px-3 py-1 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors shrink-0"
                 >
                   Clear
                 </button>
@@ -555,16 +555,16 @@ export default function App() {
             {/* Empty State */}
             {filteredGames.length === 0 ? (
               <div className="py-24 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-12 max-w-lg mx-auto space-y-6 shadow-xl shadow-slate-200/20 dark:shadow-none">
-                <div className="w-20 h-24 rounded-3xl bg-blue-50 dark:bg-blue-900/40 border border-blue-100 dark:border-blue-800 text-cyan-500 dark:text-cyan-300 flex items-center justify-center mx-auto shadow-inner">
-                  <Gamepad2 className="w-10 h-10" />
+                <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-900/40 text-cyan-500 dark:text-cyan-300 flex items-center justify-center mx-auto">
+                  <Gamepad2 className="w-8 h-8" />
                 </div>
-                <h3 className="text-2xl font-black text-slate-900 dark:text-white font-heading">
-                  Nothing found
+                <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
+                  {showFavoritesOnly ? 'No saved games yet' : 'Nothing matched that'}
                 </h3>
                 <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
                   {showFavoritesOnly
-                    ? 'Your collection is empty. Start adding games by clicking the heart icon on any title.'
-                    : `We couldn't find any games matching "${searchQuery}".`}
+                    ? 'Tap the heart on any game and it will show up here.'
+                    : searchQuery ? `No games match "${searchQuery}". Try another word or pick a different category.` : 'Try a different category or sort option.'}
                 </p>
                 <button
                   onClick={() => {
@@ -572,9 +572,9 @@ export default function App() {
                     setSelectedCategory('All');
                     setShowFavoritesOnly(false);
                   }}
-                  className="px-8 py-3.5 bg-cyan-500 hover:bg-blue-700 text-white text-sm font-bold rounded-2xl shadow-lg shadow-cyan-500/30 transition-all cursor-pointer font-heading"
+                  className="px-6 py-3 bg-[var(--brand-blue)] hover:opacity-90 text-white text-sm font-semibold rounded-full shadow-md shadow-[var(--brand-blue-glow)] transition-all cursor-pointer"
                 >
-                  Explore All {allGames.length} Titles
+                  Show all {allGames.length} games
                 </button>
               </div>
             ) : (
@@ -602,10 +602,10 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setVisibleCount((prev) => Math.min(filteredGames.length, prev + 120))}
-                  className="inline-flex items-center gap-3 px-7 py-3.5 bg-white hover:bg-slate-50 text-slate-900 font-bold text-xs uppercase tracking-wider rounded-xl border border-slate-200 hover:border-[var(--brand-blue)]/40 transition-all cursor-pointer font-heading shadow-md dark:bg-[#181824] dark:hover:bg-[#202030] dark:text-white dark:border-[#2a2a3e]"
+                  className="inline-flex items-center gap-3 px-6 py-3 bg-white hover:bg-slate-50 text-slate-900 font-medium text-sm rounded-full border border-slate-200 hover:border-[var(--brand-blue)]/40 transition-all cursor-pointer shadow-sm dark:bg-[#181824] dark:hover:bg-[#202030] dark:text-white dark:border-[#2a2a3e]"
                 >
-                  <span>Discover More</span>
-                  <span className="text-[10px] bg-slate-100 dark:bg-[#090d16] px-2 py-0.5 rounded-md text-[var(--brand-blue)] font-extrabold tabular-nums">
+                  <span>Show more</span>
+                  <span className="text-xs bg-slate-100 dark:bg-[#090d16] px-2 py-0.5 rounded-full text-[var(--brand-blue)] font-semibold tabular-nums">
                     {visibleCount} / {filteredGames.length}
                   </span>
                   <ArrowRight className="w-4 h-4 text-[var(--brand-blue)]" />
@@ -613,9 +613,9 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setVisibleCount(filteredGames.length)}
-                  className="inline-flex items-center gap-2 px-6 py-3.5 bg-[var(--brand-blue)] hover:opacity-90 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer font-heading shadow-md shadow-[var(--brand-blue-glow)]"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--brand-blue)] hover:opacity-90 text-white font-medium text-sm rounded-full transition-all cursor-pointer shadow-md shadow-[var(--brand-blue-glow)]"
                 >
-                  <span>Load All ({filteredGames.length})</span>
+                  <span>Show all {filteredGames.length}</span>
                 </button>
               </div>
             )}
@@ -677,7 +677,7 @@ export default function App() {
           }`}
         >
           <Gamepad2 className="w-5 h-5" />
-          <span className="text-[10px] font-bold uppercase tracking-tight">Games</span>
+          <span className="text-[11px] font-medium">Games</span>
         </button>
 
         <button
@@ -688,7 +688,7 @@ export default function App() {
           }`}
         >
           <Film className="w-5 h-5" />
-          <span className="text-[10px] font-bold uppercase tracking-tight">Movies</span>
+          <span className="text-[11px] font-medium">Movies</span>
         </button>
 
         <button
@@ -699,7 +699,7 @@ export default function App() {
           }`}
         >
           <Tv className="w-5 h-5" />
-          <span className="text-[10px] font-bold uppercase tracking-tight">Live TV</span>
+          <span className="text-[11px] font-medium">Live TV</span>
         </button>
 
         <button
@@ -710,7 +710,7 @@ export default function App() {
           }`}
         >
           <Sparkles className="w-5 h-5" />
-          <span className="text-[10px] font-bold uppercase tracking-tight">AI</span>
+          <span className="text-[11px] font-medium">AI</span>
         </button>
 
         <button
@@ -728,7 +728,7 @@ export default function App() {
               </span>
             )}
           </div>
-          <span className="text-[10px] font-bold uppercase tracking-tight">Social</span>
+          <span className="text-[11px] font-medium">Social</span>
         </button>
       </nav>
 

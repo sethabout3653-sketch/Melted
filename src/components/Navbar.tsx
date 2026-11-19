@@ -54,7 +54,7 @@ const NavSearchInput: React.FC<NavSearchInputProps> = React.memo(({
     setLocalVal(searchQuery);
   }, [searchQuery]);
 
-  const placeholder = 'Search games, titles...';
+  const placeholder = 'What are you in the mood for?';
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -153,15 +153,15 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                   key={tab.id}
                   type="button"
                   onClick={() => onTabChange(tab.id as any)}
-                  className={`text-xs font-extrabold uppercase tracking-wider transition-all px-3 py-2 rounded-lg border whitespace-nowrap cursor-pointer ${
+                  className={`text-sm font-medium transition-colors px-3.5 py-2 rounded-full whitespace-nowrap cursor-pointer ${
                     isActive 
-                      ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10 border-[var(--brand-blue)]/30 shadow-sm' 
-                      : 'text-slate-500 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white border-transparent hover:bg-slate-100 dark:hover:bg-[#1a1a26]'
+                      ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' 
+                      : 'text-slate-500 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#1a1a26]'
                   }`}
                 >
                   {tab.label}
                   {tab.id === 'chat' && onlineCount > 0 && (
-                    <span className="ml-1.5 bg-[var(--brand-blue)] text-slate-950 text-[10px] font-black px-1.5 py-0.5 rounded-md tabular-nums">
+                    <span className="ml-1.5 bg-[var(--brand-blue)] text-slate-950 text-[11px] font-semibold px-1.5 py-0.5 rounded-full tabular-nums">
                       {onlineCount}
                     </span>
                   )}
@@ -176,8 +176,8 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
               type="button"
               onClick={onRandomGame}
               className="min-w-[38px] min-h-[38px] flex items-center justify-center p-2 text-slate-500 hover:text-[var(--brand-blue)] hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-[#1a1a26] rounded-lg transition-all cursor-pointer"
-              title="Play Random Game"
-              aria-label="Play Random Game"
+              title="Surprise me"
+              aria-label="Play a random game"
             >
               <Shuffle className="w-4 h-4" />
             </button>
@@ -190,7 +190,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                   ? 'bg-rose-500/20 text-rose-400 border border-rose-500/30' 
                   : 'text-slate-500 hover:text-rose-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-rose-400 dark:hover:bg-[#1a1a26]'
               }`}
-              title="Saved Games"
+              title="Saved games"
               aria-label="Filter saved games"
               aria-pressed={showFavoritesOnly}
             >
