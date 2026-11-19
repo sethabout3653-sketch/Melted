@@ -78,7 +78,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
     <motion.div 
       whileHover={cardHover}
       transition={hoverTransition}
-      className={`group relative bg-white dark:bg-[#14141d] border border-slate-200 dark:border-[#222232] shadow-sm dark:shadow-none hover:border-[var(--brand-blue)] hover:shadow-[0_0_20px_var(--brand-blue-glow)] rounded-2xl p-2 flex flex-col will-change-transform transition-colors duration-150 ${
+      className={`group relative bg-white/80 dark:bg-white/[0.04] backdrop-blur-md border border-slate-200/80 dark:border-white/10 shadow-sm dark:shadow-none hover:border-[var(--brand-blue)] hover:shadow-[0_0_20px_var(--brand-blue-glow)] rounded-2xl p-2 flex flex-col will-change-transform transition-colors duration-150 ${
         variant === 'large' ? 'md:col-span-2 md:row-span-2' : ''
       }`}
     >
