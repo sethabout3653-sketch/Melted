@@ -217,44 +217,48 @@ export default function App() {
 
   // Keep user activity tracker synchronized with current tab, active game, active media, search, and voice state
   useEffect(() => {
-    try {
-      const inVoice = Boolean(globalChat.isInVideo || globalChat.activeChannel === 'video-general');
-      const activeChName = globalChat.activeChannel || 'text-general';
+    const timer = window.setTimeout(() => {
+      try {
+        const inVoice = Boolean(globalChat.isInVideo || globalChat.activeChannel === 'video-general');
+        const activeChName = globalChat.activeChannel || 'text-general';
 
-      let activityLabel = 'Browsing FrostHub';
+        let activityLabel = 'Browsing FrostHub';
 
-      if (activeGame) {
-        activityLabel = `Playing ${activeGame.name} (${activeGame.category || 'Game'})`;
-      } else if (activeMedia) {
-        const isTV = activeMedia.mediaType === 'tv';
-        activityLabel = isTV && activeMedia.season && activeMedia.episode
-          ? `Watching ${activeMedia.title} (Season ${activeMedia.season}, Episode ${activeMedia.episode})`
-          : `Watching Movie: ${activeMedia.title}`;
-      } else if (currentTab === 'chat') {
-        activityLabel = inVoice ? 'In General Voice Channel' : `Chatting in #${activeChName}`;
-      } else if (currentTab === 'ai') {
-        activityLabel = 'Chatting with Frosted AI Assistant';
-      } else if (currentTab === 'movies') {
-        activityLabel = 'Browsing Movies & Shows Library';
-      } else if (currentTab === 'tv') {
-        activityLabel = 'Watching Live TV Channels';
-      } else if (currentTab === 'games') {
-        if (searchQuery.trim()) {
-          activityLabel = `Searching games for "${searchQuery.trim()}"`;
-        } else if (showFavoritesOnly) {
-          activityLabel = 'Browsing Favorite Games';
-        } else if (selectedCategory !== 'All') {
-          activityLabel = `Browsing ${selectedCategory} Games`;
-        } else {
-          activityLabel = `Browsing all ${allGames.length} games`;
+        if (activeGame) {
+          activityLabel = `Playing ${activeGame.name} (${activeGame.category || 'Game'})`;
+        } else if (activeMedia) {
+          const isTV = activeMedia.mediaType === 'tv';
+          activityLabel = isTV && activeMedia.season && activeMedia.episode
+            ? `Watching ${activeMedia.title} (Season ${activeMedia.season}, Episode ${activeMedia.episode})`
+            : `Watching Movie: ${activeMedia.title}`;
+        } else if (currentTab === 'chat') {
+          activityLabel = inVoice ? 'In General Voice Channel' : `Chatting in #${activeChName}`;
+        } else if (currentTab === 'ai') {
+          activityLabel = 'Chatting with Frosted AI Assistant';
+        } else if (currentTab === 'movies') {
+          activityLabel = 'Browsing Movies & Shows Library';
+        } else if (currentTab === 'tv') {
+          activityLabel = 'Watching Live TV Channels';
+        } else if (currentTab === 'games') {
+          if (searchQuery.trim()) {
+            activityLabel = `Searching games for "${searchQuery.trim()}"`;
+          } else if (showFavoritesOnly) {
+            activityLabel = 'Browsing Favorite Games';
+          } else if (selectedCategory !== 'All') {
+            activityLabel = `Browsing ${selectedCategory} Games`;
+          } else {
+            activityLabel = `Browsing all ${allGames.length} games`;
+          }
         }
-      }
 
-      globalChat.updateUser({
-        activity: activityLabel,
-        current_channel: inVoice ? 'video-general' : (activeChName === 'video-general' || activeChName === 'voice-general' ? activeChName : 'text-general'),
-      });
-    } catch {}
+        globalChat.updateUser({
+          activity: activityLabel,
+          current_channel: inVoice ? 'video-general' : (activeChName === 'video-general' || activeChName === 'voice-general' ? activeChName : 'text-general'),
+        });
+      } catch {}
+    }, 800);
+
+    return () => window.clearTimeout(timer);
   }, [currentTab, activeGame, activeMedia, searchQuery, selectedCategory, showFavoritesOnly, allGames.length, globalChat.isInVideo, globalChat.activeChannel]);
 
   const handleGoHome = useCallback(() => {
