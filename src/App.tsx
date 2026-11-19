@@ -477,16 +477,16 @@ export default function App() {
           >
             <LiveTVView />
           </motion.div>
-        ) : (
-          <motion.main
-            ref={gamesScrollRef as any}
-            key="games-tab-view"
-            variants={tabTransition}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            className="flex-1 w-full overflow-y-auto"
-          >
+        ) : null}
+      </AnimatePresence>
+
+      <motion.main
+        ref={gamesScrollRef as any}
+        variants={tabTransition}
+        initial="initial"
+        animate={currentTab === 'games' ? 'animate' : 'initial'}
+        className={`flex-1 w-full overflow-y-auto ${currentTab === 'games' ? '' : 'hidden'}`}
+      >
             <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pb-24 lg:pb-16 sm:pt-6">
             {/* Categories & Sorting */}
             <div className="mb-4 sm:mb-6">
@@ -605,9 +605,7 @@ export default function App() {
                 </div>
               </div>
             </footer>
-          </motion.main>
-        )}
-      </AnimatePresence>
+      </motion.main>
         </div>
 
       {/* Game Player Modal */}
