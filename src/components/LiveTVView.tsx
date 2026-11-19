@@ -254,7 +254,16 @@ const ChannelListItem: React.FC<{
       </button>
     </div>
   );
-});
+}, (prev, next) =>
+  prev.channel === next.channel &&
+  prev.number === next.number &&
+  prev.isSelected === next.isSelected &&
+  prev.isFavorite === next.isFavorite &&
+  prev.epg?.now === next.epg?.now &&
+  prev.epg?.next === next.epg?.next &&
+  prev.onSelect === next.onSelect &&
+  prev.onToggleFavorite === next.onToggleFavorite
+);
 
 export interface LiveTVViewProps {
   searchQuery?: string;
@@ -1220,7 +1229,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
         <button
           type="button"
           onClick={() => setIsGuideVisible((prev) => !prev)}
-          className="hidden lg:flex items-center gap-1.5 px-4 border-l border-slate-200 dark:border-[#1c2a48] text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#101726] transition-colors cursor-pointer shrink-0"
+          className="flex items-center gap-1.5 px-4 border-l border-slate-200 dark:border-[#1c2a48] text-xs font-semibold text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#101726] transition-colors cursor-pointer shrink-0"
           title={isGuideVisible ? 'Hide channel guide' : 'Show channel guide'}
         >
           {isGuideVisible ? (
