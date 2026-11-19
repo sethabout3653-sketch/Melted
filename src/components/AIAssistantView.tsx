@@ -261,7 +261,7 @@ export const AIAssistantView: React.FC = () => {
     {
       id: 'welcome-1',
       sender: 'ai',
-      text: "Ask me anything. I provide direct, concise answers with live web search.",
+      text: "What's on your mind? I can search the web and keep my answers short.",
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -322,7 +322,7 @@ export const AIAssistantView: React.FC = () => {
       {
         id: 'welcome-1',
         sender: 'ai',
-        text: "Ask me anything. I provide direct, concise answers with live web search.",
+        text: "What's on your mind? I can search the web and keep my answers short.",
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       },
     ]);
@@ -639,4 +639,3 @@ export const AIAssistantView: React.FC = () => {
     </div>
   );
 };
-

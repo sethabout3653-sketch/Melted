@@ -262,7 +262,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange, searc
               <div className="absolute inset-0 bg-gradient-to-t from-[#08090b] via-transparent to-black/25" />
               <div className="relative z-10 flex h-full items-end max-w-7xl mx-auto px-4 sm:px-10 pb-6 sm:pb-14">
                 <div className="max-w-3xl">
-                  <h1 className="text-2xl sm:text-5xl lg:text-[4.5rem] font-black uppercase tracking-[-0.04em] leading-[0.95] max-w-2xl text-white">{featuredHeroMovie.title || featuredHeroMovie.name}</h1>
+                  <h1 className="text-2xl sm:text-5xl lg:text-6xl font-extrabold tracking-[-0.03em] leading-[1.02] max-w-2xl text-white">{featuredHeroMovie.title || featuredHeroMovie.name}</h1>
                   <div className="mt-2.5 sm:mt-4 flex flex-wrap items-center gap-3 text-xs sm:text-sm text-white/80">
                     {featuredHeroMovie.vote_average !== undefined && <span className="inline-flex items-center gap-1 text-amber-400 tabular-nums"><Star className="w-4 h-4 fill-current" />{featuredHeroMovie.vote_average.toFixed(1)}</span>}
                     {featuredHeroMovie.release_date && <span className="tabular-nums">{featuredHeroMovie.release_date.slice(0, 4)}</span>}
@@ -270,8 +270,8 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange, searc
                   </div>
                   {featuredHeroMovie.overview && <p className="mt-2.5 sm:mt-4 max-w-xl text-xs sm:text-base text-white/75 leading-relaxed line-clamp-2 sm:line-clamp-3">{featuredHeroMovie.overview}</p>}
                   <div className="mt-4 sm:mt-6 flex flex-wrap gap-2.5 sm:gap-3">
-                    <button type="button" onClick={() => void selectMedia(featuredHeroMovie)} className="inline-flex items-center gap-2 rounded-xl bg-[var(--brand-blue)] px-5 sm:px-7 py-2.5 sm:py-3 text-xs sm:text-sm font-black uppercase tracking-wide text-white hover:bg-[var(--brand-blue-hover)] cursor-pointer"><Play className="w-4 h-4 fill-current" />Play Now</button>
-                    <button type="button" onClick={() => void selectMedia(featuredHeroMovie)} className="inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-bold uppercase tracking-wide text-white hover:bg-white/20 cursor-pointer"><Info className="w-4 h-4" />Details</button>
+                    <button type="button" onClick={() => void selectMedia(featuredHeroMovie)} className="press inline-flex items-center gap-2 rounded-xl bg-[var(--brand-blue)] px-5 sm:px-7 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-white hover:bg-[var(--brand-blue-hover)] cursor-pointer"><Play className="w-4 h-4 fill-current" />Play now</button>
+                    <button type="button" onClick={() => void selectMedia(featuredHeroMovie)} className="press inline-flex items-center gap-2 rounded-xl border border-white/20 bg-white/10 px-4 sm:px-6 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold text-white hover:bg-white/20 cursor-pointer"><Info className="w-4 h-4" />More info</button>
                   </div>
                 </div>
               </div>
@@ -285,7 +285,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange, searc
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-5">
               {items.map(item => (
-                <button key={`${item.id}-${item.media_type || (item.title ? 'movie' : 'tv')}`} type="button" onClick={() => void selectMedia(item)} className="group text-left bg-white dark:bg-[#141519] rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 hover:border-slate-400 dark:hover:border-white/40 transition-colors cursor-pointer">
+                <button key={`${item.id}-${item.media_type || (item.title ? 'movie' : 'tv')}`} type="button" onClick={() => void selectMedia(item)} className="press group text-left bg-white dark:bg-[#141519] rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 hover:border-slate-400 dark:hover:border-white/40 hover:-translate-y-0.5 transition-[transform,border-color] duration-200 cursor-pointer">
                   <div className="relative aspect-[2/3] bg-slate-200 dark:bg-slate-900">
                     <img src={getPosterUrl(item.poster_path)} alt={item.title || item.name || 'Title poster'} loading="lazy" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
                     <span className="absolute top-2 left-2 bg-black/80 text-white text-[9px] font-bold px-2 py-0.5 rounded">{item.media_type === 'tv' || item.first_air_date ? 'TV' : 'MOVIE'}</span>
@@ -297,7 +297,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange, searc
               {(isLoading || searchLoading) && Array.from({ length: 12 }, (_, index) => <div key={`loading-${index}`} className="aspect-[2/3] rounded-xl bg-slate-200 dark:bg-white/5 animate-pulse" />)}
               {isMoreLoading && Array.from({ length: 6 }, (_, index) => <div key={`more-${index}`} className="aspect-[2/3] rounded-xl bg-slate-200 dark:bg-white/5 animate-pulse" />)}
             </div>
-            {items.length === 0 && !isLoading && !searchLoading && <div className="text-center py-16 text-slate-500 dark:text-white/50">No movies or TV shows found.</div>}
+            {items.length === 0 && !isLoading && !searchLoading && <div className="text-center py-16 text-sm text-slate-500 dark:text-white/50">Nothing found. Try a different title or browse another tab.</div>}
             <div ref={observerTarget} className="h-20 w-full flex items-center justify-center">{isMoreLoading && <div className="w-6 h-6 border-2 border-[var(--brand-blue)] border-t-transparent rounded-full animate-spin" />}</div>
           </section>
         </main>

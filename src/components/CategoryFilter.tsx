@@ -67,15 +67,15 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = React.memo(({
               key={cat.id}
               type="button"
               onClick={() => onSelectCategory(cat.id)}
-              className={`flex items-center gap-1.5 transition-colors duration-150 cursor-pointer min-h-[38px] sm:min-h-[34px] py-1.5 px-3.5 rounded-full border text-sm font-medium whitespace-nowrap shrink-0 ${
-                isSelected 
-                  ? 'bg-[var(--brand-blue)] text-slate-950 border-[var(--brand-blue)] shadow-md shadow-[var(--brand-blue-glow)]' 
-                  : 'bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 border-slate-200 dark:bg-[#181822] dark:hover:bg-[#20202e] dark:text-slate-300 dark:hover:text-white dark:border-[#262638]'
+              className={`press flex items-center gap-1.5 cursor-pointer min-h-[38px] sm:min-h-[34px] py-1.5 px-3.5 rounded-full border text-sm font-medium whitespace-nowrap shrink-0 ${
+                isSelected
+                  ? 'bg-[var(--brand-blue)] text-white border-[var(--brand-blue)]'
+                  : 'bg-transparent hover:bg-slate-100 text-slate-600 hover:text-slate-900 border-slate-200 dark:hover:bg-white/5 dark:text-slate-300 dark:hover:text-white dark:border-white/10'
               }`}
             >
               <span>{cat.label}</span>
-              <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full tabular-nums ${
-                isSelected ? 'bg-black/20 text-slate-950' : 'bg-slate-100 text-slate-500 dark:bg-[#262638] dark:text-slate-400'
+              <span className={`text-xs font-medium px-1.5 py-0.5 rounded-full tabular-nums ${
+                isSelected ? 'bg-white/20 text-white' : 'text-slate-400 dark:text-slate-500'
               }`}>
                 {count}
               </span>

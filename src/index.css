@@ -129,6 +129,24 @@
   video::cue {
     bottom: 3rem;
   }
+
+  :focus-visible {
+    outline: 2px solid var(--brand-blue);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: color-mix(in srgb, var(--brand-blue) 35%, transparent);
+  }
+}
+
+@layer components {
+  .press {
+    transition: transform 120ms ease-out, background-color 150ms ease, color 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+  }
+  .press:active:not(:disabled) {
+    transform: scale(0.97);
+  }
 }
 
 /* Custom font support: changes whole app font without mutating colors */

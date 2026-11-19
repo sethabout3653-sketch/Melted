@@ -507,7 +507,7 @@ export default function App() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={`Search ${allGames.length} games...`}
+                  placeholder={`Search ${allGames.length} games`}
                   className="w-full bg-slate-100/90 dark:bg-[#13151f] text-base text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-10 pr-10 py-2 border border-slate-200 dark:border-[#24283b] focus:border-[var(--brand-blue)] focus:outline-none shadow-sm"
                 />
                 {searchQuery && (
@@ -559,12 +559,12 @@ export default function App() {
                   <Gamepad2 className="w-8 h-8" />
                 </div>
                 <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
-                  {showFavoritesOnly ? 'No saved games yet' : 'Nothing matched that'}
+                  {showFavoritesOnly ? 'Nothing saved yet' : 'No games found'}
                 </h3>
                 <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
                   {showFavoritesOnly
-                    ? 'Tap the heart on any game and it will show up here.'
-                    : searchQuery ? `No games match "${searchQuery}". Try another word or pick a different category.` : 'Try a different category or sort option.'}
+                    ? 'Tap the heart on any game to keep it here for quick access.'
+                    : searchQuery ? `Nothing turned up for "${searchQuery}". Try a shorter word or browse a category.` : 'Try another category or change the sort order.'}
                 </p>
                 <button
                   onClick={() => {
@@ -728,7 +728,7 @@ export default function App() {
               </span>
             )}
           </div>
-          <span className="text-[11px] font-medium">Social</span>
+          <span className="text-[11px] font-medium">Community</span>
         </button>
       </nav>
 
