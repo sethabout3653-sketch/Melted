@@ -149,17 +149,25 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
               const isActive = currentTab === tab.id;
               
               return (
-                <button 
+                <button
                   key={tab.id}
                   type="button"
                   onClick={() => onTabChange(tab.id as any)}
-                  className={`text-sm font-medium transition-colors px-3.5 py-2 rounded-full whitespace-nowrap cursor-pointer ${
-                    isActive 
-                      ? 'text-[var(--brand-blue)] bg-[var(--brand-blue)]/10' 
-                      : 'text-slate-500 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-[#1a1a26]'
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`press relative text-sm font-medium transition-colors px-3.5 py-2 rounded-full whitespace-nowrap cursor-pointer ${
+                    isActive
+                      ? 'text-[var(--brand-blue)]'
+                      : 'text-slate-500 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white hover:bg-slate-100/80 dark:hover:bg-white/5'
                   }`}
                 >
-                  {tab.label}
+                  {isActive && (
+                    <motion.span
+                      layoutId="nav-active-indicator"
+                      className="absolute inset-0 rounded-full bg-[var(--brand-blue)]/12 ring-1 ring-inset ring-[var(--brand-blue)]/25"
+                      transition={{ type: 'spring', stiffness: 500, damping: 38 }}
+                    />
+                  )}
+                  <span className="relative">{tab.label}</span>
                   {tab.id === 'chat' && onlineCount > 0 && (
                     <span className="ml-1.5 bg-[var(--brand-blue)] text-slate-950 text-[11px] font-semibold px-1.5 py-0.5 rounded-full tabular-nums">
                       {onlineCount}

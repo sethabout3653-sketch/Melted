@@ -447,18 +447,18 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               </div>
               <div>
                 <h4 className="text-base font-bold text-slate-900 dark:text-white font-heading">
-                  Failed to Load Game Stream
+                  This game didn&rsquo;t load
                 </h4>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">
-                  {errorDetail || 'The upstream game server may be blocking direct embedding. Try reloading or opening in a Stealth Window.'}
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm leading-relaxed">
+                  {errorDetail || 'The game’s server may be blocking embeds. Try again, or open it in a stealth window.'}
                 </p>
               </div>
               <div className="flex items-center gap-3 pt-2">
                 <button
                   onClick={reloadGame}
-                  className="px-4 py-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-white text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
+                  className="press px-4 py-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-white text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer"
                 >
-                  Try Again
+                  Try again
                 </button>
                 {activeLaunchUrl && (
                   <button

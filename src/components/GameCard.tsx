@@ -77,6 +77,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
   return (
     <motion.div 
       whileHover={cardHover}
+      whileTap={{ scale: 0.98 }}
       transition={hoverTransition}
       className={`group relative bg-white/80 dark:bg-white/[0.04] backdrop-blur-md border border-slate-200/80 dark:border-white/10 shadow-sm dark:shadow-none hover:border-[var(--brand-blue)] hover:shadow-lg hover:shadow-black/5 rounded-2xl p-2 flex flex-col will-change-transform transition-colors duration-150 ${
         variant === 'large' ? 'md:col-span-2 md:row-span-2' : ''
