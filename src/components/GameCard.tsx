@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Play, Heart, Gamepad2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { GameItem } from '../types/game';
@@ -33,7 +33,12 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
 
   const [imgKey, setImgKey] = useState(0);
 
+  const isFirstRunRef = useRef(true);
   useEffect(() => {
+    if (isFirstRunRef.current) {
+      isFirstRunRef.current = false;
+      return;
+    }
     setImageLoaded(false);
     setImageError(false);
     setFallbackLevel(0);
@@ -79,7 +84,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
       whileHover={cardHover}
       whileTap={{ scale: 0.98 }}
       transition={hoverTransition}
-      className={`group relative bg-white/90 dark:bg-[#10101a] border border-slate-200/80 dark:border-white/10 shadow-sm dark:shadow-none hover:border-[var(--brand-blue)] hover:shadow-lg hover:shadow-black/5 rounded-2xl p-2 flex flex-col transition-colors duration-150 ${
+      className={`group relative bg-white/90 dark:bg-[#10101a] border border-slate-200/80 dark:border-white/10 shadow-sm dark:shadow-none hover:border-[var(--brand-blue)] hover:shadow-lg hover:shadow-black/5 rounded-2xl p-2 flex flex-col transition-colors duration-150 [content-visibility:auto] [contain-intrinsic-size:auto_300px] ${
         variant === 'large' ? 'md:col-span-2 md:row-span-2' : ''
       }`}
     >

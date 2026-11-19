@@ -233,7 +233,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange, searc
   return (
     <div className="w-full min-h-full bg-slate-50 dark:bg-[#08090b] text-slate-900 dark:text-white flex flex-col font-sans pb-8 lg:pb-12">
       {!isPlayerOpen && <>
-        <header className="sticky top-0 z-30 bg-white/95 dark:bg-[#08090b]/95 backdrop-blur-md border-b border-slate-200 dark:border-white/10 px-3 sm:px-8 py-3 sm:py-4">
+        <header className="sticky top-0 z-30 bg-white/95 dark:bg-[#08090b]/95 border-b border-slate-200 dark:border-white/10 px-3 sm:px-8 py-3 sm:py-4">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-4">
             <nav aria-label="Movie categories" className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto max-w-full w-full sm:w-auto scrollbar-none">
               {tabs.map(({ id, label, Icon }) => (
