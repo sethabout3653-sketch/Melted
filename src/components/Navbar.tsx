@@ -79,7 +79,7 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
           isVisible ? 'grid-rows-[1fr] opacity-100 visible' : 'grid-rows-[0fr] opacity-0 invisible'
         }`}
       >
-        <div className="min-h-0 overflow-hidden bg-white/70 dark:bg-white/[0.04] backdrop-blur-xl border-b border-slate-200/70 dark:border-white/10 transition-colors">
+        <div className="min-h-0 overflow-hidden bg-white/95 dark:bg-[#070d1a]/95 border-b border-slate-200/70 dark:border-white/10 transition-colors">
           <div className="h-14 lg:h-[4.25rem] px-3 sm:px-6 lg:px-8 flex items-center gap-2 sm:gap-4">
             <button
               type="button"
