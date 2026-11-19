@@ -165,6 +165,8 @@ const EXPLICIT_XMLTV_CHANNEL_IDS: Record<string, string[]> = {
 };
 
 const REFRESH_TTL_MS = 4 * 60 * 60 * 1000;
+const REFRESH_RETRY_MS = 5 * 60 * 1000;
+let lastRefreshAttemptAt = 0;
 const MAX_CONCURRENT_FEEDS = 2;
 const EPG_DISK_CACHE_PATH = path.join(process.cwd(), '.epg-cache.json');
 
@@ -1199,10 +1201,6 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
         byChannelId[ch.id] = dedupeAndSortProgrammes(rawPrograms);
       }
     }
-    if (!byChannelId[ch.id]?.length) {
-      byChannelId[ch.id] = buildMetadataFallbackSchedule(ch);
-      if (!tvgIds[ch.id]) tvgIds[ch.id] = ch.id;
-    }
   }
 
   return { byChannelId, tvgIds };
@@ -1249,7 +1247,9 @@ export function getNowNextSnapshot(nowMs: number = Date.now()): {
 } {
   const programs: Record<string, ChannelNowNext> = {};
   for (const ch of TV_CHANNELS) {
-    const list = cachedProgramsByChannelId[ch.id] || buildMetadataFallbackSchedule(ch, nowMs);
+    const cachedList = cachedProgramsByChannelId[ch.id];
+    const hasUpcoming = cachedList?.some((p) => p.stop > nowMs);
+    const list = hasUpcoming ? cachedList : buildMetadataFallbackSchedule(ch, nowMs);
     let nowProg: EpgProgramme | undefined;
     let nextProg: EpgProgramme | undefined;
     for (let i = 0; i < list.length; i++) {
@@ -1285,30 +1285,25 @@ export function getMappedTvgId(channel: TVChannel): string {
   return cachedTvgIdMap[channel.id] || channel.id;
 }
 
+function ensureFreshEpg(): void {
+  const now = Date.now();
+  if (now - lastUpdatedAt < REFRESH_TTL_MS) return;
+  if (now - lastRefreshAttemptAt < REFRESH_RETRY_MS) return;
+  lastRefreshAttemptAt = now;
+  refreshEpgCache().catch(() => {});
+}
+
 export function initEpgRoutes(app: express.Express) {
-  // 1. Instant disk hydration
   loadEpgFromDisk();
-
-  // 2. Pre-fill any missing channels with baseline schedule so snapshot is never empty
-  for (const ch of TV_CHANNELS) {
-    if (!cachedProgramsByChannelId[ch.id] || cachedProgramsByChannelId[ch.id].length === 0) {
-      cachedProgramsByChannelId[ch.id] = buildMetadataFallbackSchedule(ch);
-    }
-  }
-
-  // 3. Kick off background refresh only if cache is completely empty
-  const hasHydratedChannels = Object.keys(cachedProgramsByChannelId).length > 0;
-  if (!hasHydratedChannels && (lastUpdatedAt === 0 || Date.now() - lastUpdatedAt >= REFRESH_TTL_MS)) {
-    refreshEpgCache().catch(() => {});
-  }
+  ensureFreshEpg();
 
   app.get('/api/epg/now-next', async (req, res) => {
     try {
       const customUrl = typeof req.query.epgUrl === 'string' ? req.query.epgUrl.trim() : '';
       if (customUrl) {
         refreshEpgCache([customUrl], true).catch(() => {});
-      } else if (!hasHydratedChannels && (lastUpdatedAt === 0 || Date.now() - lastUpdatedAt >= REFRESH_TTL_MS)) {
-        refreshEpgCache().catch(() => {});
+      } else {
+        ensureFreshEpg();
       }
       res.setHeader('Cache-Control', 'public, max-age=30');
       // Instant non-blocking response from memory
