@@ -14,11 +14,163 @@ export interface ScramjetFrameCallbacks {
 
 let initPromise: Promise<Controller> | null = null;
 let cachedController: Controller | null = null;
+let cachedControllerReady = false;
+let controllerChangeListenerAttached = false;
 let remoteSyncTimer: number | null = null;
 let periodicFlushTimer: number | null = null;
 let lifecycleListenersAttached = false;
 const frameMap = new WeakMap<HTMLIFrameElement, Frame>();
 const frameCallbackMap = new WeakMap<HTMLIFrameElement, ScramjetFrameCallbacks>();
+const retiredFrames: Frame[] = [];
+
+const AD_AND_TRACKING_URL_SUBSTRINGS = [
+  'googleadservices',
+  'googlesyndication',
+  'doubleclick',
+  'adservice.google',
+  'amazon-adsystem',
+  'adnxs',
+  'pubmatic',
+  'rubiconproject',
+  'openx.net',
+  'casalemedia',
+  'crwdcntrl',
+  'adroll',
+  'smartadserver',
+  'taboola',
+  'outbrain',
+  'scorecardresearch',
+  'quantserve',
+  'btloader',
+  'id5-sync',
+  'confiant',
+  'criteo',
+  'lijit',
+  'sonobi',
+  'bidswitch',
+  'yieldmo',
+  'sharethrough',
+  '3lift',
+  'triplelift',
+  'adform',
+  'googletagservices',
+  'google-analytics',
+  'hotjar',
+  'clarity.ms',
+  'statcounter',
+  'adobedtm',
+  'advertising.com',
+  'chartbeat',
+  'exponential.com',
+  'infolinks',
+  'tiktokv.com',
+  'analytics.tiktok',
+  'apps.apple.com',
+  'play.google.com',
+];
+
+export function isAdOrTrackingUrl(url: string): boolean {
+  if (!url) return false;
+  try {
+    const lower = url.toLowerCase();
+    for (const sub of AD_AND_TRACKING_URL_SUBSTRINGS) {
+      if (lower.includes(sub)) return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+function normalizeHttpOrigin(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const trimmed = raw.trim().replace(/\/$/, '');
+  if (!trimmed) return null;
+  if (trimmed.startsWith('https://') || trimmed.startsWith('http://')) {
+    return trimmed;
+  }
+  if (trimmed.startsWith('wss://')) {
+    return 'https://' + trimmed.slice(6).replace(/\/(ws-db|wisp)\/?$/, '');
+  }
+  if (trimmed.startsWith('ws://')) {
+    return 'http://' + trimmed.slice(5).replace(/\/(ws-db|wisp)\/?$/, '');
+  }
+  return `https://${trimmed}`;
+}
+
+function resolveBackendOrigins(): string[] {
+  const origins: string[] = ['']; // Always try same-origin first
+  if (typeof window === 'undefined') return origins;
+
+  const pushUnique = (val: string | null | undefined) => {
+    const norm = normalizeHttpOrigin(val);
+    if (!norm) return;
+    if (norm === window.location.origin) return;
+    if (!origins.includes(norm)) origins.push(norm);
+  };
+
+  try {
+    const params = new URLSearchParams(window.location.search);
+    pushUnique(params.get('server') || params.get('ws') || params.get('backend'));
+    pushUnique(
+      localStorage.getItem('frosthub_backend_url') ||
+        localStorage.getItem('frosthub_server_url') ||
+        localStorage.getItem('frosthub_ws_url')
+    );
+    pushUnique((import.meta as any).env?.VITE_BACKEND_URL);
+  } catch {}
+
+  return origins;
+}
+
+function getWispCandidates(): string[] {
+  if (typeof window === 'undefined') return [];
+  const urls: string[] = [];
+  const pushWisp = (raw: string | null | undefined) => {
+    if (!raw) return;
+    const parts = raw.split(',');
+    for (let part of parts) {
+      let u = part.trim();
+      if (!u) continue;
+      if (u.startsWith('https://')) u = 'wss://' + u.slice(8);
+      else if (u.startsWith('http://')) u = 'ws://' + u.slice(7);
+      else if (!u.startsWith('ws://') && !u.startsWith('wss://')) {
+        const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        u = `${wsProto}//${u}`;
+      }
+      u = u.replace(/\/ws-db\/?$/, '').replace(/\/+$/, '');
+      if (!u.endsWith('/wisp')) u += '/wisp';
+      u += '/';
+      if (!urls.includes(u)) urls.push(u);
+    }
+  };
+
+  try {
+    const params = new URLSearchParams(window.location.search);
+    pushWisp(params.get('wisp'));
+    pushWisp(localStorage.getItem('frosthub_wisp_url'));
+    pushWisp((import.meta as any).env?.VITE_WISP_URL);
+
+    // Same-origin Wisp first (unless on static Pages host where WS isn't supported)
+    if (!window.location.hostname.endsWith('.pages.dev')) {
+      const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      pushWisp(`${wsProto}//${window.location.host}/wisp/`);
+    }
+
+    // Secondary configured backend Wisp
+    const backendOrigins = resolveBackendOrigins().filter(Boolean);
+    for (const origin of backendOrigins) {
+      pushWisp(origin);
+    }
+  } catch {}
+
+  return urls;
+}
+
+let globalActiveWispUrl: string | null = null;
+export function getActiveWispUrl(): string | null {
+  return globalActiveWispUrl;
+}
 
 function getCookieStoreUserId(): string {
   try {
@@ -46,7 +198,39 @@ function parseCookieDump(raw: unknown): Record<string, any> {
   return {};
 }
 
-function readLocalSavedCookies(): Record<string, any> {
+/**
+ * Deeply and additively merges cookies from any number of sources (storage, memory, incoming payloads).
+ * Guarantees that cookies are never truncated, overwritten with empty values, or wiped out.
+ * Extends expiration so cookies are never dropped as expired.
+ */
+export function deepMergeCookies(...sources: Array<Record<string, any> | undefined | null>): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const src of sources) {
+    if (!src || typeof src !== 'object') continue;
+    for (const [key, val] of Object.entries(src)) {
+      if (!val || typeof val !== 'object') continue;
+      const existing = result[key] || {};
+      const mergedVal = { ...existing, ...val };
+      if (mergedVal.name && mergedVal.value !== undefined) {
+        // If maxAge was negative or zero (e.g. deletion attempt), remove it so cookie is preserved
+        if (typeof mergedVal.maxAge === 'number' && mergedVal.maxAge <= 0) {
+          delete mergedVal.maxAge;
+        }
+        // Ensure expiration is kept in the distant future so getCookies never drops it
+        if (mergedVal.expires !== undefined) {
+          const parsed = Number(mergedVal.expires);
+          mergedVal.expires = Number.isFinite(parsed)
+            ? Math.max(parsed, Date.now() + 365 * 24 * 3600 * 1000)
+            : Date.now() + 365 * 24 * 3600 * 1000;
+        }
+        result[key] = mergedVal;
+      }
+    }
+  }
+  return result;
+}
+
+export function readLocalSavedCookies(): Record<string, any> {
   try {
     return parseCookieDump(localStorage.getItem(COOKIE_STORAGE_KEY));
   } catch {
@@ -54,9 +238,11 @@ function readLocalSavedCookies(): Record<string, any> {
   }
 }
 
-function writeLocalSavedCookies(cookies: Record<string, any>): void {
+export function writeLocalSavedCookies(cookies: Record<string, any>): void {
   try {
-    localStorage.setItem(COOKIE_STORAGE_KEY, JSON.stringify(cookies));
+    const existing = readLocalSavedCookies();
+    const merged = deepMergeCookies(existing, cookies);
+    localStorage.setItem(COOKIE_STORAGE_KEY, JSON.stringify(merged));
   } catch {
     // Ignore quota errors
   }
@@ -114,7 +300,7 @@ async function seedControllerIdbCookies(cookies: Record<string, any>): Promise<v
           const getReq = store.get(CONTROLLER_IDB_KEY);
           getReq.onsuccess = () => {
             const existing = parseCookieDump(getReq.result?.cookies);
-            const merged = { ...cookies, ...existing };
+            const merged = deepMergeCookies(existing, cookies);
             const updatedAt = Math.max(Date.now(), (Number(getReq.result?.updatedAt) || 0) + 1);
             store.put({ updatedAt, cookies: JSON.stringify(merged) }, CONTROLLER_IDB_KEY);
           };
@@ -132,27 +318,35 @@ async function seedControllerIdbCookies(cookies: Record<string, any>): Promise<v
   });
 }
 
-async function fetchRemoteSavedCookies(): Promise<Record<string, any>> {
-  try {
-    const userId = getCookieStoreUserId();
-    const res = await fetch(`/api/scramjet-cookies?userId=${encodeURIComponent(userId)}`, {
-      signal: AbortSignal.timeout(1500),
-    });
-    if (!res.ok) return {};
-    const data = await res.json();
-    return parseCookieDump(data?.cookies);
-  } catch {
-    return {};
+export async function fetchRemoteSavedCookies(): Promise<Record<string, any>> {
+  const userId = getCookieStoreUserId();
+  const origins = resolveBackendOrigins();
+  for (const origin of origins) {
+    try {
+      const res = await fetch(`${origin}/api/scramjet-cookies?userId=${encodeURIComponent(userId)}`, {
+        signal: AbortSignal.timeout(1800),
+      });
+      const ct = (res.headers.get('content-type') || '').toLowerCase();
+      if (!res.ok || !ct.includes('application/json')) continue;
+      const data = await res.json();
+      if (data && typeof data.cookies === 'object') {
+        return parseCookieDump(data.cookies);
+      }
+    } catch {
+      // Try next backend origin
+    }
   }
+  return {};
 }
 
-function pushRemoteSavedCookies(cookies: Record<string, any>, immediate = false): void {
+export function pushRemoteSavedCookies(cookies: Record<string, any>, immediate = false): void {
   if (!cookies || Object.keys(cookies).length === 0) return;
   const userId = getCookieStoreUserId();
+  const primaryOrigin = resolveBackendOrigins()[0] || '';
 
   const send = () => {
     try {
-      fetch('/api/scramjet-cookies', {
+      fetch(`${primaryOrigin}/api/scramjet-cookies`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, cookies }),
@@ -176,7 +370,7 @@ function pushRemoteSavedCookies(cookies: Record<string, any>, immediate = false)
   remoteSyncTimer = window.setTimeout(() => {
     remoteSyncTimer = null;
     send();
-  }, 500);
+  }, 400);
 }
 
 export function flushScramjetCookies(immediateRemote = true): void {
@@ -185,7 +379,7 @@ export function flushScramjetCookies(immediateRemote = true): void {
   try {
     const inMemory = parseCookieDump(controller.cookieJar.dump());
     const localStored = readLocalSavedCookies();
-    const merged = { ...localStored, ...inMemory };
+    const merged = deepMergeCookies(localStored, inMemory);
     if (Object.keys(merged).length > 0) {
       writeLocalSavedCookies(merged);
       if (typeof controller.persistCookies === 'function') {
@@ -217,34 +411,43 @@ function attachCookieLifecycleListeners(): void {
     try {
       const inMemory = parseCookieDump(controller.cookieJar.dump());
       const localStored = readLocalSavedCookies();
-      const merged = { ...localStored, ...inMemory };
+      const merged = deepMergeCookies(localStored, inMemory);
       if (Object.keys(merged).length > Object.keys(localStored).length) {
         writeLocalSavedCookies(merged);
         pushRemoteSavedCookies(merged, false);
         controller.persistCookies?.().catch(() => {});
       }
     } catch {}
-  }, 3000);
+  }, 2500);
   void periodicFlushTimer;
 }
 
-function protectCookieJarInstance(jar: any, onMutate?: () => void): void {
+export function protectCookieJarInstance(jar: any, onMutate?: () => void): void {
   if (!jar || jar.__frostProtected) return;
   jar.__frostProtected = true;
 
-  // Never allow Clear-Site-Data or runtime resets to clear saved website cookies
+  // NEVER RESET COOKIES - Neutralize clear, removeById, and unindexCookie
   jar.clear = () => {};
+  jar.removeById = () => {};
+  jar.unindexCookie = () => {};
 
   const origLoad = typeof jar.load === 'function' ? jar.load.bind(jar) : null;
   if (origLoad) {
-    jar.load = (rawJson: string) => {
+    jar.load = (rawInput: any) => {
+      let rawJson = '';
+      if (typeof rawInput === 'object' && rawInput !== null) {
+        rawJson = JSON.stringify(rawInput);
+      } else if (typeof rawInput === 'string') {
+        rawJson = rawInput;
+      }
       const current = parseCookieDump(typeof jar.dump === 'function' ? jar.dump() : '{}');
       const stored = readLocalSavedCookies();
       const incoming = parseCookieDump(rawJson);
-      const merged = { ...stored, ...current, ...incoming };
-      const mergedJson = JSON.stringify(merged);
+      // ADDITIVE MERGE: stored + current + incoming! NEVER WIPE PREVIOUS COOKIES!
+      const merged = deepMergeCookies(stored, current, incoming);
       writeLocalSavedCookies(merged);
-      return origLoad(mergedJson);
+      pushRemoteSavedCookies(merged, false);
+      return origLoad(JSON.stringify(merged));
     };
   }
 
@@ -253,9 +456,11 @@ function protectCookieJarInstance(jar: any, onMutate?: () => void): void {
     jar.setCookies = (...args: any[]) => {
       const res = origSetCookies(...args);
       try {
-        const updated = { ...readLocalSavedCookies(), ...parseCookieDump(jar.dump()) };
-        writeLocalSavedCookies(updated);
-        pushRemoteSavedCookies(updated, false);
+        const inMemory = parseCookieDump(jar.dump());
+        const stored = readLocalSavedCookies();
+        const merged = deepMergeCookies(stored, inMemory);
+        writeLocalSavedCookies(merged);
+        pushRemoteSavedCookies(merged, false);
         onMutate?.();
       } catch {}
       return res;
@@ -269,6 +474,17 @@ async function protectAndHydrateCookies(controller: Controller): Promise<void> {
 
   attachCookieLifecycleListeners();
 
+  // Also protect prototype if Scramjet exposed it globally
+  try {
+    const sj = (window as any).$scramjet;
+    if (sj?.CookieJar?.prototype && !sj.CookieJar.prototype.__frostProtoProtected) {
+      sj.CookieJar.prototype.__frostProtoProtected = true;
+      sj.CookieJar.prototype.clear = function () {};
+      sj.CookieJar.prototype.removeById = function () {};
+      sj.CookieJar.prototype.unindexCookie = function () {};
+    }
+  } catch {}
+
   // Merge cookies across remote store, localStorage, IndexedDB, and live jar
   const [remoteCookies, idbCookies] = await Promise.all([
     fetchRemoteSavedCookies(),
@@ -276,7 +492,7 @@ async function protectAndHydrateCookies(controller: Controller): Promise<void> {
   ]);
   const localCookies = readLocalSavedCookies();
   const jarCookies = parseCookieDump(jar.dump());
-  const merged = { ...remoteCookies, ...idbCookies, ...localCookies, ...jarCookies };
+  const merged = deepMergeCookies(remoteCookies, idbCookies, localCookies, jarCookies);
 
   protectCookieJarInstance(jar, () => {
     controller.persistCookies?.().catch(() => {});
@@ -297,7 +513,7 @@ async function protectAndHydrateCookies(controller: Controller): Promise<void> {
       try {
         const current = parseCookieDump(jar.dump());
         const stored = readLocalSavedCookies();
-        const combined = { ...stored, ...current };
+        const combined = deepMergeCookies(stored, current);
         if (Object.keys(combined).length > Object.keys(current).length) {
           jar.load(JSON.stringify(combined));
         }
@@ -314,66 +530,197 @@ function loadScriptOnce(src: string, globalCheck: () => boolean): Promise<void> 
     return Promise.resolve();
   }
 
-  return new Promise((resolve, reject) => {
+  const attemptLoad = (url: string) =>
+    new Promise<void>((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = url;
+      script.async = false;
+      script.onload = () => {
+        if (globalCheck()) {
+          resolve();
+        } else {
+          reject(new Error(`Script loaded but runtime global missing: ${url}`));
+        }
+      };
+      script.onerror = () => reject(new Error(`Failed to load script: ${url}`));
+      document.head.appendChild(script);
+    });
+
+  return (async () => {
     const existing = document.querySelector(`script[src="${src}"]`) as HTMLScriptElement | null;
     if (existing) {
-      if (globalCheck()) {
-        resolve();
-        return;
-      }
-      existing.addEventListener('load', () => resolve(), { once: true });
-      existing.addEventListener('error', () => reject(new Error(`Failed to load script: ${src}`)), { once: true });
-      return;
+      if (globalCheck()) return;
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const t = window.setTimeout(() => reject(new Error(`Timed out loading ${src}`)), 6000);
+          existing.addEventListener(
+            'load',
+            () => {
+              window.clearTimeout(t);
+              resolve();
+            },
+            { once: true }
+          );
+          existing.addEventListener(
+            'error',
+            () => {
+              window.clearTimeout(t);
+              reject(new Error(`Failed to load script: ${src}`));
+            },
+            { once: true }
+          );
+        });
+        if (globalCheck()) return;
+      } catch {}
+      existing.remove();
     }
 
-    const script = document.createElement('script');
-    script.src = src;
-    script.async = false;
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
-    document.head.appendChild(script);
-  });
+    try {
+      await attemptLoad(src);
+    } catch {
+      const bust = `${src}${src.includes('?') ? '&' : '?'}v=${Date.now()}`;
+      await attemptLoad(bust);
+    }
+  })();
+}
+
+async function ensureValidScramjetWasm(): Promise<void> {
+  const isValidWasm = (buf: ArrayBuffer) => {
+    if (buf.byteLength < 8) return false;
+    const u8 = new Uint8Array(buf, 0, 4);
+    return u8[0] === 0x00 && u8[1] === 0x61 && u8[2] === 0x73 && u8[3] === 0x6d;
+  };
+
+  let res = await fetch('/scramjet/scramjet.wasm');
+  let buf = res.ok ? await res.arrayBuffer() : new ArrayBuffer(0);
+  if (!isValidWasm(buf)) {
+    res = await fetch(`/scramjet/scramjet.wasm?v=${Date.now()}`, { cache: 'reload' });
+    buf = res.ok ? await res.arrayBuffer() : new ArrayBuffer(0);
+  }
+  if (!isValidWasm(buf)) {
+    throw new Error('Failed to load valid Scramjet WASM binary');
+  }
+  try {
+    (window.$scramjet as any)?.setWasm?.(buf);
+  } catch {}
+}
+
+async function cleanupLegacyServiceWorkers(): Promise<void> {
+  if (!('serviceWorker' in navigator)) return;
+  try {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    await Promise.race([
+      Promise.all(
+        regs.map(async (reg) => {
+          const scriptUrl =
+            reg.active?.scriptURL ||
+            reg.waiting?.scriptURL ||
+            reg.installing?.scriptURL ||
+            '';
+          if (scriptUrl && !scriptUrl.includes('/sj-sw.js')) {
+            await reg.unregister().catch(() => {});
+          }
+        })
+      ),
+      new Promise<void>((r) => window.setTimeout(r, 1500)),
+    ]);
+  } catch {}
 }
 
 async function waitForServiceWorkerActive(registration: ServiceWorkerRegistration): Promise<ServiceWorker> {
-  if (registration.active && registration.active.state === 'activated') {
-    return registration.active;
+  // Always prefer an incoming installing/waiting worker over an outgoing active one (since skipWaiting swaps them)
+  const waitWorkerActivated = (worker: ServiceWorker) =>
+    new Promise<ServiceWorker>((resolve, reject) => {
+      if (worker.state === 'activated') {
+        resolve(worker);
+        return;
+      }
+      if (worker.state === 'redundant') {
+        reject(new Error('redundant'));
+        return;
+      }
+
+      const timeout = window.setTimeout(() => {
+        worker.removeEventListener('statechange', onStateChange);
+        reject(new Error('Timed out waiting for Scramjet Service Worker activation'));
+      }, 9000);
+
+      const onStateChange = () => {
+        if (worker.state === 'activated') {
+          window.clearTimeout(timeout);
+          worker.removeEventListener('statechange', onStateChange);
+          resolve(worker);
+        } else if (worker.state === 'redundant') {
+          window.clearTimeout(timeout);
+          worker.removeEventListener('statechange', onStateChange);
+          reject(new Error('redundant'));
+        }
+      };
+
+      worker.addEventListener('statechange', onStateChange);
+    });
+
+  let activeWorker: ServiceWorker | null = null;
+  const incoming = registration.installing || registration.waiting;
+  if (incoming) {
+    try {
+      activeWorker = await waitWorkerActivated(incoming);
+    } catch {
+      activeWorker = registration.active || null;
+    }
+  } else if (registration.active && registration.active.state === 'activated') {
+    activeWorker = registration.active;
   }
 
-  const candidate = registration.installing || registration.waiting || registration.active;
-  if (!candidate) {
-    const readyReg = await navigator.serviceWorker.ready;
-    if (readyReg.active) {
-      return readyReg.active;
+  if (!activeWorker) {
+    const candidate = registration.installing || registration.waiting || registration.active;
+    if (candidate) {
+      try {
+        activeWorker = await waitWorkerActivated(candidate);
+      } catch {
+        activeWorker = registration.active || null;
+      }
     }
+  }
+
+  if (!activeWorker) {
+    const readyReg = await Promise.race([
+      navigator.serviceWorker.ready,
+      new Promise<never>((_, reject) =>
+        window.setTimeout(() => reject(new Error('Scramjet Service Worker ready timeout')), 9000)
+      ),
+    ]);
+    activeWorker = readyReg.active;
+  }
+
+  if (!activeWorker) {
     throw new Error('Scramjet Service Worker failed to activate');
   }
 
-  if (candidate.state === 'activated') {
-    return candidate;
+  // Wait briefly for clients.claim() so navigator.serviceWorker.controller owns this page before /~/sj/ loads
+  if (!navigator.serviceWorker.controller) {
+    await new Promise<void>((resolve) => {
+      let done = false;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        navigator.serviceWorker.removeEventListener('controllerchange', onChange);
+        window.clearInterval(poll);
+        window.clearTimeout(timer);
+        resolve();
+      };
+      const onChange = () => {
+        if (navigator.serviceWorker.controller) finish();
+      };
+      navigator.serviceWorker.addEventListener('controllerchange', onChange);
+      const poll = window.setInterval(() => {
+        if (navigator.serviceWorker.controller) finish();
+      }, 50);
+      const timer = window.setTimeout(finish, 1800);
+    });
   }
 
-  await new Promise<void>((resolve, reject) => {
-    const timeout = window.setTimeout(() => {
-      reject(new Error('Timed out waiting for Scramjet Service Worker activation'));
-    }, 8000);
-
-    const onStateChange = () => {
-      if (candidate.state === 'activated') {
-        window.clearTimeout(timeout);
-        candidate.removeEventListener('statechange', onStateChange);
-        resolve();
-      } else if (candidate.state === 'redundant') {
-        window.clearTimeout(timeout);
-        candidate.removeEventListener('statechange', onStateChange);
-        reject(new Error('Scramjet Service Worker became redundant'));
-      }
-    };
-
-    candidate.addEventListener('statechange', onStateChange);
-  });
-
-  return registration.active || candidate;
+  return navigator.serviceWorker.controller || registration.active || activeWorker;
 }
 
 type RawHeaderPair = [string, string];
@@ -406,9 +753,32 @@ function fromBase64Utf8(b64: string): string {
   return new TextDecoder().decode(bytes);
 }
 
+let cachedStickySessionId: string | null = null;
+function getStickyProxySessionId(): string {
+  if (cachedStickySessionId) return cachedStickySessionId;
+  try {
+    const existing = sessionStorage.getItem('sj_sticky_session_v1');
+    if (existing) {
+      cachedStickySessionId = existing;
+      return existing;
+    }
+    const generated =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID().replace(/-/g, '').slice(0, 16)
+        : `sj${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
+    sessionStorage.setItem('sj_sticky_session_v1', generated);
+    cachedStickySessionId = generated;
+    return generated;
+  } catch {
+    cachedStickySessionId = `sj${Date.now().toString(36)}`;
+    return cachedStickySessionId;
+  }
+}
+
 function sanitizeTransportHeaders(
   headers: RawHeaderPair[] | Headers | Record<string, string> | undefined,
-  method: string
+  method: string,
+  targetOrigin?: string
 ): RawHeaderPair[] {
   const entries: RawHeaderPair[] = [];
   if (!headers) return entries;
@@ -421,8 +791,17 @@ function sanitizeTransportHeaders(
 
   const upperMethod = (method || 'GET').toUpperCase();
   const isBodylessMethod = upperMethod === 'GET' || upperMethod === 'HEAD';
+  let secFetchMode = '';
+  for (const pair of rawPairs) {
+    if (pair && pair.length >= 2 && String(pair[0] ?? '').trim().toLowerCase() === 'sec-fetch-mode') {
+      secFetchMode = String(pair[1] ?? '').trim().toLowerCase();
+      break;
+    }
+  }
   const map = new Map<string, string>();
   const cookies: string[] = [];
+  const proxyOrigin = typeof window !== 'undefined' ? window.location.origin.toLowerCase() : '';
+  const proxyHostname = typeof window !== 'undefined' ? window.location.hostname.toLowerCase() : '';
 
   for (const pair of rawPairs) {
     if (!pair || pair.length < 2) continue;
@@ -431,6 +810,9 @@ function sanitizeTransportHeaders(
       .toLowerCase();
     if (!key || FORBIDDEN_H2_HEADERS.has(key)) continue;
     if (isBodylessMethod && key === 'content-length') continue;
+    // Browsers never send Origin on no-cors / navigate GETs (<link rel="stylesheet">, <script>, <img>);
+    // Scramjet injects it unconditionally, which triggers Cloudflare gzip/Vary corruption on some CDNs.
+    if (isBodylessMethod && key === 'origin' && secFetchMode !== 'cors') continue;
 
     let val = String(pair[1] ?? '').replace(/[\r\n\0]+/g, ' ').trim();
     if (key === 'te' && val.toLowerCase() !== 'trailers') continue;
@@ -443,10 +825,40 @@ function sanitizeTransportHeaders(
       val = cleaned || 'gzip, deflate, br';
     }
 
+    // Prevent leaking Cloud Run / Pages / localhost proxy Origin or Referer to upstream servers
+    if ((key === 'origin' || key === 'referer') && val && targetOrigin) {
+      const lowerVal = val.toLowerCase();
+      if ((proxyOrigin && lowerVal.startsWith(proxyOrigin)) || (proxyHostname && lowerVal.includes(proxyHostname))) {
+        val = key === 'origin' ? targetOrigin : `${targetOrigin}/`;
+      }
+    }
+
     if (key === 'cookie') {
       if (val) cookies.push(val);
     } else {
       map.set(key, val);
+    }
+  }
+
+  // Preserve real browser fingerprint hints if Scramjet omitted them
+  if (typeof navigator !== 'undefined') {
+    if (!map.has('user-agent') && navigator.userAgent) {
+      map.set('user-agent', navigator.userAgent);
+    }
+    const uaData = (navigator as any).userAgentData;
+    if (uaData) {
+      if (!map.has('sec-ch-ua') && Array.isArray(uaData.brands) && uaData.brands.length > 0) {
+        const brandStr = uaData.brands
+          .map((b: any) => `"${String(b.brand || '').replace(/"/g, '')}";v="${String(b.version || '')}"`)
+          .join(', ');
+        if (brandStr) map.set('sec-ch-ua', brandStr);
+      }
+      if (!map.has('sec-ch-ua-mobile') && typeof uaData.mobile === 'boolean') {
+        map.set('sec-ch-ua-mobile', uaData.mobile ? '?1' : '?0');
+      }
+      if (!map.has('sec-ch-ua-platform') && uaData.platform) {
+        map.set('sec-ch-ua-platform', `"${String(uaData.platform).replace(/"/g, '')}"`);
+      }
     }
   }
 
@@ -499,6 +911,58 @@ async function normalizeRequestBody(method: string, body: BodyInit | null | unde
   return body as any;
 }
 
+async function decodeProxyFetchResponse(res: Response): Promise<{
+  body: ArrayBuffer | null;
+  headers: RawHeaderPair[];
+  status: number;
+  statusText: string;
+} | null> {
+  const metaHeader = res.headers.get('X-SJ-Meta');
+  const metaInBody = res.headers.get('X-SJ-Meta-In-Body') === '1';
+
+  if (metaHeader) {
+    const meta = JSON.parse(fromBase64Utf8(metaHeader)) as {
+      status: number;
+      statusText: string;
+      headers: RawHeaderPair[];
+    };
+    const status = Number(meta.status) || 200;
+    const isNullBodyStatus = status === 101 || status === 204 || status === 205 || status === 304;
+    const buf = isNullBodyStatus ? null : await res.arrayBuffer();
+    return {
+      body: buf,
+      headers: Array.isArray(meta.headers) ? meta.headers : [],
+      status,
+      statusText: String(meta.statusText || ''),
+    };
+  }
+
+  if (metaInBody) {
+    const fullBuf = await res.arrayBuffer();
+    if (fullBuf.byteLength < 4) return null;
+    const view = new DataView(fullBuf);
+    const metaLen = view.getUint32(0, false);
+    if (metaLen <= 0 || 4 + metaLen > fullBuf.byteLength) return null;
+    const metaBytes = new Uint8Array(fullBuf, 4, metaLen);
+    const meta = JSON.parse(new TextDecoder().decode(metaBytes)) as {
+      status: number;
+      statusText: string;
+      headers: RawHeaderPair[];
+    };
+    const status = Number(meta.status) || 200;
+    const isNullBodyStatus = status === 101 || status === 204 || status === 205 || status === 304;
+    const bodyBuf = isNullBodyStatus ? null : fullBuf.slice(4 + metaLen);
+    return {
+      body: bodyBuf,
+      headers: Array.isArray(meta.headers) ? meta.headers : [],
+      status,
+      statusText: String(meta.statusText || ''),
+    };
+  }
+
+  return null;
+}
+
 async function serverFallbackFetch(
   remote: URL,
   method: string,
@@ -515,84 +979,91 @@ async function serverFallbackFetch(
   reqHeaders.set('X-SJ-Url', remote.href);
   reqHeaders.set('X-SJ-Method', (method || 'GET').toUpperCase());
   reqHeaders.set('X-SJ-Headers', toBase64Utf8(JSON.stringify(headers)));
+  reqHeaders.set('X-SJ-Session', getStickyProxySessionId());
 
-  const retryDelays = [400, 900, 1500];
+  const origins = resolveBackendOrigins();
+  const isDocReq = headers.some(
+    ([k, v]) =>
+      (k.toLowerCase() === 'sec-fetch-dest' && v.toLowerCase() === 'document') ||
+      (k.toLowerCase() === 'accept' && v.includes('text/html'))
+  );
+  const retryDelays = isDocReq ? [300, 800] : [250, 700];
   let lastErrorMsg = 'Proxy request failed';
+  const isYoutube = isYoutubeMediaHost(remote.hostname);
 
-  for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
-    if (signal?.aborted) {
-      throw new DOMException('Aborted', 'AbortError');
-    }
+  for (let originIdx = 0; originIdx < origins.length; originIdx++) {
+    const endpoint = `${origins[originIdx]}/api/scramjet-fetch`;
 
-    try {
-      const res = await fetch('/api/scramjet-fetch', {
-        method: 'POST',
-        headers: reqHeaders,
-        body: body as BodyInit | null,
-        signal,
-      });
-
-      const metaHeader = res.headers.get('X-SJ-Meta');
-      const contentType = (res.headers.get('content-type') || '').toLowerCase();
-
-      if (res.ok && metaHeader) {
-        const meta = JSON.parse(fromBase64Utf8(metaHeader)) as {
-          status: number;
-          statusText: string;
-          headers: RawHeaderPair[];
-        };
-        const status = Number(meta.status) || 200;
-        const isNullBodyStatus =
-          status === 101 || status === 204 || status === 205 || status === 304;
-        const buf = isNullBodyStatus ? null : await res.arrayBuffer();
-        return {
-          body: buf as any,
-          headers: Array.isArray(meta.headers) ? meta.headers : [],
-          status,
-          statusText: String(meta.statusText || ''),
-        };
+    for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
+      if (signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
       }
 
-      // Detect proxy/container warmup HTML ("Starting Server...") or 502/503/504 and retry cleanly
-      const rawBodyText = await res.text().catch(() => '');
-      const isHtmlSplash =
-        contentType.includes('text/html') ||
-        rawBodyText.trimStart().startsWith('<') ||
-        rawBodyText.includes('Starting Server');
+      try {
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: reqHeaders,
+          body: body as BodyInit | null,
+          signal,
+        });
 
-      if (isHtmlSplash) {
-        lastErrorMsg = `Server is starting up (HTTP ${res.status})`;
-      } else {
-        try {
-          const parsed = JSON.parse(rawBodyText);
-          lastErrorMsg = parsed?.message || parsed?.error || `HTTP ${res.status}`;
-        } catch {
-          lastErrorMsg = (rawBodyText || res.statusText || `HTTP ${res.status}`)
-            .replace(/<[^>]+>/g, ' ')
-            .replace(/\s+/g, ' ')
-            .trim()
-            .slice(0, 150);
+        if (res.ok) {
+          const decoded = await decodeProxyFetchResponse(res);
+          if (decoded) {
+            return (
+              isYoutube
+                ? await maybeBypassYoutubeBotBlock(remote, body, decoded as any)
+                : decoded
+            ) as any;
+          }
+        }
+
+        // If endpoint returned 404/405 or HTML without X-SJ-Meta, switch to next backend origin immediately
+        const contentType = (res.headers.get('content-type') || '').toLowerCase();
+        const rawBodyText = await res.text().catch(() => '');
+        const isHtmlResponse =
+          contentType.includes('text/html') || rawBodyText.trimStart().startsWith('<');
+        const isWarmupSplash = rawBodyText.includes('Starting Server');
+
+        if ((res.status === 404 || res.status === 405 || (res.ok && isHtmlResponse && !isWarmupSplash)) && originIdx < origins.length - 1) {
+          lastErrorMsg = `Endpoint unavailable on origin (${res.status})`;
+          break;
+        }
+
+        if (isHtmlResponse) {
+          lastErrorMsg = `Server is starting up (HTTP ${res.status})`;
+        } else {
+          try {
+            const parsed = JSON.parse(rawBodyText);
+            lastErrorMsg = parsed?.message || parsed?.error || `HTTP ${res.status}`;
+          } catch {
+            lastErrorMsg = (rawBodyText || res.statusText || `HTTP ${res.status}`)
+              .replace(/<[^>]+>/g, ' ')
+              .replace(/\s+/g, ' ')
+              .trim()
+              .slice(0, 150);
+          }
+        }
+
+        const shouldRetry =
+          attempt < retryDelays.length &&
+          (isWarmupSplash || isHtmlResponse || res.status === 502 || res.status === 503 || res.status === 504);
+
+        if (!shouldRetry) {
+          break;
+        }
+      } catch (err: any) {
+        if (err?.name === 'AbortError' || signal?.aborted) {
+          throw err;
+        }
+        lastErrorMsg = String(err?.message || 'Network error').replace(/<[^>]+>/g, ' ').slice(0, 150);
+        if (attempt >= retryDelays.length) {
+          break;
         }
       }
 
-      const shouldRetry =
-        attempt < retryDelays.length &&
-        (isHtmlSplash || res.status === 502 || res.status === 503 || res.status === 504 || !metaHeader);
-
-      if (!shouldRetry) {
-        break;
-      }
-    } catch (err: any) {
-      if (err?.name === 'AbortError' || signal?.aborted) {
-        throw err;
-      }
-      lastErrorMsg = String(err?.message || 'Network error').replace(/<[^>]+>/g, ' ').slice(0, 150);
-      if (attempt >= retryDelays.length) {
-        break;
-      }
+      await new Promise((r) => window.setTimeout(r, retryDelays[attempt]));
     }
-
-    await new Promise((r) => window.setTimeout(r, retryDelays[attempt]));
   }
 
   throw new Error(lastErrorMsg.replace(/<[^>]+>/g, '').trim() || 'Proxy request temporarily unavailable');
@@ -626,23 +1097,17 @@ function isRecoverableTransportError(err: unknown): boolean {
     msg.includes('broken pipe') ||
     msg.includes('connection') ||
     msg.includes('tls') ||
-    msg.includes('stream')
+    msg.includes('stream') ||
+    msg.includes('invaliddata') ||
+    msg.includes('invalid gzip') ||
+    msg.includes('gzip') ||
+    msg.includes('deflate') ||
+    msg.includes('brotli') ||
+    msg.includes('decompress')
   );
 }
 
 const KNOWN_HTTP2_INCOMPATIBLE_HOSTS = new Set([
-  'youtube.com',
-  'www.youtube.com',
-  'm.youtube.com',
-  'googlevideo.com',
-  'ytimg.com',
-  'i.ytimg.com',
-  'google.com',
-  'www.google.com',
-  'gstatic.com',
-  'googleapis.com',
-  'googleusercontent.com',
-  'youtube-nocookie.com',
   'tiktok.com',
   'www.tiktok.com',
   'm.tiktok.com',
@@ -667,18 +1132,44 @@ function isKnownHttp2Incompatible(hostname: string): boolean {
   return false;
 }
 
+function isYoutubeMediaHost(hostname: string): boolean {
+  const h = hostname.toLowerCase();
+  return (
+    h === 'youtube.com' ||
+    h.endsWith('.youtube.com') ||
+    h === 'youtube-nocookie.com' ||
+    h.endsWith('.youtube-nocookie.com') ||
+    h === 'googlevideo.com' ||
+    h.endsWith('.googlevideo.com') ||
+    h === 'ytimg.com' ||
+    h.endsWith('.ytimg.com') ||
+    h === 'ggpht.com' ||
+    h.endsWith('.ggpht.com')
+  );
+}
+
 const LIBCURL_PREFERRED_HOSTS = new Set([
-  'youtube.com',
-  'googlevideo.com',
-  'ytimg.com',
   'tiktok.com',
   'tiktokcdn.com',
+  'tiktokcdn-us.com',
+  'tiktokcdn-eu.com',
   'byteoversea.com',
+  'ibytedtos.com',
+  'ttwstatic.com',
+  'ibyteimg.com',
+  'muscdn.com',
   'twitch.tv',
+  'ttvnw.net',
+  'jtvnw.net',
   'discord.com',
+  'discordapp.com',
   'github.com',
   'spotify.com',
+  'scdn.co',
   'netflix.com',
+  'nflxvideo.net',
+  'vimeo.com',
+  'vimeocdn.com',
 ]);
 
 function isLibcurlPreferredHost(hostname: string): boolean {
@@ -691,60 +1182,402 @@ function isLibcurlPreferredHost(hostname: string): boolean {
   return false;
 }
 
-async function createWispTransport(): Promise<ProxyTransport> {
+async function fetchYoutubeFallbackPlayer(videoId: string): Promise<Record<string, any> | null> {
+  if (!videoId || !/^[a-zA-Z0-9_-]{6,20}$/.test(videoId)) return null;
+  const origins = resolveBackendOrigins();
+  for (const origin of origins) {
+    try {
+      const res = await fetch(`${origin}/api/yt-player-fallback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoId }),
+        signal: AbortSignal.timeout(7000),
+      });
+      const ct = (res.headers.get('content-type') || '').toLowerCase();
+      if (!res.ok || !ct.includes('application/json')) continue;
+      const data = await res.json();
+      if (data?.ok && data?.playerResponse?.streamingData) {
+        return data.playerResponse;
+      }
+    } catch {}
+  }
+  return null;
+}
+
+function getLocalWispUrl(): string {
+  const candidates = getWispCandidates();
+  if (candidates.length > 0) return candidates[0];
   const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const wispUrl = `${wsProto}//${window.location.host}/wisp/`;
-  const http2FallbackHosts = new Set<string>();
+  return `${wsProto}//${window.location.host}/wisp/`;
+}
 
-  let epoxyInstance: any = null;
-  let libcurlInstance: any = null;
-  let epoxyRefreshPromise: Promise<void> | null = null;
+async function probeWispEndpoint(url: string, timeoutMs = 2200): Promise<boolean> {
+  if (typeof WebSocket === 'undefined') return false;
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    let ws: WebSocket | null = null;
+    const finish = (ok: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      if (ws) {
+        try {
+          if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+            ws.close();
+          }
+        } catch {}
+      }
+      resolve(ok);
+    };
+    const timer = window.setTimeout(() => finish(false), timeoutMs);
+    try {
+      ws = new WebSocket(url);
+      ws.onopen = () => finish(true);
+      ws.onerror = () => finish(false);
+      ws.onclose = () => finish(false);
+    } catch {
+      finish(false);
+    }
+  });
+}
 
-  await Promise.all([
-    (async () => {
-      try {
-        const { default: EpoxyTransport } = await import('@mercuryworkshop/epoxy-transport');
-        const instance = new EpoxyTransport({
-          wisp: wispUrl,
-          redirect_limit: 0,
-          header_limit: 512,
-          buffer_size: 8192,
-        });
-        await instance.init();
-        epoxyInstance = instance;
-      } catch (err) {
-        console.warn('[Scramjet] EpoxyTransport init warning:', err);
-      }
-    })(),
-    (async () => {
-      try {
-        const { default: LibcurlClient } = await import('@mercuryworkshop/libcurl-transport');
-        const libcurl = new LibcurlClient({ wisp: wispUrl });
-        await libcurl.init();
-        libcurlInstance = libcurl;
-      } catch (err) {
-        console.warn('[Scramjet] LibcurlClient init warning:', err);
-      }
-    })(),
+function withPromiseTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      window.setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms)
+    ),
   ]);
+}
 
-  const refreshEpoxyInBackground = () => {
-    if (epoxyRefreshPromise) return;
-    epoxyRefreshPromise = (async () => {
-      try {
-        const { default: EpoxyTransport } = await import('@mercuryworkshop/epoxy-transport');
-        const instance = new EpoxyTransport({
-          wisp: wispUrl,
-          redirect_limit: 0,
-          header_limit: 512,
-          buffer_size: 8192,
+function ensureNullBodyConsistency<T extends { status: number; body: any }>(res: T): T {
+  if (res && (res.status === 101 || res.status === 204 || res.status === 205 || res.status === 304)) {
+    return { ...res, body: null };
+  }
+  return res;
+}
+
+async function readTransportBodyBytes(body: any): Promise<Uint8Array | null> {
+  if (!body) return null;
+  if (body instanceof ArrayBuffer) return new Uint8Array(body);
+  if (ArrayBuffer.isView(body)) {
+    return new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
+  }
+  if (typeof body === 'string') {
+    return new TextEncoder().encode(body);
+  }
+  if (typeof ReadableStream !== 'undefined' && body instanceof ReadableStream) {
+    const reader = body.getReader();
+    const chunks: Uint8Array[] = [];
+    let total = 0;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (value) {
+        const u8 = value instanceof Uint8Array ? value : new Uint8Array(value);
+        chunks.push(u8);
+        total += u8.byteLength;
+      }
+    }
+    const merged = new Uint8Array(total);
+    let offset = 0;
+    for (const chunk of chunks) {
+      merged.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    return merged;
+  }
+  return null;
+}
+
+function patchWatchHtmlPlayerResponse(html: string, vrData: Record<string, any>): string | null {
+  const marker = 'var ytInitialPlayerResponse = ';
+  const idx = html.indexOf(marker);
+  if (idx === -1) return null;
+  const start = idx + marker.length;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  let end = -1;
+
+  for (let i = start; i < html.length; i++) {
+    const ch = html[i];
+    if (esc) {
+      esc = false;
+      continue;
+    }
+    if (ch === '\\') {
+      esc = true;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = !inStr;
+      continue;
+    }
+    if (inStr) continue;
+    if (ch === '{') depth++;
+    else if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        end = i + 1;
+        break;
+      }
+    }
+  }
+  if (end === -1) return null;
+  try {
+    const parsed = JSON.parse(html.slice(start, end)) as Record<string, any>;
+    const patched = {
+      ...parsed,
+      playabilityStatus: vrData.playabilityStatus || { status: 'OK', playableInEmbed: true },
+      streamingData: vrData.streamingData || parsed.streamingData,
+      videoDetails: parsed.videoDetails || vrData.videoDetails,
+      captions: parsed.captions || vrData.captions,
+      storyboards: parsed.storyboards || vrData.storyboards,
+    };
+    return html.slice(0, start) + JSON.stringify(patched) + html.slice(end);
+  } catch {
+    return null;
+  }
+}
+
+let ytServerMediaAffinityUntil = 0;
+
+async function maybeBypassYoutubeBotBlock(
+  remote: URL,
+  reqBody: ArrayBuffer | Uint8Array | string | null,
+  res: { body: any; headers: RawHeaderPair[]; status: number; statusText: string }
+): Promise<{ body: any; headers: RawHeaderPair[]; status: number; statusText: string }> {
+  const host = remote.hostname.toLowerCase();
+  if (res.status !== 200 || (host !== 'youtube.com' && !host.endsWith('.youtube.com'))) {
+    return res;
+  }
+
+  const isPlayerEndpoint = remote.pathname.startsWith('/youtubei/v1/player');
+  const isWatchPage = remote.pathname === '/watch';
+  if (!isPlayerEndpoint && !isWatchPage) {
+    return res;
+  }
+
+  const bytes = await readTransportBodyBytes(res.body);
+  if (!bytes) return res;
+
+  const text = new TextDecoder().decode(bytes);
+  const hasBotBlock =
+    text.includes('LOGIN_REQUIRED') ||
+    text.includes('UNPLAYABLE') ||
+    text.includes('not a bot');
+
+  if (!hasBotBlock) {
+    return { ...res, body: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) };
+  }
+
+  if (isPlayerEndpoint) {
+    try {
+      const parsed = JSON.parse(text) as Record<string, any>;
+      let videoId = String(parsed?.videoDetails?.videoId || '');
+      if (!videoId && reqBody) {
+        try {
+          const reqStr =
+            typeof reqBody === 'string'
+              ? reqBody
+              : new TextDecoder().decode(
+                  reqBody instanceof ArrayBuffer
+                    ? new Uint8Array(reqBody)
+                    : reqBody
+                );
+          const reqJson = JSON.parse(reqStr);
+          videoId = String(reqJson?.videoId || '');
+        } catch {}
+      }
+      const vrData = await fetchYoutubeFallbackPlayer(videoId);
+      if (vrData?.streamingData) {
+        // Bind subsequent googlevideo.com chunk requests to the same server transport session/IP
+        ytServerMediaAffinityUntil = Date.now() + 10 * 60 * 1000;
+        const merged = {
+          ...parsed,
+          playabilityStatus: vrData.playabilityStatus || { status: 'OK', playableInEmbed: true },
+          streamingData: vrData.streamingData,
+          videoDetails: parsed.videoDetails || vrData.videoDetails,
+          captions: parsed.captions || vrData.captions,
+          storyboards: parsed.storyboards || vrData.storyboards,
+        };
+        const outBytes = new TextEncoder().encode(JSON.stringify(merged));
+        const cleanHeaders = (res.headers || []).filter(([k]) => {
+          const l = k.toLowerCase();
+          return l !== 'set-cookie' && l !== 'content-length';
         });
-        await instance.init();
-        epoxyInstance = instance;
-      } catch {}
-    })().finally(() => {
-      epoxyRefreshPromise = null;
-    });
+        cleanHeaders.push(['content-length', String(outBytes.byteLength)]);
+        return {
+          ...res,
+          headers: cleanHeaders,
+          body: outBytes.buffer,
+        };
+      }
+    } catch {}
+  } else if (isWatchPage) {
+    const videoId = remote.searchParams.get('v') || '';
+    const vrData = await fetchYoutubeFallbackPlayer(videoId);
+    if (vrData?.streamingData) {
+      ytServerMediaAffinityUntil = Date.now() + 10 * 60 * 1000;
+      const patchedHtml = patchWatchHtmlPlayerResponse(text, vrData);
+      if (patchedHtml) {
+        const outBytes = new TextEncoder().encode(patchedHtml);
+        const cleanHeaders = (res.headers || []).filter(([k]) => {
+          const l = k.toLowerCase();
+          return l !== 'set-cookie' && l !== 'content-length';
+        });
+        cleanHeaders.push(['content-length', String(outBytes.byteLength)]);
+        return {
+          ...res,
+          headers: cleanHeaders,
+          body: outBytes.buffer,
+        };
+      }
+    }
+  }
+
+  return { ...res, body: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) };
+}
+
+async function createWispTransport(): Promise<ProxyTransport> {
+  const wispCandidates = getWispCandidates();
+  let candidateIndex = 0;
+  let activeWispUrl: string | null = null;
+
+  for (let i = 0; i < wispCandidates.length; i++) {
+    const candidate = wispCandidates[i];
+    const ok = await probeWispEndpoint(candidate, 1500);
+    if (ok) {
+      activeWispUrl = candidate;
+      candidateIndex = i;
+      break;
+    }
+  }
+
+  if (!activeWispUrl && wispCandidates.length > 0) {
+    activeWispUrl = wispCandidates[0];
+    candidateIndex = 0;
+  }
+
+  globalActiveWispUrl = activeWispUrl || getLocalWispUrl();
+
+  let libcurlInstance: any = null;
+  let libcurlInitPromise: Promise<any> | null = null;
+  let lastLibcurlAttemptAt = 0;
+  let wispDisabledUntil = activeWispUrl ? 0 : Date.now() + 60000;
+
+  const isWispAvailable = () => Date.now() >= wispDisabledUntil;
+
+  const rotateToNextWisp = async () => {
+    const candidates = getWispCandidates();
+    if (candidates.length === 0) return getLocalWispUrl();
+    candidateIndex = (candidateIndex + 1) % candidates.length;
+    activeWispUrl = candidates[candidateIndex];
+    globalActiveWispUrl = activeWispUrl;
+    libcurlInstance = null;
+    wispDisabledUntil = 0;
+    return activeWispUrl;
+  };
+
+  const ensureLibcurl = async () => {
+    if (!isWispAvailable()) {
+      return null;
+    }
+    if (libcurlInstance) {
+      return libcurlInstance;
+    }
+    if (libcurlInitPromise) {
+      return libcurlInitPromise;
+    }
+    const now = Date.now();
+    if (now - lastLibcurlAttemptAt < 4000) {
+      return null;
+    }
+    lastLibcurlAttemptAt = now;
+
+    libcurlInitPromise = (async () => {
+      const candidates = getWispCandidates();
+      const maxAttempts = Math.max(1, candidates.length);
+
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        try {
+          const wispToUse = activeWispUrl || candidates[candidateIndex] || getLocalWispUrl();
+          globalActiveWispUrl = wispToUse;
+          const { default: LibcurlClient } = await import('@mercuryworkshop/libcurl-transport');
+          const libcurl = new LibcurlClient({
+            wisp: wispToUse,
+            connections: [16, 12, 8, 4],
+          });
+          await withPromiseTimeout(libcurl.init(), 6000, 'Libcurl init');
+          libcurlInstance = libcurl;
+          wispDisabledUntil = 0;
+          return libcurl;
+        } catch (err) {
+          console.warn(`[Scramjet] LibcurlClient init failed with Wisp ${activeWispUrl}, failing over...`, err);
+          await rotateToNextWisp();
+        }
+      }
+
+      wispDisabledUntil = Date.now() + 20000;
+      return null;
+    })();
+    return libcurlInitPromise;
+  };
+
+  if (activeWispUrl) {
+    await ensureLibcurl();
+  }
+
+  const callLibcurl = async (
+    remote: URL,
+    method: string,
+    safeBody: ArrayBuffer | Uint8Array | string | null,
+    cleanHeaders: RawHeaderPair[],
+    signal?: AbortSignal
+  ) => {
+    const client = libcurlInstance || (await ensureLibcurl());
+    if (!client) {
+      throw new Error('Libcurl transport unavailable');
+    }
+    const res = await withPromiseTimeout<any>(
+      client.request(
+        remote,
+        method,
+        safeBody === null ? undefined : safeBody,
+        cleanHeaders,
+        signal
+      ),
+      35000,
+      'Libcurl request'
+    );
+    const out = ensureNullBodyConsistency(res);
+
+    if (Array.isArray(out.headers) && cachedController?.cookieJar) {
+      let hasSetCookie = false;
+      for (const [k, v] of out.headers) {
+        if (k.toLowerCase() === 'set-cookie' && v) {
+          try {
+            cachedController.cookieJar.setCookies(v, remote);
+            hasSetCookie = true;
+          } catch {}
+        }
+      }
+      if (hasSetCookie) {
+        flushScramjetCookies(false);
+      }
+    }
+
+    if (Array.isArray(out.headers)) {
+      const hasRawStream = typeof ReadableStream !== 'undefined' && out.body instanceof ReadableStream;
+      if (!hasRawStream) {
+        out.headers = out.headers.filter(([k]: RawHeaderPair) => {
+          const l = String(k).toLowerCase();
+          return l !== 'content-encoding' && l !== 'transfer-encoding';
+        });
+      }
+    }
+    return out;
   };
 
   const resilientTransport: ProxyTransport = {
@@ -753,92 +1586,207 @@ async function createWispTransport(): Promise<ProxyTransport> {
       this.ready = true;
     },
     async request(remote, method, body, headers, signal) {
-      const cleanHeaders = sanitizeTransportHeaders(headers as any, method);
+      const cleanHeaders = sanitizeTransportHeaders(headers as any, method, remote.origin);
       const safeBody = await normalizeRequestBody(method, body);
-      const hostKey = remote.host.toLowerCase();
+      const isYoutube = isYoutubeMediaHost(remote.hostname);
 
-      // If this host is known to reject Hyper HTTP/2, go straight to server fetch
-      if (isKnownHttp2Incompatible(remote.hostname) || http2FallbackHosts.has(hostKey)) {
-        return await serverFallbackFetch(remote, method, safeBody, cleanHeaders, signal);
-      }
-
-      const useLibcurl = isLibcurlPreferredHost(remote.hostname);
-
-      // 1. If Libcurl is preferred for this media/streaming site, try Libcurl first
-      if (useLibcurl && libcurlInstance) {
+      // Inject stored cookies into outgoing request if not already present or partial
+      if (cachedController?.cookieJar) {
         try {
-          return await libcurlInstance.request(remote, method, safeBody, cleanHeaders, signal);
-        } catch {
-          // Fall through to Epoxy / Server Fetch
-        }
-      }
-
-      // 2. Try Epoxy transport
-      if (epoxyInstance?.client) {
-        try {
-          const headersObj: Record<string, string> = {};
-          for (const [k, v] of cleanHeaders) {
-            headersObj[k] = v;
+          const jarCookies = cachedController.cookieJar.getCookies(remote, false, 'lax');
+          if (jarCookies) {
+            const idx = cleanHeaders.findIndex(([k]) => k.toLowerCase() === 'cookie');
+            if (idx === -1) {
+              cleanHeaders.push(['cookie', jarCookies]);
+            } else {
+              const existing = cleanHeaders[idx][1] || '';
+              const jarCookieList = jarCookies.split(';').map((s: string) => s.trim()).filter(Boolean);
+              const existingList = existing.split(';').map((s: string) => s.trim()).filter(Boolean);
+              const existingKeys = new Set(existingList.map((s: string) => s.split('=')[0].trim()));
+              for (const jc of jarCookieList) {
+                const k = jc.split('=')[0].trim();
+                if (!existingKeys.has(k)) {
+                  existingList.push(jc);
+                }
+              }
+              cleanHeaders[idx] = ['cookie', existingList.join('; ')];
+            }
           }
-          const res = await epoxyInstance.client.fetch(remote.href, {
-            method: method || 'GET',
-            body: safeBody,
-            headers: headersObj,
-            redirect: 'manual',
-          });
-          return {
-            body: res.body,
-            headers: formatEpoxyHeaders(res.rawHeaders),
-            status: res.status,
-            statusText: res.statusText,
-          };
+        } catch {}
+      }
+
+      const captureResponseCookies = (resp: { headers?: RawHeaderPair[] } | null | undefined) => {
+        if (!resp || !Array.isArray(resp.headers) || !cachedController?.cookieJar) return;
+        let hasSetCookie = false;
+        for (const [k, v] of resp.headers) {
+          if (k.toLowerCase() === 'set-cookie' && v) {
+            try {
+              cachedController.cookieJar.setCookies(v, remote);
+              hasSetCookie = true;
+            } catch {}
+          }
+        }
+        if (hasSetCookie) {
+          flushScramjetCookies(false);
+        }
+      };
+
+      // 1. Libcurl over Wisp (primary proxy transport)
+      if (isWispAvailable()) {
+        try {
+          const res = await callLibcurl(remote, method, safeBody, cleanHeaders, signal);
+          captureResponseCookies(res);
+          return isYoutube
+            ? await maybeBypassYoutubeBotBlock(remote, safeBody, res)
+            : res;
         } catch (err) {
           if (signal?.aborted) {
             throw new DOMException('Aborted', 'AbortError');
           }
-          if (!isRecoverableTransportError(err)) {
-            throw err;
-          }
           const msg = String((err as any)?.message || err || '').toLowerCase();
-          if (msg.includes('http2') || msg.includes('protocol_error') || msg.includes('reset(')) {
-            if (http2FallbackHosts.size > 200) {
-              http2FallbackHosts.clear();
-            }
-            http2FallbackHosts.add(hostKey);
-          } else if (msg.includes('wisp') || msg.includes('closed') || msg.includes('eof')) {
-            refreshEpoxyInBackground();
+          if (msg.includes('wisp') || msg.includes('timed out') || msg.includes('websocket')) {
+            wispDisabledUntil = Date.now() + 25000;
           }
         }
       }
 
-      // 3. Fallback to Libcurl if not tried yet
-      if (!useLibcurl && libcurlInstance) {
-        try {
-          return await libcurlInstance.request(remote, method, safeBody, cleanHeaders, signal);
-        } catch {}
-      }
-
-      // 4. Final fallback to server raw fetch
-      if (!epoxyInstance?.client && !libcurlInstance) {
-        refreshEpoxyInBackground();
-      }
-      return await serverFallbackFetch(remote, method, safeBody, cleanHeaders, signal);
+      // 2. Server HTTP fetch fallback (works on all published links and networks)
+      const res = await serverFallbackFetch(remote, method, safeBody, cleanHeaders, signal);
+      captureResponseCookies(res);
+      return res;
     },
     connect(url, protocols, requestHeaders, onopen, onmessage, onclose, onerror) {
-      const active = epoxyInstance || libcurlInstance;
-      if (active) {
-        return active.connect(url, protocols, requestHeaders, onopen, onmessage, onclose, onerror);
+      if (!isWispAvailable() || !libcurlInstance) {
+        onerror('WebSocket transport unavailable');
+        return [() => {}, () => {}];
       }
-      onerror('WebSocket transport unavailable');
-      return [() => {}, () => {}];
+      try {
+        return libcurlInstance.connect(url, protocols, requestHeaders, onopen, onmessage, onclose, onerror);
+      } catch (err: any) {
+        onerror(err?.message || 'WebSocket transport error');
+        return [() => {}, () => {}];
+      }
     },
   };
 
   return resilientTransport;
 }
 
+function patchControllerRequestHandler(controller: Controller): void {
+  const methods = (controller as any).methods;
+  if (!methods || methods.__frostPatched) return;
+  methods.__frostPatched = true;
+
+  const origRequest = typeof methods.request === 'function' ? methods.request.bind(methods) : null;
+  if (!origRequest) return;
+
+  methods.request = async (data: any) => {
+    let rawPath = '';
+    try {
+      rawPath = new URL(data?.rawUrl || '').pathname;
+    } catch {
+      rawPath = String(data?.rawUrl || '');
+    }
+
+    const frames = (controller as any).frames as Frame[];
+
+    // Ensure that if a request matches a retired frame, it is re-attached to controller.frames
+    if (Array.isArray(frames) && rawPath) {
+      const matchInCurrent = frames.find((f) => rawPath.startsWith(f.prefix));
+      if (!matchInCurrent) {
+        const matchInRetired = retiredFrames.find((f) => rawPath.startsWith(f.prefix));
+        if (matchInRetired && !frames.includes(matchInRetired)) {
+          frames.push(matchInRetired);
+        }
+      }
+    }
+
+    try {
+      return await origRequest(data);
+    } catch (err: any) {
+      const errMsg = String(err?.message || err);
+      if (errMsg.includes('No frame found for request')) {
+        // Fallback: handle via the most recent available active or retired frame
+        const fallbackFrame =
+          Array.isArray(frames) && frames.length > 0
+            ? frames[frames.length - 1]
+            : retiredFrames.length > 0
+            ? retiredFrames[retiredFrames.length - 1]
+            : null;
+
+        if (fallbackFrame?.fetchHandler) {
+          try {
+            const sjheaders = (window as any).$scramjet?.ScramjetHeaders?.fromRawHeaders
+              ? (window as any).$scramjet.ScramjetHeaders.fromRawHeaders(data.initialHeaders)
+              : undefined;
+
+            const fetchresponse = await fallbackFrame.fetchHandler.handleFetch({
+              initialHeaders: sjheaders,
+              rawClientUrl: data.rawClientUrl ? new URL(data.rawClientUrl) : undefined,
+              rawUrl: new URL(data.rawUrl),
+              rawReferrer: data.rawReferrer,
+              rawDestination: data.destination,
+              method: data.method,
+              mode: data.mode,
+              referrer: data.referrer,
+              body: data.body,
+              cache: data.cache,
+              clientId: data.clientId,
+            });
+
+            return [
+              {
+                body: fetchresponse.body,
+                status: fetchresponse.status,
+                statusText: fetchresponse.statusText,
+                headers: fetchresponse.headers.toRawHeaders(),
+              },
+              fetchresponse.body instanceof ReadableStream || fetchresponse.body instanceof ArrayBuffer
+                ? [fetchresponse.body]
+                : [],
+            ];
+          } catch {}
+        }
+
+        // Return a clean 204 No Content for subresources (beacons, tracking, media chunks, images)
+        const dest = data?.destination;
+        if (dest && dest !== 'document') {
+          return [
+            {
+              body: null,
+              status: 204,
+              statusText: 'No Content',
+              headers: [],
+            },
+            [],
+          ];
+        }
+
+        return [
+          {
+            body: '<!doctype html><html><body style="background:#0f172a;color:#94a3b8;font-family:sans-serif;padding:20px;">Session closed</body></html>',
+            status: 404,
+            statusText: 'Not Found',
+            headers: [['content-type', 'text/html; charset=utf-8']],
+          },
+          [],
+        ];
+      }
+
+      throw err;
+    }
+  };
+}
+
 export async function initScramjetProxy(): Promise<Controller> {
-  if (cachedController && cachedController.isReady) {
+  if (cachedController && cachedControllerReady) {
+    const activeSw = navigator.serviceWorker?.controller;
+    if (activeSw && (cachedController as any).serviceWorkerController !== activeSw) {
+      (cachedController as any).serviceWorkerController = activeSw;
+      try {
+        (cachedController as any).setupMessagePort?.();
+      } catch {}
+    }
     return cachedController;
   }
 
@@ -848,7 +1796,11 @@ export async function initScramjetProxy(): Promise<Controller> {
 
   initPromise = (async () => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
-      throw new Error('Service Workers are not supported in this browser context');
+      throw new Error(
+        window?.isSecureContext === false
+          ? 'Proxy requires HTTPS or localhost (Service Workers are blocked on insecure HTTP links)'
+          : 'Service Workers are not supported in this browser context'
+      );
     }
 
     // 1. Pre-seed IndexedDB cookie store before Controller constructor reads it
@@ -862,85 +1814,118 @@ export async function initScramjetProxy(): Promise<Controller> {
       await seedControllerIdbCookies(preMerged);
     }
 
-    // 2. Load Scramjet 2.0.67-alpha.2 runtime and Controller API sequentially
+    // 2. Clean legacy SWs + load Scramjet 2.0.67-alpha.2 runtime, WASM, and Controller API
+    await cleanupLegacyServiceWorkers();
     await loadScriptOnce('/scramjet/scramjet.js', () => Boolean(window.$scramjet));
     await loadScriptOnce('/controller/controller.api.js', () => Boolean(window.$scramjetController));
+    await ensureValidScramjetWasm();
 
-    if (!window.$scramjetController) {
+    const scramjetControllerApi = window.$scramjetController;
+    if (!scramjetControllerApi) {
       throw new Error('Scramjet Controller API failed to initialize');
     }
 
-    // 3. Register and activate Scramjet Controller Service Worker at root scope
-    const registration = await navigator.serviceWorker.register('/sj-sw.js', {
-      scope: '/',
-      updateViaCache: 'none',
-    });
-    await registration.update().catch(() => {});
+    const createAndHandshakeController = async (): Promise<Controller> => {
+      // 3. Register and activate Scramjet Controller Service Worker at root scope
+      const registration = await navigator.serviceWorker.register('/sj-sw.js', {
+        scope: '/',
+        updateViaCache: 'none',
+      });
 
-    const activeWorker = await waitForServiceWorkerActive(registration);
+      const activeWorker = await waitForServiceWorkerActive(registration);
 
-    // 4. Initialize Wisp transport (Epoxy v3 with HTTP/2 & Wisp resilience fallback)
-    const transport = await createWispTransport();
+      // 4. Initialize transport (Epoxy/Libcurl over Wisp if reachable, plus HTTP /api/scramjet-fetch fallback)
+      const transport = await createWispTransport();
 
-    // 5. Create Controller with optimized flags for heavy media/SPA web apps (YouTube, TikTok, etc.)
-    const baseFlags = (window.$scramjet?.defaultConfig?.flags || {}) as NonNullable<
-      NonNullable<typeof window.$scramjet>['defaultConfig']
-    >['flags'];
-    const controller = new window.$scramjetController.Controller({
-      serviceworker: activeWorker,
-      transport,
-      scramjetConfig: {
-        flags: {
-          ...baseFlags,
-          sourcemaps: false,
-          allowFailedIntercepts: true,
-          allowInvalidJs: true,
-          encapsulateWorkers: true,
+      // 5. Create Controller with randomized globals and optimized flags for heavy media/SPA web apps
+      const baseFlags = (window.$scramjet?.defaultConfig?.flags || {}) as NonNullable<
+        NonNullable<typeof window.$scramjet>['defaultConfig']
+      >['flags'];
+      const baseGlobals = (window.$scramjet?.defaultConfig?.globals || {});
+      const randHex = Math.random().toString(36).substring(2, 10);
+      const randomizedGlobals = {
+        wrapfn: `__scr_${randHex}_w`,
+        wrappropertybase: `__scr_${randHex}_pb`,
+        wrappropertyfn: `__scr_${randHex}_pf`,
+        cleanrestfn: `__scr_${randHex}_cr`,
+        importfn: `__scr_${randHex}_i`,
+        rewritefn: `__scr_${randHex}_rw`,
+        metafn: `__scr_${randHex}_m`,
+        wrappostmessagefn: `__scr_${randHex}_wpm`,
+        pushsourcemapfn: `__scr_${randHex}_psm`,
+        trysetfn: `__scr_${randHex}_ts`,
+        templocid: `__scr_${randHex}_tl`,
+        tempunusedid: `__scr_${randHex}_tu`,
+      };
+      const controller = new scramjetControllerApi.Controller({
+        serviceworker: activeWorker,
+        transport,
+        scramjetConfig: {
+          flags: {
+            ...baseFlags,
+            sourcemaps: false,
+            allowFailedIntercepts: true,
+            allowInvalidJs: true,
+            encapsulateWorkers: true,
+          },
+          globals: {
+            ...baseGlobals,
+            ...randomizedGlobals,
+          },
         },
-      },
-    });
+      });
 
-    await Promise.race([
-      controller.wait(),
-      new Promise<never>((_, reject) =>
-        window.setTimeout(() => reject(new Error('Timed out waiting for Scramjet Controller handshake')), 10000)
-      ),
-    ]);
+      patchControllerRequestHandler(controller);
+
+      await Promise.race([
+        controller.wait(),
+        new Promise<never>((_, reject) =>
+          window.setTimeout(() => reject(new Error('Timed out waiting for Scramjet Controller handshake')), 10000)
+        ),
+      ]);
+
+      // Disable the 5-second revive guard immediately so SW idle wakeups reconnect without delay
+      (controller as any).guardServiceWorkerRevive = false;
+      patchControllerRequestHandler(controller);
+      return controller;
+    };
+
+    let controller: Controller;
+    try {
+      controller = await createAndHandshakeController();
+    } catch (firstErr) {
+      console.warn('[Scramjet] Retrying Controller initialization after handshake error:', firstErr);
+      controller = await createAndHandshakeController();
+    }
+
+    // Keep controller message port bound if the Service Worker swaps underneath
+    if (!controllerChangeListenerAttached) {
+      controllerChangeListenerAttached = true;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        const nextSw = navigator.serviceWorker.controller;
+        if (nextSw && cachedController && (cachedController as any).serviceWorkerController !== nextSw) {
+          (cachedController as any).serviceWorkerController = nextSw;
+          try {
+            (cachedController as any).setupMessagePort?.();
+          } catch {}
+        }
+      });
+    }
 
     // 6. Hydrate & protect saved website cookies so they never reset
     await protectAndHydrateCookies(controller);
 
     cachedController = controller;
+    cachedControllerReady = true;
     return controller;
   })().catch((err) => {
     initPromise = null;
     cachedController = null;
+    cachedControllerReady = false;
     throw err;
   });
 
   return initPromise;
-}
-
-function isAdOrTrackingUrl(url: string): boolean {
-  if (!url) return false;
-  try {
-    const host = new URL(url).hostname.toLowerCase();
-    return (
-      host.includes('googleadservices') ||
-      host.includes('doubleclick') ||
-      host.includes('googlesyndication') ||
-      host.includes('adservice.google') ||
-      host.includes('tiktokv.com') ||
-      host.includes('analytics.tiktok') ||
-      host.includes('apps.apple.com') ||
-      host.includes('play.google.com') ||
-      host.includes('adnxs') ||
-      host.includes('taboola') ||
-      host.includes('outbrain')
-    );
-  } catch {
-    return false;
-  }
 }
 
 function resolveRealTargetUrl(rawUrl: string, baseRealUrl?: string): string | null {
@@ -966,10 +1951,14 @@ export async function launchInScramjetFrame(
   frameCallbackMap.set(iframe, callbacks || {});
   const controller = await initScramjetProxy();
 
-  // Ensure saved cookies are merged without resetting before navigation
-  const localCookies = readLocalSavedCookies();
-  if (Object.keys(localCookies).length > 0 && controller.cookieJar) {
-    controller.cookieJar.load(JSON.stringify(localCookies));
+  // Ensure saved cookies are deeply merged across local & remote stores without resetting before navigation
+  const [localCookies, remoteCookies] = await Promise.all([
+    Promise.resolve(readLocalSavedCookies()),
+    fetchRemoteSavedCookies(),
+  ]);
+  const mergedPreNav = deepMergeCookies(localCookies, remoteCookies);
+  if (Object.keys(mergedPreNav).length > 0 && controller.cookieJar) {
+    controller.cookieJar.load(JSON.stringify(mergedPreNav));
   }
 
   let frame = frameMap.get(iframe);
@@ -987,6 +1976,49 @@ export async function launchInScramjetFrame(
           const win = client?.global as any;
           if (!win || win.__frostCompatPatched) return;
           win.__frostCompatPatched = true;
+
+          // Spoof real Google Chrome browser environment to bypass "This browser or app may not be secure"
+          try {
+            const nav = win.navigator;
+            if (nav) {
+              Object.defineProperty(nav, 'userAgent', {
+                get: () => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                configurable: true,
+              });
+              Object.defineProperty(nav, 'platform', {
+                get: () => 'Win32',
+                configurable: true,
+              });
+              Object.defineProperty(nav, 'vendor', {
+                get: () => 'Google Inc.',
+                configurable: true,
+              });
+              Object.defineProperty(nav, 'webdriver', {
+                get: () => false,
+                configurable: true,
+              });
+              Object.defineProperty(nav, 'languages', {
+                get: () => ['en-US', 'en'],
+                configurable: true,
+              });
+              Object.defineProperty(nav, 'hardwareConcurrency', {
+                get: () => 8,
+                configurable: true,
+              });
+              Object.defineProperty(nav, 'deviceMemory', {
+                get: () => 8,
+                configurable: true,
+              });
+            }
+            if (!win.chrome) {
+              win.chrome = {
+                runtime: {},
+                loadTimes: function() {},
+                csi: function() {},
+                app: {},
+              };
+            }
+          } catch {}
 
           // Neutralize framebusting and top-level redirection (YouTube & TikTok checks like top.location = ...)
           try {
@@ -1049,6 +2081,131 @@ export async function launchInScramjetFrame(
                   configurable: true,
                 });
               } catch {}
+            }
+          } catch {}
+
+          // 1b. Prevent YouTube player hydration freezes & mount nocookie /embed/ fallback if bot-gate DOM still renders
+          try {
+            const clientHost = String(client?.url?.hostname || '').toLowerCase();
+            if (clientHost.includes('youtube.com')) {
+              if (win.document) {
+                try {
+                  Object.defineProperty(win.document, 'hidden', { get: () => false, configurable: true });
+                  Object.defineProperty(win.document, 'visibilityState', { get: () => 'visible', configurable: true });
+                } catch {}
+              }
+              const nudgePlayerLayout = () => {
+                try {
+                  win.dispatchEvent(new win.Event('resize'));
+                } catch {}
+              };
+              win.addEventListener?.('DOMContentLoaded', () => {
+                nudgePlayerLayout();
+                window.setTimeout(nudgePlayerLayout, 500);
+              }, { once: true });
+              win.addEventListener?.('load', () => {
+                nudgePlayerLayout();
+                window.setTimeout(nudgePlayerLayout, 700);
+              }, { once: true });
+
+              let lastPatchedVideoId = '';
+              let checkTimer: number | null = null;
+              const checkBotGateOverlay = () => {
+                try {
+                  const doc = win.document;
+                  const existingEmbed = doc?.getElementById('__frost_yt_nocookie_embed') as HTMLIFrameElement | null;
+                  const realHref = resolveRealTargetUrl(win.location?.href || '', client?.url?.href) || client?.url?.href || '';
+                  if (!realHref) {
+                    existingEmbed?.remove();
+                    return;
+                  }
+                  const parsedUrl = new URL(realHref);
+                  const vid =
+                    parsedUrl.searchParams.get('v') ||
+                    (parsedUrl.pathname.startsWith('/shorts/') ? parsedUrl.pathname.split('/')[2] : '') ||
+                    '';
+                  if (!vid || !/^[a-zA-Z0-9_-]{6,20}$/.test(vid)) {
+                    lastPatchedVideoId = '';
+                    existingEmbed?.remove();
+                    return;
+                  }
+                  if (lastPatchedVideoId && lastPatchedVideoId !== vid) {
+                    lastPatchedVideoId = '';
+                    existingEmbed?.remove();
+                  }
+
+                  const playerSlot =
+                    doc?.querySelector('#player-container-inner') ||
+                    doc?.querySelector('#movie_player') ||
+                    doc?.querySelector('#player');
+                  if (!playerSlot) return;
+
+                  const slotText = (playerSlot.textContent || '').toLowerCase();
+                  const hasBotPrompt =
+                    slotText.includes('confirm you’re not a bot') ||
+                    slotText.includes("confirm you're not a bot") ||
+                    slotText.includes('sign in to confirm');
+                  if (!hasBotPrompt) return;
+                  if (lastPatchedVideoId === vid && existingEmbed) return;
+
+                  lastPatchedVideoId = vid;
+                  const embedSrc = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(vid)}?autoplay=1&rel=0`;
+                  const rewritten = (window.$scramjet as any)?.rewriteUrl
+                    ? (window.$scramjet as any).rewriteUrl(embedSrc, client.context, {
+                        origin: new URL(location.href),
+                        base: new URL(location.href),
+                      })
+                    : embedSrc;
+
+                  if (existingEmbed) {
+                    existingEmbed.src = rewritten;
+                    return;
+                  }
+
+                  const embedFrame = doc.createElement('iframe');
+                  embedFrame.id = '__frost_yt_nocookie_embed';
+                  embedFrame.src = rewritten;
+                  embedFrame.allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture';
+                  embedFrame.allowFullscreen = true;
+                  embedFrame.style.cssText =
+                    'position:absolute;inset:0;width:100%;height:100%;border:0;z-index:9999;background:#000;';
+                  if (win.getComputedStyle(playerSlot).position === 'static') {
+                    (playerSlot as HTMLElement).style.position = 'relative';
+                  }
+                  playerSlot.appendChild(embedFrame);
+                } catch {}
+              };
+
+              let obs: MutationObserver | null = null;
+              const cleanupObserver = () => {
+                if (checkTimer !== null) {
+                  window.clearTimeout(checkTimer);
+                  checkTimer = null;
+                }
+                if (obs) {
+                  try {
+                    obs.disconnect();
+                  } catch {}
+                  obs = null;
+                }
+              };
+              const attachObserver = () => {
+                try {
+                  if (!win.document?.body) return;
+                  obs = new win.MutationObserver(() => {
+                    if (checkTimer !== null) window.clearTimeout(checkTimer);
+                    checkTimer = window.setTimeout(checkBotGateOverlay, 450);
+                  });
+                  obs?.observe(win.document.body, { childList: true, subtree: true });
+                } catch {}
+              };
+              win.addEventListener?.('pagehide', cleanupObserver, { once: true });
+              win.addEventListener?.('unload', cleanupObserver, { once: true });
+              if (win.document?.readyState === 'loading') {
+                win.addEventListener?.('DOMContentLoaded', attachObserver, { once: true });
+              } else {
+                attachObserver();
+              }
             }
           } catch {}
 
@@ -1144,8 +2301,8 @@ export async function launchInScramjetFrame(
           const isAborted = (error as any)?.name === 'AbortError' || String(error?.message || '').toLowerCase().includes('abort');
           const dest = rawrequest?.destination;
 
-          // If request was aborted (e.g. video seek or discarded fetch), return clean 204
-          if (isAborted) {
+          // Only suppress non-document subresources with 204; never return 204 for document navigations (leaves about:blank black screen)
+          if (isAborted && dest !== 'document') {
             target.setResponse = {
               body: null,
               status: 204,
@@ -1155,8 +2312,10 @@ export async function launchInScramjetFrame(
             return;
           }
 
-          // Only show error splash for failed top-level document navigation
           if (dest === 'document') {
+            if (isAborted) {
+              return;
+            }
             const cleanMsg = String(error?.message || error || 'Unable to load page')
               .replace(/<[^>]+>/g, '')
               .replace(/&/g, '&amp;')
@@ -1167,8 +2326,15 @@ export async function launchInScramjetFrame(
               statusText: 'Bad Gateway',
               headers: [['content-type', 'text/html; charset=utf-8']],
             };
+          } else if (dest === 'style' || dest === 'script' || dest === 'worker' || dest === 'sharedworker') {
+            target.setResponse = {
+              body: null,
+              status: 502,
+              statusText: 'Bad Gateway',
+              headers: [['content-type', dest === 'style' ? 'text/css; charset=utf-8' : 'application/javascript; charset=utf-8']],
+            };
           } else {
-            // For subresources (media chunks, beacons, analytics), return 204 No Content so player doesn't panic
+            // For non-critical subresources (media chunks, beacons, analytics), return 204 No Content so player doesn't panic
             target.setResponse = {
               body: null,
               status: 204,
@@ -1183,16 +2349,40 @@ export async function launchInScramjetFrame(
   }
 
   frame.go(targetUrl);
-  try {
-    if (iframe.contentWindow && iframe.contentWindow.location && iframe.src) {
-      iframe.contentWindow.location.href = iframe.src;
-    }
-  } catch {}
 
   return {
     frame,
     proxiedSrc: iframe.src || '',
   };
+}
+
+export function cleanupScramjetFrame(iframe: HTMLIFrameElement | null): void {
+  if (!iframe) return;
+  const frame = frameMap.get(iframe);
+  frameMap.delete(iframe);
+  frameCallbackMap.delete(iframe);
+
+  if (frame) {
+    if (!retiredFrames.includes(frame)) {
+      retiredFrames.push(frame);
+      if (retiredFrames.length > 25) {
+        retiredFrames.shift();
+      }
+    }
+  }
+
+  // Retain a rolling buffer of frames in controller.frames so in-flight subresource requests
+  // do not fail with "No frame found for request"
+  if (cachedController && Array.isArray((cachedController as any).frames)) {
+    const frames = (cachedController as any).frames as Frame[];
+    if (frames.length > 25) {
+      frames.splice(0, frames.length - 25);
+    }
+  }
+
+  try {
+    iframe.src = 'about:blank';
+  } catch {}
 }
 
 export function getScramjetFrameForIframe(iframe: HTMLIFrameElement | null): Frame | null {

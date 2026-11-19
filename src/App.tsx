@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useDeferredValue, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useDeferredValue, useCallback, useRef } from 'react';
 import { Navbar } from './components/Navbar';
 import { motion, AnimatePresence } from 'motion/react';
 import { CategoryFilter } from './components/CategoryFilter';
@@ -47,7 +47,7 @@ import {
   X
 } from 'lucide-react';
 
-const PAGE_SIZE = 36;
+const PAGE_SIZE = 72;
 
 export default function App() {
   const [currentTab, setCurrentTab] = useState<'games' | 'chat' | 'ai' | 'movies' | 'tv'>('games');
@@ -60,6 +60,8 @@ export default function App() {
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const [targetChatChannel, setTargetChatChannel] = useState<string | null>(null);
+  const gamesScrollRef = useRef<HTMLElement | null>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement | null>(null);
 
   // Theme state: dark by default
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
@@ -142,18 +144,38 @@ export default function App() {
     };
   }, []);
 
-  // Background prefetch for Live TV EPG so it renders instantly on navigation
+  // Idle prewarm for Scramjet controller so games and soundboard launch immediately
   useEffect(() => {
-    fetch('/api/epg/now-next')
-      .then((r) => r.json())
-      .then((data) => {
-        if (data?.programs && typeof data.programs === 'object' && Object.keys(data.programs).length > 0) {
-          try {
-            localStorage.setItem('frosthub_epg_cache', JSON.stringify(data.programs));
-          } catch {}
-        }
-      })
-      .catch(() => {});
+    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+    const prewarm = () => {
+      import('./services/scramjetProxyService')
+        .then((m) => m.initScramjetProxy())
+        .catch(() => {});
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      const handle = window.requestIdleCallback(prewarm, { timeout: 3000 });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const timer = window.setTimeout(prewarm, 1200);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  // Deferred background prefetch for Live TV EPG so Home and Games render with top priority
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      fetch('/api/epg/now-next')
+        .then((r) => r.json())
+        .then((data) => {
+          if (data?.programs && typeof data.programs === 'object' && Object.keys(data.programs).length > 0) {
+            try {
+              localStorage.setItem('frosthub_epg_cache', JSON.stringify(data.programs));
+            } catch {}
+          }
+        })
+        .catch(() => {});
+    }, 4000);
+
+    return () => window.clearTimeout(timer);
   }, []);
 
   const [isCatalogLoading, setIsCatalogLoading] = useState(true);
@@ -337,13 +359,34 @@ export default function App() {
     return counts;
   }, [allGames, favorites]);
 
-  const featuredGames = useMemo(() => allGames.filter((g) => g.featured).slice(0, 10), [allGames]);
+  const featuredGames = useMemo(() => allGames.filter((g) => g.featured), [allGames]);
   const visibleGames = useMemo(() => filteredGames.slice(0, visibleCount), [filteredGames, visibleCount]);
   const hasMore = visibleCount < filteredGames.length;
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
   }, [deferredQuery, selectedCategory, showFavoritesOnly]);
+
+  // Smooth infinite scroll: automatically load more games as the user scrolls
+  useEffect(() => {
+    if (currentTab !== 'games' || !hasMore) return;
+    const sentinel = loadMoreSentinelRef.current;
+    if (!sentinel) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((prev) => Math.min(filteredGames.length, prev + 96));
+        }
+      },
+      {
+        root: gamesScrollRef.current,
+        rootMargin: '500px 0px',
+        threshold: 0.01,
+      }
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [currentTab, hasMore, filteredGames.length]);
 
   // Sync scrolling and overflow based on active tab or game
   useEffect(() => {
@@ -447,6 +490,7 @@ export default function App() {
           </motion.div>
         ) : (
           <motion.main
+            ref={gamesScrollRef as any}
             key="games-tab-view"
             variants={tabTransition}
             initial="initial"
@@ -552,19 +596,26 @@ export default function App() {
               </div>
             )}
 
-            {/* Load More Pagination */}
+            {/* Load More Pagination & Auto-Scroll Sentinel */}
             {hasMore && (
-              <div className="mt-12 flex items-center justify-center">
+              <div ref={loadMoreSentinelRef} className="mt-12 flex flex-wrap items-center justify-center gap-3">
                 <button
                   type="button"
-                  onClick={() => setVisibleCount((prev) => prev + PAGE_SIZE * 2)}
-                  className="inline-flex items-center gap-3 px-8 py-3.5 bg-white hover:bg-slate-50 text-slate-900 font-bold text-xs uppercase tracking-wider rounded-xl border border-slate-200 hover:border-[var(--brand-blue)]/40 transition-all cursor-pointer font-heading shadow-md dark:bg-[#181824] dark:hover:bg-[#202030] dark:text-white dark:border-[#2a2a3e]"
+                  onClick={() => setVisibleCount((prev) => Math.min(filteredGames.length, prev + 120))}
+                  className="inline-flex items-center gap-3 px-7 py-3.5 bg-white hover:bg-slate-50 text-slate-900 font-bold text-xs uppercase tracking-wider rounded-xl border border-slate-200 hover:border-[var(--brand-blue)]/40 transition-all cursor-pointer font-heading shadow-md dark:bg-[#181824] dark:hover:bg-[#202030] dark:text-white dark:border-[#2a2a3e]"
                 >
                   <span>Discover More</span>
-                  <span className="text-[10px] bg-slate-100 dark:bg-[#090d16] px-2 py-0.5 rounded-md text-[var(--brand-blue)] font-extrabold">
+                  <span className="text-[10px] bg-slate-100 dark:bg-[#090d16] px-2 py-0.5 rounded-md text-[var(--brand-blue)] font-extrabold tabular-nums">
                     {visibleCount} / {filteredGames.length}
                   </span>
                   <ArrowRight className="w-4 h-4 text-[var(--brand-blue)]" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVisibleCount(filteredGames.length)}
+                  className="inline-flex items-center gap-2 px-6 py-3.5 bg-[var(--brand-blue)] hover:opacity-90 text-white font-bold text-xs uppercase tracking-wider rounded-xl transition-all cursor-pointer font-heading shadow-md shadow-[var(--brand-blue-glow)]"
+                >
+                  <span>Load All ({filteredGames.length})</span>
                 </button>
               </div>
             )}

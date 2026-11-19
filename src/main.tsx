@@ -26,15 +26,6 @@ if (typeof window !== 'undefined') {
       event.preventDefault();
     }
   });
-
-  // Completely clean up and unregister any legacy service workers
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.getRegistrations().then((registrations) => {
-      for (const registration of registrations) {
-        registration.unregister().catch(() => {});
-      }
-    }).catch(() => {});
-  }
 }
 
 createRoot(document.getElementById('root')!).render(

@@ -509,10 +509,128 @@ export function getScramjetTargetUrl(game: GameItem): string {
   return game.resolvedUrl || resolveGameUrl(game.url, game.id);
 }
 
+function generateSoundboardSvgCover(): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+    <defs>
+      <linearGradient id="sbBg" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#090d16" />
+        <stop offset="50%" stop-color="#1e1035" />
+        <stop offset="100%" stop-color="#0b1120" />
+      </linearGradient>
+      <radialGradient id="sbGlow" cx="50%" cy="40%" r="55%">
+        <stop offset="0%" stop-color="#ec4899" stop-opacity="0.32" />
+        <stop offset="50%" stop-color="#8b5cf6" stop-opacity="0.18" />
+        <stop offset="100%" stop-color="#8b5cf6" stop-opacity="0" />
+      </radialGradient>
+      <linearGradient id="btnGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#ff4b4b" />
+        <stop offset="100%" stop-color="#c81e1e" />
+      </linearGradient>
+      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000000" flood-opacity="0.6"/>
+      </filter>
+    </defs>
+    <rect width="400" height="300" fill="url(#sbBg)" />
+    <rect width="400" height="300" fill="url(#sbGlow)" />
+    <!-- Audio Waveform decorative bars -->
+    <g opacity="0.25">
+      <rect x="52" y="90" width="8" height="36" rx="4" fill="#a855f7" />
+      <rect x="68" y="74" width="8" height="68" rx="4" fill="#ec4899" />
+      <rect x="84" y="82" width="8" height="52" rx="4" fill="#38bdf8" />
+      <rect x="308" y="82" width="8" height="52" rx="4" fill="#38bdf8" />
+      <rect x="324" y="74" width="8" height="68" rx="4" fill="#ec4899" />
+      <rect x="340" y="90" width="8" height="36" rx="4" fill="#a855f7" />
+    </g>
+    <!-- Instant Button Base & Cap -->
+    <ellipse cx="200" cy="128" rx="64" ry="34" fill="#334155" filter="url(#shadow)" />
+    <ellipse cx="200" cy="122" rx="58" ry="30" fill="#475569" />
+    <ellipse cx="200" cy="116" rx="52" ry="26" fill="url(#btnGrad)" />
+    <ellipse cx="200" cy="112" rx="44" ry="20" fill="#ff6b6b" opacity="0.7" />
+    <!-- Speaker / Sound icon highlight in button -->
+    <path d="M192 108 L197 108 L203 103 L203 121 L197 116 L192 116 Z" fill="#ffffff" />
+    <path d="M206 108 A4 4 0 0 1 206 116" stroke="#ffffff" stroke-width="2" stroke-linecap="round" fill="none" />
+    <path d="M209 105 A8 8 0 0 1 209 119" stroke="#ffffff" stroke-width="2" stroke-linecap="round" fill="none" />
+    <text x="200" y="206" text-anchor="middle" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="28" letter-spacing="-0.5">Soundboard</text>
+    <rect x="136" y="222" width="128" height="22" rx="11" fill="#ec4899" fill-opacity="0.2" stroke="#ec4899" stroke-width="1" stroke-opacity="0.5" />
+    <text x="200" y="237" text-anchor="middle" fill="#f472b6" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="10" letter-spacing="1.5">BY MYINSTANTS</text>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+function generateYoutubeSvgCover(): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+    <defs>
+      <linearGradient id="ytBg" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#0b0d14" />
+        <stop offset="55%" stop-color="#1a0d12" />
+        <stop offset="100%" stop-color="#090b10" />
+      </linearGradient>
+      <radialGradient id="ytGlow" cx="50%" cy="42%" r="55%">
+        <stop offset="0%" stop-color="#ff0033" stop-opacity="0.34" />
+        <stop offset="60%" stop-color="#ff0033" stop-opacity="0.08" />
+        <stop offset="100%" stop-color="#ff0033" stop-opacity="0" />
+      </radialGradient>
+      <linearGradient id="ytPlayBg" x1="0%" y1="0%" x2="0%" y2="100%">
+        <stop offset="0%" stop-color="#ff1a3c" />
+        <stop offset="100%" stop-color="#cc0022" />
+      </linearGradient>
+    </defs>
+    <rect width="400" height="300" fill="url(#ytBg)" />
+    <rect width="400" height="300" fill="url(#ytGlow)" />
+    <rect x="136" y="76" width="128" height="88" rx="24" fill="url(#ytPlayBg)" />
+    <polygon points="186,101 186,139 222,120" fill="#FFFFFF" />
+    <text x="200" y="206" text-anchor="middle" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="28" letter-spacing="-0.5">YouTube</text>
+    <rect x="148" y="222" width="104" height="22" rx="11" fill="#ff0033" fill-opacity="0.18" stroke="#ff0033" stroke-width="1" stroke-opacity="0.45" />
+    <text x="200" y="237" text-anchor="middle" fill="#ff6b81" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="800" font-size="10" letter-spacing="1.4">SCRAMJET TEST</text>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+const SOUNDBOARD_COVER_URL = 'https://cdn.aptoide.com/imgs/d/e/c/dec9bc1d63944581077bfa41b5188aa3_icon.png';
+const YOUTUBE_COVER_URL = generateYoutubeSvgCover();
+
+const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
+  {
+    id: 900001,
+    name: 'Soundboard',
+    cover: SOUNDBOARD_COVER_URL,
+    url: 'https://www.myinstants.com/en/index/us/',
+    author: 'Myinstants',
+    special: ['soundboard', 'myinstants', 'audio', 'sound effects', 'buttons', 'scramjet'],
+    featured: true,
+    source: 'scramjet',
+    category: 'Featured',
+    resolvedCover: SOUNDBOARD_COVER_URL,
+    fallbackCover: generateSoundboardSvgCover(),
+    localCover: SOUNDBOARD_COVER_URL,
+    resolvedUrl: 'https://www.myinstants.com/en/index/us/',
+  },
+  {
+    id: 900002,
+    name: 'YouTube',
+    cover: YOUTUBE_COVER_URL,
+    url: 'https://www.youtube.com/',
+    author: 'YouTube',
+    special: ['youtube', 'video', 'streaming', 'test', 'scramjet'],
+    featured: true,
+    source: 'scramjet',
+    category: 'Featured',
+    resolvedCover: YOUTUBE_COVER_URL,
+    fallbackCover: YOUTUBE_COVER_URL,
+    localCover: YOUTUBE_COVER_URL,
+    resolvedUrl: 'https://www.youtube.com/',
+  },
+];
+
 export function getAllGames(): GameItem[] {
-  // 1. ALL EXISTING GN-MATH GAMES PRESERVED EXACTLY AS-IS (ZERO TOUCHED)
+  // 1. ALL EXISTING GN-MATH GAMES PRESERVED (EXCEPT deleted native soundboard id: 179)
   const validGames = (rawGamesData as RawGame[]).filter(
-    (g) => g.id >= 0 && g.name && !g.name.includes('.gg/')
+    (g) =>
+      g.id >= 0 &&
+      g.id !== 179 &&
+      g.name &&
+      !g.name.includes('.gg/') &&
+      g.name.toLowerCase().trim() !== 'soundboard'
   );
 
   const gnGames: GameItem[] = validGames.map((game) => {
@@ -534,10 +652,8 @@ export function getAllGames(): GameItem[] {
     };
   });
 
-
-
   // 2. Track existing names and high-quality covers to avoid duplicate entries
-  const existingNames = new Set<string>();
+  const existingNames = new Set<string>(['soundboard', 'myinstants']);
   const coverLookupByName = new Map<string, string>();
   for (const g of gnGames) {
     const norm = g.name.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -571,7 +687,7 @@ export function getAllGames(): GameItem[] {
     }
   }
 
-  return [...gnGames, ...ugsGames, ...ckvGames];
+  return [...BUILTIN_SCRAMJET_GAMES, ...gnGames, ...ugsGames, ...ckvGames];
 }
 
 export async function fetchGames(): Promise<GameItem[]> {

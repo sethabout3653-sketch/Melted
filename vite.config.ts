@@ -1,11 +1,47 @@
+import fs from 'fs';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { defineConfig, loadEnv } from 'vite';
+import { defineConfig, loadEnv, type Plugin } from 'vite';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+function copyScramjetAssetsPlugin(): Plugin {
+  return {
+    name: 'copy-scramjet-runtime-assets',
+    closeBundle() {
+      const outDir = path.resolve(__dirname, 'dist');
+      if (!fs.existsSync(outDir)) return;
+
+      const mounts: Array<{ from: string; to: string }> = [
+        {
+          from: path.resolve(__dirname, 'node_modules/@mercuryworkshop/scramjet/dist'),
+          to: path.resolve(outDir, 'scramjet'),
+        },
+        {
+          from: path.resolve(__dirname, 'node_modules/@mercuryworkshop/scramjet-controller/dist'),
+          to: path.resolve(outDir, 'controller'),
+        },
+        {
+          from: path.resolve(__dirname, 'node_modules/@mercuryworkshop/epoxy-transport/dist'),
+          to: path.resolve(outDir, 'epoxy'),
+        },
+        {
+          from: path.resolve(__dirname, 'node_modules/@mercuryworkshop/libcurl-transport/dist'),
+          to: path.resolve(outDir, 'libcurl'),
+        },
+      ];
+
+      for (const { from, to } of mounts) {
+        if (fs.existsSync(from)) {
+          fs.cpSync(from, to, { recursive: true, force: true });
+        }
+      }
+    },
+  };
+}
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -21,6 +57,7 @@ export default defineConfig(({ mode }) => {
     plugins: [
       react(),
       tailwindcss(),
+      copyScramjetAssetsPlugin(),
     ],
     resolve: {
       alias: {
@@ -30,9 +67,8 @@ export default defineConfig(({ mode }) => {
     server: {
       host: '0.0.0.0',
       port: 3000,
-      // AI Studio previews use Google-hosted domains; Vercel remains supported.
-      // Keep this scoped instead of allowing every host (which weakens DNS-rebinding protection).
-      allowedHosts: ['.googleusercontent.com', '.run.app', 'sb-7bwx88dm7dok.vercel.run'],
+      // Allow AI Studio dev/published previews, Cloudflare Pages, Vercel, custom domains, and tunnels
+      allowedHosts: true,
       hmr: process.env.DISABLE_HMR !== 'true',
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },

@@ -124,15 +124,26 @@ export function initSethsrcEngine(app: express.Express, baseDir: string) {
       };
 
       const fetchWithTimeout = async (urlToFetch: string, withRef?: string) => {
-        const timeoutSignal = AbortSignal.timeout(10000);
-        const signal = typeof (AbortSignal as any).any === 'function'
-          ? (AbortSignal as any).any([clientAbort.signal, timeoutSignal])
-          : timeoutSignal;
-        return fetch(urlToFetch, {
-          headers: buildHeaders(withRef),
-          redirect: 'follow',
-          signal,
-        });
+        const headerController = new AbortController();
+        const headerTimer = setTimeout(() => {
+          headerController.abort(new Error('Upstream stream header timeout'));
+        }, 12000);
+        const onClientAbort = () => headerController.abort();
+        clientAbort.signal.addEventListener('abort', onClientAbort, { once: true });
+        try {
+          const resp = await fetch(urlToFetch, {
+            headers: buildHeaders(withRef),
+            redirect: 'follow',
+            signal: headerController.signal,
+          });
+          clearTimeout(headerTimer);
+          return resp;
+        } catch (err) {
+          clearTimeout(headerTimer);
+          throw err;
+        } finally {
+          clientAbort.signal.removeEventListener('abort', onClientAbort);
+        }
       };
 
       let upstreamResponse: Response;
@@ -307,6 +318,9 @@ export function initSethsrcEngine(app: express.Express, baseDir: string) {
           if (!res.headersSent) res.status(502).end();
           else res.end();
         });
+        res.on('error', () => {
+          stream.destroy();
+        });
         res.on('close', () => {
           stream.destroy();
         });
@@ -332,9 +346,14 @@ export function initSethsrcEngine(app: express.Express, baseDir: string) {
     if (!targetUrl) {
       return res.status(400).send('Missing url parameter');
     }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 8000);
+    res.on('close', () => {
+      if (!res.writableEnded) {
+        controller.abort();
+      }
+    });
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 6000);
       const upstream = await fetch(targetUrl, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36',
@@ -351,12 +370,23 @@ export function initSethsrcEngine(app: express.Express, baseDir: string) {
       res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
       res.setHeader('Access-Control-Allow-Origin', '*');
       if (upstream.body) {
-        Readable.fromWeb(upstream.body as any).pipe(res);
+        const imgStream = Readable.fromWeb(upstream.body as any);
+        imgStream.on('error', () => {
+          if (!res.headersSent) res.status(502).end();
+          else res.end();
+        });
+        res.on('close', () => {
+          imgStream.destroy();
+        });
+        imgStream.pipe(res);
       } else {
         res.end();
       }
     } catch {
-      res.status(502).send('Image proxy failed');
+      clearTimeout(timer);
+      if (!res.headersSent) {
+        res.status(502).send('Image proxy failed');
+      }
     }
   });
 

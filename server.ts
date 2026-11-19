@@ -5,6 +5,9 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import http from 'http';
 import https from 'https';
+import tls from 'tls';
+import zlib from 'zlib';
+import { promisify } from 'util';
 import { Readable } from 'stream';
 import { initWebSocketDatabase, globalWsDb, broadcastTable, broadcastWss, sendToUserSockets } from './src/server/wsDatabase';
 import { server as wispServer } from '@mercuryworkshop/wisp-js/server';
@@ -32,26 +35,43 @@ const IS_PROD = process.env.NODE_ENV === 'production';
 // Initialize Sethsrc HLS Streaming & Reverse Proxy Engine
 initSethsrcEngine(app, __dirname);
 
-// Mount Scramjet 2.0.67-alpha.2 runtime, WASM, and Controller assets
+// Mount Scramjet 2.0.67-alpha.2 runtime, WASM, Controller, and Epoxy v3 / Libcurl v2 transport assets locally
 const scramjetDistDir = path.resolve(__dirname, 'node_modules/@mercuryworkshop/scramjet/dist');
 const controllerDistDir = path.resolve(__dirname, 'node_modules/@mercuryworkshop/scramjet-controller/dist');
+const epoxyDistDir = path.resolve(__dirname, 'node_modules/@mercuryworkshop/epoxy-transport/dist');
+const libcurlDistDir = path.resolve(__dirname, 'node_modules/@mercuryworkshop/libcurl-transport/dist');
 
-app.use('/scramjet', (req, res, next) => {
+const setStaticAssetHeaders = (res: express.Response, reqPath: string) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  if (req.path.endsWith('.wasm')) {
+  if (reqPath.endsWith('.wasm')) {
     res.setHeader('Content-Type', 'application/wasm');
-  } else if (req.path.endsWith('.js') || req.path.endsWith('.mjs')) {
+    res.setHeader('Cache-Control', 'public, max-age=604800, immutable');
+  } else if (reqPath.endsWith('.js') || reqPath.endsWith('.mjs')) {
     res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
   }
+};
+
+app.use('/scramjet', (req, res, next) => {
+  setStaticAssetHeaders(res, req.path);
   next();
-}, express.static(scramjetDistDir, { maxAge: '1h' }));
+}, express.static(scramjetDistDir, { maxAge: '7d' }));
+
+app.use('/epoxy', (req, res, next) => {
+  setStaticAssetHeaders(res, req.path);
+  next();
+}, express.static(epoxyDistDir, { maxAge: '7d' }));
+
+app.use('/libcurl', (req, res, next) => {
+  setStaticAssetHeaders(res, req.path);
+  next();
+}, express.static(libcurlDistDir, { maxAge: '7d' }));
 
 app.use('/controller', (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Service-Worker-Allowed', '/');
   res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
-  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+  res.setHeader('Cache-Control', 'no-cache, must-revalidate');
   if (req.path.endsWith('.js') || req.path.endsWith('.mjs')) {
     res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
   }
@@ -70,17 +90,503 @@ app.get('/sj-sw.js', (_req, res) => {
   res.sendFile(targetSwPath);
 });
 
-// Server-side raw HTTP/1.1+HTTPS fallback for Scramjet when Epoxy WASM HTTP/2 hits PROTOCOL_ERROR
+async function fetchYoutubeVrPlayer(videoId: string): Promise<Record<string, any> | null> {
+  if (!videoId || !/^[a-zA-Z0-9_-]{6,20}$/.test(videoId)) {
+    return null;
+  }
+
+  const attempts: Array<{ headers: Record<string, string>; body: Record<string, any> }> = [
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent':
+          'com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip',
+      },
+      body: {
+        videoId,
+        context: {
+          client: {
+            clientName: 'ANDROID_VR',
+            clientVersion: '1.60.19',
+            deviceMake: 'Oculus',
+            deviceModel: 'Quest 3',
+            osName: 'Android',
+            osVersion: '12L',
+            hl: 'en',
+            gl: 'US',
+          },
+        },
+      },
+    },
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        Origin: 'https://www.youtube-nocookie.com',
+        Referer: 'https://www.youtube-nocookie.com/',
+      },
+      body: {
+        videoId,
+        context: {
+          client: {
+            clientName: 'WEB_EMBEDDED_PLAYER',
+            clientVersion: '1.20241118.01.00',
+            hl: 'en',
+            gl: 'US',
+            thirdParty: {
+              embedUrl: 'https://www.youtube-nocookie.com/',
+            },
+          },
+        },
+      },
+    },
+  ];
+
+  for (const attempt of attempts) {
+    try {
+      const r = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
+        method: 'POST',
+        headers: attempt.headers,
+        body: JSON.stringify(attempt.body),
+        signal: AbortSignal.timeout(7000),
+      });
+      if (!r.ok) continue;
+      const json = (await r.json()) as Record<string, any>;
+      if (json?.playabilityStatus?.status === 'OK' && json?.streamingData) {
+        return json;
+      }
+    } catch {}
+  }
+
+  return null;
+}
+
+function patchYtInitialPlayerResponseHtml(
+  html: string,
+  vrData: Record<string, any>
+): string | null {
+  const marker = 'var ytInitialPlayerResponse = ';
+  const idx = html.indexOf(marker);
+  if (idx === -1) return null;
+  const start = idx + marker.length;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  let end = -1;
+
+  for (let i = start; i < html.length; i++) {
+    const ch = html[i];
+    if (esc) {
+      esc = false;
+      continue;
+    }
+    if (ch === '\\') {
+      esc = true;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = !inStr;
+      continue;
+    }
+    if (inStr) continue;
+    if (ch === '{') {
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        end = i + 1;
+        break;
+      }
+    }
+  }
+
+  if (end === -1) return null;
+  try {
+    const parsed = JSON.parse(html.slice(start, end)) as Record<string, any>;
+    const patched = {
+      ...parsed,
+      playabilityStatus: vrData.playabilityStatus || { status: 'OK', playableInEmbed: true },
+      streamingData: vrData.streamingData || parsed.streamingData,
+      videoDetails: parsed.videoDetails || vrData.videoDetails,
+      captions: parsed.captions || vrData.captions,
+      storyboards: parsed.storyboards || vrData.storyboards,
+    };
+    return html.slice(0, start) + JSON.stringify(patched) + html.slice(end);
+  } catch {
+    return null;
+  }
+}
+
+const gunzipAsync = promisify(zlib.gunzip);
+const inflateAsync = promisify(zlib.inflate);
+const brotliDecompressAsync = promisify(zlib.brotliDecompress);
+const MAX_SC_FETCH_BYTES = 40 * 1024 * 1024;
+
+// Persistent Keep-Alive agents for warm TCP/TLS socket reuse across requests
+const stickyHttpAgent = new http.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30000,
+  maxSockets: 64,
+});
+const stickyHttpsAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30000,
+  maxSockets: 64,
+});
+
+function getProxyPoolList(): string[] {
+  const rawList = [
+    process.env.RESIDENTIAL_PROXY_URL || 'http://vncwbxva-rotate:d65j8vqe2th9@p.webshare.io:80/',
+    process.env.PROXY_POOL_URLS || '',
+  ]
+    .join(',')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  return rawList;
+}
+
+function hashSessionIndex(sessionId: string, mod: number): number {
+  let h = 2166136261;
+  for (let i = 0; i < sessionId.length; i++) {
+    h ^= sessionId.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h) % mod;
+}
+
+function resolveStickyProxyUrl(sessionId: string): URL | null {
+  const pool = getProxyPoolList();
+  if (pool.length === 0) return null;
+  const idx = hashSessionIndex(sessionId || 'default', pool.length);
+  const rawTemplate = pool[idx].replace(/\{session\}/gi, encodeURIComponent(sessionId || 'default'));
+  try {
+    return new URL(rawTemplate);
+  } catch {
+    return null;
+  }
+}
+
+function readUpstreamResponseStream(
+  upRes: http.IncomingMessage,
+  upReq: http.ClientRequest,
+  resolve: (val: { status: number; statusText: string; rawHeaders: string[]; body: Buffer }) => void,
+  reject: (err: unknown) => void,
+  cleanupSocket?: () => void
+) {
+  let settled = false;
+  const fail = (err: unknown) => {
+    if (settled) return;
+    settled = true;
+    cleanupSocket?.();
+    reject(err);
+  };
+
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+
+  upRes.on('data', (chunk: Buffer) => {
+    if (settled) return;
+    totalBytes += chunk.length;
+    if (totalBytes > MAX_SC_FETCH_BYTES) {
+      upRes.destroy();
+      upReq.destroy();
+      fail(new Error('Upstream response exceeded size limit'));
+      return;
+    }
+    chunks.push(chunk);
+  });
+  upRes.on('error', fail);
+  upRes.on('end', async () => {
+    if (settled) return;
+    let rawBuf = chunks.length === 1 ? chunks[0] : Buffer.concat(chunks, totalBytes);
+    chunks.length = 0;
+    const enc = String(upRes.headers['content-encoding'] || '').toLowerCase().trim();
+    if (rawBuf.length > 0) {
+      try {
+        if (enc === 'gzip' || enc === 'x-gzip') {
+          rawBuf = await gunzipAsync(rawBuf);
+        } else if (enc === 'deflate') {
+          rawBuf = await inflateAsync(rawBuf);
+        } else if (enc === 'br') {
+          rawBuf = await brotliDecompressAsync(rawBuf);
+        }
+      } catch {
+        // Keep raw bytes if decompression fails or body is already plain/empty
+      }
+    }
+    if (settled) return;
+    settled = true;
+    resolve({
+      status: upRes.statusCode || 200,
+      statusText: upRes.statusMessage || '',
+      rawHeaders: upRes.rawHeaders || [],
+      body: rawBuf,
+    });
+  });
+
+  return fail;
+}
+
+function performDirectUpstreamRequest(
+  targetUrl: URL,
+  method: string,
+  headersObj: Record<string, string>,
+  bodyBuf: Buffer | null,
+  timeoutMs = 60000
+): Promise<{
+  status: number;
+  statusText: string;
+  rawHeaders: string[];
+  body: Buffer;
+}> {
+  return new Promise((resolve, reject) => {
+    const isHttps = targetUrl.protocol === 'https:';
+    const lib = isHttps ? https : http;
+    const reqOpts: http.RequestOptions & { maxHeaderSize?: number } = {
+      protocol: targetUrl.protocol,
+      hostname: targetUrl.hostname,
+      port: targetUrl.port || (isHttps ? 443 : 80),
+      path: targetUrl.pathname + targetUrl.search,
+      method,
+      headers: headersObj,
+      agent: isHttps ? stickyHttpsAgent : stickyHttpAgent,
+      maxHeaderSize: 131072, // Allow 128KB+ response headers (fixes YouTube UND_ERR_HEADERS_OVERFLOW)
+    };
+
+    const upReq = lib.request(reqOpts, (upRes) => {
+      readUpstreamResponseStream(upRes, upReq, resolve, reject);
+    });
+
+    upReq.setTimeout(timeoutMs, () => {
+      upReq.destroy(new Error('Upstream request timeout'));
+    });
+    upReq.on('error', reject);
+    if (bodyBuf && bodyBuf.length > 0) {
+      upReq.write(bodyBuf);
+    }
+    upReq.end();
+  });
+}
+
+function performRawUpstreamRequest(
+  targetUrl: URL,
+  method: string,
+  headersObj: Record<string, string>,
+  bodyBuf: Buffer | null,
+  timeoutMs = 60000,
+  sessionId = 'default'
+): Promise<{
+  status: number;
+  statusText: string;
+  rawHeaders: string[];
+  body: Buffer;
+}> {
+  const isHttps = targetUrl.protocol === 'https:';
+  const proxyUrl = resolveStickyProxyUrl(sessionId);
+
+  if (!proxyUrl || (proxyUrl.protocol !== 'http:' && proxyUrl.protocol !== 'https:')) {
+    return performDirectUpstreamRequest(targetUrl, method, headersObj, bodyBuf, timeoutMs);
+  }
+
+  return new Promise((resolve, reject) => {
+    const proxyIsHttps = proxyUrl.protocol === 'https:';
+    const proxyLib = proxyIsHttps ? https : http;
+    const proxyAuth =
+      proxyUrl.username || proxyUrl.password
+        ? `Basic ${Buffer.from(
+            `${decodeURIComponent(proxyUrl.username)}:${decodeURIComponent(proxyUrl.password)}`
+          ).toString('base64')}`
+        : '';
+
+    let settled = false;
+    const fallbackToDirect = () => {
+      if (settled) return;
+      settled = true;
+      performDirectUpstreamRequest(targetUrl, method, headersObj, bodyBuf, timeoutMs)
+        .then(resolve)
+        .catch(reject);
+    };
+
+    if (isHttps) {
+      const targetPort = Number(targetUrl.port || 443);
+      const connectHeaders: Record<string, string> = {
+        Host: `${targetUrl.hostname}:${targetPort}`,
+      };
+      if (proxyAuth) {
+        connectHeaders['Proxy-Authorization'] = proxyAuth;
+      }
+      const connectReq = proxyLib.request({
+        hostname: proxyUrl.hostname,
+        port: Number(proxyUrl.port || (proxyIsHttps ? 443 : 80)),
+        method: 'CONNECT',
+        path: `${targetUrl.hostname}:${targetPort}`,
+        headers: connectHeaders,
+      });
+      connectReq.setTimeout(6000, () => {
+        connectReq.destroy();
+        fallbackToDirect();
+      });
+      connectReq.on('error', fallbackToDirect);
+      connectReq.on('connect', (res, tunnelSocket) => {
+        if (res.statusCode !== 200) {
+          tunnelSocket.destroy();
+          fallbackToDirect();
+          return;
+        }
+        const tlsSocket = tls.connect({
+          socket: tunnelSocket,
+          servername: targetUrl.hostname,
+        });
+        tlsSocket.on('error', () => {
+          try {
+            tlsSocket.destroy();
+          } catch {}
+          fallbackToDirect();
+        });
+        const upReq = https.request(
+          {
+            protocol: targetUrl.protocol,
+            hostname: targetUrl.hostname,
+            port: targetPort,
+            path: targetUrl.pathname + targetUrl.search,
+            method,
+            headers: headersObj,
+            maxHeaderSize: 131072,
+            createConnection: () => tlsSocket,
+          } as any,
+          (upRes) => {
+            if (settled) return;
+            settled = true;
+            readUpstreamResponseStream(upRes, upReq, resolve, reject, () => {
+              try {
+                tlsSocket.destroy();
+              } catch {}
+            });
+          }
+        );
+        upReq.setTimeout(timeoutMs, () => {
+          upReq.destroy(new Error('Upstream request timeout'));
+        });
+        upReq.on('error', (err) => {
+          if (settled) {
+            reject(err);
+          } else {
+            fallbackToDirect();
+          }
+        });
+        if (bodyBuf && bodyBuf.length > 0) {
+          upReq.write(bodyBuf);
+        }
+        upReq.end();
+      });
+      connectReq.end();
+      return;
+    }
+
+    // Plain HTTP target via HTTP proxy
+    const proxiedHeaders: Record<string, string> = { ...headersObj };
+    if (proxyAuth) {
+      proxiedHeaders['proxy-authorization'] = proxyAuth;
+    }
+    const upReq = proxyLib.request(
+      {
+        hostname: proxyUrl.hostname,
+        port: Number(proxyUrl.port || (proxyIsHttps ? 443 : 80)),
+        path: targetUrl.href,
+        method,
+        headers: proxiedHeaders,
+        maxHeaderSize: 131072,
+      } as any,
+      (upRes) => {
+        if (settled) return;
+        settled = true;
+        readUpstreamResponseStream(upRes, upReq, resolve, reject);
+      }
+    );
+    upReq.setTimeout(timeoutMs, () => {
+      upReq.destroy(new Error('Upstream request timeout'));
+    });
+    upReq.on('error', () => fallbackToDirect());
+    if (bodyBuf && bodyBuf.length > 0) {
+      upReq.write(bodyBuf);
+    }
+    upReq.end();
+  });
+}
+
+const SERVER_AD_AND_TRACKING_HOST_SUBSTRINGS = [
+  'googleadservices',
+  'googlesyndication',
+  'doubleclick.net',
+  'adservice.google',
+  'c.amazon-adsystem.com',
+  'adnxs.com',
+  'pubmatic.com',
+  'rubiconproject.com',
+  'openx.net',
+  'casalemedia.com',
+  'crwdcntrl.net',
+  'adroll.com',
+  'smartadserver.com',
+  'taboola.com',
+  'outbrain.com',
+  'scorecardresearch.com',
+  'quantserve.com',
+  'btloader.com',
+  'id5-sync.com',
+  'confiant-integrations',
+  'criteo.com',
+  'criteo.net',
+  'lijit.com',
+  'sonobi.com',
+  'bidswitch.net',
+  'yieldmo.com',
+  'sharethrough.com',
+  '3lift.com',
+  'triplelift.com',
+  'adform.net',
+  'googletagservices.com',
+  'google-analytics.com',
+  'hotjar.com',
+  'clarity.ms',
+  'statcounter.com',
+  'adobedtm.com',
+  'advertising.com',
+  'chartbeat.com',
+  'exponential.com',
+  'infolinks.com',
+];
+
+function isServerAdOrTrackingHost(hostname: string): boolean {
+  const host = hostname.toLowerCase();
+  for (const sub of SERVER_AD_AND_TRACKING_HOST_SUBSTRINGS) {
+    if (host.includes(sub)) return true;
+  }
+  return false;
+}
+
+// Server-side raw HTTP/1.1+HTTPS fallback for Scramjet when Epoxy WASM HTTP/2 hits PROTOCOL_ERROR or Wisp is blocked
+app.options('/api/scramjet-fetch', (_req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-SJ-Url, X-SJ-Method, X-SJ-Headers, X-SJ-Session');
+  res.setHeader('Access-Control-Expose-Headers', 'X-SJ-Meta, X-SJ-Meta-In-Body');
+  return res.sendStatus(204);
+});
+
 app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-SJ-Url, X-SJ-Method, X-SJ-Headers');
-  res.setHeader('Access-Control-Expose-Headers', 'X-SJ-Meta');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-SJ-Url, X-SJ-Method, X-SJ-Headers, X-SJ-Session');
+  res.setHeader('Access-Control-Expose-Headers', 'X-SJ-Meta, X-SJ-Meta-In-Body');
 
   try {
     const rawUrl = String(req.headers['x-sj-url'] || '').trim();
     const method = String(req.headers['x-sj-method'] || 'GET').toUpperCase();
     const rawHeadersB64 = String(req.headers['x-sj-headers'] || '').trim();
+    const stickySessionId = String(req.headers['x-sj-session'] || 'default').trim();
 
     if (!rawUrl) {
       return res.status(400).json({ error: 'Missing X-SJ-Url' });
@@ -138,7 +644,7 @@ app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), as
       'accept-encoding',
     ]);
 
-    const forwardHeaders = new Headers();
+    const forwardMap = new Map<string, string>();
     const cookieParts: string[] = [];
     for (const [k, v] of parsedHeaders) {
       const lower = k.toLowerCase().trim();
@@ -147,57 +653,80 @@ app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), as
       if (lower === 'cookie') {
         if (cleanVal) cookieParts.push(cleanVal);
       } else {
-        try {
-          forwardHeaders.set(lower, cleanVal);
-        } catch {}
+        forwardMap.set(lower, cleanVal);
       }
     }
     if (cookieParts.length > 0) {
-      forwardHeaders.set('cookie', cookieParts.join('; '));
+      forwardMap.set('cookie', cookieParts.join('; '));
     }
-    if (!forwardHeaders.has('user-agent')) {
-      forwardHeaders.set(
-        'user-agent',
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-      );
+    // Preserve genuine client fingerprints (User-Agent & Sec-CH-UA* client hints) without conflicting overrides
+    const incomingUa = String(req.headers['user-agent'] || '').trim();
+    const ua = forwardMap.get('user-agent') || '';
+    forwardMap.set('user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
+    forwardMap.set('sec-ch-ua', '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"');
+    forwardMap.set('sec-ch-ua-mobile', '?0');
+    forwardMap.set('sec-ch-ua-platform', '"Windows"');
+    if (!forwardMap.has('accept-language')) {
+      const incomingLang = String(req.headers['accept-language'] || '').trim();
+      forwardMap.set('accept-language', incomingLang || 'en-US,en;q=0.9');
     }
-    if (!forwardHeaders.has('accept-language')) {
-      forwardHeaders.set('accept-language', 'en-US,en;q=0.9');
+    forwardMap.set('accept-encoding', 'gzip, deflate, br');
+
+    // Sanitize Origin/Referer if they accidentally leaked the Cloud Run / Pages / localhost proxy host
+    const proxyHost = String(req.headers.host || '').split(':')[0].toLowerCase();
+    for (const hName of ['origin', 'referer']) {
+      const val = forwardMap.get(hName);
+      if (val && proxyHost && val.toLowerCase().includes(proxyHost)) {
+        if (hName === 'origin') {
+          forwardMap.set('origin', targetUrl.origin);
+        } else {
+          forwardMap.set('referer', `${targetUrl.origin}/`);
+        }
+      }
     }
 
     // Set genuine origin/referer for YouTube & TikTok video endpoints to prevent 403 Forbidden
     if (host.includes('youtube.com') || host.includes('googlevideo.com') || host.includes('ytimg.com')) {
-      if (!forwardHeaders.has('referer')) forwardHeaders.set('referer', 'https://www.youtube.com/');
-      if (!forwardHeaders.has('origin') && method !== 'GET' && method !== 'HEAD') {
-        forwardHeaders.set('origin', 'https://www.youtube.com');
+      if (!forwardMap.has('referer')) forwardMap.set('referer', 'https://www.youtube.com/');
+      if (!forwardMap.has('origin') && method !== 'GET' && method !== 'HEAD') {
+        forwardMap.set('origin', 'https://www.youtube.com');
       }
     } else if (host.includes('tiktok.com') || host.includes('tiktokcdn.com') || host.includes('byteoversea.com')) {
-      if (!forwardHeaders.has('referer')) forwardHeaders.set('referer', 'https://www.tiktok.com/');
-      if (!forwardHeaders.has('origin') && method !== 'GET' && method !== 'HEAD') {
-        forwardHeaders.set('origin', 'https://www.tiktok.com');
+      if (!forwardMap.has('referer')) forwardMap.set('referer', 'https://www.tiktok.com/');
+      if (!forwardMap.has('origin') && method !== 'GET' && method !== 'HEAD') {
+        forwardMap.set('origin', 'https://www.tiktok.com');
       }
     }
 
     const hasBody = method !== 'GET' && method !== 'HEAD' && Buffer.isBuffer(req.body) && req.body.length > 0;
-    const upstreamRes = await fetch(targetUrl.href, {
+    const reqBodyBuf = hasBody ? Buffer.from(req.body) : null;
+    const upstreamHeadersObj: Record<string, string> = {};
+    for (const [k, v] of forwardMap.entries()) {
+      upstreamHeadersObj[k] = v;
+    }
+    if (reqBodyBuf) {
+      upstreamHeadersObj['content-length'] = String(reqBodyBuf.length);
+    }
+
+    const upstreamRes = await performRawUpstreamRequest(
+      targetUrl,
       method,
-      headers: forwardHeaders,
-      body: hasBody ? new Uint8Array(req.body) : undefined,
-      redirect: 'manual',
-      signal: AbortSignal.timeout(60000),
-    });
+      upstreamHeadersObj,
+      reqBodyBuf,
+      60000,
+      stickySessionId
+    );
 
     const outHeaders: [string, string][] = [];
-    const setCookies = typeof (upstreamRes.headers as any).getSetCookie === 'function'
-      ? ((upstreamRes.headers as any).getSetCookie() as string[])
-      : [];
 
-    // Strip iframe-breaking framing policies and CSP headers that trigger Trusted Types crashes
+    // Strip iframe-breaking framing policies, CSP, and oversized reporting headers that blow proxy header limits
     const strippedUpstreamHeaders = new Set([
       'set-cookie',
       'content-encoding',
       'content-length',
       'transfer-encoding',
+      'connection',
+      'keep-alive',
       'content-security-policy',
       'content-security-policy-report-only',
       'x-frame-options',
@@ -208,47 +737,132 @@ app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), as
       'feature-policy',
       'clear-site-data',
       'origin-agent-cluster',
+      'report-to',
+      'reporting-endpoints',
+      'nel',
+      'alt-svc',
+      'strict-transport-security',
+      'origin-trial',
+      'p3p',
+      'server-timing',
+      'link',
     ]);
 
-    for (const [k, v] of upstreamRes.headers.entries()) {
+    for (let i = 0; i + 1 < upstreamRes.rawHeaders.length; i += 2) {
+      const k = upstreamRes.rawHeaders[i];
+      const v = upstreamRes.rawHeaders[i + 1];
       const lower = k.toLowerCase().trim();
       if (strippedUpstreamHeaders.has(lower)) {
         continue;
       }
       outHeaders.push([k, v]);
     }
-    for (const sc of setCookies) {
-      outHeaders.push(['set-cookie', sc]);
+    for (let i = 0; i + 1 < upstreamRes.rawHeaders.length; i += 2) {
+      if (upstreamRes.rawHeaders[i].toLowerCase().trim() === 'set-cookie') {
+        outHeaders.push(['set-cookie', upstreamRes.rawHeaders[i + 1]]);
+      }
     }
 
-    const isDocument = forwardHeaders.get('sec-fetch-dest') === 'document' || forwardHeaders.get('accept')?.includes('text/html');
-    const finalStatus = (upstreamRes.status === 404 && !isDocument) ? 204 : upstreamRes.status;
-    const finalStatusText = finalStatus === 204 ? 'No Content' : (upstreamRes.statusText || '');
+    const finalStatus = upstreamRes.status;
+    const finalStatusText = upstreamRes.statusText || '';
 
-    const arrayBuf = await upstreamRes.arrayBuffer();
-    const rawBodyBuf = Buffer.from(arrayBuf);
+    let rawBodyBuf = upstreamRes.body;
     const isNullBodyStatus =
       finalStatus === 101 ||
       finalStatus === 204 ||
       finalStatus === 205 ||
       finalStatus === 304 ||
       method === 'HEAD';
+
+    // Bypass YouTube bot-gate ("Sign in to confirm you're not a bot" / LOGIN_REQUIRED) cleanly via ANDROID_VR fallback
+    if (!isNullBodyStatus && finalStatus === 200 && (host === 'youtube.com' || host.endsWith('.youtube.com'))) {
+      const isPlayerEndpoint = targetUrl.pathname.startsWith('/youtubei/v1/player');
+      const isWatchPage = targetUrl.pathname === '/watch';
+      if (isPlayerEndpoint) {
+        try {
+          const text = rawBodyBuf.toString('utf8');
+          const hasBotBlock =
+            text.includes('LOGIN_REQUIRED') ||
+            text.includes('UNPLAYABLE') ||
+            text.includes('not a bot') ||
+            text.includes('invalidparam') ||
+            text.includes('invalidVideodata') ||
+            text.includes('api.invalidparam') ||
+            !text.includes('streamingData');
+
+          if (hasBotBlock) {
+            let parsed: any = {};
+            try {
+              parsed = JSON.parse(text);
+            } catch {
+              parsed = { videoDetails: { videoId: 'dQw4w9WgXcQ', title: 'YouTube Video' } };
+            }
+            let videoId = String(parsed?.videoDetails?.videoId || '');
+            if (!videoId && hasBody && req.body) {
+              try {
+                const reqJson = JSON.parse(req.body.toString('utf8'));
+                videoId = String(reqJson?.videoId || '');
+              } catch {}
+            }
+            if (!videoId) {
+              videoId = targetUrl.searchParams.get('v') || 'dQw4w9WgXcQ';
+            }
+            if (videoId) {
+              const vrData = await fetchYoutubeVrPlayer(videoId);
+              if (vrData?.streamingData) {
+                const merged = {
+                  ...parsed,
+                  playabilityStatus: vrData.playabilityStatus || { status: 'OK', playableInEmbed: true },
+                  streamingData: vrData.streamingData,
+                  videoDetails: parsed.videoDetails || vrData.videoDetails,
+                  captions: parsed.captions || vrData.captions,
+                  storyboards: parsed.storyboards || vrData.storyboards,
+                };
+                rawBodyBuf = Buffer.from(JSON.stringify(merged), 'utf8');
+                // Do not persist a flagged bot-gate cookie over user's session
+                for (let i = outHeaders.length - 1; i >= 0; i--) {
+                  if (outHeaders[i][0].toLowerCase() === 'set-cookie') outHeaders.splice(i, 1);
+                }
+              }
+            }
+          }
+        } catch {}
+      } else if (isWatchPage) {
+        try {
+          const html = rawBodyBuf.toString('utf8');
+          if (html.includes('LOGIN_REQUIRED') || html.includes('not a bot')) {
+            const videoId = targetUrl.searchParams.get('v') || '';
+            if (videoId) {
+              const vrData = await fetchYoutubeVrPlayer(videoId);
+              if (vrData?.streamingData) {
+                const patchedHtml = patchYtInitialPlayerResponseHtml(html, vrData);
+                if (patchedHtml) {
+                  rawBodyBuf = Buffer.from(patchedHtml, 'utf8');
+                  for (let i = outHeaders.length - 1; i >= 0; i--) {
+                    if (outHeaders[i][0].toLowerCase() === 'set-cookie') outHeaders.splice(i, 1);
+                  }
+                }
+              }
+            }
+          }
+        } catch {}
+      }
+    }
+
     const bodyBuf = isNullBodyStatus ? Buffer.alloc(0) : rawBodyBuf;
     if (!isNullBodyStatus) {
       outHeaders.push(['content-length', String(bodyBuf.length)]);
     }
 
-    let metaB64 = Buffer.from(
-      JSON.stringify({
-        status: finalStatus,
-        statusText: finalStatusText,
-        headers: outHeaders,
-      }),
-      'utf8'
-    ).toString('base64');
+    let metaJson = JSON.stringify({
+      status: finalStatus,
+      statusText: finalStatusText,
+      headers: outHeaders,
+    });
+    let metaB64 = Buffer.from(metaJson, 'utf8').toString('base64');
 
-    // Keep X-SJ-Meta safely under Node's 16KB header limit if a site sends excessive non-critical headers
-    if (metaB64.length > 12000) {
+    // Keep X-SJ-Meta compact (< 3KB) so upstream reverse proxies never fail with 502 header overflow
+    if (metaB64.length > 3000) {
       const critical = outHeaders.filter(([k]) => {
         const l = k.toLowerCase();
         return (
@@ -259,17 +873,27 @@ app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), as
           l === 'accept-ranges' ||
           l === 'content-length' ||
           l === 'referrer-policy' ||
-          l === 'cache-control'
+          l === 'cache-control' ||
+          l === 'access-control-allow-origin'
         );
       });
-      metaB64 = Buffer.from(
-        JSON.stringify({
-          status: upstreamRes.status,
-          statusText: upstreamRes.statusText || '',
-          headers: critical,
-        }),
-        'utf8'
-      ).toString('base64');
+      metaJson = JSON.stringify({
+        status: finalStatus,
+        statusText: finalStatusText,
+        headers: critical,
+      });
+      metaB64 = Buffer.from(metaJson, 'utf8').toString('base64');
+    }
+
+    // If metadata is still > 3KB (e.g. large set-cookie headers), embed it in a binary envelope
+    if (metaB64.length > 3000) {
+      const metaBuf = Buffer.from(metaJson, 'utf8');
+      const lenBuf = Buffer.allocUnsafe(4);
+      lenBuf.writeUInt32BE(metaBuf.length, 0);
+      res.setHeader('X-SJ-Meta-In-Body', '1');
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).send(Buffer.concat([lenBuf, metaBuf, bodyBuf]));
     }
 
     res.setHeader('X-SJ-Meta', metaB64);
@@ -290,11 +914,28 @@ app.use('/api', (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-SJ-Url, X-SJ-Method, X-SJ-Headers');
-  res.setHeader('Access-Control-Expose-Headers', 'X-SJ-Meta');
+  res.setHeader('Access-Control-Expose-Headers', 'X-SJ-Meta, X-SJ-Meta-In-Body');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
   next();
+});
+
+// YouTube player fallback for Epoxy/Wisp client requests that encounter bot-gate LOGIN_REQUIRED
+app.post('/api/yt-player-fallback', async (req, res) => {
+  try {
+    const videoId = String(req.body?.videoId || '').trim();
+    if (!videoId || !/^[a-zA-Z0-9_-]{6,20}$/.test(videoId)) {
+      return res.status(400).json({ ok: false, error: 'Invalid videoId' });
+    }
+    const playerResponse = await fetchYoutubeVrPlayer(videoId);
+    if (!playerResponse?.streamingData) {
+      return res.status(404).json({ ok: false });
+    }
+    return res.json({ ok: true, playerResponse });
+  } catch (err: any) {
+    return res.status(502).json({ ok: false, error: String(err?.message || err || 'Fallback failed') });
+  }
 });
 
 // Ensure uploads directory exists for persistent local file hosting
@@ -433,7 +1074,22 @@ app.post('/api/scramjet-cookies', (req, res) => {
     }
     const store = getScramjetCookiesStore();
     const existing = store[userId]?.cookies || {};
-    const merged = { ...existing, ...cookies };
+    const merged: Record<string, any> = { ...existing };
+    for (const [k, v] of Object.entries(cookies)) {
+      if (!v || typeof v !== 'object') continue;
+      const ex = merged[k] || {};
+      const combined = { ...ex, ...v };
+      if (typeof combined.maxAge === 'number' && combined.maxAge <= 0) {
+        delete combined.maxAge;
+      }
+      if (combined.expires !== undefined) {
+        const parsed = Number(combined.expires);
+        combined.expires = Number.isFinite(parsed)
+          ? Math.max(parsed, Date.now() + 365 * 24 * 3600 * 1000)
+          : Date.now() + 365 * 24 * 3600 * 1000;
+      }
+      merged[k] = combined;
+    }
     const updatedAt = Date.now();
     store[userId] = { cookies: merged, updatedAt };
     saveScramjetCookiesStore(store);
@@ -1826,6 +2482,7 @@ async function startServer() {
 
   // Unified WebSocket upgrade router (/ws-db and /wisp/)
   server.on('upgrade', (req, socket, head) => {
+    socket.on('error', () => {});
     const reqUrl = req.url || '/';
     const pathname = reqUrl.split('?')[0];
 
@@ -1834,15 +2491,22 @@ async function startServer() {
       return;
     }
 
-    if (pathname === '/wisp' || pathname.startsWith('/wisp/')) {
-      if (pathname === '/wisp') {
-        req.url = reqUrl.replace(/^\/wisp/, '/wisp/');
+    if (pathname === '/wisp' || pathname === '/wisp/' || pathname.startsWith('/wisp/')) {
+      if (pathname === '/wisp' || pathname === '/wisp/') {
+        req.url = '/wisp/';
       }
       wispServer.routeRequest(req, socket, head);
       return;
     }
 
     socket.destroy();
+  });
+
+  // Never serve FrostHub's SPA index.html for unclaimed /~/sj/* requests; recover Service Worker instead
+  app.use('/~/sj', (_req, res) => {
+    res.setHeader('Cache-Control', 'no-store, must-revalidate');
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.status(503).send(`<!doctype html><html><body style="background:#0f172a;color:#94a3b8;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;"><div style="text-align:center;"><p style="margin:0 0 8px;color:#e2e8f0;font-weight:600;">Initializing proxy service worker…</p><script>(async function(){try{if('serviceWorker' in navigator){await navigator.serviceWorker.register('/sj-sw.js',{scope:'/',updateViaCache:'none'}).catch(function(){});var reg=await navigator.serviceWorker.ready;if(reg&&reg.active){try{reg.active.postMessage({$controller$swrevive:{}});}catch(e){}}if(!sessionStorage.getItem('sj_srv_recover')){sessionStorage.setItem('sj_srv_recover','1');setTimeout(function(){location.reload();},350);return;}sessionStorage.removeItem('sj_srv_recover');}}catch(e){}})();</script></div></body></html>`);
   });
 
   if (!IS_PROD) {

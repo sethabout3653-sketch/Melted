@@ -15,7 +15,12 @@ import {
   getScramjetTargetUrl,
   shouldUseScramjetByDefault,
 } from '../services/gameService';
-import { launchInScramjetFrame, flushScramjetCookies } from '../services/scramjetProxyService';
+import {
+  launchInScramjetFrame,
+  flushScramjetCookies,
+  cleanupScramjetFrame,
+  getActiveWispUrl,
+} from '../services/scramjetProxyService';
 import { launchAboutBlank } from '../hooks/useCloak';
 import { storeGameSave, restoreAutoSaveToIframe, flushPendingSaves } from '../services/saveService';
 
@@ -37,11 +42,22 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const [stealthUrl, setStealthUrl] = useState<string>('');
   const [reloadNonce, setReloadNonce] = useState<number>(0);
   const [hasError, setHasError] = useState(false);
+  const [errorDetail, setErrorDetail] = useState<string>('');
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isLoadingProxy, setIsLoadingProxy] = useState(false);
+  const [activeWisp, setActiveWisp] = useState<string | null>(() => getActiveWispUrl());
 
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const prevGameIdRef = useRef<number | string | null>(null);
+
+  useEffect(() => {
+    setActiveWisp(getActiveWispUrl());
+    const t = setInterval(() => {
+      setActiveWisp(getActiveWispUrl());
+    }, 2500);
+    return () => clearInterval(t);
+  }, []);
 
   // Sync default Scramjet mode whenever switching to a different game
   useEffect(() => {
@@ -151,6 +167,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   useEffect(() => {
     let active = true;
     setHasError(false);
+    setErrorDetail('');
 
     const fallbackUrl = getPlayableGameUrl(game);
     const scramjetTarget = getScramjetTargetUrl(game);
@@ -158,6 +175,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     if (useScramjet && scramjetTarget) {
       setDirectUrl('');
       setStealthUrl(scramjetTarget);
+      setIsLoadingProxy(true);
 
       // Wait a microtask to ensure the keyed iframe ref is mounted cleanly
       const launchTimer = setTimeout(async () => {
@@ -168,22 +186,32 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           if (proxiedSrc) {
             setStealthUrl(proxiedSrc);
           }
-        } catch (err) {
-          console.warn('[GamePlayer] Scramjet v2 unavailable, falling back to direct stream:', err);
+          setIsLoadingProxy(false);
+        } catch (err: any) {
+          console.warn('[GamePlayer] Scramjet v2 unavailable:', err);
           if (!active) return;
+          setIsLoadingProxy(false);
+          if (game.source === 'scramjet') {
+            setErrorDetail(String(err?.message || '').trim());
+            setHasError(true);
+            return;
+          }
           setUseScramjet(false);
           if (fallbackUrl) {
             setDirectUrl(fallbackUrl);
             setStealthUrl(fallbackUrl);
           } else {
+            setErrorDetail(String(err?.message || '').trim());
             setHasError(true);
           }
         }
       }, 0);
 
+      const targetIframe = iframeRef.current;
       return () => {
         active = false;
         clearTimeout(launchTimer);
+        cleanupScramjetFrame(targetIframe);
       };
     }
 
@@ -216,6 +244,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
   const reloadGame = () => {
     setHasError(false);
+    setErrorDetail('');
     setReloadNonce((n) => n + 1);
   };
 
@@ -258,9 +287,20 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   <h3 className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base truncate font-heading">
                     {game.name}
                   </h3>
+                  {useScramjet && activeWisp && (
+                    <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 dark:text-emerald-400 text-[10px] font-mono font-bold border border-emerald-500/20 truncate max-w-[180px]" title={`Active Wisp URL: ${activeWisp}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="truncate">Wisp: {activeWisp}</span>
+                    </span>
+                  )}
                 </div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate font-bold">
-                  {game.author ? `By ${game.author}` : game.category}
+                <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate font-bold flex items-center gap-2">
+                  <span>{game.author ? `By ${game.author}` : game.category}</span>
+                  {useScramjet && activeWisp && (
+                    <span className="sm:hidden inline-flex items-center gap-1 px-1.5 py-0.2 rounded bg-emerald-500/10 text-emerald-500 text-[9px] font-mono truncate max-w-[120px]">
+                      {activeWisp}
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -431,7 +471,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   Failed to Load Game Stream
                 </h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm">
-                  The upstream game server may be blocking direct embedding. Try reloading or opening in a Stealth Window.
+                  {errorDetail || 'The upstream game server may be blocking direct embedding. Try reloading or opening in a Stealth Window.'}
                 </p>
               </div>
               <div className="flex items-center gap-3 pt-2">

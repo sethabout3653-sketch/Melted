@@ -2,14 +2,15 @@
   "version": 1,
   "include": [
     "/api/*",
-    "/ws-db",
-    "/wisp/*",
-    "/scramjet/*",
-    "/controller/*",
-    "/sj-sw.js"
+    "/ws-db"
   ],
   "exclude": [
     "/assets/*",
+    "/scramjet/*",
+    "/controller/*",
+    "/epoxy/*",
+    "/libcurl/*",
+    "/sj-sw.js",
     "/favicon.ico",
     "/manifest.webmanifest",
     "/*.png",

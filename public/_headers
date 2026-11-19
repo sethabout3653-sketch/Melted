@@ -2,6 +2,28 @@
   Access-Control-Allow-Origin: *
   X-Frame-Options: ALLOWALL
 
+/sj-sw.js
+  Content-Type: application/javascript; charset=utf-8
+  Service-Worker-Allowed: /
+  Cache-Control: no-cache, no-store, must-revalidate
+  Access-Control-Allow-Origin: *
+
+/controller/*
+  Service-Worker-Allowed: /
+  Cross-Origin-Resource-Policy: cross-origin
+  Access-Control-Allow-Origin: *
+  Cache-Control: no-cache, must-revalidate
+
+/scramjet/*.wasm
+  Content-Type: application/wasm
+  Cross-Origin-Resource-Policy: cross-origin
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=604800
+
+/scramjet/*
+  Cross-Origin-Resource-Policy: cross-origin
+  Access-Control-Allow-Origin: *
+
 /api/raw/*
   Content-Type: text/html; charset=utf-8
   Access-Control-Allow-Origin: *

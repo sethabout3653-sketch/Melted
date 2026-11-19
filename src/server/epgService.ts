@@ -11,6 +11,7 @@ export interface EpgProgramme {
   desc?: string;
   rating?: string;
   category?: string;
+  episode?: string;
 }
 
 export interface ChannelNowNext {
@@ -101,7 +102,7 @@ const ADULT_SWIM_SCHEDULE_URL = 'https://www.adultswim.com/api/schedule/marathon
 const EXPLICIT_XMLTV_CHANNEL_IDS: Record<string, string[]> = {
   'cartoon-network': ['Cartoon.Network.(HD).sg', 'Cartoon.Network.sg', 'CartoonNetwork.us'],
   'pbs-mpt-baltimore': ['WMPB-DT.us_locals1', 'WMPT-DT.us_locals1', 'WMPB.us', 'MPT.us', 'PBS.Stream.us2'],
-  'pbs-kids': ['PBS.Kids.Stream.us2', 'PBS.KIDS.HD.us2', 'PBSKids.us'],
+  'pbs-kids': ['PBS.Kids.Stream.us2', 'PBS.KIDS.HD.us2', 'PBSKids.us', 'PBSKids.us2', 'PBSKidsHD.us', 'PBS.Kids.us', 'PBSKidsChannel.us', 'PBSKids247.us', 'PBSKidsFast.us', 'pbskids.us'],
   'wbff-fox-45': ['WBFF-DT.us_locals1', 'WBFF.us', 'WBFFDT.us'],
   'foxlivenow-us-2e4ee': ['plex.tv.LiveNOW.from.FOX.plex', 'LiveNOW.from.FOX.us'],
   'fox-livenow-us': ['plex.tv.LiveNOW.from.FOX.plex', 'LiveNOW.from.FOX.us'],
@@ -163,7 +164,7 @@ const EXPLICIT_XMLTV_CHANNEL_IDS: Record<string, string[]> = {
   'bbcradioasiannetwork-uk-7efe0': ['BBCRAN.uk', 'bbcran.uk'],
 };
 
-const REFRESH_TTL_MS = 10 * 60 * 1000;
+const REFRESH_TTL_MS = 4 * 60 * 60 * 1000;
 const MAX_CONCURRENT_FEEDS = 2;
 const EPG_DISK_CACHE_PATH = path.join(process.cwd(), '.epg-cache.json');
 
@@ -387,6 +388,86 @@ function getDefaultRatingForCategory(category?: string, channelName?: string): s
   return 'TV-PG';
 }
 
+function getGuaranteedContentRating(title: string): string | undefined {
+  const t = title.toLowerCase();
+  if (
+    t.includes('south park') ||
+    t.includes('rick and morty') ||
+    t.includes('family guy') ||
+    t.includes('american dad') ||
+    t.includes('robot chicken') ||
+    t.includes('breaking bad') ||
+    t.includes('game of thrones') ||
+    t.includes('succession') ||
+    t.includes('sopranos') ||
+    t.includes('wire') ||
+    t.includes('the boys') ||
+    t.includes('peacemaker') ||
+    t.includes('fargo') ||
+    t.includes('dexter') ||
+    t.includes('true detective') ||
+    t.includes('metalocalypse') ||
+    t.includes('aqua teen') ||
+    t.includes('superjail') ||
+    t.includes('boondocks')
+  ) {
+    return 'TV-MA';
+  }
+  if (
+    t.includes('enemy of the state') ||
+    t.includes('pulp fiction') ||
+    t.includes('fight club') ||
+    t.includes('terminator') ||
+    t.includes('matrix') ||
+    t.includes('die hard') ||
+    t.includes('deadpool') ||
+    t.includes('goodfellas') ||
+    t.includes('scarface') ||
+    t.includes('godfather') ||
+    t.includes('saving private ryan') ||
+    t.includes('gladiator') ||
+    t.includes('john wick') ||
+    t.includes('mad max')
+  ) {
+    return 'R';
+  }
+  return undefined;
+}
+
+function parseEpisodeInfo(programmeBody: string, title: string, desc?: string): string | undefined {
+  const epNumMatch = programmeBody.match(/<episode-num\b[^>]*>([\s\S]*?)<\/episode-num>/gi);
+  if (epNumMatch) {
+    for (const tag of epNumMatch) {
+      const val = decodeXmlEntities(tag.replace(/<[^>]+>/g, '')).trim();
+      if (!val) continue;
+      if (tag.includes('system="xmltv_ns"') || tag.includes("system='xmltv_ns'")) {
+        const parts = val.split('.');
+        if (parts.length >= 2) {
+          const s = parseInt(parts[0].trim(), 10);
+          const e = parseInt(parts[1].trim(), 10);
+          if (!isNaN(s) && !isNaN(e)) {
+            return `S${String(s + 1).padStart(2, '0')}E${String(e + 1).padStart(2, '0')}`;
+          }
+        }
+      }
+      if (/s\d+e\d+/i.test(val) || /season\s*\d+/i.test(val)) {
+        return val;
+      }
+    }
+  }
+
+  const combined = `${title} ${desc || ''}`;
+  const sEFormat = combined.match(/\b(S\d+E\d+|\d+x\d+)\b/i);
+  if (sEFormat) return sEFormat[1].toUpperCase();
+
+  const seasonEpFormat = combined.match(/\bSeason\s*(\d+)[,\s]+Episode\s*(\d+)\b/i);
+  if (seasonEpFormat) {
+    return `S${String(seasonEpFormat[1]).padStart(2, '0')}E${String(seasonEpFormat[2]).padStart(2, '0')}`;
+  }
+
+  return undefined;
+}
+
 function parseTvRating(programmeBody: string): string | undefined {
   const matches = [...programmeBody.matchAll(/<rating\b[^>]*>([\s\S]*?)<\/rating>/gi)];
   for (const match of matches) {
@@ -583,7 +664,13 @@ async function withTmdbRatings(snapshot: ReturnType<typeof getNowNextSnapshot>):
   const applyRating = (programme?: EpgProgramme, channelCategory?: string, channelName?: string): EpgProgramme | undefined => {
     if (!programme) return undefined;
     const { category: _cat, ...rest } = programme;
-    if (programme.rating && programme.rating.toLowerCase() !== 'none' && programme.rating.toLowerCase() !== 'n/a') {
+    
+    const guaranteed = getGuaranteedContentRating(programme.title);
+    if (guaranteed) {
+      return { ...rest, rating: guaranteed };
+    }
+
+    if (programme.rating && programme.rating.toLowerCase() !== 'none' && programme.rating.toLowerCase() !== 'n/a' && programme.rating !== 'TV-PG') {
       return rest;
     }
     const tmdbRating = tmdbRatingResults.get(normalizeTitleKey(programme.title));
@@ -669,6 +756,7 @@ async function fetchAndParseXmltvFeed(source: FeedSource, windowStart: number, w
         const desc = descRaw ? decodeXmlEntities(descRaw.replace(/<[^>]+>/g, '')).slice(0, 180) : undefined;
         const rating = parseTvRating(body);
         const category = parseProgrammeCategory(body);
+        const episode = parseEpisodeInfo(body, title, desc);
 
         const list = programmes.get(channelId) || [];
         list.push({
@@ -678,6 +766,7 @@ async function fetchAndParseXmltvFeed(source: FeedSource, windowStart: number, w
           ...(desc ? { desc } : {}),
           ...(rating ? { rating } : {}),
           ...(category ? { category } : {}),
+          ...(episode ? { episode } : {}),
         });
         programmes.set(channelId, list);
       }
@@ -700,21 +789,43 @@ async function fetchSelectiveXmltvStream(
   const programmes = new Map<string, EpgProgramme[]>();
   const targetSet = new Set(spec.targetIds);
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => {
+    controller.abort(new Error(`Selective XMLTV timeout (${spec.url})`));
+  }, 45000);
+  timeoutId.unref?.();
+
+  let sourceStream: import('stream').Readable | null = null;
+  let gunzip: zlib.Gunzip | null = null;
+
   try {
     const res = await fetch(spec.url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/xml,text/xml,application/gzip,application/octet-stream,*/*;q=0.8',
       },
-      signal: AbortSignal.timeout(45000),
+      signal: controller.signal,
     });
     if (!res.ok || !res.body) return { tag: spec.tag, channels, programmes };
 
     for (const id of spec.targetIds) channels.set(id, [id]);
-    const gunzip = zlib.createGunzip();
-    const stream = spec.url.endsWith('.gz')
-      ? Readable.fromWeb(res.body as any).pipe(gunzip)
-      : Readable.fromWeb(res.body as any);
+
+    sourceStream = Readable.fromWeb(res.body as any);
+    let stream: AsyncIterable<Buffer>;
+    if (spec.url.endsWith('.gz')) {
+      gunzip = zlib.createGunzip();
+      const gz = gunzip;
+      sourceStream.on('error', (err) => {
+        gz.destroy(err);
+      });
+      gz.on('error', () => {
+        sourceStream?.destroy();
+      });
+      stream = sourceStream.pipe(gz);
+    } else {
+      sourceStream.on('error', () => {});
+      stream = sourceStream;
+    }
 
     let buffer = '';
     for await (const chunk of stream) {
@@ -767,6 +878,14 @@ async function fetchSelectiveXmltvStream(
     }
   } catch (err: any) {
     console.debug(`[EPG] Selective feed ${spec.url} unavailable or skipped: ${err?.message || err}`);
+  } finally {
+    clearTimeout(timeoutId);
+    try {
+      gunzip?.destroy();
+    } catch {}
+    try {
+      sourceStream?.destroy();
+    } catch {}
   }
   return { tag: spec.tag, channels, programmes };
 }
@@ -870,6 +989,54 @@ function buildMetadataFallbackSchedule(ch: TVChannel, nowMs: number = Date.now()
   const cat = (ch.category || '').trim();
   const isRadio = /\b(fm|radio|newstalk|spin 103|classic hits)\b/i.test(cleanName);
   const isNews = cat === 'News' || /\b(news|oireachtas|al jazeera)\b/i.test(cleanName);
+
+  if (ch.id === 'pbs-kids') {
+    const pbsShows = [
+      { title: "Daniel Tiger's Neighborhood", desc: "Explore life's little lessons with Daniel Tiger and friends." },
+      { title: "Curious George", desc: "Join everyone's favorite curious monkey on educational adventures." },
+      { title: "Wild Kratts", desc: "Chris and Martin Kratt dive into creature habitats around the world." },
+      { title: "Alma's Way", desc: "Alma Rivera speaks up, listens to others, and solves problems in the Bronx." },
+      { title: "Lyla in the Loop", desc: "Lyla, her blue sidekick Stu, and her family tackle creative problem-solving." },
+      { title: "Work It Out Wombats!", desc: "Malik, Zadie, and Hamilton practice computational thinking in the Treeborhood." },
+      { title: "Pinkalicious & Peterrific", desc: "Inspiring kids to engage in the arts and self-expression." },
+      { title: "Elinor Wonders Why", desc: "Elinor and her pals explore nature, curiosity, and asking why." },
+      { title: "Donkey Hodie", desc: "Empowering preschoolers to be resourceful and resilient problem solvers." },
+      { title: "Xavier Riddle and the Secret Museum", desc: "Xavier and friends travel back in time to meet historical heroes." },
+      { title: "Molly of Denali", desc: "Molly shares her life in rural Alaska with humor and resourcefulness." },
+      { title: "Arthur", desc: "Classic animated adventures with Arthur Read and friends in Elwood City." }
+    ];
+    const currentHourIndex = Math.floor(nowMs / 3600_000);
+    const nowShow = pbsShows[currentHourIndex % pbsShows.length];
+    const nextShow = pbsShows[(currentHourIndex + 1) % pbsShows.length];
+    const laterShow = pbsShows[(currentHourIndex + 2) % pbsShows.length];
+
+    return [
+      {
+        title: nowShow.title,
+        start: hourStart,
+        stop: hourEnd,
+        desc: nowShow.desc,
+        category: 'Family',
+        rating: 'TV-Y',
+      },
+      {
+        title: nextShow.title,
+        start: hourEnd,
+        stop: nextEnd,
+        desc: nextShow.desc,
+        category: 'Family',
+        rating: 'TV-Y',
+      },
+      {
+        title: laterShow.title,
+        start: nextEnd,
+        stop: nextEnd + 3600_000,
+        desc: laterShow.desc,
+        category: 'Family',
+        rating: 'TV-Y',
+      }
+    ];
+  }
 
   let nowTitle = `${cleanName} Live Broadcast`;
   let nextTitle = `${cleanName} Continuing Broadcast`;
@@ -1129,8 +1296,9 @@ export function initEpgRoutes(app: express.Express) {
     }
   }
 
-  // 3. Kick off background refresh if stale or not yet loaded
-  if (lastUpdatedAt === 0 || Date.now() - lastUpdatedAt >= REFRESH_TTL_MS) {
+  // 3. Kick off background refresh only if cache is completely empty
+  const hasHydratedChannels = Object.keys(cachedProgramsByChannelId).length > 0;
+  if (!hasHydratedChannels && (lastUpdatedAt === 0 || Date.now() - lastUpdatedAt >= REFRESH_TTL_MS)) {
     refreshEpgCache().catch(() => {});
   }
 
@@ -1139,7 +1307,7 @@ export function initEpgRoutes(app: express.Express) {
       const customUrl = typeof req.query.epgUrl === 'string' ? req.query.epgUrl.trim() : '';
       if (customUrl) {
         refreshEpgCache([customUrl], true).catch(() => {});
-      } else if (lastUpdatedAt === 0 || Date.now() - lastUpdatedAt >= REFRESH_TTL_MS) {
+      } else if (!hasHydratedChannels && (lastUpdatedAt === 0 || Date.now() - lastUpdatedAt >= REFRESH_TTL_MS)) {
         refreshEpgCache().catch(() => {});
       }
       res.setHeader('Cache-Control', 'public, max-age=30');

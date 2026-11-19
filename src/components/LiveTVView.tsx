@@ -1673,13 +1673,22 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
               )}
 
               {visibleCount < filteredChannels.length && (
-                <button
-                  type="button"
-                  onClick={() => setVisibleCount((prev) => prev + 80)}
-                  className="block w-[calc(100%-1.5rem)] mx-3 my-3 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#161b26] dark:hover:bg-[#1e2433] border border-slate-200 dark:border-[#242938] text-xs font-bold text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white transition-colors cursor-pointer"
-                >
-                  Load More ({filteredChannels.length - visibleCount} remaining)
-                </button>
+                <div className="mx-3 my-3 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount((prev) => prev + 160)}
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-[#161b26] dark:hover:bg-[#1e2433] border border-slate-200 dark:border-[#242938] text-xs font-bold text-slate-700 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white transition-colors cursor-pointer"
+                  >
+                    Load More ({filteredChannels.length - visibleCount} left)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount(filteredChannels.length)}
+                    className="py-2.5 px-3 rounded-xl bg-[var(--brand-blue)] hover:opacity-90 text-xs font-bold text-white transition-opacity cursor-pointer shrink-0"
+                  >
+                    Load All
+                  </button>
+                </div>
               )}
             </div>
           </div>

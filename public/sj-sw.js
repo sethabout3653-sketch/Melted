@@ -11,22 +11,194 @@ self.Response = class ScramjetPatchedResponse extends _NativeResponse {
   }
 };
 
+const SJ_RUNTIME_CACHE = 'scramjet-v2-runtime-v2';
+const SJ_PRECACHE_ASSETS = [
+  '/scramjet/scramjet.js',
+  '/scramjet/scramjet.wasm',
+  '/controller/controller.inject.js',
+];
+
+function isCacheableScramjetRuntimeUrl(pathname) {
+  return (
+    pathname.startsWith('/scramjet/') ||
+    pathname.startsWith('/epoxy/') ||
+    pathname.startsWith('/libcurl/') ||
+    pathname === '/controller/controller.inject.js' ||
+    pathname === '/controller/controller.api.js'
+  );
+}
+
+async function isValidRuntimeResponse(pathname, res) {
+  if (!res || !res.ok) return false;
+  const ct = (res.headers.get('content-type') || '').toLowerCase();
+  // Never cache HTML error/auth/SPA fallback pages under .js or .wasm URLs
+  if (ct.includes('text/html')) return false;
+  if (pathname.endsWith('.wasm')) {
+    try {
+      const buf = await res.clone().arrayBuffer();
+      if (buf.byteLength < 8) return false;
+      const view = new Uint8Array(buf, 0, 4);
+      // Verify WASM magic bytes \0asm
+      return view[0] === 0x00 && view[1] === 0x61 && view[2] === 0x73 && view[3] === 0x6d;
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
+self.addEventListener('install', (event) => {
+  self.skipWaiting();
+  event.waitUntil(
+    caches
+      .open(SJ_RUNTIME_CACHE)
+      .then((cache) =>
+        Promise.allSettled(
+          SJ_PRECACHE_ASSETS.map(async (asset) => {
+            const res = await fetch(asset, { cache: 'default', credentials: 'same-origin' });
+            if (await isValidRuntimeResponse(asset, res)) {
+              await cache.put(asset, res.clone());
+            }
+          })
+        )
+      )
+      .catch(() => {})
+  );
+});
+
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
+    Promise.all([
+      self.clients.claim(),
+      caches
+        .keys()
+        .then((keys) =>
+          Promise.all(
+            keys
+              .filter((k) => k.startsWith('scramjet-v2-runtime-') && k !== SJ_RUNTIME_CACHE)
+              .map((k) => caches.delete(k))
+          )
+        )
+        .catch(() => {}),
+    ])
+  );
+});
+
 importScripts('/controller/controller.sw.js');
 
-self.addEventListener('fetch', (event) => {
+const initWaiters = new Set();
+self.addEventListener('message', (event) => {
+  if (event?.data && typeof event.data === 'object' && event.data.$controller$init) {
+    // Allow controller.sw.js's listener to run first on this tick, then wake waiters
+    setTimeout(() => {
+      for (const resolve of initWaiters) {
+        try {
+          resolve();
+        } catch {}
+      }
+      initWaiters.clear();
+    }, 0);
+  }
+});
+
+async function notifyClientsToRevive() {
+  try {
+    const windowClients = await self.clients.matchAll({
+      includeUncontrolled: true,
+      type: 'window',
+    });
+    for (const client of windowClients) {
+      try {
+        client.postMessage({ $controller$swrevive: {} });
+      } catch {}
+    }
+  } catch {}
+}
+
+async function routeScramjetEvent(event) {
+  const res = await $scramjetController.route(event);
+  if (res && (res.status === 204 || res.status === 205 || res.status === 304 || res.status === 101)) {
+    return new _NativeResponse(null, {
+      status: res.status,
+      statusText: res.statusText,
+      headers: res.headers,
+    });
+  }
+  return res;
+}
+
+async function waitForControllerAndRoute(event) {
+  await notifyClientsToRevive();
+
+  const deadline = Date.now() + 2500;
+  while (Date.now() < deadline) {
+    if (typeof $scramjetController !== 'undefined' && $scramjetController.shouldRoute(event)) {
+      return routeScramjetEvent(event);
+    }
+    await new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        initWaiters.delete(done);
+        resolve();
+      };
+      initWaiters.add(done);
+      const timer = setTimeout(done, 80);
+    });
+  }
+
   if (typeof $scramjetController !== 'undefined' && $scramjetController.shouldRoute(event)) {
+    return routeScramjetEvent(event);
+  }
+
+  return new _NativeResponse(
+    '<!doctype html><html><body style="font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px;"><div style="max-width:440px;background:#1e293b;border:1px solid #334155;border-radius:16px;padding:24px;text-align:center;"><h2 style="margin:0 0 8px;font-size:17px;">Reconnecting Scramjet Proxy...</h2><p style="margin:0 0 16px;font-size:13px;color:#94a3b8;">The proxy service worker restarted. Reloading session...</p><script>setTimeout(function(){location.reload();},600);</script></div></body></html>',
+    {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: [['content-type', 'text/html; charset=utf-8']],
+    }
+  );
+}
+
+self.addEventListener('fetch', (event) => {
+  let reqUrl;
+  try {
+    reqUrl = new URL(event.request.url);
+  } catch {
+    return;
+  }
+
+  if (typeof $scramjetController !== 'undefined' && $scramjetController.shouldRoute(event)) {
+    event.respondWith(routeScramjetEvent(event));
+    return;
+  }
+
+  // If this is a Scramjet prefix request (/~/sj/...) that arrived while SW just woke from idle,
+  // wait briefly for the controller tab to re-attach via $controller$swrevive instead of falling back to SPA index.html.
+  if (reqUrl.origin === self.location.origin && reqUrl.pathname.startsWith('/~/sj/')) {
+    event.respondWith(waitForControllerAndRoute(event));
+    return;
+  }
+
+  if (event.request.method !== 'GET') return;
+
+  // Serve cached local Scramjet runtime & WASM binary without re-fetching on every navigation
+  if (reqUrl.origin === self.location.origin && isCacheableScramjetRuntimeUrl(reqUrl.pathname)) {
     event.respondWith(
-      $scramjetController.route(event).then((res) => {
-        if (res && (res.status === 204 || res.status === 205 || res.status === 304 || res.status === 101)) {
-          return new _NativeResponse(null, {
-            status: res.status,
-            statusText: res.statusText,
-            headers: res.headers,
-          });
+      caches.open(SJ_RUNTIME_CACHE).then(async (cache) => {
+        const cached = await cache.match(event.request, { ignoreSearch: false });
+        if (cached && (await isValidRuntimeResponse(reqUrl.pathname, cached))) {
+          return cached;
         }
-        return res;
+        if (cached) {
+          await cache.delete(event.request).catch(() => {});
+        }
+        const netRes = await fetch(event.request, { credentials: 'same-origin' });
+        if (await isValidRuntimeResponse(reqUrl.pathname, netRes)) {
+          cache.put(event.request, netRes.clone()).catch(() => {});
+        }
+        return netRes;
       })
     );
   }
 });
-
