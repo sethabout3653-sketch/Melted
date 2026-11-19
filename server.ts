@@ -13,6 +13,7 @@ import { initWebSocketDatabase, globalWsDb, broadcastTable, broadcastWss, sendTo
 import { server as wispServer } from '@mercuryworkshop/wisp-js/server';
 import Groq from 'groq-sdk';
 import { processGameHtml, getScaffoldingBuffer } from './src/server/scaffoldingLoader';
+import { buildAISystemInstruction } from './src/data/aiPersonalities';
 import { initSethsrcEngine } from './src/server/sethsrcEngine';
 
 // Prevent server crashes from unhandled fetch terminations / ECONNRESET errors
@@ -1756,7 +1757,7 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
   };
 
   try {
-    const { prompt, history, groqApiKey, model: customModel, searchMode } = req.body;
+    const { prompt, history, groqApiKey, model: customModel, searchMode, personality } = req.body;
     if (!prompt) {
       sendEvent({ type: 'error', error: 'Missing prompt' });
       return res.end();
@@ -1817,8 +1818,7 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
     const targetModel = typeof customModel === 'string' && customModel.trim() ? customModel.trim() : 'openai/gpt-oss-20b';
     recordStep('synthesizing', 'Synthesizing Answer', `Formulating direct response with ${targetModel}...`, 'sparkles');
 
-    const systemInstruction =
-      "You are Frosted AI. Keep all answers short, direct, and concise (1 to 3 sentences maximum). For overview questions like 'what is ___ about' or 'what is the ___ all about', give a clear high-level answer with just a little tiny bit of explanation. Never give unsolicited multi-step lecture breakdowns, long essays, or repetitive summary lists. State formulas or facts directly. USE PROFESSIONAL LATEX FOR ALL MATH FORMULAS. CRITICAL: Use $...$ for inline math and $$...$$ for block math. ALWAYS use \\dfrac for fractions to make them clear and vertically stacked. NEVER include any follow-up questions or offers such as 'Would you like...', 'Do you want...', 'Let me know', 'Can I help with...', etc. NONE of that. Answer and stop.";
+    const systemInstruction = buildAISystemInstruction(personality);
 
     let searchContext = '';
     if (searchResults.length > 0) {
@@ -1921,13 +1921,12 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
 // AI Study Assistant Endpoint (Standard JSON) - Powered exclusively by Groq with Web Search
 app.post('/api/ai/assistant', async (req, res) => {
   try {
-    const { prompt, history, groqApiKey, model: customModel, searchMode } = req.body;
+    const { prompt, history, groqApiKey, model: customModel, searchMode, personality } = req.body;
     if (!prompt) {
       return res.status(400).json({ error: 'Missing prompt' });
     }
 
-    const systemInstruction =
-      "You are Frosted AI. Keep all answers short, direct, and concise (1 to 3 sentences maximum). For overview questions like 'what is ___ about' or 'what is the ___ all about', give a clear high-level answer with just a little tiny bit of explanation. Never give unsolicited multi-step lecture breakdowns, long essays, or repetitive summary lists. State formulas or facts directly. USE PROFESSIONAL LATEX FOR ALL MATH FORMULAS. CRITICAL: Use $...$ for inline math and $$...$$ for block math. ALWAYS use \\dfrac for fractions to make them clear and vertically stacked. NEVER include any follow-up questions or offers such as 'Would you like...', 'Do you want...', 'Let me know', 'Can I help with...', etc. NONE of that. Answer and stop.";
+    const systemInstruction = buildAISystemInstruction(personality);
 
     // Auto-detect Groq API Key from server environment secrets (GROQ_API_KEY) or request body
     const groqKey = (

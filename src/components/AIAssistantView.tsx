@@ -23,6 +23,13 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { entryVariants, containerVariants, hoverTransition, slideInVariants } from '../utils/animations';
+import {
+  AI_PERSONALITIES,
+  AIPersonalityId,
+  DEFAULT_AI_PERSONALITY,
+  buildAISystemInstruction,
+  isAIPersonalityId,
+} from '../data/aiPersonalities';
 
 export interface ThinkingStep {
   id: string;
@@ -70,9 +77,6 @@ function preprocessLaTeX(text: string): string {
     .replace(/\\\[([\s\S]*?)\\\]/g, (_, equation) => `\n$$\n${equation.trim()}\n$$\n`)
     .replace(/\\\(([\s\S]*?)\\\)/g, (_, equation) => `$${equation.trim()}$`);
 }
-
-const SYSTEM_INSTRUCTION =
-  "You are FrostHub AI. Keep all answers short, direct, and concise (1 to 3 sentences maximum). For overview questions like 'what is ___ about' or 'what is the ___ all about', give a clear high-level answer with just a little tiny bit of explanation. Never give unsolicited multi-step lecture breakdowns, long essays, or repetitive summary lists. State formulas or facts directly. USE PROFESSIONAL LATEX FOR ALL MATH FORMULAS. CRITICAL: Use $...$ for inline math and $$...$$ for block math. ALWAYS use \\dfrac for fractions to make them clear and vertically stacked. NEVER include any follow-up questions or offers such as 'Would you like...', 'Do you want...', 'Let me know', 'Can I help with...', etc. NONE of that. Answer and stop.";
 
 interface AIMessageBubbleProps {
   msg: Message;
@@ -269,6 +273,14 @@ export const AIAssistantView: React.FC = () => {
   const [activeSteps, setActiveSteps] = useState<ThinkingStep[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedStepsMap, setExpandedStepsMap] = useState<Record<string, boolean>>({});
+  const [personality, setPersonality] = useState<AIPersonalityId>(() => {
+    try {
+      const saved = localStorage.getItem('frosthub_ai_personality');
+      return isAIPersonalityId(saved) ? saved : DEFAULT_AI_PERSONALITY;
+    } catch {
+      return DEFAULT_AI_PERSONALITY;
+    }
+  });
 
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -284,6 +296,14 @@ export const AIAssistantView: React.FC = () => {
       ((window as any).GROQ_API_KEY as string) ||
       ''
     ).replace(/^["']|["']$/g, '').trim();
+  };
+
+  const handlePersonalityChange = (value: string) => {
+    if (!isAIPersonalityId(value)) return;
+    setPersonality(value);
+    try {
+      localStorage.setItem('frosthub_ai_personality', value);
+    } catch {}
   };
 
   const scrollToBottom = () => {
@@ -332,7 +352,7 @@ export const AIAssistantView: React.FC = () => {
     const rawGroqKey = getActiveGroqKey();
     if (!rawGroqKey) return '';
     const groqMessages = [
-      { role: 'system', content: SYSTEM_INSTRUCTION },
+      { role: 'system', content: buildAISystemInstruction(personality) },
       ...msgHistory.map((m: any) => ({
         role: m.role === 'user' ? 'user' : 'assistant',
         content: m.text,
@@ -411,6 +431,7 @@ export const AIAssistantView: React.FC = () => {
           groqApiKey: activeGroqKey,
           model: 'openai/gpt-oss-20b',
           searchMode: 'auto',
+          personality,
         }),
         signal: abortController.signal,
       });
@@ -476,6 +497,7 @@ export const AIAssistantView: React.FC = () => {
             groqApiKey: activeGroqKey,
             model: 'openai/gpt-oss-20b',
             searchMode: 'auto',
+            personality,
           }),
           signal: abortController.signal,
         });
@@ -535,7 +557,21 @@ export const AIAssistantView: React.FC = () => {
 
   return (
     <div className="w-full h-full flex-1 min-h-0 px-3 sm:px-8 py-2.5 sm:py-4 flex flex-col font-sans overflow-hidden">
-      <div className="mb-2.5 sm:mb-4 flex items-center justify-end shrink-0">
+      <div className="mb-2.5 sm:mb-4 flex items-center justify-end gap-2 sm:gap-3 shrink-0">
+        <label className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
+          <span className="hidden sm:inline">Personality</span>
+          <select
+            value={personality}
+            onChange={(e) => handlePersonalityChange(e.target.value)}
+            disabled={isLoading}
+            aria-label="AI personality"
+            className="px-3 py-2 sm:py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 text-xs font-bold shadow-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--brand-blue)] disabled:opacity-50"
+          >
+            {AI_PERSONALITIES.map((p) => (
+              <option key={p.id} value={p.id}>{p.label}</option>
+            ))}
+          </select>
+        </label>
         <motion.button
           type="button"
           whileHover={{ scale: 1.05 }}
