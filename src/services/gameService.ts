@@ -582,7 +582,7 @@ export const FEATURED_APP_CONFIG = {
   google: {
     name: 'Gemini',
     url: 'https://gemini.google.com',
-    coverUrl: '/assets/google-logo.svg',
+    coverUrl: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1d/Google_Gemini_icon_2025.svg/960px-Google_Gemini_icon_2025.svg.png?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=thumbnail',
   },
 };
 
