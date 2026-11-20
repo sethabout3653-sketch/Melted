@@ -201,6 +201,10 @@ export async function onRequest(context: CFContext): Promise<Response> {
       } catch {}
     }
 
+    if (host === 'google.com' || host.endsWith('.google.com')) {
+      targetUrl.searchParams.set('hl', 'en');
+    }
+
     const forwardMap = new Map<string, string>();
     const cookieParts: string[] = [];
     for (const [k, v] of parsedHeaders) {
@@ -247,6 +251,9 @@ export async function onRequest(context: CFContext): Promise<Response> {
     if (!forwardMap.has('accept-language')) {
       const incomingLang = (request.headers.get('accept-language') || '').trim();
       forwardMap.set('accept-language', incomingLang || 'en-US,en;q=0.9');
+    }
+    if (host === 'google.com' || host.endsWith('.google.com')) {
+      forwardMap.set('accept-language', 'en-US,en;q=0.9');
     }
 
     // Prevent leaking the .pages.dev or proxy host in Origin/Referer
