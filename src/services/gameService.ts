@@ -580,9 +580,9 @@ export const FEATURED_APP_CONFIG = {
     coverUrl: 'https://cdn.aptoide.com/imgs/d/e/c/dec9bc1d63944581077bfa41b5188aa3_icon.png',
   },
   google: {
-    name: 'Google',
-    url: 'https://www.google.com',
-    coverUrl: '/assets/google-logo.svg',
+    name: 'Gemini',
+    url: 'https://gemini.google.com',
+    coverUrl: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1d/Google_Gemini_icon_2025.svg/960px-Google_Gemini_icon_2025.svg.png?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=thumbnail',
   },
 };
 
@@ -622,7 +622,7 @@ const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
     name: FEATURED_APP_CONFIG.google.name,
     cover: FEATURED_APP_CONFIG.google.coverUrl,
     url: FEATURED_APP_CONFIG.google.url,
-    author: 'Google',
+    author: 'By Google',
     special: ['google', 'search', 'scramjet'],
     featured: true,
     source: 'scramjet',
