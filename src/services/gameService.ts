@@ -570,9 +570,9 @@ function generateSoundboardSvgCover(): string {
 // Edit name, url, and coverUrl here to change the TikTok and Soundboard featured apps
 export const FEATURED_APP_CONFIG = {
   tiktok: {
-    name: 'TikTok',
-    url: 'https://www.tiktok.com/',
-    coverUrl: 'https://static.vecteezy.com/system/resources/thumbnails/016/716/450/small/tiktok-icon-free-png.png',
+    name: 'Soundboard 2 ',
+    url: 'https://www.soundboardguys.com',
+    coverUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSV-0qsakVXtbgjO5dYAWUse_0I8vWZJwuE88NkBZY8Og&s',
   },
   soundboard: {
     name: 'Soundboard',
