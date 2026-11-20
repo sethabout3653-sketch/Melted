@@ -567,40 +567,50 @@ function generateSoundboardSvgCover(): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-const TIKTOK_COVER_URL = 'https://static.vecteezy.com/system/resources/thumbnails/016/716/450/small/tiktok-icon-free-png.png';
-
-const SOUNDBOARD_COVER_URL = 'https://cdn.aptoide.com/imgs/d/e/c/dec9bc1d63944581077bfa41b5188aa3_icon.png';
+// Edit name, url, and coverUrl here to change the TikTok and Soundboard featured apps
+export const FEATURED_APP_CONFIG = {
+  tiktok: {
+    name: 'TikTok',
+    url: 'https://www.tiktok.com/',
+    coverUrl: 'https://static.vecteezy.com/system/resources/thumbnails/016/716/450/small/tiktok-icon-free-png.png',
+  },
+  soundboard: {
+    name: 'Soundboard',
+    url: 'https://www.myinstants.com/en/index/us/',
+    coverUrl: 'https://cdn.aptoide.com/imgs/d/e/c/dec9bc1d63944581077bfa41b5188aa3_icon.png',
+  },
+};
 
 const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
   {
     id: 900002,
-    name: 'TikTok',
-    cover: TIKTOK_COVER_URL,
-    url: 'https://www.tiktok.com/',
+    name: FEATURED_APP_CONFIG.tiktok.name,
+    cover: FEATURED_APP_CONFIG.tiktok.coverUrl,
+    url: FEATURED_APP_CONFIG.tiktok.url,
     author: 'TikTok',
     special: ['tiktok', 'video', 'videos', 'short videos', 'scramjet'],
     featured: true,
     source: 'scramjet',
     category: 'Featured',
-    resolvedCover: TIKTOK_COVER_URL,
-    fallbackCover: TIKTOK_COVER_URL,
-    localCover: TIKTOK_COVER_URL,
-    resolvedUrl: 'https://www.tiktok.com/',
+    resolvedCover: FEATURED_APP_CONFIG.tiktok.coverUrl,
+    fallbackCover: FEATURED_APP_CONFIG.tiktok.coverUrl,
+    localCover: FEATURED_APP_CONFIG.tiktok.coverUrl,
+    resolvedUrl: FEATURED_APP_CONFIG.tiktok.url,
   },
   {
     id: 900001,
-    name: 'Soundboard',
-    cover: SOUNDBOARD_COVER_URL,
-    url: 'https://www.myinstants.com/en/index/us/',
+    name: FEATURED_APP_CONFIG.soundboard.name,
+    cover: FEATURED_APP_CONFIG.soundboard.coverUrl,
+    url: FEATURED_APP_CONFIG.soundboard.url,
     author: 'Myinstants',
     special: ['soundboard', 'myinstants', 'audio', 'sound effects', 'buttons', 'scramjet'],
     featured: true,
     source: 'scramjet',
     category: 'Featured',
-    resolvedCover: SOUNDBOARD_COVER_URL,
+    resolvedCover: FEATURED_APP_CONFIG.soundboard.coverUrl,
     fallbackCover: generateSoundboardSvgCover(),
-    localCover: SOUNDBOARD_COVER_URL,
-    resolvedUrl: 'https://www.myinstants.com/en/index/us/',
+    localCover: FEATURED_APP_CONFIG.soundboard.coverUrl,
+    resolvedUrl: FEATURED_APP_CONFIG.soundboard.url,
   },
 ];
 
