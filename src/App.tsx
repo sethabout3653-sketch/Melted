@@ -429,60 +429,16 @@ export default function App() {
 
       {/* Main Content Scrollable Area with Smooth Transitions */}
       <AnimatePresence mode="wait">
-        {currentTab === 'chat' ? (
-          <motion.div
-            key="chat-tab-view"
+        {currentTab === 'games' ? (
+          <motion.main
+            key="games-tab-view"
+            ref={gamesScrollRef as any}
             variants={tabTransition}
             initial="initial"
             animate="animate"
             exit="exit"
-            className="flex-1 flex flex-col min-h-0 h-full w-full"
+            className="flex-1 w-full overflow-y-auto"
           >
-            <ChatView globalChat={globalChat} initialChannel={targetChatChannel} />
-          </motion.div>
-        ) : currentTab === 'ai' ? (
-          <motion.div
-            key="ai-tab-view"
-            variants={tabTransition}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-hidden"
-          >
-            <AIAssistantView />
-          </motion.div>
-        ) : currentTab === 'movies' ? (
-          <motion.div
-            key="movies-tab-view"
-            variants={tabTransition}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-y-auto"
-          >
-            <MovieView onActiveMediaChange={setActiveMedia} />
-          </motion.div>
-        ) : currentTab === 'tv' ? (
-          <motion.div
-            key="tv-tab-view"
-            variants={tabTransition}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            className="flex-1 flex flex-col min-h-0 h-full w-full"
-          >
-            <LiveTVView />
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-
-      <motion.main
-        ref={gamesScrollRef as any}
-        variants={tabTransition}
-        initial="initial"
-        animate={currentTab === 'games' ? 'animate' : 'initial'}
-        className={`flex-1 w-full overflow-y-auto ${currentTab === 'games' ? '' : 'hidden'}`}
-      >
             <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pb-24 lg:pb-16 sm:pt-6">
             {/* Categories & Sorting */}
             <div className="mb-4 sm:mb-6">
@@ -601,7 +557,53 @@ export default function App() {
                 </div>
               </div>
             </footer>
-      </motion.main>
+          </motion.main>
+        ) : currentTab === 'chat' ? (
+          <motion.div
+            key="chat-tab-view"
+            variants={tabTransition}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="flex-1 flex flex-col min-h-0 h-full w-full"
+          >
+            <ChatView globalChat={globalChat} initialChannel={targetChatChannel} />
+          </motion.div>
+        ) : currentTab === 'ai' ? (
+          <motion.div
+            key="ai-tab-view"
+            variants={tabTransition}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-hidden"
+          >
+            <AIAssistantView />
+          </motion.div>
+        ) : currentTab === 'movies' ? (
+          <motion.div
+            key="movies-tab-view"
+            variants={tabTransition}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="flex-1 flex flex-col min-h-0 h-full w-full overflow-y-auto"
+          >
+            <MovieView onActiveMediaChange={setActiveMedia} />
+          </motion.div>
+        ) : currentTab === 'tv' ? (
+          <motion.div
+            key="tv-tab-view"
+            variants={tabTransition}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="flex-1 flex flex-col min-h-0 h-full w-full"
+          >
+            <LiveTVView />
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
         </div>
 
       {/* Game Player Modal */}

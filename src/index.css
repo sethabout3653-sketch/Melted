@@ -55,14 +55,16 @@
     backface-visibility: hidden;
   }
 
-  /* Locked 60 FPS GPU-Composited Animation Rules (scoped to heavy elements) */
+  /* Locked 60 FPS GPU-Composited Animation Rules for Cloudflare and Proxy Delivery */
   .gpu-accelerated,
   .motion-safe-gpu,
   video,
   iframe,
-  canvas {
+  canvas,
+  div, main, section, nav, header, footer, aside {
     transform: translateZ(0);
     backface-visibility: hidden;
+    will-change: transform, opacity;
   }
 
   /* Render containment for smooth mobile & desktop scrolling */
