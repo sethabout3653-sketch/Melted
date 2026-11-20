@@ -12,7 +12,11 @@
     "start": "tsx server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "cf:dev:workers": "vite build && npx -y wrangler@4 dev",
+    "cf:deploy:workers": "vite build && npx -y wrangler@4 deploy",
+    "cf:dev:pages": "vite build && npx -y wrangler@4 pages dev dist",
+    "cf:deploy:pages": "vite build && npx -y wrangler@4 pages deploy dist --project-name=frosted"
   },
   "dependencies": {
     "@distube/ytdl-core": "^5.2.1",
