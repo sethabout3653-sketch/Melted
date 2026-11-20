@@ -39,6 +39,11 @@ function copyScramjetAssetsPlugin(): Plugin {
           fs.cpSync(from, to, { recursive: true, force: true });
         }
       }
+
+      const epgSnapshot = path.resolve(__dirname, '.epg-cache.json');
+      if (fs.existsSync(epgSnapshot)) {
+        fs.copyFileSync(epgSnapshot, path.resolve(outDir, 'epg-cache.json'));
+      }
     },
   };
 }
