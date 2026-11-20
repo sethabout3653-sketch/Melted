@@ -101,7 +101,7 @@ export function getSavedSearchEngine(): SearchEngineId {
       return raw;
     }
   } catch {}
-  return 'google';
+  return 'duckduckgo';
 }
 
 export function saveSearchEngine(engine: SearchEngineId): void {
