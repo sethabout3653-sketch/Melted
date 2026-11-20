@@ -176,10 +176,6 @@ export function resolveWebSocketUrl(): string {
       return `${wsProto}//${cleanBackend}/ws-db`;
     }
 
-    if (typeof window !== 'undefined' && window.location?.hostname?.endsWith('.pages.dev')) {
-      return 'wss://melted-arcade.onrender.com/ws-db';
-    }
-
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return `${protocol}//${window.location.host}/ws-db`;
   } catch {
@@ -369,7 +365,7 @@ export function useWebSocketDatabase(currentUser: {
             if (change.type !== 'added') return;
             const s = change.doc.data();
             if (s && s.fromUserId && s.fromUserId !== myUserId) {
-              const sigKey = `${s.fromUserId}:${s.sigId || change.doc.id}`;
+              const sigKey = s.sigId || change.doc.id;
               if (!processedRtcSignalsRef.current.has(sigKey)) {
                 processedRtcSignalsRef.current.add(sigKey);
                 if (processedRtcSignalsRef.current.size > 200) {
@@ -479,7 +475,7 @@ export function useWebSocketDatabase(currentUser: {
         if (sigData.success && Array.isArray(sigData.signals)) {
           sigData.signals.forEach((s: any) => {
             if (s.targetUserId === u.id && s.fromUserId !== u.id) {
-              const sigKey = `${s.fromUserId}:${s.id}`;
+              const sigKey = s.sigId || s.id;
               if (!processedRtcSignalsRef.current.has(sigKey)) {
                 processedRtcSignalsRef.current.add(sigKey);
                 if (processedRtcSignalsRef.current.size > 200) {

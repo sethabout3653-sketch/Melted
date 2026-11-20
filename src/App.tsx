@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { CategoryFilter } from './components/CategoryFilter';
 import { GameCard } from './components/GameCard';
 import { GamePlayer } from './components/GamePlayer';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { ChatView } from './components/ChatView';
 import { AIAssistantView } from './components/AIAssistantView';
 import { FrostHubLoadingScreen } from './components/FrostHubLoadingScreen';
@@ -605,12 +606,14 @@ export default function App() {
 
       {/* Game Player Modal */}
       {activeGame && (
-        <GamePlayer
-          game={activeGame}
-          onClose={handleCloseGame}
-          isFavorite={favorites.includes(activeGame.id)}
-          onToggleFavorite={handleToggleFavorite}
-        />
+        <ErrorBoundary key={activeGame.id} fallback={() => null} onError={handleCloseGame}>
+          <GamePlayer
+            game={activeGame}
+            onClose={handleCloseGame}
+            isFavorite={favorites.includes(activeGame.id)}
+            onToggleFavorite={handleToggleFavorite}
+          />
+        </ErrorBoundary>
       )}
 
       {/* Global In-App Message Notification Toast - visible on every screen and over games */}

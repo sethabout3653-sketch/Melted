@@ -2,6 +2,8 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 
 interface Props {
   children: ReactNode;
+  fallback?: () => ReactNode;
+  onError?: (error: Error) => void;
 }
 
 interface State {
@@ -20,6 +22,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error('[FrostHub render error]', error, errorInfo);
+    this.props.onError?.(error);
   }
 
   private handleReload = () => {
@@ -28,6 +31,7 @@ export class ErrorBoundary extends Component<Props, State> {
 
   public render() {
     if (this.state.hasError) {
+      if (this.props.fallback) return this.props.fallback();
       return (
         <main role="alert" className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white flex items-center justify-center p-6">
           <section className="max-w-lg w-full rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 p-6 shadow-2xl">
