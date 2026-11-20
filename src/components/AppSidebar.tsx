@@ -86,6 +86,8 @@ const UtilityButton: React.FC<UtilityButtonProps> = ({ icon: Icon, label, onClic
 );
 
 const UtilityActions: React.FC<NavLinksProps> = ({
+  currentTab,
+  onTabChange,
   showFavoritesOnly,
   onToggleFavoritesOnly,
   onRandomGame,
@@ -103,7 +105,16 @@ const UtilityActions: React.FC<NavLinksProps> = ({
         onNavigate?.();
       }}
     />
-    <UtilityButton icon={Heart} label="Saved games" active={showFavoritesOnly} onClick={onToggleFavoritesOnly} />
+    <UtilityButton
+      icon={Heart}
+      label="Saved games"
+      active={showFavoritesOnly}
+      onClick={() => {
+        if (currentTab !== 'games') onTabChange('games');
+        onToggleFavoritesOnly();
+        onNavigate?.();
+      }}
+    />
     <UtilityButton
       icon={theme === 'dark' ? Sun : Moon}
       label={theme === 'dark' ? 'Light mode' : 'Dark mode'}
