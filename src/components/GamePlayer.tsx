@@ -177,7 +177,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           if (proxiedSrc) {
             setStealthUrl(proxiedSrc);
           }
-          setIsLoadingProxy(false);
+          // Note: Keep isLoadingProxy=true until iframe onLoad fires so user never sees a bare black screen
         } catch (err: any) {
           console.warn('[GamePlayer] Scramjet v2 unavailable:', err);
           if (!active) return;
@@ -200,8 +200,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
 
       // Ensure loading overlay never gets stuck indefinitely
       const safetyTimer = window.setTimeout(() => {
-        if (active) setIsLoadingProxy(false);
-      }, 12000);
+        if (active) {
+          setIsLoadingProxy(false);
+        }
+      }, 16000);
 
       return () => {
         active = false;
@@ -421,6 +423,19 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   if (iframeRef.current?.contentWindow) {
                     const win = iframeRef.current.contentWindow;
                     restoreAutoSaveToIframe(game.id, win);
+
+                    if (useScramjet) {
+                      try {
+                        const doc = iframeRef.current.contentDocument || win.document;
+                        if (doc) {
+                          const bodyText = (doc.body?.textContent || '').trim();
+                          if (bodyText.includes("Page couldn't load") || bodyText.includes('Reconnecting Scramjet Proxy')) {
+                            setHasError(true);
+                            setErrorDetail(bodyText.slice(0, 200));
+                          }
+                        }
+                      } catch {}
+                    }
 
                     // Inject Scaffolding compatibility layer for direct non-Scramjet frames when same-origin
                     if (!useScramjet) {

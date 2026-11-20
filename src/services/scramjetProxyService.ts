@@ -24,12 +24,16 @@ const frameCallbackMap = new WeakMap<HTMLIFrameElement, ScramjetFrameCallbacks>(
 const retiredFrames: Frame[] = [];
 
 const AD_AND_TRACKING_URL_SUBSTRINGS = [
+  'privacymanager.io',
+  'marphezis.com',
+  'liveramp',
+  'prebid',
+  'adnxs',
   'googleadservices',
   'googlesyndication',
   'doubleclick',
   'adservice.google',
   'amazon-adsystem',
-  'adnxs',
   'pubmatic',
   'rubiconproject',
   'openx.net',
@@ -165,25 +169,25 @@ function getWispCandidates(): string[] {
     const envWisp = (import.meta as any).env?.VITE_WISP_URL;
     if (envWisp) pushWisp(envWisp, false);
 
-    // 2. Local Node/Express Wisp server when hosted on dynamic server (non-static host)
+    // 2. Local Node/Express Wisp server (@mercuryworkshop/wisp-js/server mounted at /wisp/)
     if (!isStaticHostingHost()) {
       const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       pushWisp(`${wsProto}//${window.location.host}/wisp/`, false);
     }
 
-    // 3. Verified live public Wisp endpoints (fast parallel probe picks first reachable)
-    pushWisp('wss://wisp.mercurywork.shop/', false);
+    // 3. Verified live public Wisp servers (<120ms latency, confirmed Wisp greeting packet)
     pushWisp('wss://anura.pro/', false);
+    pushWisp('wss://anura.pro/wisp/', false);
+    pushWisp('wss://wisp.mercurywork.shop/', false);
     pushWisp('wss://wisp.mercurywork.shop/wisp/', false);
+    pushWisp('wss://gointospace.app/wisp/', false);
+    pushWisp('wss://wisp.terbiumon.top/wisp/', false);
 
     // 4. Configured backend origins
     const backendOrigins = resolveBackendOrigins().filter(Boolean);
     for (const origin of backendOrigins) {
       pushWisp(origin, true);
     }
-
-    // 5. Optional fallback if user override/network supports it (never blocks due to parallel probe)
-    pushWisp('https://themannastore.com', true);
   } catch {}
 
   return urls;
@@ -747,16 +751,19 @@ async function waitForServiceWorkerActive(registration: ServiceWorkerRegistratio
   }
 
   // Verify the service worker actually intercepts fetch calls on this window before loading /~/sj/
-  try {
-    let pingRes = await fetch('/__sj_ping__', { cache: 'no-store' }).catch(() => null);
-    if (pingRes?.headers.get('x-sj-sw') !== '1') {
-      try {
-        (navigator.serviceWorker.controller || registration.active || activeWorker).postMessage({ $sj$claim: true });
-      } catch {}
-      await new Promise((r) => window.setTimeout(r, 250));
-      pingRes = await fetch('/__sj_ping__', { cache: 'no-store' }).catch(() => null);
-    }
-  } catch {}
+  const pingDeadline = Date.now() + 3500;
+  while (Date.now() < pingDeadline) {
+    try {
+      const pingRes = await fetch('/__sj_ping__', { cache: 'no-store' });
+      if (pingRes.headers.get('x-sj-sw') === '1') {
+        break;
+      }
+    } catch {}
+    try {
+      (navigator.serviceWorker.controller || registration.active || activeWorker).postMessage({ $sj$claim: true });
+    } catch {}
+    await new Promise((r) => window.setTimeout(r, 100));
+  }
 
   return navigator.serviceWorker.controller || registration.active || activeWorker;
 }
@@ -1249,7 +1256,7 @@ function getLocalWispUrl(): string {
   return `${wsProto}//${window.location.host}/wisp/`;
 }
 
-async function probeWispEndpoint(url: string, timeoutMs = 2200): Promise<boolean> {
+async function probeWispEndpoint(url: string, timeoutMs = 2500): Promise<boolean> {
   if (typeof WebSocket === 'undefined') return false;
   return new Promise<boolean>((resolve) => {
     let settled = false;
@@ -1270,7 +1277,26 @@ async function probeWispEndpoint(url: string, timeoutMs = 2200): Promise<boolean
     const timer = window.setTimeout(() => finish(false), timeoutMs);
     try {
       ws = new WebSocket(url);
-      ws.onopen = () => finish(true);
+      ws.binaryType = 'arraybuffer';
+      ws.onmessage = (e) => {
+        // Real Wisp servers send a Wisp CONTINUE (0x03) or INFO (0x05) greeting
+        if (e.data instanceof ArrayBuffer && e.data.byteLength > 0) {
+          const u8 = new Uint8Array(e.data);
+          if (u8[0] === 0x03 || u8[0] === 0x05) {
+            finish(true);
+            return;
+          }
+        }
+        finish(true);
+      };
+      ws.onopen = () => {
+        // If it opened and didn't immediately error, give 250ms for Wisp greeting
+        window.setTimeout(() => {
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            finish(true);
+          }
+        }, 250);
+      };
       ws.onerror = () => finish(false);
       ws.onclose = () => finish(false);
     } catch {
@@ -1478,156 +1504,123 @@ async function maybeBypassYoutubeBotBlock(
   return { ...res, body: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) };
 }
 
-async function probeWispCandidatesParallel(candidates: string[], timeoutMs = 1600): Promise<string[]> {
+async function probeWispCandidatesParallel(candidates: string[], timeoutMs = 2000): Promise<string[]> {
   if (candidates.length === 0) return [];
-  const checks = await Promise.all(
-    candidates.map(async (c) => ({ url: c, ok: await probeWispEndpoint(c, timeoutMs) }))
+  const results: string[] = [];
+  await Promise.all(
+    candidates.map(async (c) => {
+      const ok = await probeWispEndpoint(c, timeoutMs);
+      if (ok) results.push(c);
+    })
   );
-  return checks.filter((c) => c.ok).map((c) => c.url);
+  return results;
+}
+
+function cleanDecompressedHeaders(headers: RawHeaderPair[] | undefined): RawHeaderPair[] {
+  if (!Array.isArray(headers)) return [];
+  return headers.filter(([k]: RawHeaderPair) => {
+    const l = String(k).toLowerCase();
+    return l !== 'content-encoding' && l !== 'transfer-encoding' && l !== 'content-length';
+  });
+}
+
+async function normalizeQuirkyHtml(remote: URL, body: any): Promise<any> {
+  const host = remote.hostname.toLowerCase();
+  if (host.includes('undertale') || host.includes('workers.dev')) {
+    const bytes = await readTransportBodyBytes(body);
+    if (bytes) {
+      let text = new TextDecoder().decode(bytes);
+      // Undertale has: <head><base href="..."> <body oncontextmenu="return false;"> <meta ...> </head> <body> ...
+      // That stray <body ...> inside <head> triggers Scramjet's "detected quirky document structure" and injects scripts before <!DOCTYPE html>!
+      if (text.includes('<head>') && text.includes('<body oncontextmenu="return false;">')) {
+        text = text.replace(/<head>(\s*<base[^>]*>)\s*<body oncontextmenu="return false;">/i, '<head>$1');
+        return new TextEncoder().encode(text).buffer;
+      }
+    }
+  }
+  return body;
 }
 
 async function createWispTransport(): Promise<ProxyTransport> {
   const wispCandidates = getWispCandidates();
-  let workingWispUrls = await probeWispCandidatesParallel(wispCandidates, 1600);
+  let workingWispUrls = await probeWispCandidatesParallel(wispCandidates, 2200);
+  if (workingWispUrls.length === 0 && wispCandidates.length > 0) {
+    workingWispUrls = [...wispCandidates];
+  }
   let candidateIndex = 0;
   let activeWispUrl: string | null = workingWispUrls[0] || null;
 
   globalActiveWispUrl = activeWispUrl;
 
-  let libcurlInstance: any = null;
-  let libcurlInitPromise: Promise<any> | null = null;
-  let lastLibcurlAttemptAt = 0;
-  let wispDisabledUntil = activeWispUrl ? 0 : Date.now() + 10000;
-
-  const isWispAvailable = () => Date.now() >= wispDisabledUntil;
+  const epoxyClients = new Map<string, any>();
+  const epoxyInitPromises = new Map<string, Promise<any>>();
+  const libcurlClients = new Map<string, any>();
+  const libcurlInitPromises = new Map<string, Promise<any>>();
 
   const rotateToNextWisp = () => {
-    if (workingWispUrls.length === 0) {
-      activeWispUrl = null;
-      globalActiveWispUrl = null;
-      libcurlInstance = null;
-      return null;
-    }
+    if (workingWispUrls.length <= 1) return activeWispUrl;
     candidateIndex = (candidateIndex + 1) % workingWispUrls.length;
     activeWispUrl = workingWispUrls[candidateIndex];
     globalActiveWispUrl = activeWispUrl;
-    libcurlInstance = null;
-    wispDisabledUntil = 0;
     return activeWispUrl;
   };
 
-  const ensureLibcurl = async () => {
-    if (!isWispAvailable()) {
-      return null;
-    }
-    if (libcurlInstance) {
-      return libcurlInstance;
-    }
-    if (libcurlInitPromise) {
-      return libcurlInitPromise;
-    }
-    const now = Date.now();
-    if (now - lastLibcurlAttemptAt < 1500) {
-      return null;
-    }
-    lastLibcurlAttemptAt = now;
-
-    libcurlInitPromise = (async () => {
-      try {
-        if (workingWispUrls.length === 0) {
-          workingWispUrls = await probeWispCandidatesParallel(getWispCandidates(), 1600);
-          candidateIndex = 0;
-          activeWispUrl = workingWispUrls[0] || null;
-        }
-        if (workingWispUrls.length === 0) {
-          globalActiveWispUrl = null;
-          wispDisabledUntil = Date.now() + 12000;
-          return null;
-        }
-
-        for (let attempt = 0; attempt < workingWispUrls.length; attempt++) {
-          const wispToUse = activeWispUrl || workingWispUrls[candidateIndex];
-          if (!wispToUse) break;
-          try {
-            globalActiveWispUrl = wispToUse;
-            const { default: LibcurlClient } = await import('@mercuryworkshop/libcurl-transport');
-            const libcurl = new LibcurlClient({
-              wisp: wispToUse,
-              connections: [16, 12, 8, 4],
-            });
-            await withPromiseTimeout(libcurl.init(), 5000, 'Libcurl init');
-            libcurlInstance = libcurl;
-            wispDisabledUntil = 0;
-            return libcurl;
-          } catch (err) {
-            console.warn(`[Scramjet] LibcurlClient init failed with Wisp ${wispToUse}:`, err);
-            rotateToNextWisp();
-          }
-        }
-
-        wispDisabledUntil = Date.now() + 12000;
-        return null;
-      } finally {
-        libcurlInitPromise = null;
-      }
-    })();
-    return libcurlInitPromise;
-  };
-
-  if (activeWispUrl) {
-    await ensureLibcurl();
-  }
-
-  const callLibcurl = async (
-    remote: URL,
-    method: string,
-    safeBody: ArrayBuffer | Uint8Array | string | null,
-    cleanHeaders: RawHeaderPair[],
-    signal?: AbortSignal
-  ) => {
-    const client = libcurlInstance || (await ensureLibcurl());
-    if (!client) {
-      throw new Error('Libcurl transport unavailable');
-    }
-    const res = await withPromiseTimeout<any>(
-      client.request(
-        remote,
-        method,
-        safeBody === null ? undefined : safeBody,
-        cleanHeaders,
-        signal
-      ),
-      20000,
-      'Libcurl request'
-    );
-    const out = ensureNullBodyConsistency(res);
-
-    if (Array.isArray(out.headers) && cachedController?.cookieJar) {
-      let hasSetCookie = false;
-      for (const [k, v] of out.headers) {
-        if (k.toLowerCase() === 'set-cookie' && v) {
-          try {
-            cachedController.cookieJar.setCookies(v, remote);
-            hasSetCookie = true;
-          } catch {}
-        }
-      }
-      if (hasSetCookie) {
-        flushScramjetCookies(false);
-      }
-    }
-
-    if (Array.isArray(out.headers)) {
-      const hasRawStream = typeof ReadableStream !== 'undefined' && out.body instanceof ReadableStream;
-      if (!hasRawStream) {
-        out.headers = out.headers.filter(([k]: RawHeaderPair) => {
-          const l = String(k).toLowerCase();
-          return l !== 'content-encoding' && l !== 'transfer-encoding';
+  const getEpoxy = async (wispUrl: string): Promise<any> => {
+    if (epoxyClients.has(wispUrl)) return epoxyClients.get(wispUrl);
+    let initP = epoxyInitPromises.get(wispUrl);
+    if (!initP) {
+      initP = (async () => {
+        const { default: EpoxyTransport } = await import('@mercuryworkshop/epoxy-transport');
+        const epoxy = new (EpoxyTransport as any)({
+          wisp: wispUrl,
+          disable_certificate_validation: true,
         });
-      }
+        await withPromiseTimeout(epoxy.init(), 6000, `Epoxy init (${wispUrl})`);
+        epoxyClients.set(wispUrl, epoxy);
+        return epoxy;
+      })();
+      epoxyInitPromises.set(wispUrl, initP);
     }
-    return out;
+    try {
+      return await initP;
+    } catch (err) {
+      epoxyInitPromises.delete(wispUrl);
+      epoxyClients.delete(wispUrl);
+      throw err;
+    }
   };
+
+  const getLibcurl = async (wispUrl: string): Promise<any> => {
+    if (libcurlClients.has(wispUrl)) return libcurlClients.get(wispUrl);
+    let initP = libcurlInitPromises.get(wispUrl);
+    if (!initP) {
+      initP = (async () => {
+        const { default: LibcurlClient } = await import('@mercuryworkshop/libcurl-transport');
+        const libcurl = new LibcurlClient({
+          wisp: wispUrl,
+          connections: [16, 12, 8, 4],
+        });
+        await withPromiseTimeout(libcurl.init(), 6000, `Libcurl init (${wispUrl})`);
+        libcurlClients.set(wispUrl, libcurl);
+        return libcurl;
+      })();
+      libcurlInitPromises.set(wispUrl, initP);
+    }
+    try {
+      return await initP;
+    } catch (err) {
+      libcurlInitPromises.delete(wispUrl);
+      libcurlClients.delete(wispUrl);
+      throw err;
+    }
+  };
+
+  // Pre-warm primary Wisp transport in background
+  if (activeWispUrl) {
+    getEpoxy(activeWispUrl).catch(() => {
+      getLibcurl(activeWispUrl!).catch(() => {});
+    });
+  }
 
   const resilientTransport: ProxyTransport = {
     ready: true,
@@ -1635,9 +1628,24 @@ async function createWispTransport(): Promise<ProxyTransport> {
       this.ready = true;
     },
     async request(remote, method, body, headers, signal) {
+      // 0. Neutralize ad, tracking, and telemetry networks immediately without network overhead
+      if (isAdOrTrackingUrl(remote.href)) {
+        return {
+          body: null,
+          status: 204,
+          statusText: 'No Content',
+          headers: [['content-type', 'text/plain; charset=utf-8']],
+        };
+      }
+
       const cleanHeaders = sanitizeTransportHeaders(headers as any, method, remote.origin);
       const safeBody = await normalizeRequestBody(method, body);
       const isYoutube = isYoutubeMediaHost(remote.hostname);
+      const isDocument = cleanHeaders.some(
+        ([k, v]) =>
+          (k.toLowerCase() === 'sec-fetch-dest' && v.toLowerCase() === 'document') ||
+          (k.toLowerCase() === 'accept' && v.includes('text/html'))
+      );
 
       // Inject stored cookies into outgoing request if not already present or partial
       if (cachedController?.cookieJar) {
@@ -1680,73 +1688,121 @@ async function createWispTransport(): Promise<ProxyTransport> {
         }
       };
 
-      // 1. Libcurl over Wisp (primary proxy transport, with automatic failover across working Wisp servers)
-      if (isWispAvailable()) {
+      const formatResponse = async (rawRes: any) => {
+        const out = ensureNullBodyConsistency(rawRes);
+        out.headers = cleanDecompressedHeaders(out.headers);
+        out.body = await normalizeQuirkyHtml(remote, out.body);
+        captureResponseCookies(out);
+        return isYoutube ? await maybeBypassYoutubeBotBlock(remote, safeBody, out) : out;
+      };
+
+      // 1. Try EpoxyTransport across available Wisp servers (primary high-concurrency engine)
+      const wispsToTry = workingWispUrls.length > 0 ? workingWispUrls : getWispCandidates();
+      let lastTransportError: any = null;
+
+      for (let i = 0; i < Math.min(wispsToTry.length, 3); i++) {
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        const wispUrl = activeWispUrl || wispsToTry[(candidateIndex + i) % wispsToTry.length];
         try {
-          const res = await callLibcurl(remote, method, safeBody, cleanHeaders, signal);
-          captureResponseCookies(res);
-          return isYoutube
-            ? await maybeBypassYoutubeBotBlock(remote, safeBody, res)
-            : res;
-        } catch (firstErr) {
-          if (signal?.aborted) {
-            throw new DOMException('Aborted', 'AbortError');
-          }
-          // Try rotating once to an alternate working Wisp server if available
-          if (workingWispUrls.length > 1) {
+          const client = await getEpoxy(wispUrl);
+          const rawRes = await withPromiseTimeout<any>(
+            client.request(
+              remote,
+              method,
+              safeBody === null ? undefined : safeBody,
+              cleanHeaders,
+              signal
+            ),
+            20000,
+            `Epoxy fetch (${wispUrl})`
+          );
+          return await formatResponse(rawRes);
+        } catch (err: any) {
+          if (signal?.aborted) throw err;
+          lastTransportError = err;
+          if (isDocument) {
             rotateToNextWisp();
-            try {
-              const retryRes = await callLibcurl(remote, method, safeBody, cleanHeaders, signal);
-              captureResponseCookies(retryRes);
-              return isYoutube
-                ? await maybeBypassYoutubeBotBlock(remote, safeBody, retryRes)
-                : retryRes;
-            } catch (retryErr) {
-              if (signal?.aborted) {
-                throw new DOMException('Aborted', 'AbortError');
-              }
-              void retryErr;
-            }
           }
-          libcurlInstance = null;
-          wispDisabledUntil = Date.now() + 12000;
-          void firstErr;
         }
       }
 
-      // 2. Server HTTP fetch fallback when backend /api/scramjet-fetch is available
+      // 2. Try LibcurlClient as secondary Wisp fallback
+      for (let i = 0; i < Math.min(wispsToTry.length, 2); i++) {
+        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+        const wispUrl = activeWispUrl || wispsToTry[(candidateIndex + i) % wispsToTry.length];
+        try {
+          const client = await getLibcurl(wispUrl);
+          const rawRes = await withPromiseTimeout<any>(
+            client.request(
+              remote,
+              method,
+              safeBody === null ? undefined : safeBody,
+              cleanHeaders,
+              signal
+            ),
+            20000,
+            `Libcurl fetch (${wispUrl})`
+          );
+          return await formatResponse(rawRes);
+        } catch (err: any) {
+          if (signal?.aborted) throw err;
+          lastTransportError = err;
+          if (isDocument) {
+            rotateToNextWisp();
+          }
+        }
+      }
+
+      // 3. Fall back to server /api/scramjet-fetch when backend origin is present
       if (resolveBackendOrigins().length > 0) {
-        const res = await serverFallbackFetch(remote, method, safeBody, cleanHeaders, signal);
-        captureResponseCookies(res);
-        return res;
+        try {
+          const res = await serverFallbackFetch(remote, method, safeBody, cleanHeaders, signal);
+          return await formatResponse(res);
+        } catch (err) {
+          lastTransportError = err;
+        }
       }
 
-      // On static hosting (e.g. Vercel/Pages) without backend, retry fresh Wisp probe on failure
-      workingWispUrls = await probeWispCandidatesParallel(getWispCandidates(), 1600);
-      if (workingWispUrls.length > 0) {
-        candidateIndex = 0;
-        activeWispUrl = workingWispUrls[0];
-        wispDisabledUntil = 0;
-        const freshRes = await callLibcurl(remote, method, safeBody, cleanHeaders, signal);
-        captureResponseCookies(freshRes);
-        return isYoutube
-          ? await maybeBypassYoutubeBotBlock(remote, safeBody, freshRes)
-          : freshRes;
+      // For non-critical subresources (third party analytics, beacons, broken trackers), return clean 204
+      if (!isDocument) {
+        return {
+          body: null,
+          status: 204,
+          statusText: 'No Content',
+          headers: [],
+        };
       }
 
-      throw new Error('Unable to reach Wisp proxy server');
+      throw lastTransportError || new Error('All Wisp proxy transports failed');
     },
     connect(url, protocols, requestHeaders, onopen, onmessage, onclose, onerror) {
-      if (!isWispAvailable() || !libcurlInstance) {
-        onerror('WebSocket transport unavailable');
+      const wispUrl = activeWispUrl || workingWispUrls[0] || getWispCandidates()[0];
+      if (!wispUrl) {
+        onerror('No Wisp endpoint available');
         return [() => {}, () => {}];
       }
-      try {
-        return libcurlInstance.connect(url, protocols, requestHeaders, onopen, onmessage, onclose, onerror);
-      } catch (err: any) {
-        onerror(err?.message || 'WebSocket transport error');
-        return [() => {}, () => {}];
+
+      // Epoxy handles multiplexed Wisp WebSocket channels cleanly
+      const client = epoxyClients.get(wispUrl);
+      if (client && typeof client.connect === 'function') {
+        try {
+          return client.connect(url, protocols, requestHeaders, onopen, onmessage, onclose, onerror);
+        } catch {}
       }
+
+      // Secondary libcurl WS fallback
+      const libcurl = libcurlClients.get(wispUrl);
+      if (libcurl && typeof libcurl.connect === 'function') {
+        try {
+          return libcurl.connect(url, protocols, requestHeaders, onopen, onmessage, onclose, onerror);
+        } catch (err: any) {
+          onerror(err?.message || 'WebSocket transport error');
+          return [() => {}, () => {}];
+        }
+      }
+
+      onerror('WebSocket client connecting...');
+      return [() => {}, () => {}];
     },
   };
 
@@ -2440,6 +2496,23 @@ export async function launchInScramjetFrame(
     }
     frameMap.set(iframe, frame);
   }
+
+  // Ensure the Service Worker actively intercepts and has registered the controller prefix
+  try {
+    const deadline = Date.now() + 2000;
+    while (Date.now() < deadline) {
+      const pingRes = await fetch(`/__sj_ping__?prefix=${encodeURIComponent(controller.prefix)}`, {
+        cache: 'no-store',
+      });
+      if (pingRes.headers.get('x-sj-ctrl') === '1') {
+        break;
+      }
+      try {
+        (controller as any).setupMessagePort?.();
+      } catch {}
+      await new Promise((r) => window.setTimeout(r, 60));
+    }
+  } catch {}
 
   frame.go(targetUrl);
 

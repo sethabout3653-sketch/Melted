@@ -234,6 +234,7 @@ const stickyHttpsAgent = new https.Agent({
   keepAlive: true,
   keepAliveMsecs: 30000,
   maxSockets: 64,
+  rejectUnauthorized: false,
 });
 
 function getProxyPoolList(): string[] {
@@ -439,6 +440,7 @@ function performRawUpstreamRequest(
         const tlsSocket = tls.connect({
           socket: tunnelSocket,
           servername: targetUrl.hostname,
+          rejectUnauthorized: false,
         });
         tlsSocket.on('error', () => {
           try {
@@ -2479,21 +2481,25 @@ async function startServer() {
   // Initialize Pure WebSocket Database upgrade handler on /ws-db
   const handleWsDbUpgrade = initWebSocketDatabase(server);
 
-  // Unified WebSocket upgrade router (/ws-db and /wisp/)
+  // Configure wisp-js server options for optimal proxying and compatibility
+  wispServer.options.allow_tcp_streams = true;
+  wispServer.options.allow_udp_streams = true;
+  wispServer.options.allow_direct_ip = true;
+
+  // Unified WebSocket upgrade router (/ws-db and /wisp/) supporting secure wss:// connections
   server.on('upgrade', (req, socket, head) => {
     socket.on('error', () => {});
     const reqUrl = req.url || '/';
     const pathname = reqUrl.split('?')[0];
 
-    if (pathname === '/ws-db') {
+    if (pathname === '/ws-db' || pathname === '/ws-db/') {
       handleWsDbUpgrade(req, socket, head);
       return;
     }
 
-    if (pathname === '/wisp' || pathname === '/wisp/' || pathname.startsWith('/wisp/')) {
-      if (pathname === '/wisp' || pathname === '/wisp/') {
-        req.url = '/wisp/';
-      }
+    // Route /wisp/ specifically to wisp-js so it doesn't collide with other WebSocket endpoints
+    if (req.url && (req.url.endsWith('/wisp/') || pathname.endsWith('/wisp/') || pathname === '/wisp' || pathname.startsWith('/wisp/'))) {
+      req.url = '/wisp/';
       wispServer.routeRequest(req, socket, head);
       return;
     }
