@@ -567,9 +567,50 @@ function generateSoundboardSvgCover(): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
+function generateYoutubeSvgCover(): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
+    <defs>
+      <linearGradient id="ytBg" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#0f0f0f" />
+        <stop offset="100%" stop-color="#1f1111" />
+      </linearGradient>
+      <radialGradient id="ytGlow" cx="50%" cy="40%" r="55%">
+        <stop offset="0%" stop-color="#ff0000" stop-opacity="0.28" />
+        <stop offset="100%" stop-color="#ff0000" stop-opacity="0" />
+      </radialGradient>
+      <filter id="ytShadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000000" flood-opacity="0.6"/>
+      </filter>
+    </defs>
+    <rect width="400" height="300" fill="url(#ytBg)" />
+    <rect width="400" height="300" fill="url(#ytGlow)" />
+    <rect x="110" y="82" width="180" height="126" rx="34" fill="#ff0000" filter="url(#ytShadow)" />
+    <path d="M176 116 L176 174 L226 145 Z" fill="#ffffff" />
+    <text x="200" y="240" text-anchor="middle" fill="#FFFFFF" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-weight="900" font-size="26" letter-spacing="-0.5">YouTube</text>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+const YOUTUBE_COVER_URL = generateYoutubeSvgCover();
+
 const SOUNDBOARD_COVER_URL = 'https://cdn.aptoide.com/imgs/d/e/c/dec9bc1d63944581077bfa41b5188aa3_icon.png';
 
 const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
+  {
+    id: 900002,
+    name: 'YouTube',
+    cover: YOUTUBE_COVER_URL,
+    url: 'https://www.youtube.com/',
+    author: 'YouTube',
+    special: ['youtube', 'video', 'videos', 'music', 'scramjet'],
+    featured: true,
+    source: 'scramjet',
+    category: 'Featured',
+    resolvedCover: YOUTUBE_COVER_URL,
+    fallbackCover: YOUTUBE_COVER_URL,
+    localCover: YOUTUBE_COVER_URL,
+    resolvedUrl: 'https://www.youtube.com/',
+  },
   {
     id: 900001,
     name: 'Soundboard',
