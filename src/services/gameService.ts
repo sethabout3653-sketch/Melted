@@ -591,7 +591,7 @@ function generateYoutubeSvgCover(): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-const YOUTUBE_COVER_URL = generateYoutubeSvgCover();
+const YOUTUBE_COVER_URL = 'https://upload.wikimedia.org/wikipedia/commons/e/ef/Youtube_logo.png?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=original';
 
 const SOUNDBOARD_COVER_URL = 'https://cdn.aptoide.com/imgs/d/e/c/dec9bc1d63944581077bfa41b5188aa3_icon.png';
 
@@ -607,7 +607,7 @@ const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
     source: 'scramjet',
     category: 'Featured',
     resolvedCover: YOUTUBE_COVER_URL,
-    fallbackCover: YOUTUBE_COVER_URL,
+    fallbackCover: generateYoutubeSvgCover(),
     localCover: YOUTUBE_COVER_URL,
     resolvedUrl: 'https://www.youtube.com/',
   },
