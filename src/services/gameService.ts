@@ -467,11 +467,21 @@ export function getPlayableGameUrl(game: GameItem): string {
   if (game.url && (game.url.startsWith('http://') || game.url.startsWith('https://'))) {
     return game.url;
   }
+  const isStaticHost =
+    typeof window !== 'undefined' &&
+    (/\.(vercel\.app|pages\.dev|netlify\.app|github\.io)$/i.test(window.location.hostname) ||
+      window.location.protocol === 'about:');
   if (game.source === 'ugs' || game.url.startsWith('/ugs/')) {
+    if (isStaticHost) {
+      return resolveUgsUrl(game.url);
+    }
     const clean = game.url.replace(/^\/ugs\//, '').replace(/^\//, '');
     return `/api/ugs/${clean}`;
   }
   if (game.source === 'CKV' || game.url.startsWith('/ckv/')) {
+    if (isStaticHost) {
+      return resolveUgsUrl(game.url);
+    }
     const clean = game.url.replace(/^\/ckv\//, '').replace(/^\//, '');
     return `/api/ckv/${clean}`;
   }

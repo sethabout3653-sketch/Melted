@@ -164,6 +164,14 @@ export function launchAboutBlank(gameUrl: string, gameTitle: string) {
     link.href = 'https://ssl.gstatic.com/classroom/favicon.png';
     win.document.head.appendChild(link);
 
+    const resolvedUrl = (() => {
+      try {
+        return new URL(gameUrl, window.location.href).href;
+      } catch {
+        return gameUrl;
+      }
+    })();
+
     const iframe = win.document.createElement('iframe');
     iframe.style.position = 'fixed';
     iframe.style.top = '0';
@@ -172,8 +180,8 @@ export function launchAboutBlank(gameUrl: string, gameTitle: string) {
     iframe.style.height = '100vh';
     iframe.style.border = 'none';
     iframe.allowFullscreen = true;
-    iframe.setAttribute('allow', 'fullscreen; autoplay; gamepad');
-    iframe.src = gameUrl;
+    iframe.setAttribute('allow', 'fullscreen; autoplay; gamepad; microphone; clipboard-read; clipboard-write');
+    iframe.src = resolvedUrl;
 
     win.document.body.style.margin = '0';
     win.document.body.style.padding = '0';

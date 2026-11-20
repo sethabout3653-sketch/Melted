@@ -98,8 +98,13 @@ function normalizeHttpOrigin(raw: string | null | undefined): string | null {
   return `https://${trimmed}`;
 }
 
+function isStaticHostingHost(): boolean {
+  if (typeof window === 'undefined') return false;
+  return /\.(vercel\.app|pages\.dev|netlify\.app|github\.io)$/i.test(window.location.hostname);
+}
+
 function resolveBackendOrigins(): string[] {
-  const origins: string[] = ['']; // Always try same-origin first
+  const origins: string[] = isStaticHostingHost() ? [] : [''];
   if (typeof window === 'undefined') return origins;
 
   const pushUnique = (val: string | null | undefined) => {
@@ -126,10 +131,10 @@ function resolveBackendOrigins(): string[] {
 function getWispCandidates(): string[] {
   if (typeof window === 'undefined') return [];
   const urls: string[] = [];
-  const pushWisp = (raw: string | null | undefined) => {
+  const pushWisp = (raw: string | null | undefined, forceWispSuffix = true) => {
     if (!raw) return;
     const parts = raw.split(',');
-    for (let part of parts) {
+    for (const part of parts) {
       let u = part.trim();
       if (!u) continue;
       if (u.startsWith('https://')) u = 'wss://' + u.slice(8);
@@ -138,30 +143,47 @@ function getWispCandidates(): string[] {
         const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         u = `${wsProto}//${u}`;
       }
-      u = u.replace(/\/ws-db\/?$/, '').replace(/\/+$/, '');
-      if (!u.endsWith('/wisp')) u += '/wisp';
-      u += '/';
+      u = u.replace(/\/ws-db\/?$/, '');
+      if (forceWispSuffix) {
+        u = u.replace(/\/+$/, '');
+        if (!u.endsWith('/wisp')) u += '/wisp';
+        u += '/';
+      } else {
+        if (!u.endsWith('/')) u += '/';
+      }
       if (!urls.includes(u)) urls.push(u);
     }
   };
 
   try {
+    // 1. User or environment overrides always take top priority
     const params = new URLSearchParams(window.location.search);
-    pushWisp(params.get('wisp'));
-    pushWisp(localStorage.getItem('frosthub_wisp_url'));
-    pushWisp((import.meta as any).env?.VITE_WISP_URL);
+    const paramWisp = params.get('wisp');
+    if (paramWisp) pushWisp(paramWisp, false);
+    const storedWisp = localStorage.getItem('frosthub_wisp_url');
+    if (storedWisp) pushWisp(storedWisp, false);
+    const envWisp = (import.meta as any).env?.VITE_WISP_URL;
+    if (envWisp) pushWisp(envWisp, false);
 
-    // Same-origin Wisp first (unless on static Pages host where WS isn't supported)
-    if (!window.location.hostname.endsWith('.pages.dev')) {
+    // 2. Local Node/Express Wisp server when hosted on dynamic server (non-static host)
+    if (!isStaticHostingHost()) {
       const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      pushWisp(`${wsProto}//${window.location.host}/wisp/`);
+      pushWisp(`${wsProto}//${window.location.host}/wisp/`, false);
     }
 
-    // Secondary configured backend Wisp
+    // 3. Verified live public Wisp endpoints (fast parallel probe picks first reachable)
+    pushWisp('wss://wisp.mercurywork.shop/', false);
+    pushWisp('wss://anura.pro/', false);
+    pushWisp('wss://wisp.mercurywork.shop/wisp/', false);
+
+    // 4. Configured backend origins
     const backendOrigins = resolveBackendOrigins().filter(Boolean);
     for (const origin of backendOrigins) {
-      pushWisp(origin);
+      pushWisp(origin, true);
     }
+
+    // 5. Optional fallback if user override/network supports it (never blocks due to parallel probe)
+    pushWisp('https://themannastore.com', true);
   } catch {}
 
   return urls;
@@ -321,10 +343,11 @@ async function seedControllerIdbCookies(cookies: Record<string, any>): Promise<v
 export async function fetchRemoteSavedCookies(): Promise<Record<string, any>> {
   const userId = getCookieStoreUserId();
   const origins = resolveBackendOrigins();
+  if (origins.length === 0) return {};
   for (const origin of origins) {
     try {
       const res = await fetch(`${origin}/api/scramjet-cookies?userId=${encodeURIComponent(userId)}`, {
-        signal: AbortSignal.timeout(1800),
+        signal: AbortSignal.timeout(800),
       });
       const ct = (res.headers.get('content-type') || '').toLowerCase();
       if (!res.ok || !ct.includes('application/json')) continue;
@@ -697,8 +720,11 @@ async function waitForServiceWorkerActive(registration: ServiceWorkerRegistratio
     throw new Error('Scramjet Service Worker failed to activate');
   }
 
-  // Wait briefly for clients.claim() so navigator.serviceWorker.controller owns this page before /~/sj/ loads
+  // Ensure activeWorker claims this page immediately if not already controlling
   if (!navigator.serviceWorker.controller) {
+    try {
+      activeWorker.postMessage({ $sj$claim: true });
+    } catch {}
     await new Promise<void>((resolve) => {
       let done = false;
       const finish = () => {
@@ -715,10 +741,22 @@ async function waitForServiceWorkerActive(registration: ServiceWorkerRegistratio
       navigator.serviceWorker.addEventListener('controllerchange', onChange);
       const poll = window.setInterval(() => {
         if (navigator.serviceWorker.controller) finish();
-      }, 50);
-      const timer = window.setTimeout(finish, 1800);
+      }, 40);
+      const timer = window.setTimeout(finish, 3200);
     });
   }
+
+  // Verify the service worker actually intercepts fetch calls on this window before loading /~/sj/
+  try {
+    let pingRes = await fetch('/__sj_ping__', { cache: 'no-store' }).catch(() => null);
+    if (pingRes?.headers.get('x-sj-sw') !== '1') {
+      try {
+        (navigator.serviceWorker.controller || registration.active || activeWorker).postMessage({ $sj$claim: true });
+      } catch {}
+      await new Promise((r) => window.setTimeout(r, 250));
+      pingRes = await fetch('/__sj_ping__', { cache: 'no-store' }).catch(() => null);
+    }
+  } catch {}
 
   return navigator.serviceWorker.controller || registration.active || activeWorker;
 }
@@ -1440,40 +1478,38 @@ async function maybeBypassYoutubeBotBlock(
   return { ...res, body: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) };
 }
 
+async function probeWispCandidatesParallel(candidates: string[], timeoutMs = 1600): Promise<string[]> {
+  if (candidates.length === 0) return [];
+  const checks = await Promise.all(
+    candidates.map(async (c) => ({ url: c, ok: await probeWispEndpoint(c, timeoutMs) }))
+  );
+  return checks.filter((c) => c.ok).map((c) => c.url);
+}
+
 async function createWispTransport(): Promise<ProxyTransport> {
   const wispCandidates = getWispCandidates();
+  let workingWispUrls = await probeWispCandidatesParallel(wispCandidates, 1600);
   let candidateIndex = 0;
-  let activeWispUrl: string | null = null;
+  let activeWispUrl: string | null = workingWispUrls[0] || null;
 
-  for (let i = 0; i < wispCandidates.length; i++) {
-    const candidate = wispCandidates[i];
-    const ok = await probeWispEndpoint(candidate, 1500);
-    if (ok) {
-      activeWispUrl = candidate;
-      candidateIndex = i;
-      break;
-    }
-  }
-
-  if (!activeWispUrl && wispCandidates.length > 0) {
-    activeWispUrl = wispCandidates[0];
-    candidateIndex = 0;
-  }
-
-  globalActiveWispUrl = activeWispUrl || getLocalWispUrl();
+  globalActiveWispUrl = activeWispUrl;
 
   let libcurlInstance: any = null;
   let libcurlInitPromise: Promise<any> | null = null;
   let lastLibcurlAttemptAt = 0;
-  let wispDisabledUntil = activeWispUrl ? 0 : Date.now() + 60000;
+  let wispDisabledUntil = activeWispUrl ? 0 : Date.now() + 10000;
 
   const isWispAvailable = () => Date.now() >= wispDisabledUntil;
 
-  const rotateToNextWisp = async () => {
-    const candidates = getWispCandidates();
-    if (candidates.length === 0) return getLocalWispUrl();
-    candidateIndex = (candidateIndex + 1) % candidates.length;
-    activeWispUrl = candidates[candidateIndex];
+  const rotateToNextWisp = () => {
+    if (workingWispUrls.length === 0) {
+      activeWispUrl = null;
+      globalActiveWispUrl = null;
+      libcurlInstance = null;
+      return null;
+    }
+    candidateIndex = (candidateIndex + 1) % workingWispUrls.length;
+    activeWispUrl = workingWispUrls[candidateIndex];
     globalActiveWispUrl = activeWispUrl;
     libcurlInstance = null;
     wispDisabledUntil = 0;
@@ -1491,36 +1527,49 @@ async function createWispTransport(): Promise<ProxyTransport> {
       return libcurlInitPromise;
     }
     const now = Date.now();
-    if (now - lastLibcurlAttemptAt < 4000) {
+    if (now - lastLibcurlAttemptAt < 1500) {
       return null;
     }
     lastLibcurlAttemptAt = now;
 
     libcurlInitPromise = (async () => {
-      const candidates = getWispCandidates();
-      const maxAttempts = Math.max(1, candidates.length);
-
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        try {
-          const wispToUse = activeWispUrl || candidates[candidateIndex] || getLocalWispUrl();
-          globalActiveWispUrl = wispToUse;
-          const { default: LibcurlClient } = await import('@mercuryworkshop/libcurl-transport');
-          const libcurl = new LibcurlClient({
-            wisp: wispToUse,
-            connections: [16, 12, 8, 4],
-          });
-          await withPromiseTimeout(libcurl.init(), 6000, 'Libcurl init');
-          libcurlInstance = libcurl;
-          wispDisabledUntil = 0;
-          return libcurl;
-        } catch (err) {
-          console.warn(`[Scramjet] LibcurlClient init failed with Wisp ${activeWispUrl}, failing over...`, err);
-          await rotateToNextWisp();
+      try {
+        if (workingWispUrls.length === 0) {
+          workingWispUrls = await probeWispCandidatesParallel(getWispCandidates(), 1600);
+          candidateIndex = 0;
+          activeWispUrl = workingWispUrls[0] || null;
         }
-      }
+        if (workingWispUrls.length === 0) {
+          globalActiveWispUrl = null;
+          wispDisabledUntil = Date.now() + 12000;
+          return null;
+        }
 
-      wispDisabledUntil = Date.now() + 20000;
-      return null;
+        for (let attempt = 0; attempt < workingWispUrls.length; attempt++) {
+          const wispToUse = activeWispUrl || workingWispUrls[candidateIndex];
+          if (!wispToUse) break;
+          try {
+            globalActiveWispUrl = wispToUse;
+            const { default: LibcurlClient } = await import('@mercuryworkshop/libcurl-transport');
+            const libcurl = new LibcurlClient({
+              wisp: wispToUse,
+              connections: [16, 12, 8, 4],
+            });
+            await withPromiseTimeout(libcurl.init(), 5000, 'Libcurl init');
+            libcurlInstance = libcurl;
+            wispDisabledUntil = 0;
+            return libcurl;
+          } catch (err) {
+            console.warn(`[Scramjet] LibcurlClient init failed with Wisp ${wispToUse}:`, err);
+            rotateToNextWisp();
+          }
+        }
+
+        wispDisabledUntil = Date.now() + 12000;
+        return null;
+      } finally {
+        libcurlInitPromise = null;
+      }
     })();
     return libcurlInitPromise;
   };
@@ -1548,7 +1597,7 @@ async function createWispTransport(): Promise<ProxyTransport> {
         cleanHeaders,
         signal
       ),
-      35000,
+      20000,
       'Libcurl request'
     );
     const out = ensureNullBodyConsistency(res);
@@ -1631,7 +1680,7 @@ async function createWispTransport(): Promise<ProxyTransport> {
         }
       };
 
-      // 1. Libcurl over Wisp (primary proxy transport)
+      // 1. Libcurl over Wisp (primary proxy transport, with automatic failover across working Wisp servers)
       if (isWispAvailable()) {
         try {
           const res = await callLibcurl(remote, method, safeBody, cleanHeaders, signal);
@@ -1639,21 +1688,53 @@ async function createWispTransport(): Promise<ProxyTransport> {
           return isYoutube
             ? await maybeBypassYoutubeBotBlock(remote, safeBody, res)
             : res;
-        } catch (err) {
+        } catch (firstErr) {
           if (signal?.aborted) {
             throw new DOMException('Aborted', 'AbortError');
           }
-          const msg = String((err as any)?.message || err || '').toLowerCase();
-          if (msg.includes('wisp') || msg.includes('timed out') || msg.includes('websocket')) {
-            wispDisabledUntil = Date.now() + 25000;
+          // Try rotating once to an alternate working Wisp server if available
+          if (workingWispUrls.length > 1) {
+            rotateToNextWisp();
+            try {
+              const retryRes = await callLibcurl(remote, method, safeBody, cleanHeaders, signal);
+              captureResponseCookies(retryRes);
+              return isYoutube
+                ? await maybeBypassYoutubeBotBlock(remote, safeBody, retryRes)
+                : retryRes;
+            } catch (retryErr) {
+              if (signal?.aborted) {
+                throw new DOMException('Aborted', 'AbortError');
+              }
+              void retryErr;
+            }
           }
+          libcurlInstance = null;
+          wispDisabledUntil = Date.now() + 12000;
+          void firstErr;
         }
       }
 
-      // 2. Server HTTP fetch fallback (works on all published links and networks)
-      const res = await serverFallbackFetch(remote, method, safeBody, cleanHeaders, signal);
-      captureResponseCookies(res);
-      return res;
+      // 2. Server HTTP fetch fallback when backend /api/scramjet-fetch is available
+      if (resolveBackendOrigins().length > 0) {
+        const res = await serverFallbackFetch(remote, method, safeBody, cleanHeaders, signal);
+        captureResponseCookies(res);
+        return res;
+      }
+
+      // On static hosting (e.g. Vercel/Pages) without backend, retry fresh Wisp probe on failure
+      workingWispUrls = await probeWispCandidatesParallel(getWispCandidates(), 1600);
+      if (workingWispUrls.length > 0) {
+        candidateIndex = 0;
+        activeWispUrl = workingWispUrls[0];
+        wispDisabledUntil = 0;
+        const freshRes = await callLibcurl(remote, method, safeBody, cleanHeaders, signal);
+        captureResponseCookies(freshRes);
+        return isYoutube
+          ? await maybeBypassYoutubeBotBlock(remote, safeBody, freshRes)
+          : freshRes;
+      }
+
+      throw new Error('Unable to reach Wisp proxy server');
     },
     connect(url, protocols, requestHeaders, onopen, onmessage, onclose, onerror) {
       if (!isWispAvailable() || !libcurlInstance) {
@@ -1842,21 +1923,6 @@ export async function initScramjetProxy(): Promise<Controller> {
         NonNullable<typeof window.$scramjet>['defaultConfig']
       >['flags'];
       const baseGlobals = (window.$scramjet?.defaultConfig?.globals || {});
-      const randHex = Math.random().toString(36).substring(2, 10);
-      const randomizedGlobals = {
-        wrapfn: `__scr_${randHex}_w`,
-        wrappropertybase: `__scr_${randHex}_pb`,
-        wrappropertyfn: `__scr_${randHex}_pf`,
-        cleanrestfn: `__scr_${randHex}_cr`,
-        importfn: `__scr_${randHex}_i`,
-        rewritefn: `__scr_${randHex}_rw`,
-        metafn: `__scr_${randHex}_m`,
-        wrappostmessagefn: `__scr_${randHex}_wpm`,
-        pushsourcemapfn: `__scr_${randHex}_psm`,
-        trysetfn: `__scr_${randHex}_ts`,
-        templocid: `__scr_${randHex}_tl`,
-        tempunusedid: `__scr_${randHex}_tu`,
-      };
       const controller = new scramjetControllerApi.Controller({
         serviceworker: activeWorker,
         transport,
@@ -1867,10 +1933,6 @@ export async function initScramjetProxy(): Promise<Controller> {
             allowFailedIntercepts: true,
             allowInvalidJs: true,
             encapsulateWorkers: true,
-          },
-          globals: {
-            ...baseGlobals,
-            ...randomizedGlobals,
           },
         },
       });
@@ -1951,15 +2013,13 @@ export async function launchInScramjetFrame(
   frameCallbackMap.set(iframe, callbacks || {});
   const controller = await initScramjetProxy();
 
-  // Ensure saved cookies are deeply merged across local & remote stores without resetting before navigation
-  const [localCookies, remoteCookies] = await Promise.all([
-    Promise.resolve(readLocalSavedCookies()),
-    fetchRemoteSavedCookies(),
-  ]);
-  const mergedPreNav = deepMergeCookies(localCookies, remoteCookies);
-  if (Object.keys(mergedPreNav).length > 0 && controller.cookieJar) {
-    controller.cookieJar.load(JSON.stringify(mergedPreNav));
-  }
+  // Merge local saved cookies instantaneously without blocking launch on a network roundtrip
+  try {
+    const localCookies = readLocalSavedCookies();
+    if (Object.keys(localCookies).length > 0 && controller.cookieJar) {
+      controller.cookieJar.load(JSON.stringify(localCookies));
+    }
+  } catch {}
 
   let frame = frameMap.get(iframe);
   if (!frame || frame.controller !== controller) {
@@ -2081,6 +2141,39 @@ export async function launchInScramjetFrame(
                   configurable: true,
                 });
               } catch {}
+            }
+          } catch {}
+
+          // Suppress blocking modal alert() dialogs inside game frames (e.g. Undertale boot alerts)
+          // and auto-resume suspended Web Audio contexts on interaction
+          try {
+            const cb = frameCallbackMap.get(iframe);
+            if (!cb?.onNavigate) {
+              win.alert = (msg?: any) => {
+                console.info('[Scramjet Game Alert]:', msg);
+              };
+            }
+            const OrigAudio = win.AudioContext || win.webkitAudioContext;
+            if (OrigAudio && !OrigAudio.__frostResumable) {
+              const ctxList: any[] = [];
+              const WrappedAudio = function (this: any, ...args: any[]) {
+                const inst = new OrigAudio(...args);
+                ctxList.push(inst);
+                return inst;
+              } as any;
+              WrappedAudio.prototype = OrigAudio.prototype;
+              WrappedAudio.__frostResumable = true;
+              win.AudioContext = WrappedAudio;
+              if (win.webkitAudioContext) win.webkitAudioContext = WrappedAudio;
+              const resumeAudio = () => {
+                for (const ctx of ctxList) {
+                  if (ctx && ctx.state === 'suspended') {
+                    ctx.resume?.().catch(() => {});
+                  }
+                }
+              };
+              win.addEventListener?.('pointerdown', resumeAudio, { capture: true, passive: true });
+              win.addEventListener?.('keydown', resumeAudio, { capture: true, passive: true });
             }
           } catch {}
 

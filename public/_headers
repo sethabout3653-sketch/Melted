@@ -24,6 +24,26 @@
   Cross-Origin-Resource-Policy: cross-origin
   Access-Control-Allow-Origin: *
 
+/epoxy/*.wasm
+  Content-Type: application/wasm
+  Cross-Origin-Resource-Policy: cross-origin
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=604800
+
+/epoxy/*
+  Cross-Origin-Resource-Policy: cross-origin
+  Access-Control-Allow-Origin: *
+
+/libcurl/*.wasm
+  Content-Type: application/wasm
+  Cross-Origin-Resource-Policy: cross-origin
+  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=604800
+
+/libcurl/*
+  Cross-Origin-Resource-Policy: cross-origin
+  Access-Control-Allow-Origin: *
+
 /api/raw/*
   Content-Type: text/html; charset=utf-8
   Access-Control-Allow-Origin: *

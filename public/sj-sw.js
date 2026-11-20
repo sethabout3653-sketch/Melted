@@ -11,12 +11,12 @@ self.Response = class ScramjetPatchedResponse extends _NativeResponse {
   }
 };
 
-const SJ_RUNTIME_CACHE = 'scramjet-v2-runtime-v2';
+const SJ_RUNTIME_CACHE = 'scramjet-v2-runtime-v4';
 const SJ_PRECACHE_ASSETS = [
   '/scramjet/scramjet.js',
-  '/scramjet/scramjet.wasm',
   '/controller/controller.inject.js',
 ];
+const SJ_BACKGROUND_WARM_ASSETS = ['/scramjet/scramjet.wasm'];
 
 function isCacheableScramjetRuntimeUrl(pathname) {
   return (
@@ -49,6 +49,7 @@ async function isValidRuntimeResponse(pathname, res) {
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
+  // Warm light JS runtime fast during install; warm WASM in background so slow mobile networks never stall SW activation
   event.waitUntil(
     caches
       .open(SJ_RUNTIME_CACHE)
@@ -80,6 +81,20 @@ self.addEventListener('activate', (event) => {
           )
         )
         .catch(() => {}),
+      caches
+        .open(SJ_RUNTIME_CACHE)
+        .then((cache) =>
+          Promise.allSettled(
+            SJ_BACKGROUND_WARM_ASSETS.map(async (asset) => {
+              if (await cache.match(asset)) return;
+              const res = await fetch(asset, { cache: 'default', credentials: 'same-origin' });
+              if (await isValidRuntimeResponse(asset, res)) {
+                await cache.put(asset, res.clone());
+              }
+            })
+          )
+        )
+        .catch(() => {}),
     ])
   );
 });
@@ -88,16 +103,25 @@ importScripts('/controller/controller.sw.js');
 
 const initWaiters = new Set();
 self.addEventListener('message', (event) => {
-  if (event?.data && typeof event.data === 'object' && event.data.$controller$init) {
-    // Allow controller.sw.js's listener to run first on this tick, then wake waiters
-    setTimeout(() => {
-      for (const resolve of initWaiters) {
-        try {
-          resolve();
-        } catch {}
+  if (event?.data && typeof event.data === 'object') {
+    if (event.data.$sj$claim) {
+      const claimPromise = self.clients.claim().catch(() => {});
+      if (typeof event.waitUntil === 'function') {
+        event.waitUntil(claimPromise);
       }
-      initWaiters.clear();
-    }, 0);
+      return;
+    }
+    if (event.data.$controller$init) {
+      // Allow controller.sw.js's listener to run first on this tick, then wake waiters
+      setTimeout(() => {
+        for (const resolve of initWaiters) {
+          try {
+            resolve();
+          } catch {}
+        }
+        initWaiters.clear();
+      }, 0);
+    }
   }
 });
 
@@ -130,10 +154,15 @@ async function routeScramjetEvent(event) {
 async function waitForControllerAndRoute(event) {
   await notifyClientsToRevive();
 
-  const deadline = Date.now() + 2500;
+  const deadline = Date.now() + 5500;
+  let lastRevive = Date.now();
   while (Date.now() < deadline) {
     if (typeof $scramjetController !== 'undefined' && $scramjetController.shouldRoute(event)) {
       return routeScramjetEvent(event);
+    }
+    if (Date.now() - lastRevive >= 350) {
+      lastRevive = Date.now();
+      notifyClientsToRevive();
     }
     await new Promise((resolve) => {
       const done = () => {
@@ -142,7 +171,7 @@ async function waitForControllerAndRoute(event) {
         resolve();
       };
       initWaiters.add(done);
-      const timer = setTimeout(done, 80);
+      const timer = setTimeout(done, 50);
     });
   }
 
@@ -165,6 +194,31 @@ self.addEventListener('fetch', (event) => {
   try {
     reqUrl = new URL(event.request.url);
   } catch {
+    return;
+  }
+
+  if (reqUrl.origin === self.location.origin && reqUrl.pathname === '/__sj_ping__') {
+    let ctrlReady = '0';
+    const prefix = reqUrl.searchParams.get('prefix');
+    if (prefix && typeof $scramjetController !== 'undefined' && typeof $scramjetController.shouldRoute === 'function') {
+      try {
+        const probeReq = new Request(self.location.origin + prefix + 'https://example.com/');
+        if ($scramjetController.shouldRoute({ request: probeReq })) {
+          ctrlReady = '1';
+        }
+      } catch {}
+    }
+    event.respondWith(
+      new _NativeResponse('ok', {
+        status: 200,
+        headers: {
+          'content-type': 'text/plain; charset=utf-8',
+          'cache-control': 'no-store',
+          'x-sj-sw': '1',
+          'x-sj-ctrl': ctrlReady,
+        },
+      })
+    );
     return;
   }
 

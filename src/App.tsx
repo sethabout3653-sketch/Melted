@@ -127,19 +127,14 @@ export default function App() {
     };
   }, []);
 
-  // Idle prewarm for Scramjet controller so games and soundboard launch immediately
+  // Immediately prewarm Scramjet SW & controller so games and soundboard launch cleanly on first click
   useEffect(() => {
     if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
-    const prewarm = () => {
+    const timer = window.setTimeout(() => {
       import('./services/scramjetProxyService')
         .then((m) => m.initScramjetProxy())
         .catch(() => {});
-    };
-    if (typeof window.requestIdleCallback === 'function') {
-      const handle = window.requestIdleCallback(prewarm, { timeout: 3000 });
-      return () => window.cancelIdleCallback(handle);
-    }
-    const timer = window.setTimeout(prewarm, 1200);
+    }, 50);
     return () => window.clearTimeout(timer);
   }, []);
 

@@ -167,11 +167,12 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       setStealthUrl(scramjetTarget);
       setIsLoadingProxy(true);
 
+      const targetIframe = iframeRef.current;
       // Wait a microtask to ensure the keyed iframe ref is mounted cleanly
       const launchTimer = setTimeout(async () => {
-        if (!active || !iframeRef.current) return;
+        if (!active || !targetIframe) return;
         try {
-          const { proxiedSrc } = await launchInScramjetFrame(iframeRef.current, scramjetTarget);
+          const { proxiedSrc } = await launchInScramjetFrame(targetIframe, scramjetTarget);
           if (!active) return;
           if (proxiedSrc) {
             setStealthUrl(proxiedSrc);
@@ -197,14 +198,20 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         }
       }, 0);
 
-      const targetIframe = iframeRef.current;
+      // Ensure loading overlay never gets stuck indefinitely
+      const safetyTimer = window.setTimeout(() => {
+        if (active) setIsLoadingProxy(false);
+      }, 12000);
+
       return () => {
         active = false;
         clearTimeout(launchTimer);
+        window.clearTimeout(safetyTimer);
         cleanupScramjetFrame(targetIframe);
       };
     }
 
+    setIsLoadingProxy(false);
     if (fallbackUrl) {
       setDirectUrl(fallbackUrl);
       setStealthUrl(fallbackUrl);
@@ -408,35 +415,47 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               className="w-full h-full border-none outline-none"
               allow="fullscreen; autoplay; gamepad; focus-without-user-activation; clipboard-read; clipboard-write; microphone; camera; pointer-lock; xr-spatial-tracking; screen-wake-lock; display-capture; encrypted-media; picture-in-picture; midi; accelerometer; gyroscope; speaker-selection"
               allowFullScreen
-              onLoad={() => {
-                // Silently restore saved game data into iframe scope on load
-                if (iframeRef.current?.contentWindow) {
-                  const win = iframeRef.current.contentWindow;
-                  restoreAutoSaveToIframe(game.id, win);
+                onLoad={() => {
+                  setIsLoadingProxy(false);
+                  // Silently restore saved game data into iframe scope on load
+                  if (iframeRef.current?.contentWindow) {
+                    const win = iframeRef.current.contentWindow;
+                    restoreAutoSaveToIframe(game.id, win);
 
-                  // Inject Scaffolding compatibility layer for direct non-Scramjet frames when same-origin
-                  if (!useScramjet) {
-                    try {
-                      const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
-                      if (doc) {
-                        import('../utils/scaffolding-loader').then(({ injectScaffolding }) => {
-                          injectScaffolding(doc);
-                        });
+                    // Inject Scaffolding compatibility layer for direct non-Scramjet frames when same-origin
+                    if (!useScramjet) {
+                      try {
+                        const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
+                        if (doc) {
+                          import('../utils/scaffolding-loader').then(({ injectScaffolding }) => {
+                            injectScaffolding(doc);
+                          });
+                        }
+                      } catch {
+                        // Cross-origin frames restrict document access by browser security design; ignore silently.
                       }
-                    } catch {
-                      // Cross-origin frames restrict document access by browser security design; ignore silently.
                     }
-                  }
 
-                  try {
-                    iframeRef.current.focus();
-                  } catch {}
-                }
-              }}
-              onError={() => {
-                setHasError(true);
-              }}
-            />
+                    try {
+                      iframeRef.current.focus();
+                    } catch {}
+                  }
+                }}
+                onError={() => {
+                  setIsLoadingProxy(false);
+                  setHasError(true);
+                }}
+              />
+            )}
+
+          {/* Loading overlay while Scramjet initializes & connects */}
+          {isLoadingProxy && !hasError && (
+            <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-6 text-center z-10 pointer-events-none">
+              <div className="w-10 h-10 rounded-full border-2 border-slate-700 border-t-[var(--brand-blue)] animate-spin mb-3" />
+              <p className="text-xs font-semibold text-slate-300 tracking-wide">
+                Loading {game.name}...
+              </p>
+            </div>
           )}
 
           {/* Fallback */}
