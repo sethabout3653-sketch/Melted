@@ -115,6 +115,10 @@ const AD_AND_TRACKING_HOST_SUBSTRINGS = [
   'infolinks.com',
 ];
 
+function isGoogleHost(host: string): boolean {
+  return /(^|\.)google\.(com|[a-z]{2})(\.[a-z]{2})?$/.test(host);
+}
+
 function isAdOrTrackingHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
   for (const sub of AD_AND_TRACKING_HOST_SUBSTRINGS) {
@@ -201,7 +205,7 @@ export async function onRequest(context: CFContext): Promise<Response> {
       } catch {}
     }
 
-    if (host === 'google.com' || host.endsWith('.google.com')) {
+    if (isGoogleHost(host)) {
       targetUrl.searchParams.set('hl', 'en');
     }
 
@@ -252,7 +256,7 @@ export async function onRequest(context: CFContext): Promise<Response> {
       const incomingLang = (request.headers.get('accept-language') || '').trim();
       forwardMap.set('accept-language', incomingLang || 'en-US,en;q=0.9');
     }
-    if (host === 'google.com' || host.endsWith('.google.com')) {
+    if (isGoogleHost(host)) {
       forwardMap.set('accept-language', 'en-US,en;q=0.9');
     }
 
