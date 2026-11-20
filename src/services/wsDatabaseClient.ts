@@ -334,38 +334,7 @@ export function useWebSocketDatabase(currentUser: {
           () => {}
         );
 
-        // 4. Firestore Cross-Link WebRTC Signaling
-        const myId = currentUserRef.current.id;
-        const sigQuery = query(collection(db, 'voice_signals'), where('targetUserId', '==', myId));
-        const unsubscribeSignals = onSnapshot(
-          sigQuery,
-          (snapshot) => {
-            snapshot.docChanges().forEach((change) => {
-              if (change.type === 'added') {
-                const s = change.doc.data();
-                const docId = change.doc.id;
-                if (s && s.fromUserId && s.fromUserId !== currentUserRef.current.id) {
-                  const sigKey = `${s.fromUserId}:${s.sigId || docId}`;
-                  if (!processedRtcSignalsRef.current.has(sigKey)) {
-                    processedRtcSignalsRef.current.add(sigKey);
-                    if (processedRtcSignalsRef.current.size > 200) {
-                      const [first] = processedRtcSignalsRef.current;
-                      processedRtcSignalsRef.current.delete(first);
-                    }
-                    if (onRtcSignalRef.current) {
-                      onRtcSignalRef.current(s.fromUserId, s.signal);
-                    }
-                  }
-                }
-                deleteDoc(change.doc.ref).catch(() => {});
-              }
-            });
-          },
-          () => {}
-        );
-
         (window as any).__unsubPresence = unsubscribePresence;
-        (window as any).__unsubSignals = unsubscribeSignals;
       } catch (err) {
         console.warn('[Firebase] Initialization failed, WebSocket relay continues:', err);
         setIsFirebaseActive(false);
@@ -383,13 +352,47 @@ export function useWebSocketDatabase(currentUser: {
           (window as any).__unsubPresence();
           (window as any).__unsubPresence = null;
         }
-        if ((window as any).__unsubSignals) {
-          (window as any).__unsubSignals();
-          (window as any).__unsubSignals = null;
-        }
       } catch {}
     };
   }, []);
+
+  const myUserId = currentUser.id;
+  useEffect(() => {
+    if (!myUserId) return;
+    let unsubscribeSignals: (() => void) | null = null;
+    try {
+      const sigQuery = query(collection(db, 'voice_signals'), where('targetUserId', '==', myUserId));
+      unsubscribeSignals = onSnapshot(
+        sigQuery,
+        (snapshot) => {
+          snapshot.docChanges().forEach((change) => {
+            if (change.type !== 'added') return;
+            const s = change.doc.data();
+            if (s && s.fromUserId && s.fromUserId !== myUserId) {
+              const sigKey = `${s.fromUserId}:${s.sigId || change.doc.id}`;
+              if (!processedRtcSignalsRef.current.has(sigKey)) {
+                processedRtcSignalsRef.current.add(sigKey);
+                if (processedRtcSignalsRef.current.size > 200) {
+                  const [first] = processedRtcSignalsRef.current;
+                  processedRtcSignalsRef.current.delete(first);
+                }
+                if (onRtcSignalRef.current) {
+                  onRtcSignalRef.current(s.fromUserId, s.signal);
+                }
+              }
+            }
+            deleteDoc(change.doc.ref).catch(() => {});
+          });
+        },
+        (err) => console.warn('[Firebase] voice_signals listener error:', err)
+      );
+    } catch (err) {
+      console.warn('[Firebase] voice_signals subscription failed:', err);
+    }
+    return () => {
+      unsubscribeSignals?.();
+    };
+  }, [myUserId]);
 
   const onRtcSignalRef = useRef<((fromUserId: string, signal: any) => void) | null>(null);
   const onUserJoinedMediaRef = useRef<((userId: string, channel: string) => void) | null>(null);
@@ -915,17 +918,19 @@ export function useWebSocketDatabase(currentUser: {
       body: JSON.stringify(payload),
     }).catch(() => {});
 
-    // Also dispatch to Firestore voice_signals for cross-link reliability
+    // Firestore rejects class instances (RTCIceCandidate) and undefined fields; JSON round-trip yields plain data
     try {
       const sigDocId = `sig-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       setDoc(doc(db, 'voice_signals', sigDocId), {
         fromUserId,
         targetUserId,
-        signal,
+        signal: JSON.parse(JSON.stringify(signal)),
         sigId,
         timestamp: Date.now(),
-      }).catch(() => {});
-    } catch {}
+      }).catch((err) => console.warn('[Firebase] voice_signals write failed:', err));
+    } catch (err) {
+      console.warn('[Firebase] voice_signals serialization failed:', err);
+    }
   }, []);
 
   const isConnected = isWsConnected || isHttpSyncActive || isFirebaseActive;
