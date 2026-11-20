@@ -1,5 +1,4 @@
-// Cloudflare Pages Function: /ws-db Edge WebSocket Database & Signaling Server
-// Includes 100-second idle timeout prevention heartbeat for Cloudflare Edge
+// Durable Object: single shared /ws-db presence & signaling hub for all Cloudflare clients
 
 interface EdgeUser {
   id: string;
@@ -41,8 +40,7 @@ function broadcast(payload: any) {
   });
 }
 
-export async function onRequest(context: { request: Request }): Promise<Response> {
-  const { request } = context;
+async function handleSocket(request: Request): Promise<Response> {
 
   const upgradeHeader = request.headers.get('Upgrade');
   if (!upgradeHeader || upgradeHeader.toLowerCase() !== 'websocket') {
@@ -233,6 +231,7 @@ export async function onRequest(context: { request: Request }): Promise<Response
                     fromUserId: msg.fromUserId,
                     targetUserId: msg.targetUserId,
                     signal: msg.signal,
+                    sigId: msg.sigId,
                   })
                 );
               } catch {}
@@ -305,4 +304,10 @@ export async function onRequest(context: { request: Request }): Promise<Response
     status: 101,
     webSocket: client,
   } as any);
+}
+
+export class SignalingHub {
+  fetch(request: Request): Promise<Response> {
+    return handleSocket(request);
+  }
 }

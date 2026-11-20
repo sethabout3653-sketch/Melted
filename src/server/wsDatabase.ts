@@ -41,6 +41,7 @@ export interface PendingSignal {
   targetUserId: string;
   type: 'RTC_SIGNAL';
   signal?: any;
+  sigId?: string;
   timestamp: number;
 }
 
@@ -351,6 +352,7 @@ export function initWebSocketDatabase(_server?: Server) {
                 fromUserId: msg.fromUserId || boundUserId,
                 targetUserId: msg.targetUserId,
                 signal: msg.signal,
+                sigId: msg.sigId,
               };
 
               const delivered = sendToUserSockets(msg.targetUserId, signalPayload);
@@ -362,6 +364,7 @@ export function initWebSocketDatabase(_server?: Server) {
                   targetUserId: msg.targetUserId,
                   type: 'RTC_SIGNAL',
                   signal: msg.signal,
+                  sigId: msg.sigId,
                   timestamp: Date.now(),
                 });
               }

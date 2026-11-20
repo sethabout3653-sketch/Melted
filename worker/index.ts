@@ -5,10 +5,16 @@ import { onRequest as raw } from '../functions/api/raw/[filename]';
 import { onRequest as proxyStream } from '../functions/api/proxy-stream';
 import { onRequest as proxyImage } from '../functions/api/proxy-image';
 import { onRequest as epgNowNext } from '../functions/api/epg/now-next';
-import { onRequest as wsDb } from '../functions/ws-db';
+import { SignalingHub } from './signalingHub';
+
+export { SignalingHub };
 
 interface Env {
   ASSETS: { fetch(request: Request): Promise<Response> };
+  SIGNALING_HUB: {
+    idFromName(name: string): unknown;
+    get(id: unknown): { fetch(request: Request): Promise<Response> };
+  };
 }
 
 type Handler = (context: { request: Request; env: Env; params: Record<string, string> }) => Promise<Response>;
@@ -21,12 +27,16 @@ const routes: Array<{ pattern: RegExp; handler: Handler }> = [
   { pattern: /^\/api\/proxy-stream\/?$/, handler: proxyStream },
   { pattern: /^\/api\/proxy-image\/?$/, handler: proxyImage },
   { pattern: /^\/api\/epg\/now-next\/?$/, handler: epgNowNext },
-  { pattern: /^\/ws-db\/?$/, handler: wsDb },
 ];
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === '/ws-db' || url.pathname === '/ws-db/') {
+      const hub = env.SIGNALING_HUB.get(env.SIGNALING_HUB.idFromName('global'));
+      return hub.fetch(request);
+    }
 
     for (const { pattern, handler } of routes) {
       const match = url.pathname.match(pattern);
