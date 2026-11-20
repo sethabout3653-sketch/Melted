@@ -1042,20 +1042,14 @@ app.post('/api/favorites', (req, res) => {
 // Scramjet Persistent Website Cookies Store (merge-only, never resets cookies)
 const scramjetCookiesStorePath = path.join(uploadsDir, 'scramjet_cookies_store.json');
 const getScramjetCookiesStore = (): Record<string, { cookies: Record<string, any>; updatedAt: number }> => {
-  try {
-    if (fs.existsSync(scramjetCookiesStorePath)) {
-      return JSON.parse(fs.readFileSync(scramjetCookiesStorePath, 'utf8'));
-    }
-  } catch {}
-  return {};
+  if (!fs.existsSync(scramjetCookiesStorePath)) return {};
+  return JSON.parse(fs.readFileSync(scramjetCookiesStorePath, 'utf8'));
 };
 
 const saveScramjetCookiesStore = (data: Record<string, any>) => {
-  try {
-    fs.writeFileSync(scramjetCookiesStorePath, JSON.stringify(data), 'utf8');
-  } catch (e) {
-    console.warn('Failed to write Scramjet cookies store:', e);
-  }
+  const tmpPath = `${scramjetCookiesStorePath}.tmp`;
+  fs.writeFileSync(tmpPath, JSON.stringify(data), 'utf8');
+  fs.renameSync(tmpPath, scramjetCookiesStorePath);
 };
 
 app.get('/api/scramjet-cookies', (req, res) => {

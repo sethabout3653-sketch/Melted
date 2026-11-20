@@ -579,6 +579,11 @@ export const FEATURED_APP_CONFIG = {
     url: 'https://www.myinstants.com/en/index/us/',
     coverUrl: 'https://cdn.aptoide.com/imgs/d/e/c/dec9bc1d63944581077bfa41b5188aa3_icon.png',
   },
+  google: {
+    name: 'Google',
+    url: 'https://www.google.com',
+    coverUrl: '/assets/google-logo.svg',
+  },
 };
 
 const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
@@ -611,6 +616,21 @@ const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
     fallbackCover: generateSoundboardSvgCover(),
     localCover: FEATURED_APP_CONFIG.soundboard.coverUrl,
     resolvedUrl: FEATURED_APP_CONFIG.soundboard.url,
+  },
+  {
+    id: 900003,
+    name: FEATURED_APP_CONFIG.google.name,
+    cover: FEATURED_APP_CONFIG.google.coverUrl,
+    url: FEATURED_APP_CONFIG.google.url,
+    author: 'Google',
+    special: ['google', 'search', 'scramjet'],
+    featured: true,
+    source: 'scramjet',
+    category: 'Featured',
+    resolvedCover: FEATURED_APP_CONFIG.google.coverUrl,
+    fallbackCover: FEATURED_APP_CONFIG.google.coverUrl,
+    localCover: FEATURED_APP_CONFIG.google.coverUrl,
+    resolvedUrl: FEATURED_APP_CONFIG.google.url,
   },
 ];
 

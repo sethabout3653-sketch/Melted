@@ -1,8 +1,16 @@
 // Cloudflare Pages Function: Persistent Additive Cookie Store (/api/scramjet-cookies)
 
+interface CookieKV {
+  get(key: string, type: 'json'): Promise<unknown>;
+  put(key: string, value: string): Promise<void>;
+}
+
 interface CFContext {
   request: Request;
+  env?: { SCRAMJET_COOKIES?: CookieKV };
 }
+
+type CookieEntry = { cookies: Record<string, any>; updatedAt: number };
 
 const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -10,7 +18,23 @@ const CORS_HEADERS: Record<string, string> = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
-const memoryStore = new Map<string, { cookies: Record<string, any>; updatedAt: number }>();
+const memoryStore = new Map<string, CookieEntry>();
+
+async function readEntry(env: CFContext['env'], userId: string): Promise<CookieEntry> {
+  const kv = env?.SCRAMJET_COOKIES;
+  if (!kv) return memoryStore.get(userId) || { cookies: {}, updatedAt: 0 };
+  const stored = (await kv.get(`sj:${userId}`, 'json')) as CookieEntry | null;
+  return stored || { cookies: {}, updatedAt: 0 };
+}
+
+async function writeEntry(env: CFContext['env'], userId: string, entry: CookieEntry): Promise<void> {
+  const kv = env?.SCRAMJET_COOKIES;
+  if (!kv) {
+    memoryStore.set(userId, entry);
+    return;
+  }
+  await kv.put(`sj:${userId}`, JSON.stringify(entry));
+}
 
 function mergeCookiesAdditive(
   existing: Record<string, any>,
@@ -36,7 +60,7 @@ function mergeCookiesAdditive(
 }
 
 export async function onRequest(context: CFContext): Promise<Response> {
-  const { request } = context;
+  const { request, env } = context;
 
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -47,7 +71,7 @@ export async function onRequest(context: CFContext): Promise<Response> {
 
     if (request.method === 'GET') {
       const userId = url.searchParams.get('userId') || 'default';
-      const entry = memoryStore.get(userId) || { cookies: {}, updatedAt: 0 };
+      const entry = await readEntry(env, userId);
       return new Response(
         JSON.stringify({ success: true, cookies: entry.cookies, updatedAt: entry.updatedAt }),
         {
@@ -70,10 +94,10 @@ export async function onRequest(context: CFContext): Promise<Response> {
           headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
         });
       }
-      const existing = memoryStore.get(userId)?.cookies || {};
+      const existing = (await readEntry(env, userId)).cookies;
       const merged = mergeCookiesAdditive(existing, cookies);
       const updatedAt = Date.now();
-      memoryStore.set(userId, { cookies: merged, updatedAt });
+      await writeEntry(env, userId, { cookies: merged, updatedAt });
 
       return new Response(
         JSON.stringify({ success: true, cookies: merged, updatedAt }),

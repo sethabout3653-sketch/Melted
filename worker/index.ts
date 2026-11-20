@@ -15,13 +15,17 @@ interface Env {
     idFromName(name: string): unknown;
     get(id: unknown): { fetch(request: Request): Promise<Response> };
   };
+  SCRAMJET_COOKIES?: {
+    get(key: string, type: 'json'): Promise<unknown>;
+    put(key: string, value: string): Promise<void>;
+  };
 }
 
 type Handler = (context: { request: Request; env: Env; params: Record<string, string> }) => Promise<Response>;
 
 const routes: Array<{ pattern: RegExp; handler: Handler }> = [
   { pattern: /^\/api\/health\/?$/, handler: health },
-  { pattern: /^\/api\/scramjet-cookies\/?$/, handler: scramjetCookies },
+  { pattern: /^\/api\/scramjet-cookies\/?$/, handler: ({ request, env }) => scramjetCookies({ request, env }) },
   { pattern: /^\/api\/scramjet-fetch\/?$/, handler: scramjetFetch },
   { pattern: /^\/api\/raw\/([^/]+)\/?$/, handler: ({ params }) => raw({ params: { filename: params.filename } }) },
   { pattern: /^\/api\/proxy-stream\/?$/, handler: proxyStream },
