@@ -592,7 +592,7 @@ const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
     name: FEATURED_APP_CONFIG.tiktok.name,
     cover: FEATURED_APP_CONFIG.tiktok.coverUrl,
     url: FEATURED_APP_CONFIG.tiktok.url,
-    author: 'TikTok',
+    author: 'Soundboard Guys',
     special: ['tiktok', 'video', 'videos', 'short videos', 'scramjet'],
     featured: true,
     source: 'scramjet',
