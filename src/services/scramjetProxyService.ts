@@ -1699,8 +1699,10 @@ async function createWispTransport(): Promise<ProxyTransport> {
       // 1. Try EpoxyTransport across available Wisp servers (primary high-concurrency engine)
       const wispsToTry = workingWispUrls.length > 0 ? workingWispUrls : getWispCandidates();
       let lastTransportError: any = null;
+      const preferLibcurl = isKnownHttp2Incompatible(remote.hostname) || isLibcurlPreferredHost(remote.hostname);
+      const epoxyAttempts = preferLibcurl ? 0 : Math.min(wispsToTry.length, 3);
 
-      for (let i = 0; i < Math.min(wispsToTry.length, 3); i++) {
+      for (let i = 0; i < epoxyAttempts; i++) {
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         const wispUrl = activeWispUrl || wispsToTry[(candidateIndex + i) % wispsToTry.length];
         try {
