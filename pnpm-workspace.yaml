@@ -1,8 +1,0 @@
-packages:
-  - '.'
-
-allowBuilds:
-  '@firebase/util': false
-  bufferutil: false
-  esbuild: true
-  protobufjs: false
