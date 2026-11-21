@@ -397,23 +397,26 @@ export function useWebSocketDatabase(currentUser: {
   const fetchHttpSync = useCallback(async () => {
     try {
       const u = currentUserRef.current;
-      const res = await fetch('/api/ws-db/snapshot');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          setIsHttpSyncActive(true);
-          if (Array.isArray(data.users)) {
-            serverUsersRef.current = data.users;
-            publishUsers();
+      const wsOpen = wsRef.current?.readyState === WebSocket.OPEN;
+      if (!wsOpen) {
+        const res = await fetch('/api/ws-db/snapshot');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            setIsHttpSyncActive(true);
+            if (Array.isArray(data.users)) {
+              serverUsersRef.current = data.users;
+              publishUsers();
+            }
           }
         }
-      }
 
-      fetch('/api/ws-db/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: activeUserStateRef.current }),
-      }).catch(() => {});
+        fetch('/api/ws-db/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user: activeUserStateRef.current }),
+        }).catch(() => {});
+      }
 
       const sigRes = await fetch(`/api/ws-db/signals/${encodeURIComponent(u.id)}`);
       if (sigRes.ok) {
@@ -591,6 +594,7 @@ export function useWebSocketDatabase(currentUser: {
         } catch {}
       };
       ws.onclose = () => {
+        if (wsRef.current !== ws) return;
         setIsWsConnected(false);
         stopHeartbeat();
         wsRef.current = null;
