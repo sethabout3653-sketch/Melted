@@ -3,6 +3,8 @@ import { Play, Heart, Gamepad2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { GameItem } from '../types/game';
 import { generateGameSvgCover } from '../services/gameService';
+import { resolveGameRating } from '../services/gameRatingService';
+import { EsrbBadge } from './EsrbBadge';
 import { entryVariants, cardHover } from '../utils/animations';
 
 interface GameCardProps {
@@ -11,7 +13,6 @@ interface GameCardProps {
   onPlay: (game: GameItem) => void;
   onToggleFavorite: (id: number) => void;
   isFavorite: boolean;
-  onAboutBlank: (game: GameItem) => void;
 }
 
 export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large' }> = React.memo(({
@@ -20,7 +21,6 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
   onPlay,
   onToggleFavorite,
   isFavorite,
-  onAboutBlank,
   variant = 'standard'
 }) => {
   const [imageError, setImageError] = useState(false);
@@ -28,6 +28,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
   const primaryCover = game.resolvedCover || game.cover || '';
   const [currentCover, setCurrentCover] = useState<string>(primaryCover);
   const [fallbackLevel, setFallbackLevel] = useState<number>(0);
+  const rating = game.rating || resolveGameRating(game.name, game.special, game.category);
 
   const isFirstRunRef = useRef(true);
   useEffect(() => {
@@ -116,9 +117,28 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
           <Heart className={`w-4 h-4 sm:w-3.5 sm:h-3.5 ${isFavorite ? 'fill-current' : ''}`} />
         </button>
 
+        {/* Official ESRB Rating Badge (Cover Only) */}
+        <EsrbBadge
+          rating={rating}
+          className="absolute bottom-1.5 left-1.5 z-10 w-[44px] sm:w-[52px]"
+        />
+
+        {/* Special 13+ / 17+ / 18+ Content Tag on Cover */}
+        {rating.coverTag && (
+          <div
+            className={`absolute bottom-1.5 right-1.5 z-10 pointer-events-none select-none px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-extrabold tracking-tight shadow-[0_4px_12px_rgba(0,0,0,0.7)] border ${
+              rating.code === 'AO' || rating.code === 'M'
+                ? 'bg-red-950/95 text-red-100 border-red-400/50'
+                : 'bg-black/85 text-amber-100 border-amber-400/45'
+            }`}
+          >
+            {rating.coverTag}
+          </div>
+        )}
+
         {/* Hover Play Overlay */}
         <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center pointer-events-none">
-          <div className="bg-[var(--brand-blue)] text-[#090d16] px-4 py-1.5 rounded-full shadow-lg font-semibold text-sm flex items-center gap-1.5 transform scale-90 group-hover:scale-100 transition-transform duration-200">
+          <div className="bg-[var(--brand-blue)] text-white px-4 py-1.5 rounded-full shadow-lg font-semibold text-sm flex items-center gap-1.5 transform scale-90 group-hover:scale-100 transition-transform duration-200">
             <Play className="w-3.5 h-3.5 fill-current" />
             <span>Play</span>
           </div>
@@ -136,18 +156,10 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
         </h3>
         <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
           {game.author || game.category || 'Instant Play'}
+          {rating.specialTags?.[1] && (rating.code === 'AO' || rating.code === 'M' || rating.code === 'T')
+            ? ` · ${rating.specialTags[1]}`
+            : ''}
         </p>
-      </div>
-
-      {/* Action Footer */}
-      <div className="mt-auto px-2 pb-1.5 sm:px-2.5 sm:pb-2 pt-0.5 flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 transition-opacity">
-        <button
-          type="button"
-          onClick={() => onAboutBlank(game)}
-          className="flex-1 min-h-[34px] sm:min-h-[30px] py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-[#1e1e2d] dark:hover:bg-[#28283a] text-slate-700 dark:text-slate-300 hover:text-[var(--brand-blue)] border border-slate-200 dark:border-[#2a2a3e] hover:border-[var(--brand-blue)]/40 text-xs font-medium transition-all cursor-pointer"
-        >
-          Open in stealth
-        </button>
       </div>
 
     </motion.div>

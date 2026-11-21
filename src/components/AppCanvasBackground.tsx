@@ -15,15 +15,34 @@ export const AppCanvasBackground: React.FC<AppCanvasBackgroundProps> = React.mem
   const { bgMode, bgSolidColor, bgGradientPreset, bgImageUrl, bgBlur, bgOverlayOpacity } = themeConfig;
 
   if (bgMode === 'solid') {
+    const isDefaultNavy =
+      bgSolidColor === '#0a1128' || bgSolidColor === '#090d16';
     return (
       <div 
         className="fixed inset-0 pointer-events-none z-0 transition-colors duration-300"
-        style={{ backgroundColor: isDark ? '#000000' : '#ffffff' }}
+        style={{
+          backgroundColor: isDark
+            ? isDefaultNavy
+              ? 'var(--brand-navy-bg)'
+              : bgSolidColor || '#000000'
+            : '#ffffff',
+        }}
       />
     );
   }
 
   if (bgMode === 'gradient') {
+    if (bgGradientPreset === 'glacier') {
+      return (
+        <div
+          className="fixed inset-0 pointer-events-none z-0 transition-all duration-300"
+          style={{
+            background:
+              'radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--brand-blue) 28%, #07080d), var(--brand-navy-bg) 75%), radial-gradient(at 10% 90%, color-mix(in srgb, var(--brand-blue) 24%, transparent), transparent 50%)',
+          }}
+        />
+      );
+    }
     const preset = BG_GRADIENT_PRESETS.find((g) => g.id === bgGradientPreset) || BG_GRADIENT_PRESETS[0];
     return (
       <div 

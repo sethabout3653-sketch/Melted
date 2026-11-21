@@ -488,6 +488,10 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {BG_GRADIENT_PRESETS.map((g) => {
                         const isSelected = config.bgGradientPreset === g.id;
+                        const bgStyle =
+                          g.id === 'glacier'
+                            ? 'radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--brand-blue) 28%, #07080d), var(--brand-navy-bg) 75%), radial-gradient(at 10% 90%, color-mix(in srgb, var(--brand-blue) 24%, transparent), transparent 50%)'
+                            : g.css;
                         return (
                           <button
                             key={g.id}
@@ -495,7 +499,7 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                             className={`p-4 rounded-2xl border text-left h-20 flex items-end justify-between transition-all cursor-pointer overflow-hidden relative ${
                               isSelected ? 'border-cyan-400 ring-2 ring-cyan-400/30' : 'border-slate-200 dark:border-slate-800'
                             }`}
-                            style={{ background: g.css }}
+                            style={{ background: bgStyle }}
                           >
                             <span className="text-xs font-black text-white relative z-10 shadow-sm">
                               {g.name}

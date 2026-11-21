@@ -25,6 +25,20 @@ export type GameCategory =
   | 'Emulators & Ports'
   | 'Favorites';
 
+export type EsrbRatingCode = 'E' | 'E10+' | 'T' | 'M' | 'AO';
+
+export interface GameRatingInfo {
+  code: EsrbRatingCode;
+  label: string;
+  age: string;
+  descriptors?: string;
+  requiresGate: boolean;
+  gateMinAge?: '13+' | '17+' | '18+';
+  specialTags: string[];
+  coverTag?: string;
+  warningMessage?: string;
+}
+
 export interface GameItem extends RawGame {
   category: GameCategory;
   resolvedCover: string;
@@ -32,6 +46,7 @@ export interface GameItem extends RawGame {
   localCover: string;
   resolvedUrl: string;
   proxyUrl?: string;
+  rating?: GameRatingInfo;
 }
 
 export interface TabCloakPreset {

@@ -15,6 +15,11 @@
     --brand-blue: #2563eb;
     --brand-blue-hover: #1d4ed8;
     --brand-blue-glow: rgba(37, 99, 235, 0.4);
+    --brand-accent-tint: color-mix(in srgb, var(--brand-blue) 76%, #ffffff);
+    --brand-navy-bg: color-mix(in srgb, var(--brand-blue) 14%, #050609);
+    --brand-navy-surface: color-mix(in srgb, var(--brand-blue) 10%, #090a0f);
+    --brand-navy-elevated: color-mix(in srgb, var(--brand-blue) 15%, #12131c);
+    --brand-navy-border: color-mix(in srgb, var(--brand-blue) 22%, #1d1e29);
     --text-slate: #0f172a;
     --text-muted: #64748b;
     --border-slate: #f1f5f9;
@@ -40,7 +45,7 @@
     font-family: var(--app-font-family);
     background-color: var(--bg-white);
     @variant dark {
-      background-color: #070d1a; /* Rich Dark Navy Blue */
+      background-color: var(--brand-navy-bg);
       color: #f1f5f9;
     }
     color: var(--text-slate);
@@ -185,57 +190,91 @@ body.font-modern-clean .font-heading {
   font-weight: var(--app-font-heading-weight);
 }
 
-/* Global utility class overrides to transform ALL blue UI elements into the user's custom accent color */
+/* Global utility class overrides to transform ALL blue, cyan, sky, indigo, and navy UI elements into the user's custom accent color */
 .bg-blue-600,
 .bg-blue-500,
-.bg-blue-700 {
+.bg-blue-700,
+.bg-blue-800,
+.bg-blue-900,
+.bg-blue-950 {
   background-color: var(--brand-blue) !important;
 }
 
 .bg-blue-600\/10,
 .bg-blue-500\/10,
-.bg-blue-500\/20 {
-  background-color: color-mix(in srgb, var(--brand-blue) 15%, transparent) !important;
+.bg-blue-500\/20,
+.bg-cyan-500\/15,
+.bg-cyan-400\/20,
+.dark .dark\:bg-cyan-400\/20,
+.dark .dark\:bg-cyan-400\/10,
+.dark .dark\:bg-cyan-500\/10,
+.dark .dark\:bg-blue-900\/30,
+.dark .dark\:bg-blue-900\/40,
+.dark .dark\:bg-blue-950\/30 {
+  background-color: color-mix(in srgb, var(--brand-blue) 16%, transparent) !important;
 }
 
 .bg-blue-50,
 .bg-blue-50\/50,
+.bg-blue-50\/60,
 .bg-blue-950\/30 {
   background-color: color-mix(in srgb, var(--brand-blue) 10%, transparent) !important;
 }
 
 .hover\:bg-blue-600:hover,
 .hover\:bg-blue-500:hover,
-.hover\:bg-blue-700:hover {
+.hover\:bg-blue-700:hover,
+.dark .dark\:hover\:bg-blue-900\/30:hover {
   background-color: var(--brand-blue-hover) !important;
 }
 
 .text-blue-600,
 .text-blue-500,
-.text-blue-400 {
+.text-blue-400,
+.text-blue-700,
+.text-blue-800,
+.text-blue-900,
+.text-sky-600,
+.text-sky-500,
+.text-sky-400,
+.text-indigo-600,
+.text-indigo-500,
+.text-indigo-400 {
   color: var(--brand-blue) !important;
 }
 
 .hover\:text-blue-600:hover,
-.hover\:text-blue-400:hover {
+.hover\:text-blue-400:hover,
+.hover\:text-blue-700:hover {
   color: var(--brand-blue-hover) !important;
 }
 
 .border-blue-600,
 .border-blue-500,
-.border-blue-400 {
+.border-blue-400,
+.border-blue-700,
+.border-blue-800,
+.border-blue-900,
+.dark .dark\:border-blue-800 {
   border-color: var(--brand-blue) !important;
 }
 
 .border-blue-500\/30,
-.border-blue-600\/30 {
-  border-color: color-mix(in srgb, var(--brand-blue) 30%, transparent) !important;
+.border-blue-600\/30,
+.border-cyan-400\/30,
+.border-cyan-400\/40,
+.dark .dark\:border-cyan-400\/30 {
+  border-color: color-mix(in srgb, var(--brand-blue) 35%, transparent) !important;
 }
 
 .ring-blue-500,
 .ring-blue-600,
+.ring-cyan-400,
+.ring-cyan-400\/30,
 .focus\:ring-blue-500:focus,
-.focus\:ring-blue-600:focus {
+.focus\:ring-blue-600:focus,
+.focus\:ring-cyan-400:focus,
+.focus-visible\:ring-cyan-300:focus-visible {
   --tw-ring-color: var(--brand-blue) !important;
 }
 
@@ -265,8 +304,9 @@ body.font-modern-clean .font-heading {
   color: var(--brand-blue) !important;
 }
 .dark .text-cyan-100, .dark .text-cyan-200, .dark .text-cyan-300, .dark .text-cyan-400, .dark .text-cyan-500, .dark .text-cyan-600,
-.dark .text-blue-100, .dark .text-blue-200, .dark .text-blue-300, .dark .text-blue-400, .dark .text-blue-500, .dark .text-blue-600 {
-  color: #67e8f9 !important;
+.dark .text-blue-100, .dark .text-blue-200, .dark .text-blue-300, .dark .text-blue-400, .dark .text-blue-500, .dark .text-blue-600,
+.dark .dark\:text-sky-300, .dark .dark\:text-sky-400, .dark .dark\:text-indigo-400 {
+  color: var(--brand-accent-tint) !important;
 }
 .border-cyan-100, .border-cyan-200, .border-cyan-300, .border-cyan-400, .border-cyan-500, .border-cyan-600,
 .border-blue-100, .border-blue-200, .border-blue-300, .border-blue-400, .border-blue-500, .border-blue-600 {
@@ -288,14 +328,80 @@ body.font-modern-clean .font-heading {
 .shadow-cyan-500\/30, .shadow-blue-500\/30 {
   box-shadow: 0 10px 15px -3px var(--brand-blue-glow) !important;
 }
-.hover\:border-cyan-400:hover {
+.hover\:border-cyan-400:hover,
+.hover\:border-cyan-500:hover,
+.focus\:border-cyan-400:focus,
+.focus-within\:border-cyan-400:focus-within,
+.dark .dark\:focus-within\:border-cyan-400:focus-within,
+.dark .dark\:hover\:border-cyan-400:hover {
   border-color: var(--brand-blue) !important;
 }
-.hover\:text-cyan-500:hover {
-  color: var(--brand-blue) !important;
+.hover\:text-cyan-500:hover,
+.dark .dark\:hover\:text-cyan-300:hover {
+  color: var(--brand-accent-tint) !important;
 }
 .hover\:bg-cyan-400:hover {
   background-color: var(--brand-blue-hover) !important;
+}
+
+/* Dark-mode navy surface classes dynamically follow the active accent color */
+.dark .dark\:bg-\[\#070d1a\],
+.dark .dark\:bg-slate-950 {
+  background-color: var(--brand-navy-bg) !important;
+}
+.dark .dark\:bg-\[\#070d1a\]\/95,
+.dark .dark\:bg-slate-950\/95 {
+  background-color: color-mix(in srgb, var(--brand-navy-bg) 95%, transparent) !important;
+}
+.dark .dark\:bg-slate-950\/80 {
+  background-color: color-mix(in srgb, var(--brand-navy-bg) 82%, transparent) !important;
+}
+.dark .dark\:bg-\[\#090d16\],
+.dark .dark\:bg-\[\#0d0d12\],
+.dark .dark\:bg-\[\#10101a\],
+.dark .dark\:bg-\[\#0f0f18\],
+.dark .dark\:bg-\[\#14141d\],
+.dark .dark\:bg-\[\#14141f\],
+.dark .dark\:bg-\[\#141519\],
+.dark .dark\:bg-slate-900 {
+  background-color: var(--brand-navy-surface) !important;
+}
+.dark .dark\:bg-\[\#090d16\]\/95,
+.dark .dark\:bg-\[\#0a1128\]\/95,
+.dark .dark\:bg-slate-900\/95 {
+  background-color: color-mix(in srgb, var(--brand-navy-surface) 95%, transparent) !important;
+}
+.dark .dark\:bg-slate-900\/50,
+.dark .dark\:bg-slate-900\/40 {
+  background-color: color-mix(in srgb, var(--brand-navy-surface) 55%, transparent) !important;
+}
+.dark .dark\:bg-\[\#181824\],
+.dark .dark\:bg-\[\#181822\],
+.dark .dark\:bg-\[\#1e1e2d\],
+.dark .dark\:bg-\[\#1a1a26\],
+.dark .dark\:bg-slate-800 {
+  background-color: var(--brand-navy-elevated) !important;
+}
+.dark .dark\:bg-slate-800\/50 {
+  background-color: color-mix(in srgb, var(--brand-navy-elevated) 55%, transparent) !important;
+}
+.dark .dark\:hover\:bg-slate-800:hover,
+.dark .dark\:hover\:bg-slate-700:hover,
+.dark .dark\:hover\:bg-\[\#1e1e2d\]:hover,
+.dark .dark\:hover\:bg-\[\#202030\]:hover,
+.dark .dark\:hover\:bg-\[\#20202e\]:hover,
+.dark .dark\:hover\:bg-\[\#28283a\]:hover {
+  background-color: color-mix(in srgb, var(--brand-blue) 22%, #171822) !important;
+}
+.dark .dark\:border-slate-900,
+.dark .dark\:border-slate-800,
+.dark .dark\:border-slate-700,
+.dark .dark\:border-\[\#1f1f2e\],
+.dark .dark\:border-\[\#2a2a3c\],
+.dark .dark\:border-\[\#2a2a3e\],
+.dark .dark\:border-\[\#262638\],
+.dark .dark\:border-\[\#1d1d2b\] {
+  border-color: var(--brand-navy-border) !important;
 }
 
 html.monochrome {

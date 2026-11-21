@@ -2,6 +2,7 @@ import rawGamesData from '../data/gnMathGames.json';
 import rawUgsData from '../data/ugsGames.json';
 import rawCkvData from '../data/ckvGames.json';
 import { RawGame, GameItem, GameCategory } from '../types/game';
+import { resolveGameRating } from './gameRatingService';
 
 import fileMapData from '../data/gnMathFileMap.json';
 
@@ -379,6 +380,7 @@ export function transformUgsEntry(
     resolvedUrl,
     featured: false,
     source: (isCkv ? 'CKV' : 'ugs'),
+    rating: resolveGameRating(trimmedName, [], category),
   };
 }
 
@@ -686,6 +688,7 @@ export function getAllGames(): GameItem[] {
       fallbackCover,
       localCover: resolvedCover,
       resolvedUrl,
+      rating: resolveGameRating(game.name, game.special, category),
     };
   });
 
@@ -724,7 +727,12 @@ export function getAllGames(): GameItem[] {
     }
   }
 
-  return [...BUILTIN_SCRAMJET_GAMES, ...gnGames, ...ugsGames, ...ckvGames];
+  const builtInsWithRatings = BUILTIN_SCRAMJET_GAMES.map((g) => ({
+    ...g,
+    rating: g.rating || resolveGameRating(g.name, g.special, g.category),
+  }));
+
+  return [...builtInsWithRatings, ...gnGames, ...ugsGames, ...ckvGames];
 }
 
 export async function fetchGames(): Promise<GameItem[]> {

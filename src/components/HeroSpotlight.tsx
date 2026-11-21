@@ -7,13 +7,11 @@ import { entryVariants, hoverTransition, cardHover } from '../utils/animations';
 interface HeroSpotlightProps {
   featuredGames: GameItem[];
   onPlay: (game: GameItem) => void;
-  onAboutBlank: (game: GameItem) => void;
 }
 
 export const HeroSpotlight: React.FC<HeroSpotlightProps> = React.memo(({
   featuredGames,
   onPlay,
-  onAboutBlank,
 }) => {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
@@ -66,17 +64,6 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = React.memo(({
               className="px-10 py-5 bg-cyan-500 hover:bg-blue-700 text-white text-base font-black rounded-2xl shadow-2xl shadow-cyan-500/30 transition-colors duration-150 cursor-pointer font-heading tracking-tight border border-cyan-400 will-change-transform"
             >
               Start Playing Now
-            </motion.button>
-
-            <motion.button
-              type="button"
-              whileHover={{ scale: 1.04, y: -2 }}
-              whileTap={{ scale: 0.96 }}
-              transition={hoverTransition}
-              onClick={() => onAboutBlank(activeGame)}
-              className="px-8 py-5 bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800 text-base font-bold rounded-2xl border border-slate-200 dark:border-slate-800 transition-colors duration-150 cursor-pointer shadow-sm will-change-transform"
-            >
-              Quiet Window
             </motion.button>
           </div>
         </div>

@@ -13,9 +13,9 @@ import { FrostHubLogo } from './components/FrostHubLogo';
 import { InAppNotificationToast } from './components/InAppNotificationToast';
 import { VoiceAudioEngine } from './components/VoiceAudioEngine';
 import { PersistentVoiceDock } from './components/PersistentVoiceDock';
-import { getAllGames, resolveGameUrl, getUGSGames, getCKVGames, mergeUgsGames, getPlayableGameUrl } from './services/gameService';
+import { getAllGames, resolveGameUrl, getUGSGames, getCKVGames, mergeUgsGames } from './services/gameService';
 import { tabTransition, containerVariants, entryVariants } from './utils/animations';
-import { useCloak, launchAboutBlank } from './hooks/useCloak';
+import { useCloak } from './hooks/useCloak';
 import { useGlobalChat } from './hooks/useGlobalChat';
 import { useDeviceAdaptation } from './hooks/useDeviceAdaptation';
 import { useThemeConfig } from './hooks/useThemeConfig';
@@ -270,11 +270,6 @@ export default function App() {
     if (game) handlePlayGame(game);
   }, [allGames, handlePlayGame]);
 
-  const handleAboutBlank = useCallback((game: GameItem) => {
-    const url = getPlayableGameUrl(game);
-    launchAboutBlank(url, game.name);
-  }, []);
-
   const handleSelectCategory = useCallback((cat: GameCategory) => {
     setSelectedCategory(cat);
     if (cat === 'Favorites') {
@@ -315,6 +310,9 @@ export default function App() {
           game.name,
           game.category,
           game.author,
+          game.rating?.code,
+          game.rating?.label,
+          ...(game.rating?.specialTags || []),
           ...(game.special || []),
         ].filter(Boolean).join(' ').toLowerCase();
         return queryTokens.every((token) => searchableText.includes(token));
@@ -414,14 +412,19 @@ export default function App() {
       <FrostHubLoadingScreen />
       <AppCanvasBackground themeConfig={themeConfig} isDark={theme === 'dark'} />
       <div 
-        className={`relative z-10 text-slate-900 dark:text-slate-100 flex font-sans selection:bg-cyan-500 selection:text-white dark:border-slate-900 transition-colors overflow-hidden ${
-          themeConfig.bgMode !== 'solid' || themeConfig.bgSolidColor !== '#090d16'
+        className={`relative z-10 text-slate-900 dark:text-slate-100 flex font-sans selection:bg-[var(--brand-blue)] selection:text-white dark:border-slate-900 transition-colors overflow-hidden ${
+          themeConfig.bgMode !== 'solid' || (themeConfig.bgSolidColor !== '#090d16' && themeConfig.bgSolidColor !== '#0a1128')
             ? 'bg-white/90 dark:bg-transparent'
             : 'bg-[#f8fafc] dark:bg-slate-950'
         } h-[100dvh] max-h-[100dvh] pb-[env(safe-area-inset-bottom)]`}
         style={
           theme === 'dark' && themeConfig.bgMode === 'solid'
-            ? { backgroundColor: themeConfig.bgSolidColor }
+            ? {
+                backgroundColor:
+                  themeConfig.bgSolidColor === '#0a1128' || themeConfig.bgSolidColor === '#090d16'
+                    ? 'var(--brand-navy-bg)'
+                    : themeConfig.bgSolidColor,
+              }
             : undefined
         }
       >
@@ -510,14 +513,14 @@ export default function App() {
             {searchQuery && (
               <div className="mb-4 sm:mb-8 flex items-center justify-between bg-white dark:bg-slate-900 px-4 sm:px-6 py-2.5 sm:py-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
                 <div className="flex items-center gap-2.5 sm:gap-3 text-xs sm:text-sm text-slate-600 dark:text-slate-300 font-medium">
-                  <Search className="w-4 h-4 sm:w-5 sm:h-5 text-cyan-500 dark:text-cyan-300 shrink-0" />
+                  <Search className="w-4 h-4 sm:w-5 sm:h-5 text-[var(--brand-blue)] dark:text-[var(--brand-accent-tint)] shrink-0" />
                   <span>
                     <strong className="text-slate-900 dark:text-white">{filteredGames.length}</strong> {filteredGames.length === 1 ? 'result' : 'results'} for &ldquo;{searchQuery}&rdquo;
                   </span>
                 </div>
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="text-sm text-cyan-500 dark:text-cyan-300 hover:text-blue-700 font-semibold cursor-pointer px-3 py-1 rounded-full hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors shrink-0"
+                  className="text-sm text-[var(--brand-blue)] dark:text-[var(--brand-accent-tint)] hover:opacity-80 font-semibold cursor-pointer px-3 py-1 rounded-full hover:bg-[var(--brand-blue)]/10 transition-colors shrink-0"
                 >
                   Clear
                 </button>
@@ -527,7 +530,7 @@ export default function App() {
             {/* Empty State */}
             {filteredGames.length === 0 ? (
               <div className="py-24 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-12 max-w-lg mx-auto space-y-6 shadow-xl shadow-slate-200/20 dark:shadow-none">
-                <div className="w-16 h-16 rounded-2xl bg-blue-50 dark:bg-blue-900/40 text-cyan-500 dark:text-cyan-300 flex items-center justify-center mx-auto">
+                <div className="w-16 h-16 rounded-2xl bg-[var(--brand-blue)]/15 text-[var(--brand-blue)] dark:text-[var(--brand-accent-tint)] flex items-center justify-center mx-auto">
                   <Gamepad2 className="w-8 h-8" />
                 </div>
                 <h3 className="text-xl font-semibold text-slate-900 dark:text-white">
@@ -562,7 +565,6 @@ export default function App() {
                     onPlay={handlePlayGame}
                     onToggleFavorite={handleToggleFavorite}
                     isFavorite={favorites.includes(game.id)}
-                    onAboutBlank={handleAboutBlank}
                   />
                 ))}
               </div>

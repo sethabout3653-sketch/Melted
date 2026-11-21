@@ -99,6 +99,45 @@ export function useThemeConfig() {
     root.style.setProperty('--brand-blue', config.accentColor);
     root.style.setProperty('--brand-blue-hover', config.accentHover);
     root.style.setProperty('--brand-blue-glow', config.accentGlow);
+    root.style.setProperty(
+      '--brand-accent-tint',
+      `color-mix(in srgb, ${config.accentColor} 76%, #ffffff)`
+    );
+
+    // Dynamic accent-tinted dark surfaces (replaces static navy blue UI elements)
+    root.style.setProperty(
+      '--brand-navy-bg',
+      `color-mix(in srgb, ${config.accentColor} 14%, #050609)`
+    );
+    root.style.setProperty(
+      '--brand-navy-surface',
+      `color-mix(in srgb, ${config.accentColor} 10%, #090a0f)`
+    );
+    root.style.setProperty(
+      '--brand-navy-elevated',
+      `color-mix(in srgb, ${config.accentColor} 15%, #12131c)`
+    );
+    root.style.setProperty(
+      '--brand-navy-border',
+      `color-mix(in srgb, ${config.accentColor} 22%, #1d1e29)`
+    );
+
+    // Override Tailwind v4 blue/cyan/sky/indigo palette variables to follow current accent
+    const accentMix = (pct: number, base: string) =>
+      `color-mix(in srgb, ${config.accentColor} ${pct}%, ${base})`;
+    for (const family of ['blue', 'cyan', 'sky', 'indigo']) {
+      root.style.setProperty(`--color-${family}-50`, accentMix(10, '#ffffff'));
+      root.style.setProperty(`--color-${family}-100`, accentMix(18, '#ffffff'));
+      root.style.setProperty(`--color-${family}-200`, accentMix(35, '#ffffff'));
+      root.style.setProperty(`--color-${family}-300`, accentMix(65, '#ffffff'));
+      root.style.setProperty(`--color-${family}-400`, accentMix(85, '#ffffff'));
+      root.style.setProperty(`--color-${family}-500`, config.accentColor);
+      root.style.setProperty(`--color-${family}-600`, config.accentColor);
+      root.style.setProperty(`--color-${family}-700`, config.accentHover);
+      root.style.setProperty(`--color-${family}-800`, accentMix(45, '#090a0f'));
+      root.style.setProperty(`--color-${family}-900`, accentMix(30, '#07080d'));
+      root.style.setProperty(`--color-${family}-950`, accentMix(18, '#050609'));
+    }
 
     // Border Radius mapping
     const radPreset = RADIUS_PRESETS.find((r) => r.id === config.radius);

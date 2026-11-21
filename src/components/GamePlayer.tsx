@@ -5,8 +5,8 @@ import {
   Maximize2, 
   Minimize2, 
   X, 
-  EyeOff, 
-  AlertCircle
+  AlertCircle,
+  ShieldAlert
 } from 'lucide-react';
 import { GameItem } from '../types/game';
 import {
@@ -14,12 +14,12 @@ import {
   getScramjetTargetUrl,
   shouldUseScramjetByDefault,
 } from '../services/gameService';
+import { resolveGameRating } from '../services/gameRatingService';
 import {
   launchInScramjetFrame,
   flushScramjetCookies,
   cleanupScramjetFrame,
 } from '../services/scramjetProxyService';
-import { launchAboutBlank } from '../hooks/useCloak';
 import { storeGameSave, restoreAutoSaveToIframe, flushPendingSaves } from '../services/saveService';
 
 interface GamePlayerProps {
@@ -35,9 +35,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   onToggleFavorite,
   isFavorite,
 }) => {
+  const ratingInfo = game.rating || resolveGameRating(game.name, game.special, game.category);
+  const [ageConfirmed, setAgeConfirmed] = useState<boolean>(() => !ratingInfo.requiresGate);
   const [useScramjet, setUseScramjet] = useState<boolean>(() => shouldUseScramjetByDefault(game));
   const [directUrl, setDirectUrl] = useState<string>('');
-  const [stealthUrl, setStealthUrl] = useState<string>('');
   const [reloadNonce, setReloadNonce] = useState<number>(0);
   const [hasError, setHasError] = useState(false);
   const [errorDetail, setErrorDetail] = useState<string>('');
@@ -48,10 +49,12 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const prevGameIdRef = useRef<number | string | null>(null);
 
-  // Sync default Scramjet mode whenever switching to a different game
+  // Sync default Scramjet mode and age gate whenever switching to a different game
   useEffect(() => {
     if (prevGameIdRef.current !== game.id) {
       prevGameIdRef.current = game.id;
+      const nextRating = game.rating || resolveGameRating(game.name, game.special, game.category);
+      setAgeConfirmed(!nextRating.requiresGate);
       setUseScramjet(shouldUseScramjetByDefault(game));
       setReloadNonce(0);
     }
@@ -162,18 +165,25 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  // Launch via Scramjet v2 or Direct URL
+  // Launch via Scramjet v2 or Direct URL (strictly blocked until ageConfirmed is true)
   useEffect(() => {
     let active = true;
     setHasError(false);
     setErrorDetail('');
+
+    if (!ageConfirmed) {
+      setIsLoadingProxy(false);
+      setDirectUrl('');
+      return () => {
+        active = false;
+      };
+    }
 
     const fallbackUrl = getPlayableGameUrl(game);
     const scramjetTarget = getScramjetTargetUrl(game);
 
     if (useScramjet && scramjetTarget) {
       setDirectUrl('');
-      setStealthUrl(scramjetTarget);
       setIsLoadingProxy(true);
 
       const targetIframe = iframeRef.current;
@@ -181,11 +191,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       const launchTimer = setTimeout(async () => {
         if (!active || !targetIframe) return;
         try {
-          const { proxiedSrc } = await launchInScramjetFrame(targetIframe, scramjetTarget);
+          await launchInScramjetFrame(targetIframe, scramjetTarget);
           if (!active) return;
-          if (proxiedSrc) {
-            setStealthUrl(proxiedSrc);
-          }
           // Note: Keep isLoadingProxy=true until iframe onLoad fires so user never sees a bare black screen
         } catch (err: any) {
           console.warn('[GamePlayer] Scramjet v2 unavailable:', err);
@@ -199,7 +206,6 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           setUseScramjet(false);
           if (fallbackUrl) {
             setDirectUrl(fallbackUrl);
-            setStealthUrl(fallbackUrl);
           } else {
             setErrorDetail(String(err?.message || '').trim());
             setHasError(true);
@@ -225,16 +231,14 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     setIsLoadingProxy(false);
     if (fallbackUrl) {
       setDirectUrl(fallbackUrl);
-      setStealthUrl(fallbackUrl);
     } else {
       setDirectUrl('');
-      setStealthUrl('');
       setHasError(true);
     }
     return () => {
       active = false;
     };
-  }, [game.id, game.resolvedUrl, game.url, game.name, useScramjet, reloadNonce]);
+  }, [game.id, game.resolvedUrl, game.url, game.name, useScramjet, reloadNonce, ageConfirmed]);
 
   if (!game) return null;
 
@@ -255,8 +259,6 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     setErrorDetail('');
     setReloadNonce((n) => n + 1);
   };
-
-  const activeLaunchUrl = stealthUrl || directUrl || getPlayableGameUrl(game);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#05070c] p-0 sm:p-4">
@@ -318,19 +320,6 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               >
                 <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
               </button>
-
-              {/* Stealth about:blank button */}
-              {activeLaunchUrl && (
-                <button
-                  type="button"
-                  onClick={() => launchAboutBlank(activeLaunchUrl, game.name)}
-                  className="hidden sm:flex items-center gap-1.5 px-3 min-h-[40px] bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-[var(--brand-blue)] dark:hover:text-[var(--brand-blue)] hover:border-blue-200 dark:hover:border-blue-700 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-[transform,colors] duration-100 hover:scale-105 active:scale-95 cursor-pointer"
-                  title="Open stealth tab (about:blank cloak)"
-                >
-                  <EyeOff className="w-3.5 h-3.5" />
-                  <span>Stealth Window</span>
-                </button>
-              )}
 
               {/* Reload button */}
               <button
@@ -405,8 +394,71 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             </div>
           )}
 
-          {/* Iframe */}
-          {(useScramjet || directUrl) && (
+          {/* Interactive Age / Content Warning Gate (blocks iframe/port load until confirmed) */}
+          {!ageConfirmed && (
+            <div className="absolute inset-0 z-20 flex items-center justify-center p-4 sm:p-8 bg-black/95 overflow-y-auto">
+              <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-2xl text-center space-y-4">
+                <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/35 text-amber-500 flex items-center justify-center mx-auto">
+                  <ShieldAlert className="w-6 h-6" />
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="text-[11px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
+                    {ratingInfo.gateMinAge === '18+'
+                      ? '18+ Adults Only Content Warning'
+                      : ratingInfo.gateMinAge === '17+'
+                      ? '17+ Mature Content Warning'
+                      : '13+ Teen Content Advisory'}
+                  </div>
+                  <h4 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white font-heading">
+                    {game.name}
+                  </h4>
+                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                    {ratingInfo.warningMessage ||
+                      `This title is rated ${ratingInfo.code} (${ratingInfo.label}) and may contain ${ratingInfo.descriptors || 'mature, violent, or frightening themes'}.`}
+                  </p>
+                </div>
+
+                {/* Special 13+ / 17+ / 18+ Content Tags */}
+                {ratingInfo.specialTags && ratingInfo.specialTags.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
+                    {ratingInfo.specialTags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={onClose}
+                    className="sm:flex-1 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+                  >
+                    Go Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAgeConfirmed(true)}
+                    className="sm:flex-[2] px-4 py-2.5 rounded-xl bg-[var(--brand-blue)] hover:bg-[var(--brand-blue-hover)] text-white text-xs sm:text-sm font-extrabold shadow-lg shadow-[var(--brand-blue-glow)] transition-all cursor-pointer"
+                  >
+                    {ratingInfo.gateMinAge === '18+'
+                      ? 'I understand and am 18+'
+                      : ratingInfo.gateMinAge === '17+'
+                      ? 'I understand and am 17+'
+                      : 'I understand and am 13+'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Iframe (strictly rendered only after ageConfirmed) */}
+          {ageConfirmed && (useScramjet || directUrl) && (
             <iframe
               key={`${game.id}-${useScramjet ? 'sj' : 'direct'}-${reloadNonce}`}
               ref={iframeRef}
@@ -464,7 +516,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             )}
 
           {/* Loading overlay while Scramjet initializes & connects */}
-          {isLoadingProxy && !hasError && (
+          {ageConfirmed && isLoadingProxy && !hasError && (
             <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-6 text-center z-10 pointer-events-none">
               <div className="w-10 h-10 rounded-full border-2 border-slate-700 border-t-[var(--brand-blue)] animate-spin mb-3" />
               <p className="text-xs font-semibold text-slate-300 tracking-wide">
@@ -484,24 +536,16 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   This game didn&rsquo;t load
                 </h4>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm leading-relaxed">
-                  {errorDetail || 'The game’s server may be blocking embeds. Try again, or open it in a stealth window.'}
+                  {errorDetail || 'The game’s server may be blocking embeds. Please try again.'}
                 </p>
               </div>
               <div className="flex items-center gap-3 pt-2">
                 <button
                   onClick={reloadGame}
-                  className="press px-4 py-2 bg-slate-50 hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-white text-xs font-semibold rounded-xl border border-slate-200 dark:border-slate-700 cursor-pointer"
+                  className="press px-4 py-2 bg-[var(--brand-blue)] hover:bg-[var(--brand-blue-hover)] text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-lg shadow-[var(--brand-blue-glow)]"
                 >
                   Try again
                 </button>
-                {activeLaunchUrl && (
-                  <button
-                    onClick={() => launchAboutBlank(activeLaunchUrl, game.name)}
-                    className="px-4 py-2 bg-[var(--brand-blue)] hover:bg-[var(--brand-blue-hover)] text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-lg shadow-[var(--brand-blue-glow)]"
-                  >
-                    Open Stealth Window
-                  </button>
-                )}
               </div>
             </div>
           )}
