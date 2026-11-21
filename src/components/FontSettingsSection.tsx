@@ -95,10 +95,10 @@ export const FontSettingsSection: React.FC<FontSettingsSectionProps> = ({ classN
             </div>
           )}
           <div>
-            <div className="text-xs font-bold">Default</div>
-            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Inter & Outfit</div>
+            <div className="text-xs font-bold">Google Sans (Default)</div>
+            <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">Google Sans Official</div>
           </div>
-          <div className="mt-2 text-[10px] font-mono text-slate-400 dark:text-slate-500">System Balanced</div>
+          <div className="mt-2 text-[10px] font-mono text-slate-400 dark:text-slate-500">Google Fonts</div>
         </button>
 
         {/* Preset 2: Modern & Clean (Outfit Bold/Black + Inter or DM Sans) */}
@@ -179,7 +179,7 @@ export const FontSettingsSection: React.FC<FontSettingsSectionProps> = ({ classN
               </span>
             </div>
             <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800">
-              {(['plus-jakarta', 'inter', 'dm-sans'] as ModernCleanBodyFont[]).map((f) => (
+              {(['google-sans', 'plus-jakarta', 'inter', 'dm-sans'] as ModernCleanBodyFont[]).map((f) => (
                 <button
                   key={f}
                   type="button"
@@ -190,7 +190,7 @@ export const FontSettingsSection: React.FC<FontSettingsSectionProps> = ({ classN
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
-                  {f === 'plus-jakarta' ? 'Plus Jakarta' : f === 'dm-sans' ? 'DM Sans' : 'Inter'}
+                  {f === 'google-sans' ? 'Google Sans' : f === 'plus-jakarta' ? 'Plus Jakarta' : f === 'dm-sans' ? 'DM Sans' : 'Inter'}
                 </button>
               ))}
             </div>
@@ -293,8 +293,8 @@ export const FontSettingsSection: React.FC<FontSettingsSectionProps> = ({ classN
             {fontConfig.preset === 'custom'
               ? (fontConfig.customFontName || 'Custom Font')
               : fontConfig.preset === 'modern-clean'
-              ? `Modern Clean (${fontConfig.modernCleanWeight === '900' ? 'Black' : 'Bold'})`
-              : 'Default (Inter)'}
+              ? `Modern Clean (${fontConfig.modernCleanBody === 'google-sans' ? 'Google Sans' : fontConfig.modernCleanBody === 'plus-jakarta' ? 'Plus Jakarta' : fontConfig.modernCleanBody === 'dm-sans' ? 'DM Sans' : 'Inter'})`
+              : 'Google Sans (Default)'}
           </span>
         </div>
 

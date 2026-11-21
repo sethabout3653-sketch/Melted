@@ -49,10 +49,20 @@ const USER_TTL_MS = 300000;
 export class CfHubCore {
   private users = new Map<string, EdgeUser>();
   private messages: EdgeMessage[] = [];
+  private deletedIds = new Set<string>();
   private sockets = new Set<any>();
   private userToSockets = new Map<string, Set<any>>();
   private pendingSignals = new Map<string, EdgePendingSignal[]>();
   private disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  private markDeleted(id: string): void {
+    if (!id) return;
+    this.deletedIds.add(id);
+    if (this.deletedIds.size > 1000) {
+      const oldest = this.deletedIds.values().next().value;
+      if (oldest) this.deletedIds.delete(oldest);
+    }
+  }
 
   public readonly channels = [
     { id: 'text-general', name: 'general', type: 'text' },
@@ -211,8 +221,9 @@ export class CfHubCore {
           type: 'DB_INIT',
           tables: {
             users: this.getUsers(),
-            messages: this.messages,
+            messages: this.messages.filter((m) => !this.deletedIds.has(m.id)),
             channels: this.channels,
+            deletedIds: Array.from(this.deletedIds).slice(-200),
           },
         })
       );
@@ -300,8 +311,10 @@ export class CfHubCore {
           case 'SQL_INSERT': {
             if (msg.table === 'messages' && msg.row) {
               const row = msg.row;
+              const msgId = row.id || 'msg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8);
+              if (this.deletedIds.has(msgId)) break;
               const newMsg: EdgeMessage = {
-                id: row.id || 'msg-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+                id: msgId,
                 channel_id: row.channel_id || 'text-general',
                 sender_id: row.sender_id || boundUserId || 'anon',
                 sender_name: row.sender_name || 'Player',
@@ -381,6 +394,7 @@ export class CfHubCore {
 
           case 'SQL_DELETE': {
             if (msg.table === 'messages' && msg.id) {
+              this.markDeleted(msg.id);
               const idx = this.messages.findIndex((m) => m.id === msg.id);
               if (idx >= 0) this.messages.splice(idx, 1);
               this.broadcast({ type: 'SQL_DELETE', table: 'messages', id: msg.id });
@@ -390,6 +404,9 @@ export class CfHubCore {
 
           case 'SQL_DELETE_CHANNEL': {
             if (msg.channel_id) {
+              this.messages.forEach((m) => {
+                if (m.channel_id === msg.channel_id) this.markDeleted(m.id);
+              });
               this.messages = this.messages.filter((m) => m.channel_id !== msg.channel_id);
               this.broadcast({
                 type: 'SQL_DELETE_CHANNEL',
@@ -402,6 +419,7 @@ export class CfHubCore {
 
           case 'SQL_DELETE_ALL': {
             this.messages = [];
+            this.deletedIds.clear();
             this.broadcast({ type: 'DB_CLEAR_MESSAGES' });
             break;
           }
@@ -580,6 +598,7 @@ export class CfHubCore {
         const body = (await request.json().catch(() => ({}))) as any;
         const row = body?.row;
         if (!row || !row.id) return json({ error: 'Missing message row' }, 400);
+        if (this.deletedIds.has(row.id)) return json({ success: true, deleted: true });
         const newMsg: EdgeMessage = {
           id: row.id,
           channel_id: row.channel_id || 'text-general',
@@ -612,6 +631,7 @@ export class CfHubCore {
       if (request.method === 'DELETE' && pathname.startsWith('/api/ws-db/message/')) {
         const messageId = decodeURIComponent(pathname.slice('/api/ws-db/message/'.length));
         if (messageId) {
+          this.markDeleted(messageId);
           const idx = this.messages.findIndex((m) => m.id === messageId);
           if (idx >= 0) this.messages.splice(idx, 1);
           this.broadcast({ type: 'SQL_DELETE', table: 'messages', id: messageId });
@@ -622,6 +642,9 @@ export class CfHubCore {
       if (request.method === 'DELETE' && pathname.startsWith('/api/ws-db/channel-messages/')) {
         const channelId = decodeURIComponent(pathname.slice('/api/ws-db/channel-messages/'.length));
         if (channelId) {
+          this.messages.forEach((m) => {
+            if (m.channel_id === channelId) this.markDeleted(m.id);
+          });
           this.messages = this.messages.filter((m) => m.channel_id !== channelId);
           this.broadcast({ type: 'SQL_DELETE_CHANNEL', table: 'messages', channel_id: channelId });
         }
@@ -630,6 +653,7 @@ export class CfHubCore {
 
       if (request.method === 'DELETE' && pathname === '/api/ws-db/messages/all') {
         this.messages = [];
+        this.deletedIds.clear();
         this.broadcast({ type: 'DB_CLEAR_MESSAGES' });
         return json({ success: true });
       }

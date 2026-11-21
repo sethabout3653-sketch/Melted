@@ -14,7 +14,7 @@ import { InAppNotificationToast } from './components/InAppNotificationToast';
 import { VoiceAudioEngine } from './components/VoiceAudioEngine';
 import { PersistentVoiceDock } from './components/PersistentVoiceDock';
 import { getAllGames, resolveGameUrl, getUGSGames, getCKVGames, mergeUgsGames } from './services/gameService';
-import { tabTransition, containerVariants, entryVariants } from './utils/animations';
+import { tabTransition } from './utils/animations';
 import { useCloak } from './hooks/useCloak';
 import { useGlobalChat } from './hooks/useGlobalChat';
 import { useDeviceAdaptation } from './hooks/useDeviceAdaptation';
@@ -442,7 +442,7 @@ export default function App() {
         />
 
       {/* Main Content Scrollable Area with Smooth Transitions */}
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" initial={false}>
         {currentTab === 'chat' ? (
           <motion.div
             key="chat-tab-view"
@@ -547,7 +547,7 @@ export default function App() {
                     setSelectedCategory('All');
                     setShowFavoritesOnly(false);
                   }}
-                  className="px-6 py-3 bg-[var(--brand-blue)] hover:opacity-90 text-white text-sm font-semibold rounded-full shadow-md shadow-[var(--brand-blue-glow)] transition-all cursor-pointer"
+                  className="px-6 py-3 bg-[var(--brand-blue)] hover:opacity-90 active:scale-95 text-white text-sm font-semibold rounded-full shadow-md shadow-[var(--brand-blue-glow)] transition duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer"
                 >
                   Show all {allGames.length} games
                 </button>
@@ -576,7 +576,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setVisibleCount((prev) => Math.min(filteredGames.length, prev + 120))}
-                  className="inline-flex items-center gap-3 px-6 py-3 bg-white hover:bg-slate-50 text-slate-900 font-medium text-sm rounded-full border border-slate-200 hover:border-[var(--brand-blue)]/40 transition-all cursor-pointer shadow-sm dark:bg-[#181824] dark:hover:bg-[#202030] dark:text-white dark:border-[#2a2a3e]"
+                  className="inline-flex items-center gap-3 px-6 py-3 bg-white hover:bg-slate-50 active:scale-95 text-slate-900 font-medium text-sm rounded-full border border-slate-200 hover:border-[var(--brand-blue)]/40 transition duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer shadow-sm dark:bg-[#181824] dark:hover:bg-[#202030] dark:text-white dark:border-[#2a2a3e]"
                 >
                   <span>Show more</span>
                   <span className="text-xs bg-slate-100 dark:bg-[#090d16] px-2 py-0.5 rounded-full text-[var(--brand-blue)] font-semibold tabular-nums">
@@ -587,7 +587,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => setVisibleCount(filteredGames.length)}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--brand-blue)] hover:opacity-90 text-white font-medium text-sm rounded-full transition-all cursor-pointer shadow-md shadow-[var(--brand-blue-glow)]"
+                  className="inline-flex items-center gap-2 px-6 py-3 bg-[var(--brand-blue)] hover:opacity-90 active:scale-95 text-white font-medium text-sm rounded-full transition duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer shadow-md shadow-[var(--brand-blue-glow)]"
                 >
                   <span>Show all {filteredGames.length}</span>
                 </button>

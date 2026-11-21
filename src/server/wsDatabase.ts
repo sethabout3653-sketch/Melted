@@ -33,6 +33,10 @@ export interface DbMessage {
   attachment_name?: string;
   timestamp: string;
   created_at: number;
+  // Client-only transient upload state (stripped before WS/Firestore persistence)
+  is_uploading?: boolean;
+  upload_progress?: number;
+  upload_error?: string;
 }
 
 export interface PendingSignal {
@@ -51,11 +55,21 @@ const DISCONNECT_GRACE_MS = 60000;
 export class WebSocketDatabase {
   public users: Map<string, DbUser> = new Map();
   public pendingSignals: Map<string, PendingSignal[]> = new Map(); // targetUserId -> signals
+  public deletedMessageIds: Set<string> = new Set();
 
   public channels = [
     { id: 'text-general', name: 'general', type: 'text' },
     { id: 'video-general', name: 'general', type: 'video' },
   ];
+
+  public markMessageDeleted(messageId: string): void {
+    if (!messageId) return;
+    this.deletedMessageIds.add(messageId);
+    if (this.deletedMessageIds.size > 1000) {
+      const oldest = this.deletedMessageIds.values().next().value;
+      if (oldest) this.deletedMessageIds.delete(oldest);
+    }
+  }
 
   public getUsers(): DbUser[] {
     const now = Date.now();
@@ -175,6 +189,7 @@ export function initWebSocketDatabase(_server?: Server) {
         tables: {
           users: globalWsDb.getUsers(),
           channels: globalWsDb.channels,
+          deletedIds: Array.from(globalWsDb.deletedMessageIds).slice(-200),
         },
       }));
     } catch {}
@@ -306,8 +321,12 @@ export function initWebSocketDatabase(_server?: Server) {
           case 'SQL_INSERT': {
             if (msg.table === 'messages' && msg.row) {
               const row = msg.row;
+              const msgId = row.id || ('msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6));
+              if (globalWsDb.deletedMessageIds.has(msgId)) {
+                break;
+              }
               const newMsg: DbMessage = {
-                id: row.id || ('msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6)),
+                id: msgId,
                 channel_id: row.channel_id || 'text-general',
                 sender_id: row.sender_id || boundUserId || 'anon',
                 sender_name: row.sender_name || 'Player',
@@ -328,6 +347,7 @@ export function initWebSocketDatabase(_server?: Server) {
 
           case 'SQL_DELETE': {
             if (msg.table === 'messages' && msg.id) {
+              globalWsDb.markMessageDeleted(msg.id);
               broadcastWss({ type: 'SQL_DELETE', table: 'messages', id: msg.id });
             }
             break;
@@ -341,6 +361,7 @@ export function initWebSocketDatabase(_server?: Server) {
           }
 
           case 'SQL_DELETE_ALL': {
+            globalWsDb.deletedMessageIds.clear();
             broadcastWss({ type: 'DB_CLEAR_MESSAGES' });
             break;
           }

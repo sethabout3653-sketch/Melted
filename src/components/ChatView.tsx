@@ -48,7 +48,6 @@ interface ChatViewProps {
   initialChannel?: string | null;
 }
 import { GiphyFetch } from '@giphy/js-fetch-api';
-import { entryVariants, containerVariants, hoverTransition } from '../utils/animations';
 
 // Official Giphy SDK Client with active Web API Key
 const gf = new GiphyFetch('sXpGFDGZs0Dv1mmNFvYaGUvYwKX0PWIh');
@@ -1400,18 +1399,21 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
   // Attachment Uploading States with Real Progress
   const [pendingFile, setPendingFile] = useState<{
+    id: string;
     fileObj: File;
     filename: string;
     mimeType: string;
     size: number;
     previewUrl?: string;
     type: 'image' | 'video' | 'audio' | 'file';
-    base64Data?: string;
     uploadProgress: number;
     isUploading: boolean;
     uploadedUrl: string | null;
     error: string | null;
     xhrRef?: XMLHttpRequest;
+    uploadPromise: Promise<string>;
+    abortUpload: () => void;
+    subscribeProgress: (cb: (pct: number) => void) => () => void;
   } | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -1684,10 +1686,17 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
     }
   };
 
-  // FILE SELECTION AND UPLOAD
+  // FILE SELECTION AND FAST BINARY UPLOAD (0ms instant preview + parallel upload)
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Abort any previous unsubmitted upload
+    if (pendingFile?.isUploading) {
+      try {
+        pendingFile.abortUpload();
+      } catch {}
+    }
 
     // Search comprehensive list of literally every audio extension
     const AUDIO_EXT_REGEX = /\.(mp3|wav|ogg|oga|ogv|flac|aac|m4a|opus|weba|aiff?|wma|alac|midi?|amr|ac3|dts|ape|ra|ram|caf|mka|spx|voc|xm|it|mod|s3m|3gp)$/i;
@@ -1697,32 +1706,81 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
     else if (file.type.startsWith('video/') || /\.(mp4|webm|mov|mkv|ogg|m4v|avi)$/i.test(file.name)) attachmentType = 'video';
     else if (file.type.startsWith('audio/') || AUDIO_EXT_REGEX.test(file.name)) attachmentType = 'audio';
 
-    const localPreview = (attachmentType === 'image' || attachmentType === 'video' || attachmentType === 'audio') ? URL.createObjectURL(file) : undefined;
+    const localPreview =
+      attachmentType === 'image' || attachmentType === 'video' || attachmentType === 'audio'
+        ? URL.createObjectURL(file)
+        : undefined;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64Data = reader.result as string;
-      const xhr = new XMLHttpRequest();
+    const pendingId = 'att-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+    const xhr = new XMLHttpRequest();
+    const progressListeners = new Set<(pct: number) => void>();
 
-      setPendingFile({
-        fileObj: file,
-        filename: file.name,
-        mimeType: file.type || 'application/octet-stream',
-        size: file.size,
-        previewUrl: localPreview,
-        type: attachmentType,
-        base64Data,
-        uploadProgress: 0,
-        isUploading: true,
-        uploadedUrl: null,
-        error: null,
-        xhrRef: xhr,
+    const subscribeProgress = (cb: (pct: number) => void) => {
+      progressListeners.add(cb);
+      return () => {
+        progressListeners.delete(cb);
+      };
+    };
+
+    const readSmallFileFallback = (): Promise<string> =>
+      new Promise((resolve, reject) => {
+        if (file.size > 600 * 1024) {
+          reject(new Error('Upload failed. Files over 600 KB require server upload availability.'));
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Failed to read attachment file.'));
+        reader.readAsDataURL(file);
       });
 
+    let settled = false;
+    const uploadPromise = new Promise<string>((resolve, reject) => {
+      const emitProgress = (pct: number) => {
+        progressListeners.forEach((cb) => {
+          try {
+            cb(pct);
+          } catch {}
+        });
+        setPendingFile((prev) =>
+          prev && prev.id === pendingId ? { ...prev, uploadProgress: pct } : prev
+        );
+      };
+
+      const handleSuccess = (finalUrl: string) => {
+        if (settled) return;
+        settled = true;
+        emitProgress(100);
+        setPendingFile((prev) =>
+          prev && prev.id === pendingId
+            ? { ...prev, uploadProgress: 100, isUploading: false, uploadedUrl: finalUrl, error: null }
+            : prev
+        );
+        resolve(finalUrl);
+      };
+
+      const handleFailure = async (statusMsg: string) => {
+        if (settled) return;
+        try {
+          const dataUrl = await readSmallFileFallback();
+          handleSuccess(dataUrl);
+        } catch (fallbackErr: any) {
+          if (settled) return;
+          settled = true;
+          const errMessage = fallbackErr?.message || statusMsg || 'Upload failed';
+          setPendingFile((prev) =>
+            prev && prev.id === pendingId
+              ? { ...prev, isUploading: false, error: errMessage }
+              : prev
+          );
+          reject(new Error(errMessage));
+        }
+      };
+
       xhr.upload.onprogress = (event) => {
-        if (event.lengthComputable) {
-          const percentComplete = Math.round((event.loaded / event.total) * 100);
-          setPendingFile((prev) => prev ? { ...prev, uploadProgress: percentComplete } : null);
+        if (event.lengthComputable && event.total > 0) {
+          const percentComplete = Math.min(99, Math.round((event.loaded / event.total) * 100));
+          emitProgress(percentComplete);
         }
       };
 
@@ -1730,82 +1788,107 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
         if (xhr.status >= 200 && xhr.status < 300) {
           try {
             const response = JSON.parse(xhr.responseText);
-            setPendingFile((prev) => prev ? {
-              ...prev,
-              uploadProgress: 100,
-              isUploading: false,
-              uploadedUrl: response.url,
-            } : null);
-          } catch {
-            setPendingFile((prev) => prev ? {
-              ...prev,
-              uploadProgress: 100,
-              isUploading: false,
-              uploadedUrl: base64Data,
-            } : null);
-          }
-        } else {
-          setPendingFile((prev) => prev ? {
-            ...prev,
-            isUploading: false,
-            uploadedUrl: base64Data,
-          } : null);
+            if (response?.url) {
+              handleSuccess(response.url);
+              return;
+            }
+          } catch {}
         }
+        void handleFailure(`Upload failed (${xhr.status || 'server error'})`);
       };
 
       xhr.onerror = () => {
-        setPendingFile((prev) => prev ? {
-          ...prev,
-          isUploading: false,
-          uploadedUrl: base64Data,
-        } : null);
+        void handleFailure('Network error while uploading');
       };
 
-      xhr.open('POST', '/api/upload');
-      xhr.setRequestHeader('Content-Type', 'application/json');
-      xhr.send(JSON.stringify({
-        filename: file.name,
-        base64Data,
-        mimeType: file.type,
-      }));
+      xhr.onabort = () => {
+        if (settled) return;
+        settled = true;
+        reject(new Error('Upload cancelled'));
+      };
+
+      xhr.open(
+        'POST',
+        `/api/upload?filename=${encodeURIComponent(file.name)}&mimeType=${encodeURIComponent(file.type || 'application/octet-stream')}`
+      );
+      xhr.setRequestHeader('Content-Type', 'application/octet-stream');
+      xhr.setRequestHeader('X-Filename', encodeURIComponent(file.name));
+      xhr.setRequestHeader('X-Mime-Type', file.type || 'application/octet-stream');
+      xhr.send(file);
+    });
+
+    const abortUpload = () => {
+      try {
+        xhr.abort();
+      } catch {}
     };
 
-    reader.readAsDataURL(file);
+    // Show preview in 0ms immediately (no waiting on FileReader base64!)
+    setPendingFile({
+      id: pendingId,
+      fileObj: file,
+      filename: file.name,
+      mimeType: file.type || 'application/octet-stream',
+      size: file.size,
+      previewUrl: localPreview,
+      type: attachmentType,
+      uploadProgress: 0,
+      isUploading: true,
+      uploadedUrl: null,
+      error: null,
+      xhrRef: xhr,
+      uploadPromise,
+      abortUpload,
+      subscribeProgress,
+    });
+
     e.target.value = '';
   };
 
   const cancelPendingFile = () => {
-    if (pendingFile?.xhrRef) {
-      try {
-        pendingFile.xhrRef.abort();
-      } catch {
-        // Abort handled
-      }
+    if (pendingFile) {
+      pendingFile.abortUpload();
     }
     setPendingFile(null);
   };
 
-  // Submit Message immediately with uploaded file
-  const handleSendMessage = useCallback((textToSend: string) => {
-    updateUser({ activity: 'Online', typing_channel: undefined, typing_at: 0 });
-    if (!textToSend.trim() && !pendingFile) return;
+  // Submit Message immediately (0ms optimistic render; completes upload in background if still uploading)
+  const handleSendMessage = useCallback(
+    (textToSend: string) => {
+      updateUser({ activity: 'Online', typing_channel: undefined, typing_at: 0 });
+      if (!textToSend.trim() && !pendingFile) return;
 
-    let finalAttachment: { url: string; type: 'image' | 'video' | 'audio' | 'file' | 'gif'; name?: string } | undefined = undefined;
+      if (pendingFile) {
+        if (pendingFile.error && !pendingFile.uploadedUrl) {
+          return;
+        }
 
-    if (pendingFile) {
-      const finalUrl = pendingFile.uploadedUrl || pendingFile.previewUrl || pendingFile.base64Data;
-      if (finalUrl) {
-        finalAttachment = {
-          url: finalUrl,
-          type: pendingFile.type,
-          name: pendingFile.filename,
-        };
+        const currentPending = pendingFile;
+        setPendingFile(null);
+
+        if (currentPending.uploadedUrl) {
+          void insertMessage(textToSend, activeChannel, {
+            url: currentPending.uploadedUrl,
+            type: currentPending.type,
+            name: currentPending.filename,
+          });
+        } else {
+          void insertMessage(textToSend, activeChannel, {
+            url: currentPending.previewUrl || '',
+            type: currentPending.type,
+            name: currentPending.filename,
+            uploadPromise: currentPending.uploadPromise,
+            abortUpload: currentPending.abortUpload,
+            subscribeProgress: currentPending.subscribeProgress,
+          });
+        }
+        return;
       }
-    }
 
-    insertMessage(textToSend, activeChannel, finalAttachment);
-    setPendingFile(null);
-  }, [pendingFile, activeChannel, insertMessage, updateUser]);
+      void insertMessage(textToSend, activeChannel);
+    },
+    [pendingFile, activeChannel, insertMessage, updateUser]
+  );
 
   // Helper to reliably download image, video, audio, or any file attachment
   const downloadAttachment = useCallback((url: string, filename: string) => {
@@ -2016,7 +2099,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
             <div className="flex-1 min-h-0 flex flex-col min-w-0 relative overflow-hidden">
               
               {/* Top Header */}
-              <header className="h-14 sm:h-16 md:h-20 px-3 sm:px-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white/80 dark:bg-slate-950/80 backdrop-blur-md shrink-0 gap-2 sm:gap-4">
+              <header className="h-14 sm:h-16 md:h-20 px-3 sm:px-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white/95 dark:bg-slate-950/95 shrink-0 gap-2 sm:gap-4">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   {/* Mobile Channels button */}
                   <button
@@ -2132,7 +2215,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                 className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 md:p-6 space-y-4 sm:space-y-6"
               >
                 {messageSearch.trim() && (
-                  <div className="sticky top-0 z-10 flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-cyan-50/95 dark:bg-slate-900/95 border border-cyan-200 dark:border-cyan-500/30 backdrop-blur-md text-xs">
+                  <div className="sticky top-0 z-10 flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-cyan-50/98 dark:bg-slate-900/98 border border-cyan-200 dark:border-cyan-500/30 shadow-sm text-xs">
                     <span className="font-semibold text-slate-700 dark:text-slate-200 truncate">
                       {activeChannelMessages.length} {activeChannelMessages.length === 1 ? 'match' : 'matches'} for &ldquo;{messageSearch}&rdquo;
                     </span>
@@ -2153,25 +2236,21 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                 )}
 
                 {/* Messages List */}
-                <motion.div 
-                  variants={containerVariants}
-                  initial="hidden"
-                  animate="visible"
-                  className="space-y-1"
-                >
-                  <AnimatePresence mode="popLayout">
-                    {activeChannelMessages.map((msg: any, idx: number) => {
+                <div className="space-y-1">
+                  <AnimatePresence initial={false}>
+                    {activeChannelMessages.map((msg: any) => {
                       const msgUser = users.find((u: any) => u.id === msg.sender_id);
                       const displayUsername = msgUser?.username || msg.sender_name;
                       const displayAvatarColor = msgUser?.avatar_color || msg.avatar_color;
                       const displayAvatarUrl = msgUser?.avatar_url || msg.sender_avatar_url;
 
                       return (
-                        <motion.div 
-                          key={msg.id} 
-                          variants={entryVariants}
-                          custom={idx}
-                          layout
+                        <motion.div
+                          key={msg.id}
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -4 }}
+                          transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                           className="flex items-start gap-2.5 sm:gap-3.5 group hover:bg-slate-50 dark:hover:bg-slate-900/40 -mx-2 sm:-mx-4 px-2 sm:px-4 py-1.5 rounded-xl transition-colors"
                         >
                           <div className="shrink-0">
@@ -2194,10 +2273,10 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                           )}
 
                           {/* Attachment Rendering */}
-                          {msg.attachment_url && (() => {
+                          {(msg.attachment_url || msg.is_uploading || msg.upload_error) && (() => {
                             const category = getAttachmentCategory(msg.attachment_url, msg.attachment_name, msg.attachment_type);
 
-                            if (category === 'audio') {
+                            if (category === 'audio' && msg.attachment_url) {
                               return (
                                 <div className="mt-2 max-w-full">
                                   <AudioAttachmentPlayer
@@ -2209,7 +2288,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                               );
                             }
 
-                            if (category === 'video') {
+                            if (category === 'video' && msg.attachment_url) {
                               return (
                                 <div className="mt-2 space-y-2 max-w-full sm:max-w-lg">
                                   {msg.attachment_name && (
@@ -2224,21 +2303,23 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                                     preload="metadata"
                                     className="max-h-60 sm:max-h-80 max-w-full w-auto rounded-xl bg-black border border-slate-200 dark:border-white/10"
                                   />
-                                  <div>
-                                    <button
-                                      type="button"
-                                      onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'video.mp4')}
-                                      className="inline-flex items-center gap-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:text-slate-950 dark:hover:text-white bg-slate-100 dark:bg-[#1a1a24] hover:bg-slate-200 dark:hover:bg-[#252534] px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 transition-colors cursor-pointer"
-                                    >
-                                      <Download className="w-3.5 h-3.5" />
-                                      <span>Download</span>
-                                    </button>
-                                  </div>
+                                  {!msg.is_uploading && !msg.upload_error && (
+                                    <div>
+                                      <button
+                                        type="button"
+                                        onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'video.mp4')}
+                                        className="inline-flex items-center gap-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:text-slate-950 dark:hover:text-white bg-slate-100 dark:bg-[#1a1a24] hover:bg-slate-200 dark:hover:bg-[#252534] px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 transition-colors cursor-pointer"
+                                      >
+                                        <Download className="w-3.5 h-3.5" />
+                                        <span>Download</span>
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             }
 
-                            if (category === 'image') {
+                            if (category === 'image' && msg.attachment_url) {
                               return (
                                 <div className="mt-2 space-y-2 block max-w-full sm:max-w-md">
                                   {msg.attachment_name && msg.attachment_name !== 'gif.gif' && (
@@ -2251,16 +2332,18 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                                     alt={msg.attachment_name || 'Attachment'}
                                     className="max-h-60 sm:max-h-80 max-w-full w-auto object-contain rounded-xl border border-slate-200 dark:border-white/10 bg-black/5 dark:bg-black/20"
                                   />
-                                  <div>
-                                    <button
-                                      type="button"
-                                      onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'image.png')}
-                                      className="inline-flex items-center gap-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:text-slate-950 dark:hover:text-white bg-slate-100 dark:bg-[#1a1a24] hover:bg-slate-200 dark:hover:bg-[#252534] px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 transition-colors cursor-pointer"
-                                    >
-                                      <Download className="w-3.5 h-3.5" />
-                                      <span>Download</span>
-                                    </button>
-                                  </div>
+                                  {!msg.is_uploading && !msg.upload_error && (
+                                    <div>
+                                      <button
+                                        type="button"
+                                        onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'image.png')}
+                                        className="inline-flex items-center gap-1.5 text-xs text-slate-700 dark:text-zinc-300 hover:text-slate-950 dark:hover:text-white bg-slate-100 dark:bg-[#1a1a24] hover:bg-slate-200 dark:hover:bg-[#252534] px-3 py-1.5 rounded-lg border border-slate-200 dark:border-white/10 transition-colors cursor-pointer"
+                                      >
+                                        <Download className="w-3.5 h-3.5" />
+                                        <span>Download</span>
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
                               );
                             }
@@ -2270,36 +2353,58 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                                 <span className="text-xs font-semibold text-slate-900 dark:text-white truncate min-w-0 flex-1">
                                   {msg.attachment_name || 'Attachment'}
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'attachment')}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-white text-xs font-semibold rounded-lg transition-colors shrink-0 cursor-pointer"
-                                >
-                                  <Download className="w-3.5 h-3.5" />
-                                  <span>Download</span>
-                                </button>
+                                {msg.attachment_url && !msg.is_uploading && !msg.upload_error && (
+                                  <button
+                                    type="button"
+                                    onClick={() => downloadAttachment(msg.attachment_url, msg.attachment_name || 'attachment')}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-cyan-500 hover:bg-cyan-400 text-white text-xs font-semibold rounded-lg transition-colors shrink-0 cursor-pointer"
+                                  >
+                                    <Download className="w-3.5 h-3.5" />
+                                    <span>Download</span>
+                                  </button>
+                                )}
                               </div>
                             );
                           })()}
 
+                          {msg.is_uploading && (
+                            <div className="mt-2 max-w-xs space-y-1">
+                              <div className="flex items-center justify-between text-[11px] font-semibold text-cyan-600 dark:text-cyan-400">
+                                <span>Sending attachment...</span>
+                                <span>{msg.upload_progress ?? 0}%</span>
+                              </div>
+                              <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-800 rounded-sm overflow-hidden">
+                                <div
+                                  className="h-full bg-cyan-500 transition-all duration-150 rounded-sm"
+                                  style={{ width: `${msg.upload_progress ?? 0}%` }}
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {msg.upload_error && (
+                            <div className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-red-500 bg-red-500/10 border border-red-500/20 px-2.5 py-1 rounded-lg">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span>{msg.upload_error}</span>
+                            </div>
+                          )}
+
                         </div>
-                        {msg.sender_id === currentUser.id && (
-                          <div className="shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                            <button
-                              type="button"
-                              onClick={() => deleteMessage(msg.id)}
-                              className="p-1.5 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
-                              title="Delete message"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        )}
+                        <div className="shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={() => deleteMessage(msg.id)}
+                            className="p-1.5 text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                            title="Delete message"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </motion.div>
                       );
                     })}
                   </AnimatePresence>
-                </motion.div>
+                </div>
                 <div ref={messagesEndRef} />
               </div>
 
@@ -2352,12 +2457,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                       </div>
                     )}
 
-                    {/* Upload progress & info */}
+                    {/* Upload progress & error info */}
                     {pendingFile.isUploading && (
                       <div className="flex-1 min-w-[140px] self-center">
                         <div className="space-y-1.5">
                           <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-300">
-                            <span>Uploading...</span>
+                            <span>Uploading... (you can send now)</span>
                             <span>{pendingFile.uploadProgress}%</span>
                           </div>
                           <div className="h-1.5 w-full bg-slate-200 dark:bg-slate-800 rounded-sm overflow-hidden">
@@ -2367,6 +2472,12 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                             />
                           </div>
                         </div>
+                      </div>
+                    )}
+                    {pendingFile.error && (
+                      <div className="flex-1 min-w-[140px] self-center text-xs font-semibold text-red-500 flex items-center gap-1.5">
+                        <AlertCircle className="w-4 h-4 shrink-0" />
+                        <span>{pendingFile.error}</span>
                       </div>
                     )}
 
@@ -2385,7 +2496,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
 
               {/* GIPHY POPOVER MODAL */}
               {isGiphyOpen && (
-                <div className="absolute bottom-16 sm:bottom-20 left-2 right-2 sm:left-4 sm:right-4 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-3 sm:p-4 max-w-xl mx-auto max-h-[min(60dvh,26rem)] flex flex-col space-y-2.5 sm:space-y-3 backdrop-blur-xl">
+                <div className="absolute bottom-16 sm:bottom-20 left-2 right-2 sm:left-4 sm:right-4 z-50 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl p-3 sm:p-4 max-w-xl mx-auto max-h-[min(60dvh,26rem)] flex flex-col space-y-2.5 sm:space-y-3">
                   
                   {/* Modal Header */}
                   <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800 shrink-0">
@@ -3220,18 +3331,19 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
       <AnimatePresence>
         {isMobileChannelsOpen && (
           <div className="fixed inset-0 z-[250] md:hidden flex">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
               className="fixed inset-0 bg-black/60 backdrop-blur-sm"
               onClick={() => setIsMobileChannelsOpen(false)}
             />
-            <motion.aside 
+            <motion.aside
               initial={{ x: '-100%' }}
               animate={{ x: 0 }}
               exit={{ x: '-100%' }}
-              transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+              transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
               className="relative w-72 max-w-[85vw] h-full bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 p-6 flex flex-col z-10 shadow-2xl overflow-hidden"
             >
               <div className="flex items-center justify-between pb-4 border-b border-slate-200 dark:border-slate-800 shrink-0">

@@ -114,6 +114,14 @@ function cleanData<T>(obj: T): T {
   return result as T;
 }
 
+function toPersistedMessage(msg: DbMessage): DbMessage {
+  const { is_uploading, upload_progress, upload_error, ...rest } = msg;
+  void is_uploading;
+  void upload_progress;
+  void upload_error;
+  return rest;
+}
+
 function mergeMessages(
   existing: DbMessage[],
   incoming: DbMessage[],
@@ -206,6 +214,7 @@ export function useWebSocketDatabase(currentUser: {
   const httpSyncIntervalRef = useRef<any>(null);
   const outgoingQueueRef = useRef<string[]>([]);
   const deletedIdsRef = useRef<Set<string>>(new Set());
+  const pendingUploadAbortsRef = useRef<Map<string, () => void>>(new Map());
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
   const processedRtcSignalsRef = useRef<Set<string>>(new Set());
   const sessionBootTimeRef = useRef<number>(Date.now());
@@ -595,9 +604,18 @@ export function useWebSocketDatabase(currentUser: {
           }
           if (msg.type === 'PONG') return;
           if (msg.type === 'DB_INIT') {
+            if (Array.isArray(msg.tables?.deletedIds)) {
+              msg.tables.deletedIds.forEach((id: string) => {
+                if (id) deletedIdsRef.current.add(id);
+              });
+              setMessages((prev) => prev.filter((m) => m && !deletedIdsRef.current.has(m.id)));
+            }
             if (Array.isArray(msg.tables?.users)) {
               serverUsersRef.current = msg.tables.users;
               publishUsers();
+            }
+            if (Array.isArray(msg.tables?.messages)) {
+              setMessages((prev) => mergeMessages(prev, msg.tables.messages, deletedIdsRef.current));
             }
           } else if (msg.type === 'DB_SYNC') {
             if (msg.table === 'users' && Array.isArray(msg.data)) {
@@ -737,48 +755,117 @@ export function useWebSocketDatabase(currentUser: {
     async (
       content: string,
       channelId: string = 'text-general',
-      attachment?: { url: string; type: string; name?: string }
+      attachment?: {
+        url: string;
+        type: string;
+        name?: string;
+        uploadPromise?: Promise<string>;
+        abortUpload?: () => void;
+        subscribeProgress?: (cb: (pct: number) => void) => () => void;
+      }
     ) => {
       if (!content.trim() && !attachment) return;
       const u = currentUserRef.current;
+      const msgId = 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
+      const isPendingUpload = Boolean(attachment?.uploadPromise);
+
       const newMsg: DbMessage = {
-        id: 'msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6),
+        id: msgId,
         channel_id: channelId,
         sender_id: u.id,
         sender_name: u.username,
         avatar_color: u.avatar_color,
         sender_avatar_url: u.avatar_url || '',
         content: content.trim(),
-        attachment_url: attachment?.url,
+        attachment_url: attachment?.url || '',
         attachment_type: attachment?.type,
         attachment_name: attachment?.name,
         timestamp: 'Today at ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         created_at: Date.now(),
+        ...(isPendingUpload ? { is_uploading: true, upload_progress: 0 } : {}),
       };
 
-      // 1. Optimistic local state
+      // 1. Optimistic local state (instant display for sender)
       setMessages((prev) => {
-        if (prev.some((m) => m.id === newMsg.id)) return prev;
-        const next = [...prev, newMsg];
-        broadcastChannelRef.current?.postMessage({ type: 'SYNC_MESSAGES', messages: [newMsg] });
-        return next;
+        if (deletedIdsRef.current.has(msgId) || prev.some((m) => m.id === msgId)) return prev;
+        return [...prev, newMsg];
       });
 
+      let finalMsg: DbMessage = toPersistedMessage(newMsg);
+
+      if (attachment?.uploadPromise) {
+        if (attachment.abortUpload) {
+          pendingUploadAbortsRef.current.set(msgId, attachment.abortUpload);
+        }
+        const unsubProgress = attachment.subscribeProgress?.((pct) => {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === msgId ? { ...m, upload_progress: pct } : m))
+          );
+        });
+
+        try {
+          const uploadedUrl = await attachment.uploadPromise;
+          unsubProgress?.();
+          pendingUploadAbortsRef.current.delete(msgId);
+
+          if (deletedIdsRef.current.has(msgId)) {
+            return;
+          }
+
+          finalMsg = toPersistedMessage({
+            ...newMsg,
+            attachment_url: uploadedUrl,
+          });
+
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId
+                ? { ...finalMsg, is_uploading: false, upload_progress: 100, upload_error: undefined }
+                : m
+            )
+          );
+        } catch (err: any) {
+          unsubProgress?.();
+          pendingUploadAbortsRef.current.delete(msgId);
+          if (deletedIdsRef.current.has(msgId)) {
+            return;
+          }
+          setMessages((prev) =>
+            prev.map((m) =>
+              m.id === msgId
+                ? {
+                    ...m,
+                    is_uploading: false,
+                    upload_error: err?.message || 'Upload failed — file could not be sent.',
+                  }
+                : m
+            )
+          );
+          return;
+        }
+      }
+
+      if (deletedIdsRef.current.has(msgId)) return;
+
+      // Notify other tabs in same browser now that URL is persistent
+      broadcastChannelRef.current?.postMessage({ type: 'SYNC_MESSAGES', messages: [finalMsg] });
+
       // 2. WebSocket real-time relay (NOT saved to WS disk)
-      safeSend({ type: 'SQL_INSERT', table: 'messages', row: newMsg });
+      safeSend({ type: 'SQL_INSERT', table: 'messages', row: finalMsg });
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
         fetch('/api/ws-db/message', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ row: newMsg }),
+          body: JSON.stringify({ row: finalMsg }),
         }).catch(() => {});
       }
 
       // 3. Firebase ONLY saves chat messages
+      if (deletedIdsRef.current.has(msgId)) return;
       try {
-        await setDoc(doc(db, 'messages', newMsg.id), cleanData(newMsg));
+        await setDoc(doc(db, 'messages', finalMsg.id), cleanData(finalMsg));
       } catch (err) {
-        handleFirestoreError(err, OperationType.CREATE, `messages/${newMsg.id}`);
+        handleFirestoreError(err, OperationType.CREATE, `messages/${finalMsg.id}`);
       }
     },
     [safeSend]
@@ -786,25 +873,34 @@ export function useWebSocketDatabase(currentUser: {
 
   const deleteMessage = useCallback(
     async (messageId: string) => {
+      if (!messageId) return;
       deletedIdsRef.current.add(messageId);
 
-      // 1. Optimistic local state
-      setMessages((prev) => {
-        const next = prev.filter((m) => m && m.id !== messageId);
-        broadcastChannelRef.current?.postMessage({ type: 'SYNC_DELETIONS', deletedId: messageId });
-        return next;
-      });
+      // Abort any in-flight media upload for this message so it never relays/writes late
+      const abortUpload = pendingUploadAbortsRef.current.get(messageId);
+      if (abortUpload) {
+        pendingUploadAbortsRef.current.delete(messageId);
+        try {
+          abortUpload();
+        } catch {}
+      }
 
-      // 2. WebSocket live deletion relay
+      // 1. Optimistic local state + multi-tab sync
+      setMessages((prev) => prev.filter((m) => m && m.id !== messageId));
+      broadcastChannelRef.current?.postMessage({ type: 'SYNC_DELETIONS', deletedId: messageId });
+
+      // 2. WebSocket + HTTP deletion relay
       safeSend({ type: 'SQL_DELETE', table: 'messages', id: messageId });
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
         fetch(`/api/ws-db/message/${encodeURIComponent(messageId)}`, { method: 'DELETE' }).catch(() => {});
       }
 
-      // 3. Firebase persistent delete + tombstone
+      // 3. Atomic Firebase persistent delete + shared tombstone
       try {
-        await deleteDoc(doc(db, 'messages', messageId));
-        await setDoc(doc(db, 'deletions', messageId), { id: messageId, deleted_at: Date.now() });
+        const batch = writeBatch(db);
+        batch.set(doc(db, 'deletions', messageId), { id: messageId, deleted_at: Date.now() });
+        batch.delete(doc(db, 'messages', messageId));
+        await batch.commit();
       } catch (err) {
         handleFirestoreError(err, OperationType.DELETE, `messages/${messageId}`);
       }
@@ -819,6 +915,11 @@ export function useWebSocketDatabase(currentUser: {
         prev.filter((m) => {
           if (m && m.channel_id === channelId) {
             deletedIdsRef.current.add(m.id);
+            const abort = pendingUploadAbortsRef.current.get(m.id);
+            if (abort) {
+              pendingUploadAbortsRef.current.delete(m.id);
+              try { abort(); } catch {}
+            }
             return false;
           }
           return true;
@@ -831,17 +932,21 @@ export function useWebSocketDatabase(currentUser: {
         fetch(`/api/ws-db/channel-messages/${encodeURIComponent(channelId)}`, { method: 'DELETE' }).catch(() => {});
       }
 
-      // 3. Firebase persistent channel delete
+      // 3. Firebase persistent channel delete (chunked for > 200 docs)
       try {
         const q = query(collection(db, 'messages'), where('channel_id', '==', channelId));
         const snap = await getDocs(q);
-        const batch = writeBatch(db);
-        snap.forEach((msgDoc) => {
-          deletedIdsRef.current.add(msgDoc.id);
-          batch.delete(msgDoc.ref);
-          batch.set(doc(db, 'deletions', msgDoc.id), { id: msgDoc.id, deleted_at: Date.now() });
-        });
-        await batch.commit();
+        const docs = snap.docs;
+        for (let i = 0; i < docs.length; i += 200) {
+          const chunk = docs.slice(i, i + 200);
+          const batch = writeBatch(db);
+          chunk.forEach((msgDoc) => {
+            deletedIdsRef.current.add(msgDoc.id);
+            batch.delete(msgDoc.ref);
+            batch.set(doc(db, 'deletions', msgDoc.id), { id: msgDoc.id, deleted_at: Date.now() });
+          });
+          await batch.commit();
+        }
       } catch (err) {
         handleFirestoreError(err, OperationType.DELETE, `messages?channel_id=${channelId}`);
       }
@@ -850,6 +955,10 @@ export function useWebSocketDatabase(currentUser: {
   );
 
   const clearAllMessages = useCallback(async () => {
+    pendingUploadAbortsRef.current.forEach((abort) => {
+      try { abort(); } catch {}
+    });
+    pendingUploadAbortsRef.current.clear();
     setMessages([]);
     deletedIdsRef.current.clear();
     broadcastChannelRef.current?.postMessage({ type: 'DB_CLEAR_MESSAGES' });
@@ -861,14 +970,18 @@ export function useWebSocketDatabase(currentUser: {
 
     try {
       const msgSnap = await getDocs(collection(db, 'messages'));
-      const msgBatch = writeBatch(db);
-      msgSnap.forEach((d) => msgBatch.delete(d.ref));
-      await msgBatch.commit();
+      for (let i = 0; i < msgSnap.docs.length; i += 400) {
+        const batch = writeBatch(db);
+        msgSnap.docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
 
       const delSnap = await getDocs(collection(db, 'deletions'));
-      const delBatch = writeBatch(db);
-      delSnap.forEach((d) => delBatch.delete(d.ref));
-      await delBatch.commit();
+      for (let i = 0; i < delSnap.docs.length; i += 400) {
+        const batch = writeBatch(db);
+        delSnap.docs.slice(i, i + 400).forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, 'messages');
     }

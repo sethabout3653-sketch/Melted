@@ -1,7 +1,7 @@
 // Font Configuration and Storage Engine for FrostHub
 
 export type FontPresetId = 'default' | 'modern-clean' | 'custom';
-export type ModernCleanBodyFont = 'plus-jakarta' | 'inter' | 'dm-sans';
+export type ModernCleanBodyFont = 'google-sans' | 'plus-jakarta' | 'inter' | 'dm-sans';
 export type ModernCleanHeadingWeight = '700' | '900'; // Bold or Black
 
 export interface FontConfig {
@@ -13,8 +13,8 @@ export interface FontConfig {
 }
 
 export const DEFAULT_FONT_CONFIG: FontConfig = {
-  preset: 'modern-clean',
-  modernCleanBody: 'plus-jakarta',
+  preset: 'default',
+  modernCleanBody: 'google-sans',
   modernCleanWeight: '700',
 };
 
@@ -110,6 +110,9 @@ export function getSavedFontConfig(): FontConfig {
     const raw = localStorage.getItem(FONT_CONFIG_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
+      if (parsed.preset === 'modern-clean' && parsed.modernCleanBody === 'plus-jakarta') {
+        parsed.modernCleanBody = 'google-sans';
+      }
       return { ...DEFAULT_FONT_CONFIG, ...parsed };
     }
   } catch {}
@@ -129,8 +132,8 @@ export async function applyFontConfig(config: FontConfig): Promise<void> {
   let styleTag = document.getElementById(STYLE_TAG_ID) as HTMLStyleElement | null;
 
   if (config.preset === 'default') {
-    root.style.setProperty('--app-font-family', "'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif");
-    root.style.setProperty('--app-font-heading', "'Outfit', sans-serif");
+    root.style.setProperty('--app-font-family', "'Google Sans', 'Google Sans Text', system-ui, -apple-system, sans-serif");
+    root.style.setProperty('--app-font-heading', "'Google Sans', 'Outfit', sans-serif");
     root.style.setProperty('--app-font-heading-weight', '700');
     document.body.classList.remove('font-custom', 'font-modern-clean');
 
@@ -145,11 +148,13 @@ export async function applyFontConfig(config: FontConfig): Promise<void> {
       ? "'DM Sans', 'Inter', system-ui, sans-serif"
       : config.modernCleanBody === 'inter'
       ? "'Inter', system-ui, sans-serif"
-      : "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif";
+      : config.modernCleanBody === 'plus-jakarta'
+      ? "'Plus Jakarta Sans', 'Inter', system-ui, sans-serif"
+      : "'Google Sans', 'Google Sans Text', system-ui, sans-serif";
     const headingWeight = config.modernCleanWeight === '900' ? '900' : '700';
 
     root.style.setProperty('--app-font-family', bodyFont);
-    root.style.setProperty('--app-font-heading', "'Outfit', sans-serif");
+    root.style.setProperty('--app-font-heading', "'Google Sans', 'Outfit', sans-serif");
     root.style.setProperty('--app-font-heading-weight', headingWeight);
 
     document.body.classList.remove('font-custom');

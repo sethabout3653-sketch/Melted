@@ -22,7 +22,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import { entryVariants, containerVariants, hoverTransition, slideInVariants } from '../utils/animations';
+import { slideInVariants } from '../utils/animations';
 import {
   AI_PERSONALITIES,
   AIPersonalityId,
@@ -89,7 +89,6 @@ interface AIMessageBubbleProps {
 
 const AIMessageBubble: React.FC<AIMessageBubbleProps> = React.memo(({
   msg,
-  idx,
   isCopied,
   isStepExpanded,
   onCopy,
@@ -97,11 +96,10 @@ const AIMessageBubble: React.FC<AIMessageBubbleProps> = React.memo(({
 }) => {
   return (
     <motion.div
-      variants={entryVariants}
-      initial="hidden"
-      animate="visible"
-      custom={idx}
-      className={`flex gap-3 w-full will-change-transform ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+      className={`flex gap-3 w-full ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
     >
       {msg.sender === 'ai' && (
         <div 
@@ -593,14 +591,11 @@ export const AIAssistantView: React.FC = () => {
         </motion.button>
       </div>
 
-      <motion.div 
+      <div
         ref={assistantScrollRef}
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
         className="flex-1 min-h-0 overflow-y-auto space-y-4 sm:space-y-6 pr-1 sm:pr-2 custom-scrollbar pb-4 sm:pb-6 w-full"
       >
-        <AnimatePresence mode="popLayout">
+        <AnimatePresence initial={false}>
           {messages.map((msg, idx) => (
             <AIMessageBubble
               key={msg.id}
@@ -654,7 +649,7 @@ export const AIAssistantView: React.FC = () => {
           </motion.div>
         )}
         <div ref={messagesEndRef} />
-      </motion.div>
+      </div>
 
       {messages.length <= 2 && !isLoading && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-2.5 sm:mb-3 shrink-0 w-full">

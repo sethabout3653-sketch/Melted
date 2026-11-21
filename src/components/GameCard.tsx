@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Heart, Gamepad2 } from 'lucide-react';
-import { motion } from 'motion/react';
 import { GameItem } from '../types/game';
 import { generateGameSvgCover } from '../services/gameService';
 import { resolveGameRating } from '../services/gameRatingService';
 import { EsrbBadge } from './EsrbBadge';
-import { entryVariants, cardHover } from '../utils/animations';
 
 interface GameCardProps {
   game: GameItem;
@@ -61,14 +59,12 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
     }
   };
 
+  const entryDelayMs = index < 12 ? index * 16 : 0;
+
   return (
-    <motion.div 
-      variants={entryVariants}
-      initial="hidden"
-      animate="visible"
-      custom={index}
-      whileHover={cardHover}
-      className={`group relative bg-white/90 dark:bg-[#10101a] border border-slate-200/80 dark:border-white/10 shadow-sm dark:shadow-none hover:border-[var(--brand-blue)] hover:shadow-lg hover:shadow-black/5 rounded-2xl p-2 flex flex-col transition-[border-color,box-shadow] duration-200 [contain:layout_style] ${
+    <div 
+      style={entryDelayMs > 0 ? { animationDelay: `${entryDelayMs}ms` } : undefined}
+      className={`group relative bg-white/90 dark:bg-[#10101a] border border-slate-200/80 dark:border-white/10 shadow-sm dark:shadow-none hover:border-[var(--brand-blue)] rounded-2xl p-2 flex flex-col card-smooth-in card-smooth-hover [contain:layout_style] ${
         variant === 'large' ? 'md:col-span-2 md:row-span-2' : ''
       }`}
     >
@@ -91,11 +87,11 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
             src={currentCover}
             alt={game.name}
             referrerPolicy="no-referrer"
-            loading="eager"
-            decoding={index < 16 ? 'sync' : 'async'}
-            fetchPriority={index < 24 ? 'high' : 'auto'}
+            loading={index < 18 ? 'eager' : 'lazy'}
+            decoding={index < 6 ? 'sync' : 'async'}
+            fetchPriority={index < 12 ? 'high' : 'auto'}
             onError={handleImageError}
-            className="w-full h-full object-cover transition-transform duration-200 ease-out group-hover:scale-105"
+            className="w-full h-full object-cover transition-transform duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-105"
           />
         )}
 
@@ -162,6 +158,6 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
         </p>
       </div>
 
-    </motion.div>
+    </div>
   );
 });

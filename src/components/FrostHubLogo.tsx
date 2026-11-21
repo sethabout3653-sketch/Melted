@@ -7,6 +7,8 @@ interface FrostHubLogoProps {
   onClick?: () => void;
 }
 
+const LOGO_FONT = "'Google Sans', 'Google Sans Text', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+
 export const FrostHubLogo: React.FC<FrostHubLogoProps> = ({
   variant = 'standard',
   size = 'md',
@@ -39,22 +41,34 @@ export const FrostHubLogo: React.FC<FrostHubLogoProps> = ({
   return (
     <div 
       onClick={onClick}
-      className={`inline-flex flex-col items-center justify-center select-none leading-none ${onClick ? 'cursor-pointer' : ''} ${className}`}
-      style={{ fontFamily: 'Arial, "Helvetica Neue", Helvetica, sans-serif' }}
+      className={`frosthub-logo inline-flex flex-col items-center justify-center select-none leading-none ${onClick ? 'cursor-pointer' : ''} ${className}`}
+      style={{ fontFamily: LOGO_FONT }}
     >
-      <div className={`flex items-center tracking-tight leading-none ${sizeClasses.text}`}>
-        <span className="text-slate-900 dark:text-white tracking-tight transition-colors">Frost</span>
+      <div className={`flex items-center tracking-tight leading-none ${sizeClasses.text}`} style={{ fontFamily: LOGO_FONT }}>
         <span 
-          className={`bg-[var(--brand-blue)] text-[#090d16] flex items-center justify-center transition-all duration-200 ${sizeClasses.badge}`}
-          style={{ boxShadow: '0 0 14px var(--brand-blue-glow)', fontFamily: 'Arial, "Helvetica Neue", Helvetica, sans-serif' }}
+          className="frosthub-logo-text text-slate-900 dark:text-white tracking-tight transition-colors font-black"
+          style={{ fontFamily: LOGO_FONT, fontWeight: 900 }}
+        >
+          Frost
+        </span>
+        <span 
+          className={`frosthub-logo-badge bg-[var(--brand-blue)] text-[#090d16] flex items-center justify-center transition-all duration-200 font-black ${sizeClasses.badge}`}
+          style={{ 
+            boxShadow: '0 0 14px var(--brand-blue-glow)', 
+            fontFamily: LOGO_FONT,
+            fontWeight: 900 
+          }}
         >
           hub
         </span>
       </div>
       {variant === 'community' && (
         <span 
-          className={`text-slate-600 dark:text-slate-100 tracking-widest lowercase opacity-95 font-medium ${sizeClasses.community}`}
-          style={{ fontFamily: 'Arial, "Helvetica Neue", Helvetica, sans-serif' }}
+          className={`frosthub-logo-community text-slate-600 dark:text-slate-100 tracking-widest lowercase opacity-95 font-semibold ${sizeClasses.community}`}
+          style={{ 
+            fontFamily: LOGO_FONT,
+            fontWeight: 600 
+          }}
         >
           community
         </span>

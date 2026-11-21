@@ -916,7 +916,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use('/api', (req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-SJ-Url, X-SJ-Method, X-SJ-Headers');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-SJ-Url, X-SJ-Method, X-SJ-Headers, X-Filename, X-Mime-Type');
   res.setHeader('Access-Control-Expose-Headers', 'X-SJ-Meta, X-SJ-Meta-In-Body');
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
@@ -954,35 +954,63 @@ app.use('/uploads', (req, res, next) => {
   next();
 }, express.static(uploadsDir));
 
-// File Upload Endpoint
-app.post('/api/upload', (req, res) => {
-  try {
-    const { filename, base64Data, mimeType } = req.body;
-    if (!filename || !base64Data) {
-      return res.status(400).json({ error: 'Missing filename or base64 file data' });
+// File Upload Endpoint (supports fast raw binary streaming and JSON base64 fallback)
+app.post(
+  '/api/upload',
+  express.raw({
+    type: (req) => !String(req.headers['content-type'] || '').toLowerCase().includes('application/json'),
+    limit: '100mb',
+  }),
+  async (req, res) => {
+    try {
+      let filename = '';
+      let mimeType = 'application/octet-stream';
+      let buffer: Buffer;
+
+      if (Buffer.isBuffer(req.body)) {
+        const rawHeaderName = String(req.headers['x-filename'] || req.query.filename || 'upload.bin');
+        try {
+          filename = decodeURIComponent(rawHeaderName);
+        } catch {
+          filename = rawHeaderName;
+        }
+        mimeType = String(req.headers['x-mime-type'] || req.query.mimeType || 'application/octet-stream');
+        buffer = req.body;
+      } else {
+        const { filename: jsonName, base64Data, mimeType: jsonMime } = req.body || {};
+        filename = String(jsonName || '');
+        mimeType = String(jsonMime || 'application/octet-stream');
+        if (!filename || !base64Data) {
+          return res.status(400).json({ error: 'Missing filename or file data' });
+        }
+        const cleanBase64 = String(base64Data).replace(/^data:[^;]+;base64,/, '');
+        buffer = Buffer.from(cleanBase64, 'base64');
+      }
+
+      if (!filename || !buffer || buffer.length === 0) {
+        return res.status(400).json({ error: 'Empty upload payload' });
+      }
+
+      const safeBase = path.basename(filename).replace(/[^a-zA-Z0-9_.-]/g, '_') || 'file';
+      const safeName = `${Date.now()}_${Math.random().toString(36).slice(2, 6)}_${safeBase}`;
+      const filePath = path.join(uploadsDir, safeName);
+
+      await fs.promises.writeFile(filePath, buffer);
+
+      const publicUrl = `/uploads/${safeName}`;
+      res.json({
+        success: true,
+        url: publicUrl,
+        filename,
+        size: buffer.length,
+        mimeType,
+      });
+    } catch (err: any) {
+      console.error('File upload error:', err);
+      res.status(500).json({ error: 'Failed to upload file to server', message: err?.message });
     }
-
-    const cleanBase64 = base64Data.replace(/^data:[^;]+;base64,/, '');
-    const buffer = Buffer.from(cleanBase64, 'base64');
-
-    const safeName = `${Date.now()}_${filename.replace(/[^a-zA-Z0-9_.-]/g, '_')}`;
-    const filePath = path.join(uploadsDir, safeName);
-
-    fs.writeFileSync(filePath, buffer);
-
-    const publicUrl = `/uploads/${safeName}`;
-    res.json({
-      success: true,
-      url: publicUrl,
-      filename,
-      size: buffer.length,
-      mimeType: mimeType || 'application/octet-stream',
-    });
-  } catch (err: any) {
-    console.error('File upload error:', err);
-    res.status(500).json({ error: 'Failed to upload file to server', message: err?.message });
   }
-});
+);
 
 // User Favorites Persistent Storage Endpoint
 const favoritesStorePath = path.join(uploadsDir, 'favorites_store.json');
@@ -1420,6 +1448,9 @@ app.post('/api/ws-db/message', (req, res) => {
     if (!row || !row.id) {
       return res.status(400).json({ error: 'Missing message row' });
     }
+    if (globalWsDb.deletedMessageIds.has(row.id)) {
+      return res.json({ success: true, deleted: true });
+    }
     const newMsg = {
       id: row.id,
       channel_id: row.channel_id || 'text-general',
@@ -1445,6 +1476,7 @@ app.delete('/api/ws-db/message/:id', (req, res) => {
   try {
     const messageId = req.params.id;
     if (messageId) {
+      globalWsDb.markMessageDeleted(messageId);
       broadcastWss({ type: 'SQL_DELETE', table: 'messages', id: messageId });
     }
     res.json({ success: true });
@@ -1467,6 +1499,7 @@ app.delete('/api/ws-db/channel-messages/:channelId', (req, res) => {
 
 app.delete('/api/ws-db/messages/all', (req, res) => {
   try {
+    globalWsDb.deletedMessageIds.clear();
     broadcastWss({ type: 'DB_CLEAR_MESSAGES' });
     res.json({ success: true });
   } catch (err: any) {

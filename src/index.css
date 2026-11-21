@@ -32,8 +32,8 @@
     --color-blue-800: var(--brand-blue-hover);
     --color-blue-900: var(--brand-blue-hover);
     /* App Dynamic Font Configuration */
-    --app-font-family: 'Plus Jakarta Sans', 'Inter', system-ui, -apple-system, sans-serif;
-    --app-font-heading: 'Outfit', sans-serif;
+    --app-font-family: 'Google Sans', 'Google Sans Text', system-ui, -apple-system, sans-serif;
+    --app-font-heading: 'Google Sans', 'Outfit', sans-serif;
     --app-font-heading-weight: 700;
   }
 
@@ -56,11 +56,9 @@
     -moz-osx-font-smoothing: grayscale;
     -webkit-overflow-scrolling: touch;
     text-rendering: optimizeSpeed;
-    transform: translateZ(0);
-    backface-visibility: hidden;
   }
 
-  /* Locked 60 FPS GPU-Composited Animation Rules (scoped to heavy elements) */
+  /* Locked 60 FPS GPU-Composited Animation Rules (scoped to heavy media/layers) */
   .gpu-accelerated,
   .motion-safe-gpu,
   video,
@@ -68,6 +66,32 @@
   canvas {
     transform: translateZ(0);
     backface-visibility: hidden;
+  }
+
+  @keyframes frostCardIn {
+    from {
+      opacity: 0;
+      transform: translate3d(0, 14px, 0) scale(0.985);
+    }
+    to {
+      opacity: 1;
+      transform: translate3d(0, 0, 0) scale(1);
+    }
+  }
+
+  .card-smooth-in {
+    animation: frostCardIn 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .card-smooth-hover {
+    transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1), border-color 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    will-change: transform;
+  }
+  .card-smooth-hover:hover {
+    transform: translate3d(0, -5px, 0) scale(1.025);
+  }
+  .card-smooth-hover:active {
+    transform: translate3d(0, -2px, 0) scale(0.985);
   }
 
   /* Render containment for smooth mobile & desktop scrolling */
@@ -159,33 +183,42 @@
   }
 }
 
-/* Custom font support: changes whole app font without mutating colors */
+/* FrostHub Brand Logo: strictly locked font so it never mutates or changes font */
+.frosthub-logo,
+.frosthub-logo *,
+.frosthub-logo-text,
+.frosthub-logo-badge,
+.frosthub-logo-community {
+  font-family: 'Google Sans', 'Google Sans Text', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+}
+
+/* Custom font support: changes whole app font without mutating colors or brand logo */
 body.font-custom,
-body.font-custom button:not([class*="font-mono"]),
+body.font-custom button:not([class*="font-mono"]):not(.frosthub-logo):not(:has(.frosthub-logo)),
 body.font-custom input,
 body.font-custom select,
 body.font-custom textarea,
 body.font-custom p,
 body.font-custom a,
 body.font-custom label,
-body.font-custom span:not(.katex *):not(.katex) {
+body.font-custom span:not(.katex *):not(.katex):not(.frosthub-logo):not(.frosthub-logo *) {
   font-family: var(--app-font-family);
 }
 
-body.font-custom h1,
-body.font-custom h2,
-body.font-custom h3,
-body.font-custom h4,
-body.font-custom .font-heading {
+body.font-custom h1:not(.frosthub-logo *),
+body.font-custom h2:not(.frosthub-logo *),
+body.font-custom h3:not(.frosthub-logo *),
+body.font-custom h4:not(.frosthub-logo *),
+body.font-custom .font-heading:not(.frosthub-logo *) {
   font-family: var(--app-font-heading);
   font-weight: var(--app-font-heading-weight);
 }
 
-body.font-modern-clean h1,
-body.font-modern-clean h2,
-body.font-modern-clean h3,
-body.font-modern-clean h4,
-body.font-modern-clean .font-heading {
+body.font-modern-clean h1:not(.frosthub-logo *),
+body.font-modern-clean h2:not(.frosthub-logo *),
+body.font-modern-clean h3:not(.frosthub-logo *),
+body.font-modern-clean h4:not(.frosthub-logo *),
+body.font-modern-clean .font-heading:not(.frosthub-logo *) {
   font-family: var(--app-font-heading);
   font-weight: var(--app-font-heading-weight);
 }
