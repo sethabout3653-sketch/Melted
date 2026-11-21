@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { DbUser, DbMessage } from '../server/wsDatabase';
+import { io, Socket } from 'socket.io-client';
 import { db, auth } from './firebase';
 import {
   collection,
@@ -190,6 +191,10 @@ export function resolveWebSocketUrl(): string {
   }
 }
 
+export function resolveSocketOrigin(): string {
+  return resolveWebSocketUrl().replace(/\/ws-db\/?$/, '').replace(/^ws/, 'http');
+}
+
 export function useWebSocketDatabase(currentUser: {
   id: string;
   username: string;
@@ -206,11 +211,10 @@ export function useWebSocketDatabase(currentUser: {
   const [isHttpSyncActive, setIsHttpSyncActive] = useState(false);
   const [isFirebaseActive, setIsFirebaseActive] = useState(false);
 
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<any>(null);
+  const socketRef = useRef<Socket | null>(null);
   const pingIntervalRef = useRef<any>(null);
   const httpSyncIntervalRef = useRef<any>(null);
-  const outgoingQueueRef = useRef<string[]>([]);
+  const outgoingQueueRef = useRef<any[]>([]);
   const deletedIdsRef = useRef<Set<string>>(new Set());
   const pendingUploadAbortsRef = useRef<Map<string, () => void>>(new Map());
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
@@ -352,18 +356,12 @@ export function useWebSocketDatabase(currentUser: {
   );
 
   const safeSend = useCallback((payload: any) => {
-    const raw = typeof payload === 'string' ? payload : JSON.stringify(payload);
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      try {
-        wsRef.current.send(raw);
-      } catch (err) {
-        console.warn('[wsDatabaseClient] Send failed, queueing:', err);
-        outgoingQueueRef.current.push(raw);
-      }
-    } else {
-      outgoingQueueRef.current.push(raw);
-      if (outgoingQueueRef.current.length > 50) outgoingQueueRef.current.shift();
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('message', payload);
+      return;
     }
+    outgoingQueueRef.current.push(payload);
+    if (outgoingQueueRef.current.length > 50) outgoingQueueRef.current.shift();
   }, []);
 
   // Multi-tab BroadcastChannel for sync across tabs in same browser
@@ -397,7 +395,7 @@ export function useWebSocketDatabase(currentUser: {
   const fetchHttpSync = useCallback(async () => {
     try {
       const u = currentUserRef.current;
-      const wsOpen = wsRef.current?.readyState === WebSocket.OPEN;
+      const wsOpen = socketRef.current?.connected ?? false;
       if (!wsOpen) {
         const res = await fetch('/api/ws-db/snapshot');
         if (res.ok) {
@@ -451,9 +449,9 @@ export function useWebSocketDatabase(currentUser: {
       const uId = currentUserRef.current.id;
       if (!uId) return;
       try {
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(JSON.stringify({ type: 'USER_DISCONNECT', userId: uId }));
-          wsRef.current.close();
+        if (socketRef.current?.connected) {
+          socketRef.current.emit('message', { type: 'USER_DISCONNECT', userId: uId });
+          socketRef.current.disconnect();
         }
       } catch {}
       try {
@@ -477,14 +475,12 @@ export function useWebSocketDatabase(currentUser: {
     };
   }, []);
 
-  // WebSocket Heartbeat
+  // Presence heartbeat: the server's user TTL is refreshed by application messages, not transport pings
   const startHeartbeat = useCallback(() => {
     if (pingIntervalRef.current) clearInterval(pingIntervalRef.current);
     pingIntervalRef.current = setInterval(() => {
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        try {
-          wsRef.current.send(JSON.stringify({ type: 'PING', timestamp: Date.now() }));
-        } catch {}
+      if (socketRef.current?.connected) {
+        socketRef.current.emit('message', { type: 'PING', timestamp: Date.now() });
       }
     }, 12000);
   }, []);
@@ -497,43 +493,36 @@ export function useWebSocketDatabase(currentUser: {
   }, []);
 
   const connect = useCallback(() => {
-    if (
-      wsRef.current &&
-      (wsRef.current.readyState === WebSocket.CONNECTING || wsRef.current.readyState === WebSocket.OPEN)
-    )
+    const existing = socketRef.current;
+    if (existing) {
+      if (!existing.connected) existing.connect();
       return;
-    try {
-      const wsUrl = resolveWebSocketUrl();
-      const ws = new WebSocket(wsUrl);
-      wsRef.current = ws;
-      ws.onopen = () => {
-        setIsWsConnected(true);
-        startHeartbeat();
-        ws.send(
-          JSON.stringify({
-            type: 'REGISTER_USER',
-            user: activeUserStateRef.current,
-          })
-        );
-        while (outgoingQueueRef.current.length > 0) {
-          const item = outgoingQueueRef.current.shift();
-          if (item) {
-            try {
-              ws.send(item);
-            } catch {
-              outgoingQueueRef.current.unshift(item);
-              break;
-            }
-          }
+    }
+
+    const socket = io(resolveSocketOrigin(), {
+      path: '/socket.io',
+      transports: ['websocket', 'polling'],
+      reconnectionDelay: 500,
+      reconnectionDelayMax: 4000,
+    });
+    socketRef.current = socket;
+
+    socket.on('connect', () => {
+      setIsWsConnected(true);
+      startHeartbeat();
+      socket.emit('message', { type: 'REGISTER_USER', user: activeUserStateRef.current });
+      while (outgoingQueueRef.current.length > 0) {
+        const item = outgoingQueueRef.current.shift();
+        if (item) socket.emit('message', item);
+      }
+    });
+
+    socket.on('message', (msg: any) => {
+      try {
+        if (msg.type === 'PING') {
+          socket.emit('message', { type: 'PONG', timestamp: Date.now() });
+          return;
         }
-      };
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === 'PING') {
-            if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
-            return;
-          }
           if (msg.type === 'PONG') return;
           if (msg.type === 'DB_INIT') {
             if (Array.isArray(msg.tables?.deletedIds)) {
@@ -592,32 +581,13 @@ export function useWebSocketDatabase(currentUser: {
             // Authoritative users table is already broadcast right before USER_MEDIA_UPDATE
           }
         } catch {}
-      };
-      ws.onclose = () => {
-        if (wsRef.current !== ws) return;
-        setIsWsConnected(false);
-        stopHeartbeat();
-        wsRef.current = null;
-        if (!reconnectTimeoutRef.current) {
-          reconnectTimeoutRef.current = setTimeout(() => {
-            reconnectTimeoutRef.current = null;
-            connect();
-          }, 2500);
-        }
-      };
-      ws.onerror = () => {
-        try {
-          ws.close();
-        } catch {}
-      };
-    } catch {
-      if (!reconnectTimeoutRef.current) {
-        reconnectTimeoutRef.current = setTimeout(() => {
-          reconnectTimeoutRef.current = null;
-          connect();
-        }, 2500);
-      }
-    }
+    });
+
+    socket.on('disconnect', (reason) => {
+      setIsWsConnected(false);
+      stopHeartbeat();
+      if (reason === 'io server disconnect') socket.connect();
+    });
   }, [startHeartbeat, stopHeartbeat, publishUsers]);
 
   useEffect(() => {
@@ -625,7 +595,7 @@ export function useWebSocketDatabase(currentUser: {
     fetchHttpSync();
     connect();
     httpSyncIntervalRef.current = setInterval(() => {
-      const wsOpen = wsRef.current?.readyState === WebSocket.OPEN;
+      const wsOpen = socketRef.current?.connected ?? false;
       const minInterval = wsOpen ? 4000 : 1200;
       const now = Date.now();
       if (now - lastHttpSyncAtRef.current >= minInterval) {
@@ -636,19 +606,15 @@ export function useWebSocketDatabase(currentUser: {
     const handleOnline = () => {
       lastHttpSyncAtRef.current = Date.now();
       fetchHttpSync();
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) connect();
+      connect();
     };
     window.addEventListener('online', handleOnline);
     return () => {
       window.removeEventListener('online', handleOnline);
       stopHeartbeat();
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
       if (httpSyncIntervalRef.current) clearInterval(httpSyncIntervalRef.current);
-      if (wsRef.current) {
-        try {
-          wsRef.current.close();
-        } catch {}
-      }
+      socketRef.current?.disconnect();
+      socketRef.current = null;
     };
   }, [connect, stopHeartbeat, fetchHttpSync]);
 
@@ -666,7 +632,7 @@ export function useWebSocketDatabase(currentUser: {
 
       // WebSocket / REST presence relay
       safeSend({ type: 'SQL_UPDATE', table: 'users', id: u.id, set });
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      if (!socketRef.current?.connected) {
         fetch('/api/ws-db/update-user', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -779,7 +745,7 @@ export function useWebSocketDatabase(currentUser: {
 
       // 2. WebSocket real-time relay (NOT saved to WS disk)
       safeSend({ type: 'SQL_INSERT', table: 'messages', row: finalMsg });
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      if (!socketRef.current?.connected) {
         fetch('/api/ws-db/message', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -818,7 +784,7 @@ export function useWebSocketDatabase(currentUser: {
 
       // 2. WebSocket + HTTP deletion relay
       safeSend({ type: 'SQL_DELETE', table: 'messages', id: messageId });
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      if (!socketRef.current?.connected) {
         fetch(`/api/ws-db/message/${encodeURIComponent(messageId)}`, { method: 'DELETE' }).catch(() => {});
       }
 
@@ -855,7 +821,7 @@ export function useWebSocketDatabase(currentUser: {
 
       // 2. WebSocket live relay
       safeSend({ type: 'SQL_DELETE_CHANNEL', table: 'messages', channel_id: channelId });
-      if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+      if (!socketRef.current?.connected) {
         fetch(`/api/ws-db/channel-messages/${encodeURIComponent(channelId)}`, { method: 'DELETE' }).catch(() => {});
       }
 
@@ -891,7 +857,7 @@ export function useWebSocketDatabase(currentUser: {
     broadcastChannelRef.current?.postMessage({ type: 'DB_CLEAR_MESSAGES' });
 
     safeSend({ type: 'SQL_DELETE_ALL' });
-    if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
+    if (!socketRef.current?.connected) {
       fetch('/api/ws-db/messages/all', { method: 'DELETE' }).catch(() => {});
     }
 
@@ -955,10 +921,9 @@ export function useWebSocketDatabase(currentUser: {
     const sigId = `sig-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const payload = { type: 'RTC_SIGNAL', fromUserId, targetUserId, signal, sigId };
 
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      try {
-        wsRef.current.send(JSON.stringify(payload));
-      } catch {}
+    if (socketRef.current?.connected) {
+      socketRef.current.emit('message', payload);
+      return;
     }
 
     fetch('/api/ws-db/signal', {
