@@ -55,8 +55,8 @@ export const RAWGITHACK_BASE = 'https://raw.githack.com/gn-math/html/main';
 export const GAME_PROXY_BASE = '/api/raw';
 
 /**
-- Resolves the canonical streaming URL for a game payload.
-- Strictly decoupled from image covers.
+ * Resolves the canonical streaming URL for a game payload.
+ * Strictly decoupled from image covers.
  */
 export function resolveGameUrl(rawUrl: string, gameId?: number): string {
   if (!rawUrl) return '';
@@ -78,8 +78,8 @@ export function resolveGameUrl(rawUrl: string, gameId?: number): string {
 }
 
 /**
-- Provides a local backend streaming proxy URL for the game payload,
-- ensuring seamless gameplay even if upstream CDN or school firewalls block rawgithack.
+ * Provides a local backend streaming proxy URL for the game payload,
+ * ensuring seamless gameplay even if upstream CDN or school firewalls block rawgithack.
  */
 export function getProxyGameUrl(rawUrl: string, gameId?: number): string {
   if (!rawUrl) return '';
@@ -130,7 +130,6 @@ const FEATURED_NAMES = new Set([
   'Smash Karts',
   'Duck Life 4',
   'Undertale',
-  'Deltarune',
   'Vex 7',
   'Geometry Dash',
   'FNAF 2',
@@ -356,7 +355,7 @@ export function transformUgsEntry(
   const category = detectCategory({ name: trimmedName, special: [] } as any);
   const isCkv = entry.url.startsWith('/ckv/');
   const resolvedUrl = resolveUgsUrl(entry.url);
-
+  
   let resolvedCover = '';
   if (coverLookupByName.has(normalized)) {
     resolvedCover = coverLookupByName.get(normalized)!;
@@ -384,8 +383,8 @@ export function transformUgsEntry(
 }
 
 /**
-- Fetches the game list directly from raw.githack.com UGS index,
-- with fallback to jsDelivr and local bundled mirror.
+ * Fetches the game list directly from raw.githack.com UGS index,
+ * with fallback to jsDelivr and local bundled mirror.
  */
 export async function getUGSGames(): Promise<Array<{ name: string; url: string; img?: string }>> {
   try {
@@ -411,7 +410,7 @@ export async function getUGSGames(): Promise<Array<{ name: string; url: string; 
 }
 
 /**
-- Fetches latest games dynamically from ChickenKingsVault games.js
+ * Fetches latest games dynamically from ChickenKingsVault games.js
  */
 export async function getCKVGames(): Promise<Array<{ name: string; url: string; img?: string }>> {
   try {
@@ -490,8 +489,8 @@ export function getPlayableGameUrl(game: GameItem): string {
 }
 
 /**
-- GN-Math native games run directly by default ("except gn-math games they are fine").
-- External URLs (e.g. Undertale & Deltarune workers.dev), UGS, and CKV games run via Scramjet v2.
+ * GN-Math native games run directly by default ("except gn-math games they are fine").
+ * External URLs (e.g. Undertale & Deltarune workers.dev), UGS, and CKV games run via Scramjet v2.
  */
 export function shouldUseScramjetByDefault(game: GameItem): boolean {
   if (!game) return false;
@@ -503,7 +502,7 @@ export function shouldUseScramjetByDefault(game: GameItem): boolean {
 }
 
 /**
-- Resolves the absolute upstream target URL required by Scramjet frame.go(url).
+ * Resolves the absolute upstream target URL required by Scramjet frame.go(url).
  */
 export function getScramjetTargetUrl(game: GameItem): string {
   if (!game) return '';
@@ -585,12 +584,6 @@ export const FEATURED_APP_CONFIG = {
     url: 'https://gemini.google.com',
     coverUrl: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1d/Google_Gemini_icon_2025.svg/960px-Google_Gemini_icon_2025.svg.png?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=thumbnail',
   },
-  deltarune: {
-    name: 'Deltarune',
-    url: 'https://wl-fang.itch.io/deltarune-web-port',
-    coverUrl:
-      'https://thumb.wikimedia.org/wikipedia/commons/thumb/4/43/Deltarune_vector_logo.svg/3840px-Deltarune_vector_logo.svg.png?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=thumbnail',
-  },
 };
 
 const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
@@ -639,21 +632,6 @@ const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
     localCover: FEATURED_APP_CONFIG.google.coverUrl,
     resolvedUrl: FEATURED_APP_CONFIG.google.url,
   },
-  {
-    id: 900004,
-    name: FEATURED_APP_CONFIG.deltarune.name,
-    cover: FEATURED_APP_CONFIG.deltarune.coverUrl,
-    url: FEATURED_APP_CONFIG.deltarune.url,
-    author: 'Toby Fox / wl-fang',
-    special: ['deltarune', 'rpg', 'undertale', 'scramjet'],
-    featured: true,
-    source: 'scramjet',
-    category: 'Featured',
-    resolvedCover: FEATURED_APP_CONFIG.deltarune.coverUrl,
-    fallbackCover: generateGameSvgCover('Deltarune', 'Featured'),
-    localCover: FEATURED_APP_CONFIG.deltarune.coverUrl,
-    resolvedUrl: FEATURED_APP_CONFIG.deltarune.url,
-  },
 ];
 
 export function getAllGames(): GameItem[] {
@@ -689,15 +667,6 @@ export function getAllGames(): GameItem[] {
   // 2. Track existing names and high-quality covers to avoid duplicate entries
   const existingNames = new Set<string>(['soundboard', 'myinstants']);
   const coverLookupByName = new Map<string, string>();
-  for (const scramjetGame of BUILTIN_SCRAMJET_GAMES) {
-    const norm = scramjetGame.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (norm) {
-      existingNames.add(norm);
-      if (scramjetGame.resolvedCover) {
-        coverLookupByName.set(norm, scramjetGame.resolvedCover);
-      }
-    }
-  }
   for (const g of gnGames) {
     const norm = g.name.toLowerCase().replace(/[^a-z0-9]/g, '');
     existingNames.add(norm);
@@ -705,7 +674,7 @@ export function getAllGames(): GameItem[] {
     if (baseWord.length >= 3) {
       existingNames.add(baseWord);
     }
-    if (g.resolvedCover && !coverLookupByName.has(norm)) {
+    if (g.resolvedCover) {
       coverLookupByName.set(norm, g.resolvedCover);
     }
   }

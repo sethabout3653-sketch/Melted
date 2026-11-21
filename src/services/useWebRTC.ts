@@ -181,7 +181,6 @@ export function useWebRTC({
 
   const pendingCandidates = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
   const makingOfferRef = useRef<Map<string, boolean>>(new Map());
-  const sentOfferIdRef = useRef<Map<string, string>>(new Map());
   const isNegotiatingRef = useRef<Map<string, boolean>>(new Map());
   const pendingRenegotiatePeersRef = useRef<Set<string>>(new Set());
   const lastSentMetaRef = useRef<Map<string, string>>(new Map());
@@ -254,7 +253,6 @@ export function useWebRTC({
     remoteVideoTracks.current.delete(peerId);
     pendingCandidates.current.delete(peerId);
     makingOfferRef.current.delete(peerId);
-    sentOfferIdRef.current.delete(peerId);
     isNegotiatingRef.current.delete(peerId);
 
     setRemoteStreams((prev) => {
@@ -933,13 +931,10 @@ export function useWebRTC({
       const finalOffer = { type: offer.type, sdp: optimizedSdp };
       await pc.setLocalDescription(finalOffer);
 
-      const offerId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      sentOfferIdRef.current.set(peerId, offerId);
       const metaFields = buildLocalMetaFields(bundle);
       sendRtcSignal(peerId, {
         type: 'offer',
         offer: finalOffer,
-        offerId,
         ...metaFields,
       });
       lastSentMetaRef.current.set(peerId, JSON.stringify({ type: 'track-meta', ...metaFields }));
@@ -1173,7 +1168,6 @@ export function useWebRTC({
         sendRtcSignal(fromUserId, {
           type: 'answer',
           answer: finalAnswer,
-          offerId: signal.offerId,
           ...metaFields,
         });
         lastSentMetaRef.current.set(fromUserId, JSON.stringify({ type: 'track-meta', ...metaFields }));
@@ -1228,29 +1222,12 @@ export function useWebRTC({
           });
         }
 
-        const staleAnswer =
-          signal.offerId !== undefined && signal.offerId !== sentOfferIdRef.current.get(fromUserId);
-        if (staleAnswer) return;
-
         if (pc.signalingState === 'have-local-offer') {
           const optimizedAnswer = {
             type: signal.answer.type,
             sdp: optimizeAudioSdp(signal.answer.sdp || ''),
           };
-          try {
-            await pc.setRemoteDescription(new RTCSessionDescription(optimizedAnswer));
-          } catch (answerErr) {
-            console.warn('[useWebRTC] Answer rejected, re-offering:', answerErr);
-            try {
-              await pc.setLocalDescription({ type: 'rollback' });
-            } catch {}
-            setTimeout(() => {
-              if (isMediaActiveRef.current && peerBundles.current.has(fromUserId)) {
-                renegotiateWithPeer(fromUserId);
-              }
-            }, 50);
-            return;
-          }
+          await pc.setRemoteDescription(new RTCSessionDescription(optimizedAnswer));
           const queued = pendingCandidates.current.get(fromUserId) || [];
           for (const c of queued) {
             try {
