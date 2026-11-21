@@ -1,6 +1,5 @@
-import { WebSocketServer, WebSocket } from 'ws';
-import type { IncomingMessage, Server } from 'http';
-import type { Duplex } from 'stream';
+import { Server as SocketIOServer, Socket } from 'socket.io';
+import type { Server } from 'http';
 
 export interface DbUser {
   id: string;
@@ -49,7 +48,7 @@ export interface PendingSignal {
   timestamp: number;
 }
 
-// Ephemeral in-memory WebSocket state (presence, voice/video rooms, typing & WebRTC signaling; chat history lives in Firebase)
+// Ephemeral in-memory state (presence, voice/video rooms, typing & WebRTC signaling; chat history lives in Firebase)
 const DISCONNECT_GRACE_MS = 60000;
 
 export class WebSocketDatabase {
@@ -124,36 +123,25 @@ export class WebSocketDatabase {
 
 export const globalWsDb = new WebSocketDatabase();
 
-let activeWss: WebSocketServer | null = null;
-const userSocketsMap = new Map<string, Set<WebSocket>>();
+let activeIo: SocketIOServer | null = null;
+const userSocketsMap = new Map<string, Set<Socket>>();
 
 export function sendToUserSockets(targetUserId: string, payload: any): boolean {
   if (!targetUserId) return false;
   const sockets = userSocketsMap.get(targetUserId);
   if (!sockets || sockets.size === 0) return false;
-  const str = typeof payload === 'string' ? payload : JSON.stringify(payload);
   let delivered = false;
   sockets.forEach((s) => {
-    if (s.readyState === WebSocket.OPEN) {
-      try {
-        s.send(str);
-        delivered = true;
-      } catch {}
+    if (s.connected) {
+      s.emit('message', payload);
+      delivered = true;
     }
   });
   return delivered;
 }
 
 export function broadcastWss(payload: any) {
-  if (!activeWss) return;
-  const str = typeof payload === 'string' ? payload : JSON.stringify(payload);
-  activeWss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
-      try {
-        client.send(str);
-      } catch {}
-    }
-  });
+  activeIo?.emit('message', payload);
 }
 
 export function broadcastTable(tableName: string, data: any) {
@@ -165,9 +153,14 @@ export function broadcastTable(tableName: string, data: any) {
   });
 }
 
-export function initWebSocketDatabase(_server?: Server) {
-  const wss = new WebSocketServer({ noServer: true });
-  activeWss = wss;
+export function initWebSocketDatabase(server: Server): void {
+  const io = new SocketIOServer(server, {
+    path: '/socket.io',
+    cors: { origin: true, credentials: true },
+    pingInterval: 10000,
+    pingTimeout: 20000,
+  });
+  activeIo = io;
 
   const disconnectTimers = new Map<string, NodeJS.Timeout>();
 
@@ -180,23 +173,20 @@ export function initWebSocketDatabase(_server?: Server) {
     });
   }
 
-  wss.on('connection', (ws) => {
+  io.on('connection', (socket) => {
     let boundUserId: string | null = null;
 
-    try {
-      ws.send(JSON.stringify({
-        type: 'DB_INIT',
-        tables: {
-          users: globalWsDb.getUsers(),
-          channels: globalWsDb.channels,
-          deletedIds: Array.from(globalWsDb.deletedMessageIds).slice(-200),
-        },
-      }));
-    } catch {}
+    socket.emit('message', {
+      type: 'DB_INIT',
+      tables: {
+        users: globalWsDb.getUsers(),
+        channels: globalWsDb.channels,
+        deletedIds: Array.from(globalWsDb.deletedMessageIds).slice(-200),
+      },
+    });
 
-    ws.on('message', (raw) => {
+    socket.on('message', (msg: any) => {
       try {
-        const msg = JSON.parse(raw.toString());
         if (boundUserId) {
           const u = globalWsDb.getUser(boundUserId);
           if (u) {
@@ -204,7 +194,7 @@ export function initWebSocketDatabase(_server?: Server) {
           }
         }
 
-        switch (msg.type) {
+        switch (msg?.type) {
           case 'REGISTER_USER': {
             if (msg.user && msg.user.id) {
               const uId: string = msg.user.id;
@@ -218,7 +208,7 @@ export function initWebSocketDatabase(_server?: Server) {
               if (!userSocketsMap.has(uId)) {
                 userSocketsMap.set(uId, new Set());
               }
-              userSocketsMap.get(uId)!.add(ws);
+              userSocketsMap.get(uId)!.add(socket);
 
               const existingUser = globalWsDb.getUser(uId);
               const userObj: DbUser = {
@@ -246,11 +236,7 @@ export function initWebSocketDatabase(_server?: Server) {
               }
 
               const queued = globalWsDb.popPendingSignals(uId);
-              queued.forEach((s) => {
-                try {
-                  ws.send(JSON.stringify(s));
-                } catch {}
-              });
+              queued.forEach((s) => socket.emit('message', s));
             }
             break;
           }
@@ -399,7 +385,7 @@ export function initWebSocketDatabase(_server?: Server) {
             if (uId) {
               const sockets = userSocketsMap.get(uId);
               if (sockets) {
-                sockets.delete(ws);
+                sockets.delete(socket);
                 if (sockets.size === 0) {
                   userSocketsMap.delete(uId);
                 }
@@ -416,15 +402,7 @@ export function initWebSocketDatabase(_server?: Server) {
           }
 
           case 'PING': {
-            if (boundUserId) {
-              const u = globalWsDb.getUser(boundUserId);
-              if (u) {
-                u.updated_at = Date.now();
-              }
-            }
-            if (ws.readyState === WebSocket.OPEN) {
-              ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
-            }
+            socket.emit('message', { type: 'PONG', timestamp: Date.now() });
             break;
           }
 
@@ -432,50 +410,33 @@ export function initWebSocketDatabase(_server?: Server) {
             break;
         }
       } catch (err) {
-        console.warn('[WebSocket DB] Message parse warning:', err);
+        console.warn('[Socket.IO DB] Message handling warning:', err);
       }
     });
 
-    const pingTimer = setInterval(() => {
-      if (ws.readyState === WebSocket.OPEN) {
-        try {
-          ws.send(JSON.stringify({ type: 'PING', timestamp: Date.now() }));
-        } catch {}
-      }
-    }, 15000);
-
-    ws.on('close', () => {
-      clearInterval(pingTimer);
-      if (boundUserId) {
-        const uId = boundUserId;
-        const sockets = userSocketsMap.get(uId);
-        if (sockets) {
-          sockets.delete(ws);
-          if (sockets.size === 0) {
-            userSocketsMap.delete(uId);
-            const timer = setTimeout(() => {
-              disconnectTimers.delete(uId);
-              if (userSocketsMap.has(uId)) return;
-              const user = globalWsDb.getUser(uId);
-              const oldChannel = user?.current_channel;
-              globalWsDb.deleteUser(uId);
-              broadcastTable('users', globalWsDb.getUsers());
-              if (oldChannel === 'video-general' || oldChannel === 'voice-general') {
-                broadcastMediaPresence('USER_LEFT_MEDIA', uId, oldChannel);
-              }
-            }, DISCONNECT_GRACE_MS);
-            disconnectTimers.set(uId, timer);
+    socket.on('disconnect', () => {
+      if (!boundUserId) return;
+      const uId = boundUserId;
+      const sockets = userSocketsMap.get(uId);
+      if (!sockets) return;
+      sockets.delete(socket);
+      if (sockets.size === 0) {
+        userSocketsMap.delete(uId);
+        const timer = setTimeout(() => {
+          disconnectTimers.delete(uId);
+          if (userSocketsMap.has(uId)) return;
+          const user = globalWsDb.getUser(uId);
+          const oldChannel = user?.current_channel;
+          globalWsDb.deleteUser(uId);
+          broadcastTable('users', globalWsDb.getUsers());
+          if (oldChannel === 'video-general' || oldChannel === 'voice-general') {
+            broadcastMediaPresence('USER_LEFT_MEDIA', uId, oldChannel);
           }
-        }
+        }, DISCONNECT_GRACE_MS);
+        disconnectTimers.set(uId, timer);
       }
     });
   });
 
-  console.log(`🔌 Pure WebSocket Database mounted at /ws-db`);
-
-  return (req: IncomingMessage, socket: Duplex, head: Buffer) => {
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      wss.emit('connection', ws, req);
-    });
-  };
+  console.log('🔌 Socket.IO database hub mounted at /socket.io');
 }

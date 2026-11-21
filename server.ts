@@ -2402,8 +2402,7 @@ app.all('/api/*', (req, res) => {
 async function startServer() {
   const server = http.createServer(app);
 
-  // Initialize Pure WebSocket Database upgrade handler on /ws-db
-  const handleWsDbUpgrade = initWebSocketDatabase(server);
+  initWebSocketDatabase(server);
 
   // Configure wisp-js server options for optimal proxying and compatibility
   wispServer.options.allow_tcp_streams = true;
@@ -2416,8 +2415,7 @@ async function startServer() {
     const reqUrl = req.url || '/';
     const pathname = reqUrl.split('?')[0];
 
-    if (pathname === '/ws-db' || pathname === '/ws-db/') {
-      handleWsDbUpgrade(req, socket, head);
+    if (pathname.startsWith('/socket.io/')) {
       return;
     }
 
