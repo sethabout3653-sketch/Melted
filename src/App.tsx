@@ -421,6 +421,7 @@ export default function App() {
         <div className="flex-1 min-w-0 min-h-0 flex flex-col">
         <Navbar
           currentTab={currentTab}
+          onTabChange={setCurrentTab}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           onGoHome={handleGoHome}
