@@ -39,7 +39,7 @@ THEME AND FONTS
 
 AI ASSISTANT (this chat)
 - A text chat with markdown and math rendering, copy-response, a new-session action, and four starter prompts (math formula, science concept, live web info, history overview).
-- The model is cognitivecomputations/dolphin-mistral-24b-venice-edition:free, served through OpenRouter.
+- The model is openrouter/free, which routes each request to an available free model through OpenRouter.
 - In auto mode it searches the web when a question seems to need current facts. It tries DuckDuckGo first and falls back to Wikipedia, then shows sources.
 - The assistant has no personality or tone setting. Answers are written fresh for each question.
 

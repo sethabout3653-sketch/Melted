@@ -18,10 +18,10 @@ export interface AIThinkingStep {
 
 export const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-export const OPENROUTER_MODEL = 'cognitivecomputations/dolphin-mistral-24b-venice-edition:free';
+export const OPENROUTER_MODEL = 'openrouter/free';
 
 export const FALLBACK_OPENROUTER_MODELS = [
-  { id: OPENROUTER_MODEL, owned_by: 'Cognitive Computations', description: 'Dolphin Mistral 24B Venice Edition (free)' },
+  { id: OPENROUTER_MODEL, owned_by: 'OpenRouter', description: 'Free Models Router (free)' },
 ];
 
 export function extractOpenRouterKey(env?: Record<string, any>, requestKey?: string): string {
