@@ -378,17 +378,16 @@ export function useGlobalChat({
             silenceTimer = null;
           }, 350);
         }
-
-        animId = requestAnimationFrame(checkVolume);
       };
 
       checkVolume();
+      animId = window.setInterval(checkVolume, 100);
     } catch (err) {
       console.warn('[useGlobalChat] VAD setup warning:', err);
     }
 
     return () => {
-      if (animId) cancelAnimationFrame(animId);
+      if (animId) clearInterval(animId);
       if (silenceTimer) clearTimeout(silenceTimer);
       if (source) { try { source.disconnect(); } catch {} }
       if (analyser) { try { analyser.disconnect(); } catch {} }
@@ -744,42 +743,71 @@ export function useGlobalChat({
     }
   }, [isScreenSharing, screenStream]);
 
-  return {
-    currentUser,
-    setCurrentUser,
-    activeNotification,
-    dismissNotification,
-    
-    // Voice/Video Shared States
-    isInVideo,
-    isVideoEnabled,
-    isScreenSharing,
-    isSpeaking,
-    is_speaking: isSpeaking,
-    isMuted,
-    setIsMuted,
-    isDeafened,
-    setIsDeafened,
-    localAudioStream,
-    cameraStream,
-    screenStream,
-    activeVideoStream,
-    micError,
-    cameraError,
-    screenShareError,
-    setMicError,
-    setCameraError,
-    setScreenShareError,
-    micPermissionStatus,
-    requestMicrophonePermission,
-    ...rtc,
-    joinVoiceChannel,
-    stopVoiceChannel,
-    toggleCamera,
-    toggleScreenShare,
-    
-    activeChannel,
-    setActiveChannel,
-    ...chat,
-  };
+  return useMemo(
+    () => ({
+      currentUser,
+      setCurrentUser,
+      activeNotification,
+      dismissNotification,
+
+      // Voice/Video Shared States
+      isInVideo,
+      isVideoEnabled,
+      isScreenSharing,
+      isSpeaking,
+      is_speaking: isSpeaking,
+      isMuted,
+      setIsMuted,
+      isDeafened,
+      setIsDeafened,
+      localAudioStream,
+      cameraStream,
+      screenStream,
+      activeVideoStream,
+      micError,
+      cameraError,
+      screenShareError,
+      setMicError,
+      setCameraError,
+      setScreenShareError,
+      micPermissionStatus,
+      requestMicrophonePermission,
+      ...rtc,
+      joinVoiceChannel,
+      stopVoiceChannel,
+      toggleCamera,
+      toggleScreenShare,
+
+      activeChannel,
+      setActiveChannel,
+      ...chat,
+    }),
+    [
+      currentUser,
+      activeNotification,
+      dismissNotification,
+      isInVideo,
+      isVideoEnabled,
+      isScreenSharing,
+      isSpeaking,
+      isMuted,
+      isDeafened,
+      localAudioStream,
+      cameraStream,
+      screenStream,
+      activeVideoStream,
+      micError,
+      cameraError,
+      screenShareError,
+      micPermissionStatus,
+      requestMicrophonePermission,
+      rtc,
+      joinVoiceChannel,
+      stopVoiceChannel,
+      toggleCamera,
+      toggleScreenShare,
+      activeChannel,
+      chat,
+    ]
+  );
 }

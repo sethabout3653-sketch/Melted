@@ -3,7 +3,7 @@ import { Variants, Transition } from 'motion/react';
 // Highly optimized spring physics for 60fps GPU-composited motion
 export const hoverTransition: Transition = {
   type: "tween",
-  duration: 0.35,
+  duration: 0.16,
   ease: [0.22, 1, 0.36, 1],
 };
 
@@ -18,25 +18,25 @@ export const cardHover = {
 export const entryVariants: Variants = {
   hidden: {
     opacity: 0,
-    y: 24,
+    y: 12,
   },
   visible: (i: number = 0) => ({
     opacity: 1,
     y: 0,
     transition: {
-      duration: 0.6,
+      duration: 0.22,
       ease: [0.16, 1, 0.3, 1],
-      delay: Math.min(i * 0.04, 0.3),
+      delay: Math.min(i * 0.02, 0.12),
     },
   }),
 };
 
 export const slideInVariants: Variants = {
-  hidden: { x: -28, opacity: 0 },
+  hidden: { x: -16, opacity: 0 },
   visible: {
     x: 0,
     opacity: 1,
-    transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] },
+    transition: { duration: 0.22, ease: [0.16, 1, 0.3, 1] },
   },
 };
 
@@ -46,23 +46,22 @@ export const containerVariants: Variants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.05,
-      delayChildren: 0.05,
+      staggerChildren: 0.02,
+      delayChildren: 0.02,
     },
   },
 };
 
 // Pure transform and opacity tab transition with zero filter/blur rasterization
 export const tabTransition: Variants = {
-  initial: { opacity: 0, y: 14, scale: 0.985 },
+  initial: { opacity: 0, y: 6 },
   animate: { 
     opacity: 1, 
     y: 0,
-    scale: 1,
-    transition: { duration: 0.45, ease: [0.16, 1, 0.3, 1] }
+    transition: { duration: 0.14, ease: [0.16, 1, 0.3, 1] }
   },
   exit: { 
     opacity: 0,
-    transition: { duration: 0.25, ease: [0.7, 0, 0.84, 0] }
+    transition: { duration: 0.08, ease: [0.7, 0, 0.84, 0] }
   },
 };

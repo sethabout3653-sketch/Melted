@@ -98,6 +98,9 @@ export const HeroSpotlight: React.FC<HeroSpotlightProps> = React.memo(({
                 src={activeGame.resolvedCover || activeGame.fallbackCover || activeGame.localCover || undefined}
                 alt={activeGame.name}
                 referrerPolicy="no-referrer"
+                loading="eager"
+                decoding="sync"
+                fetchPriority="high"
                 onError={(e) => {
                   const target = e.currentTarget;
                   if (activeGame.fallbackCover && target.src !== activeGame.fallbackCover) {

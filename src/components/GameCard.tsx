@@ -1,9 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Heart, Gamepad2 } from 'lucide-react';
-import { motion } from 'motion/react';
 import { GameItem } from '../types/game';
 import { generateGameSvgCover } from '../services/gameService';
-import { cardHover, hoverTransition, entryVariants } from '../utils/animations';
 
 interface GameCardProps {
   game: GameItem;
@@ -23,15 +21,11 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
   onAboutBlank,
   variant = 'standard'
 }) => {
-  const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
 
   const primaryCover = game.resolvedCover || game.cover || '';
   const [currentCover, setCurrentCover] = useState<string>(primaryCover);
   const [fallbackLevel, setFallbackLevel] = useState<number>(0);
-  const [retryCount, setRetryCount] = useState(0);
-
-  const [imgKey, setImgKey] = useState(0);
 
   const isFirstRunRef = useRef(true);
   useEffect(() => {
@@ -39,40 +33,25 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
       isFirstRunRef.current = false;
       return;
     }
-    setImageLoaded(false);
     setImageError(false);
     setFallbackLevel(0);
-    setRetryCount(0);
     setCurrentCover(primaryCover);
-    setImgKey(prev => prev + 1);
   }, [game.id, primaryCover]);
 
   const handleImageError = () => {
-    if (retryCount < 2) {
-      setTimeout(() => {
-        setRetryCount(prev => prev + 1);
-        setImgKey(prev => prev + 1);
-      }, 600);
-      return;
-    }
-
     if (fallbackLevel === 0) {
       if (game.fallbackCover && game.fallbackCover !== currentCover) {
         setFallbackLevel(1);
-        setRetryCount(0);
         setCurrentCover(game.fallbackCover);
       } else {
         setFallbackLevel(2);
-        setRetryCount(0);
         setCurrentCover(game.localCover || generateGameSvgCover(game.name, game.category));
       }
     } else if (fallbackLevel === 1) {
       setFallbackLevel(2);
-      setRetryCount(0);
       setCurrentCover(game.localCover || generateGameSvgCover(game.name, game.category));
     } else if (fallbackLevel === 2 && game.localCover && currentCover === game.localCover) {
       setFallbackLevel(3);
-      setRetryCount(0);
       setCurrentCover(generateGameSvgCover(game.name, game.category));
     } else {
       setImageError(true);
@@ -80,11 +59,8 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
   };
 
   return (
-    <motion.div 
-      whileHover={cardHover}
-      whileTap={{ scale: 0.98 }}
-      transition={hoverTransition}
-      className={`group relative bg-white/90 dark:bg-[#10101a] border border-slate-200/80 dark:border-white/10 shadow-sm dark:shadow-none hover:border-[var(--brand-blue)] hover:shadow-lg hover:shadow-black/5 rounded-2xl p-2 flex flex-col transition-colors duration-150 [content-visibility:auto] [contain-intrinsic-size:auto_300px] ${
+    <div 
+      className={`group relative bg-white/90 dark:bg-[#10101a] border border-slate-200/80 dark:border-white/10 shadow-sm dark:shadow-none hover:border-[var(--brand-blue)] hover:shadow-lg hover:shadow-black/5 rounded-2xl p-2 flex flex-col transition-[transform,border-color,box-shadow] duration-150 ease-out hover:-translate-y-1 active:scale-[0.98] [contain:layout_style] ${
         variant === 'large' ? 'md:col-span-2 md:row-span-2' : ''
       }`}
     >
@@ -93,10 +69,6 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
         onClick={() => onPlay(game)}
         className="relative w-full aspect-[16/10] sm:aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 dark:bg-[#0d0d12] cursor-pointer border border-slate-200 dark:border-[#1d1d2b] shadow-inner group"
       >
-        {!imageLoaded && !imageError && (
-          <div className="absolute inset-0 bg-slate-200 dark:bg-[#1a1a28] animate-pulse" />
-        )}
-
         {imageError || !currentCover ? (
           <div className="absolute inset-0 bg-slate-100 dark:bg-[#0f0f18] flex flex-col items-center justify-center p-3 text-center select-none">
             <div className="w-10 h-10 rounded-xl bg-white dark:bg-[#1a1a26] border border-slate-200 dark:border-[#2a2a3c] flex items-center justify-center text-[var(--brand-blue)] mb-2 shadow-sm">
@@ -108,16 +80,14 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
           </div>
         ) : (
           <img
-            key={imgKey}
             src={currentCover}
             alt={game.name}
             referrerPolicy="no-referrer"
-            loading="lazy"
-            onLoad={() => setImageLoaded(true)}
+            loading="eager"
+            decoding={index < 16 ? 'sync' : 'async'}
+            fetchPriority={index < 24 ? 'high' : 'auto'}
             onError={handleImageError}
-            className={`w-full h-full object-cover transition-transform duration-300 ease-out group-hover:scale-105 ${
-              imageLoaded ? 'opacity-100' : 'opacity-0'
-            } transition-opacity duration-200`}
+            className="w-full h-full object-cover transition-transform duration-200 ease-out group-hover:scale-105"
           />
         )}
 
@@ -173,6 +143,6 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
         </button>
       </div>
 
-    </motion.div>
+    </div>
   );
 });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { MessageSquare, X, ArrowRight, FileText, Image as ImageIcon, Music, Video as VideoIcon } from 'lucide-react';
 import { InAppNotification } from '../hooks/useGlobalChat';
 import { UserAvatar } from './UserAvatar';
@@ -14,29 +14,10 @@ export const InAppNotificationToast: React.FC<InAppNotificationToastProps> = ({
   onDismiss,
   onOpenChat,
 }) => {
-  const [progress, setProgress] = useState(100);
-
   useEffect(() => {
-    if (!notification) {
-      setProgress(100);
-      return;
-    }
-
-    setProgress(100);
-    const startTime = Date.now();
-    const duration = 6000;
-
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const remaining = Math.max(0, 100 - (elapsed / duration) * 100);
-      setProgress(remaining);
-      if (remaining <= 0) {
-        clearInterval(interval);
-        onDismiss();
-      }
-    }, 50);
-
-    return () => clearInterval(interval);
+    if (!notification) return;
+    const timer = window.setTimeout(onDismiss, 6000);
+    return () => window.clearTimeout(timer);
   }, [notification?.id, onDismiss]);
 
   if (!notification) return null;
@@ -109,10 +90,7 @@ export const InAppNotificationToast: React.FC<InAppNotificationToastProps> = ({
         <X className="w-4 h-4" />
       </button>
 
-      <div
-        className="absolute bottom-0 left-0 h-0.5 bg-[var(--brand-blue)] transition-[width] duration-75"
-        style={{ width: `${progress}%` }}
-      />
+      <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[var(--brand-blue)]/80" />
     </div>
   );
 };

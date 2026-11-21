@@ -163,10 +163,20 @@ const formatEpgTime = (ms: number): string => {
 
 const CHANNEL_NUMBER_BASE = 101;
 
-const liveEpgEntry = (entry: ChannelNowNext, nowMs: number): ChannelNowNext => ({
-  now: entry.now && entry.now.start <= nowMs && nowMs < entry.now.stop ? entry.now : undefined,
-  next: entry.next && entry.next.start > nowMs ? entry.next : undefined,
-});
+const liveEpgEntry = (entry: ChannelNowNext, nowMs: number): ChannelNowNext => {
+  if (entry.now && entry.now.start <= nowMs && nowMs < entry.now.stop) {
+    return {
+      now: entry.now,
+      next: entry.next && entry.next.start > nowMs ? entry.next : undefined,
+    };
+  }
+  if (entry.next && entry.next.start <= nowMs && nowMs < entry.next.stop) {
+    return { now: entry.next };
+  }
+  return {
+    next: entry.next && entry.next.start > nowMs ? entry.next : undefined,
+  };
+};
 
 const programmeProgress = (programme: EpgProgramme) => {
   const span = programme.stop - programme.start;
@@ -301,7 +311,7 @@ export const LiveTVView: React.FC<LiveTVViewProps> = ({
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const guideSearchInputRef = useRef<HTMLInputElement>(null);
 
-const EPG_STORAGE_KEY = 'frosthub_epg_cache';
+const EPG_STORAGE_KEY = 'frosthub_epg_cache_v2';
 let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
 
   const [qualityLevels, setQualityLevels] = useState<QualityLevel[]>([]);
@@ -313,6 +323,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
       return inMemoryEpgCache;
     }
     try {
+      localStorage.removeItem('frosthub_epg_cache');
       const raw = localStorage.getItem(EPG_STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
@@ -331,7 +342,7 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
     let retryTimer: number | null = null;
     const loadEpg = async () => {
       try {
-        const res = await fetch('/api/epg/now-next', { signal: AbortSignal.timeout(10000), cache: 'default' });
+        const res = await fetch('/api/epg/now-next', { signal: AbortSignal.timeout(10000), cache: 'no-cache' });
         if (!res.ok) return;
         const data = await res.json();
         if (active && data && typeof data.programs === 'object' && Object.keys(data.programs).length > 0) {

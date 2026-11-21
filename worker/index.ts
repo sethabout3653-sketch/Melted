@@ -2,6 +2,7 @@ import { onRequest as health } from '../functions/api/health';
 import { onRequest as scramjetCookies } from '../functions/api/scramjet-cookies';
 import { onRequest as scramjetFetch } from '../functions/api/scramjet-fetch';
 import { onRequest as raw } from '../functions/api/raw/[filename]';
+import { onRequest as cover } from '../functions/api/cover/[[path]]';
 import { onRequest as proxyStream } from '../functions/api/proxy-stream';
 import { onRequest as proxyImage } from '../functions/api/proxy-image';
 import { onRequest as epgNowNext } from '../functions/api/epg/now-next';
@@ -33,7 +34,8 @@ const routes: Array<{ pattern: RegExp; handler: Handler }> = [
   { pattern: /^\/api\/health\/?$/, handler: health },
   { pattern: /^\/api\/scramjet-cookies\/?$/, handler: ({ request, env }) => scramjetCookies({ request, env }) },
   { pattern: /^\/api\/scramjet-fetch\/?$/, handler: scramjetFetch },
-  { pattern: /^\/api\/raw\/([^/]+)\/?$/, handler: ({ params }) => raw({ params: { filename: params.filename } }) },
+  { pattern: /^\/api\/raw\/(.+)\/?$/, handler: ({ params }) => raw({ params: { filename: params.filename } }) },
+  { pattern: /^\/api\/cover\/(.+)\/?$/, handler: ({ request, params }) => cover({ request, params: { path: params.filename } }) },
   { pattern: /^\/api\/proxy-stream\/?$/, handler: proxyStream },
   { pattern: /^\/api\/proxy-image\/?$/, handler: proxyImage },
   { pattern: /^\/api\/epg\/now-next\/?$/, handler: epgNowNext },
@@ -46,7 +48,11 @@ export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    if (url.pathname === '/ws-db' || url.pathname === '/ws-db/') {
+    if (
+      url.pathname === '/ws-db' ||
+      url.pathname === '/ws-db/' ||
+      url.pathname.startsWith('/api/ws-db/')
+    ) {
       const hub = env.SIGNALING_HUB.get(env.SIGNALING_HUB.idFromName('global'));
       return hub.fetch(request);
     }

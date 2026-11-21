@@ -1,15 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { Menu, Search, X } from 'lucide-react';
+import { Film, Gamepad2, Menu, MessageSquare, Search, Sparkles, Tv, X } from 'lucide-react';
 import { FrostHubLogo } from './FrostHubLogo';
 import { AppTab } from './AppSidebar';
 
 interface NavbarProps {
   currentTab: AppTab;
+  onTabChange: (tab: AppTab) => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   onGoHome: () => void;
   onOpenMenu: () => void;
 }
+
+const MOBILE_QUICK_TABS: { id: AppTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: 'games', label: 'Games', icon: Gamepad2 },
+  { id: 'movies', label: 'Movies', icon: Film },
+  { id: 'tv', label: 'Live TV', icon: Tv },
+  { id: 'ai', label: 'AI', icon: Sparkles },
+  { id: 'chat', label: 'Chat', icon: MessageSquare },
+];
 
 interface NavSearchInputProps {
   searchQuery: string;
@@ -65,46 +74,64 @@ const NavSearchInput: React.FC<NavSearchInputProps> = React.memo(({
 
 export const Navbar: React.FC<NavbarProps> = React.memo(({
   currentTab,
+  onTabChange,
   searchQuery,
   onSearchChange,
   onGoHome,
   onOpenMenu,
 }) => {
-  const isVisible = currentTab === 'games';
+  const isGames = currentTab === 'games';
 
   return (
-    <header className="sticky top-0 z-50 w-full shrink-0 text-slate-900 dark:text-white">
-      <div
-        className={`grid transition-[grid-template-rows,opacity,visibility] duration-300 ease-in-out ${
-          isVisible ? 'grid-rows-[1fr] opacity-100 visible' : 'grid-rows-[0fr] opacity-0 invisible'
-        }`}
-      >
-        <div className="min-h-0 overflow-hidden bg-white/95 dark:bg-[#070d1a]/95 border-b border-slate-200/70 dark:border-white/10 transition-colors">
-          <div className="h-14 lg:h-[4.25rem] px-3 sm:px-6 lg:px-8 flex items-center gap-2 sm:gap-4">
-            <button
-              type="button"
-              onClick={onOpenMenu}
-              aria-label="Open menu"
-              className="lg:hidden min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5 cursor-pointer shrink-0"
-            >
-              <Menu className="w-5 h-5" />
-            </button>
+    <header className={`sticky top-0 z-50 w-full shrink-0 text-slate-900 dark:text-white ${isGames ? '' : 'lg:hidden'}`}>
+      <div className="bg-white/95 dark:bg-[#070d1a]/95 border-b border-slate-200/70 dark:border-white/10 transition-colors">
+        <div className="h-14 lg:h-[4.25rem] px-3 sm:px-6 lg:px-8 flex items-center gap-2 sm:gap-4">
+          <button
+            type="button"
+            onClick={onOpenMenu}
+            aria-label="Open menu"
+            className="lg:hidden min-w-[40px] min-h-[40px] flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10 cursor-pointer shrink-0 touch-manipulation"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
 
-            <button
-              type="button"
-              onClick={onGoHome}
-              aria-label="Go to FrostHub home"
-              className="lg:hidden shrink-0 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-blue)]"
-            >
-              <FrostHubLogo size="sm" />
-            </button>
+          <button
+            type="button"
+            onClick={onGoHome}
+            aria-label="Go to FrostHub home"
+            className="lg:hidden shrink-0 cursor-pointer rounded-xl focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-blue)]"
+          >
+            <FrostHubLogo size="sm" />
+          </button>
 
+          {isGames ? (
             <div className="flex-1 min-w-0 max-w-3xl">
-              {isVisible && (
-                <NavSearchInput searchQuery={searchQuery} onSearchChange={onSearchChange} />
-              )}
+              <NavSearchInput searchQuery={searchQuery} onSearchChange={onSearchChange} />
             </div>
-          </div>
+          ) : (
+            <nav aria-label="Quick tabs" className="lg:hidden flex-1 min-w-0 flex items-center justify-end gap-1 overflow-x-auto scrollbar-none">
+              {MOBILE_QUICK_TABS.map(({ id, label, icon: Icon }) => {
+                const active = currentTab === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => onTabChange(id)}
+                    aria-label={label}
+                    aria-current={active ? 'page' : undefined}
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-colors cursor-pointer touch-manipulation ${
+                      active
+                        ? 'bg-[var(--brand-blue)] text-white shadow-sm'
+                        : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <span className="hidden xs:inline sm:inline">{label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+          )}
         </div>
       </div>
     </header>

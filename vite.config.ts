@@ -51,14 +51,12 @@ function copyScramjetAssetsPlugin(): Plugin {
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const groqKey = env.GROQ_API_KEY || process.env.GROQ_API_KEY || '';
-  const geminiKey = env.GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
 
   return {
     define: {
       'process.env.GROQ_API_KEY': JSON.stringify(groqKey),
-      'process.env.GEMINI_API_KEY': JSON.stringify(geminiKey),
     },
-    envPrefix: ['VITE_', 'GROQ_', 'GEMINI_'],
+    envPrefix: ['VITE_', 'GROQ_'],
     plugins: [
       react(),
       tailwindcss(),

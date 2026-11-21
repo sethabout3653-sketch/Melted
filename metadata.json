@@ -2,5 +2,5 @@
   "name": "FrostHub",
   "description": "Premium editorial unblocked entertainment portal with community chat and AI study assistant.",
   "requestFramePermissions": ["microphone", "camera"],
-  "majorCapabilities": []
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

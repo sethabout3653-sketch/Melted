@@ -123,7 +123,7 @@ const UtilityActions: React.FC<NavLinksProps> = ({
 export const AppSidebar: React.FC<NavigationProps> = (props) => (
   <aside
     aria-label="Sidebar"
-    className="hidden lg:flex flex-col w-60 shrink-0 h-full border-r border-slate-200/70 dark:border-white/10 bg-white/70 dark:bg-white/[0.03] backdrop-blur-xl"
+    className="hidden lg:flex flex-col w-60 shrink-0 h-full border-r border-slate-200/70 dark:border-white/10 bg-white/95 dark:bg-[#090d16]/95"
   >
     <div className="h-[4.25rem] flex items-center px-5 shrink-0">
       <button
@@ -153,7 +153,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ isOpen, onClose, ...nav 
   <AnimatePresence>
     {isOpen && (
       <motion.div
-        className="lg:hidden fixed inset-0 z-[400]"
+        className="lg:hidden fixed inset-0 z-[500]"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}

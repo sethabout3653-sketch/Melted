@@ -3,24 +3,24 @@ import path from 'path';
 import express from 'express';
 import zlib from 'zlib';
 import { TV_CHANNELS, TVChannel } from '../data/channels';
+import '../data/registerExtraChannels';
+import { classifyChannel } from '../utils/channelOrganization';
+import {
+  EpgProgramme,
+  ChannelNowNext,
+  EpgChannelMeta,
+  normalizeRatingBadge,
+  normalizeTitleKey,
+  stripCircledSymbols,
+  resolveAccurateProgrammeRating,
+  buildChannelFallbackSchedule,
+} from '../utils/epgRatingHelpers';
 
-export interface EpgProgramme {
-  title: string;
-  start: number;
-  stop: number;
-  desc?: string;
-  rating?: string;
-  category?: string;
-  episode?: string;
-}
-
-export interface ChannelNowNext {
-  now?: EpgProgramme;
-  next?: EpgProgramme;
-}
+export type { EpgProgramme, ChannelNowNext };
 
 type FeedTag =
   | 'custom'
+  | 'pluto_api'
   | 'pluto'
   | 'samsung'
   | 'roku'
@@ -53,7 +53,6 @@ interface CandidateEntry {
   xmlId: string;
   feedTag: FeedTag;
   names: string[];
-  normNames: Set<string>;
 }
 
 const DEFAULT_XMLTV_FEEDS: FeedSource[] = [
@@ -107,8 +106,12 @@ const EXPLICIT_XMLTV_CHANNEL_IDS: Record<string, string[]> = {
   'foxlivenow-us-2e4ee': ['plex.tv.LiveNOW.from.FOX.plex', 'LiveNOW.from.FOX.us'],
   'fox-livenow-us': ['plex.tv.LiveNOW.from.FOX.plex', 'LiveNOW.from.FOX.us'],
   'nbcnewsnow-us-02844': ['plex.tv.NBC.News.NOW.plex', 'b5fe4277ff365ccda0a7d43028d53d90', 'CAAJ2700011IF'],
-  'bbchome-us-8caaf': ['plex.tv.BBC.Home.&.Garden.plex', 'b04b170e5f085586985358512adbdb9f', 'CABD1200012B8'],
-  'black-cinema-ed435': ['plex.tv.Maverick.Black.Cinema.plex', '834e2a09799752b3be7ecaab726b7242'],
+  'bbchome-us-8caaf': ['5fb5836fe745b600070fc743', 'plex.tv.BBC.Home.&.Garden.plex', 'b04b170e5f085586985358512adbdb9f', 'CABD1200012B8'],
+  'bbcfood-us-55aa7': ['5fb5844bf5514d0007945bda', 'CABD1200010LE', '6a1610bebdf296985fd95603-630905af0417b7074a4ad95e'],
+  'black-cinema-ed435': ['58af4c093a41ca9d4ecabe96', 'plex.tv.Maverick.Black.Cinema.plex', '834e2a09799752b3be7ecaab726b7242'],
+  'bloomberg-originals-live': ['6a1610bebdf296985fd95603-68fafe0dae4af1c7478fbeec', '697140a85d851f5e69414688-61d73c3ca7b7c7f703418518', 'Bloomberg.Originals.us', 'BloombergOriginals.us'],
+  'film-detective-f988f': ['The.Film.Detective.us2', 'The.Film.Detective.us', 'plex.tv.The.Film.Detective.plex'],
+  'fast-creator-tv': ['6a1610bebdf296985fd95603-67884bd6d37f2fd48d6220db'],
   'fast-delicious-eats': ['3cc1692ef5f94887414daf3a888964a6'],
   'reuters-now-live': ['The.Reuters.60.distro', 'plex.tv.The.Reuters.60.plex', 'GBBD4900001RG', 'Reuters.us'],
   'fast-reuters-60': ['The.Reuters.60.distro', 'plex.tv.The.Reuters.60.plex', 'GBBD4900001RG', 'Reuters.us'],
@@ -123,7 +126,7 @@ const EXPLICIT_XMLTV_CHANNEL_IDS: Record<string, string[]> = {
   'fast-dungeontv': ['Dungeon.TV.distro'],
   'al-jazeera-english-live': ['GB2300005ML', 'AlJazeeraEnglish.us', 'Al.Jazeera.uk', 'Al.Jazeera.nz'],
   'abc-news-live-3-free': ['USBC39000171G', 'ABCNewsLive.us', 'ABC.News.Live.us'],
-  'fast-dawson-s-creek-party-of-five': ['plex.tv.Dawsons.Creek.and.Party.of.Five.plex'],
+  'fast-dawson-s-creek-party-of-five': ['plex.tv.Dawsons.Creek.and.Party.of.Five.plex', '6a1610bebdf296985fd95603-6414957e238e21f260e78440'],
   'fast-stingray-hit-list': ['plex.tv.Stingray.Hit.List.plex'],
   'fast-xumo-free-sci-fi-fantasy-movies': ['plex.tv.FilmRise.Sci-Fi.plex', '6a1610bebdf296985fd95603-6449369eb3ff17382cae580d'],
   'ten-hd-au': ['mjh-10-nsw', '10Sydney.au', 'TenSydney.au', '10.au'],
@@ -141,17 +144,20 @@ const EXPLICIT_XMLTV_CHANNEL_IDS: Record<string, string[]> = {
   'sbsfood-au-xdk': ['mjh-sbs-3syd', 'SBSFood.au', 'SBS.Food.au'],
   'sbsviceland-au-t1t': ['mjh-sbs-2syd', 'SBSVICELAND.au', 'SBSViceland.au'],
   'sbsworldmovies-au-4o0': ['mjh-sbs-4syd', 'SBSWorldMovies.au', 'SBS.World.Movies.au'],
-  'abckids-au-r2v': ['ABCFamilyPerth.au', 'ABCKids.au', 'ABC.Kids.au'],
-  'abcme-au-2d1': ['ABCEntertainsPerth.au', 'ABCME.au', 'ABC.Me.au'],
+  'abckids-au-r2v': ['mjh-abc-kids', 'ABCKidsSydney.au', 'ABCKidsMelbourne.au', 'ABCKidsPerth.au', 'ABCKids.au', 'ABC.Kids.au'],
+  'abcme-au-2d1': ['mjh-abc-me', 'ABCEntertainsSydney.au', 'ABCEntertainsMelbourne.au', 'ABCME.au', 'ABC.Me.au'],
   'rteone-ie-661f5': ['RTE.One.HD.ie', 'RTEOne.ie'],
   'rtenews-ie-f6362': ['RTE.News.ie', 'RTENews.ie'],
   'virginmediaone-ie-2e599': ['Virgin.Media.One.HD.ie', 'VirginMediaOne.ie'],
   'virginmediatwo-ie-42929': ['Virgin.Media.Two.HD.ie', 'VirginMediaTwo.ie'],
   'virginmediathree-ie-57ef4': ['Virgin.Media.Three.HD.ie', 'VirginMediaThree.ie'],
+  'virginmediafour-ie-cd077': ['Virgin.Media.Four.HD.ie', 'VirginMediaFour.ie'],
+  'oireachtastv-ie-bad54': ['Oireachtas.TV.ie', 'OireachtasTV.ie'],
   'cpacenglish-ca-2f417': ['[CPAC].Cable.Public.Affairs.Channel.HD.ca2', 'CPAC.(English).ca2', 'CPAC.English.ca2'],
   'civmdt-ca-8c7aa': ['CIVM-DT.ca2', 'CIVM.ca2'],
   'cbftdt-ca-ca948': ['CBFT.ca2', 'ICI.Radio-Canada.Tele.Montreal.ca2'],
   'bbcscotland-uk-dc635': ['BBCScotland.uk', 'bbcscotland.uk', 'BBC.Scotland.HD.uk'],
+  'truecrime-uk-4cfbc': ['ITBD1000006RD', 'TrueCrime.uk', 'True.Crime.uk'],
   'gemstv-uk-8e41a': ['Gems.TV.uk', 'GemsTV.uk'],
   'bbcradio1-uk-19d2b': ['BBCR1.uk', 'bbcr1.uk'],
   'bbcradio2-uk-51a96': ['BBCR2.uk', 'bbcr2.uk'],
@@ -162,6 +168,7 @@ const EXPLICIT_XMLTV_CHANNEL_IDS: Record<string, string[]> = {
   'bbcradio5sportsextra-uk-590da': ['BBCR5SX.uk', 'bbcr5lsx.uk'],
   'bbcradio6music-uk-abe81': ['BBCR6M.uk', 'bbcr6m.uk'],
   'bbcradioasiannetwork-uk-7efe0': ['BBCRAN.uk', 'bbcran.uk'],
+  'one-mt-2b7f9': ['ONE.mt', 'One.mt'],
 };
 
 const REFRESH_TTL_MS = 4 * 60 * 60 * 1000;
@@ -169,6 +176,7 @@ const REFRESH_RETRY_MS = 5 * 60 * 1000;
 let lastRefreshAttemptAt = 0;
 const MAX_CONCURRENT_FEEDS = 2;
 const EPG_DISK_CACHE_PATH = path.join(process.cwd(), '.epg-cache.json');
+const EPG_PUBLIC_CACHE_PATH = path.join(process.cwd(), 'public', 'epg-cache.json');
 
 let cachedProgramsByChannelId: Record<string, EpgProgramme[]> = {};
 let cachedTvgIdMap: Record<string, string> = {};
@@ -176,10 +184,59 @@ let lastUpdatedAt = 0;
 let activeRefreshPromise: Promise<void> | null = null;
 let prewarmActive = false;
 
-function loadEpgFromDisk(): boolean {
+const CHANNEL_BY_ID = new Map<string, TVChannel>(TV_CHANNELS.map((c) => [c.id, c]));
+
+const TMDB_API_KEY = process.env.TMDB_API_KEY || 'e378bd904d6b4952f9261f8f27882a9c';
+const TMDB_BASE = 'https://api.themoviedb.org/3';
+const TMDB_TIMEOUT_MS = 8000;
+const TMDB_LOOKUP_CONCURRENCY = 12;
+const tmdbRatingLookups = new Map<string, Promise<string | undefined>>();
+const tmdbRatingResults = new Map<string, string | undefined>();
+
+function buildChannelMetaMap(): Record<string, EpgChannelMeta> {
+  const out: Record<string, EpgChannelMeta> = {};
+  for (const ch of TV_CHANNELS) {
+    const cls = classifyChannel(ch);
+    const decoded = extractStreamUrl(ch.url);
+    const plutoId =
+      decoded.match(/plu-([a-f0-9]{24})/i)?.[1] ||
+      decoded.match(/\/stitch\/(?:v1\/|embed\/)?(?:hls\/)?channel\/([a-f0-9]{24})/i)?.[1];
+    out[ch.id] = {
+      id: ch.id,
+      name: ch.name,
+      category: cls.category || ch.category,
+      subType: cls.subType,
+      ...(ch.description ? { description: ch.description.slice(0, 140) } : {}),
+      ...(plutoId ? { plutoId } : {}),
+    };
+  }
+  return out;
+}
+
+function buildBakedProgramsForDisk(): Record<string, EpgProgramme[]> {
+  const out: Record<string, EpgProgramme[]> = {};
+  for (const ch of TV_CHANNELS) {
+    const list = cachedProgramsByChannelId[ch.id];
+    if (!list?.length) continue;
+    const cls = classifyChannel(ch);
+    const chInfo = { id: ch.id, name: ch.name, category: cls.category || ch.category, subType: cls.subType };
+    out[ch.id] = list.map((p) => ({
+      ...p,
+      rating: resolveAccurateProgrammeRating(p, chInfo, tmdbRatingResults),
+    }));
+  }
+  return out;
+}
+
+export function loadEpgFromDisk(): boolean {
   try {
-    if (fs.existsSync(EPG_DISK_CACHE_PATH)) {
-      const raw = fs.readFileSync(EPG_DISK_CACHE_PATH, 'utf8');
+    const sourcePath = fs.existsSync(EPG_DISK_CACHE_PATH)
+      ? EPG_DISK_CACHE_PATH
+      : fs.existsSync(EPG_PUBLIC_CACHE_PATH)
+      ? EPG_PUBLIC_CACHE_PATH
+      : null;
+    if (sourcePath) {
+      const raw = fs.readFileSync(sourcePath, 'utf8');
       const data = JSON.parse(raw);
       if (data && typeof data === 'object') {
         if (data.programs && Object.keys(data.programs).length > 0) {
@@ -206,15 +263,20 @@ function loadEpgFromDisk(): boolean {
   return false;
 }
 
-function saveEpgToDisk(): void {
+export function saveEpgToDisk(): void {
   try {
     const payload = {
-      programs: cachedProgramsByChannelId,
+      programs: buildBakedProgramsForDisk(),
       tvgIds: cachedTvgIdMap,
+      channelMeta: buildChannelMetaMap(),
       lastUpdatedAt,
       tmdbRatings: Array.from(tmdbRatingResults.entries()),
     };
-    fs.writeFileSync(EPG_DISK_CACHE_PATH, JSON.stringify(payload), 'utf8');
+    const json = JSON.stringify(payload);
+    fs.writeFileSync(EPG_DISK_CACHE_PATH, json, 'utf8');
+    if (fs.existsSync(path.dirname(EPG_PUBLIC_CACHE_PATH))) {
+      fs.writeFileSync(EPG_PUBLIC_CACHE_PATH, json, 'utf8');
+    }
   } catch (err) {
     console.warn('[EPG] Disk cache save notice:', err);
   }
@@ -235,18 +297,26 @@ function decodeXmlEntities(str: string): string {
     .trim();
 }
 
-function stripCircledSymbols(name: string): string {
-  return name.replace(/[\u24B6-\u24E9]/g, '').trim();
+function normalizeStrictName(name: string): string {
+  return stripCircledSymbols(name)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\((?:720p|1080p|480p|sd|hd|fhd|uhd|en|english)\)/gi, '')
+    .replace(/&/g, 'and')
+    .replace(/\b(hd|fhd|uhd|sd)\b/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .trim();
 }
 
-function normalizeChannelName(name: string): string {
+function normalizeLooseName(name: string): string {
   return stripCircledSymbols(name)
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/\((?:720p|1080p|480p|sd|hd|fhd|uhd|en|english|east|west|us|uk|ca|au|ie|nz|sg)\)/gi, '')
     .replace(/&/g, 'and')
-    .replace(/\b(hd|fhd|uhd|sd|tv|channel|us|uk|sg|au|ie|ca|nz|east|west|plus)\b/g, '')
+    .replace(/\b(hd|fhd|uhd|sd|tv|channel|east|west)\b/g, '')
     .replace(/[^a-z0-9]/g, '')
     .trim();
 }
@@ -268,7 +338,10 @@ function extractProviderXmltvIds(streamUrl: string): { id: string; feed?: FeedTa
   const out: { id: string; feed?: FeedTag }[] = [];
 
   const plu = decoded.match(/plu-([a-f0-9]{24,32})(?:\.m3u8|$)/i)?.[1];
-  if (plu) out.push({ id: plu, feed: 'pluto' });
+  if (plu) out.push({ id: plu, feed: 'pluto_api' });
+
+  const stitcherPlu = decoded.match(/\/stitch\/(?:v1\/|embed\/)?(?:hls\/)?channel\/([a-f0-9]{24})/i)?.[1];
+  if (stitcherPlu) out.push({ id: stitcherPlu, feed: 'pluto_api' });
 
   const rok = decoded.match(/rok-([a-f0-9]{24,32})(?:\.m3u8|$)/i)?.[1];
   if (rok) out.push({ id: rok, feed: 'roku' });
@@ -278,9 +351,6 @@ function extractProviderXmltvIds(streamUrl: string): { id: string; feed?: FeedTa
 
   const plexPart = decoded.match(/\/library\/parts\/([a-f0-9]+-[a-f0-9]+)/i)?.[1];
   if (plexPart) out.push({ id: plexPart, feed: 'plex' });
-
-  const stitcherPlu = decoded.match(/\/stitch\/embed\/hls\/channel\/([a-f0-9]{24})/i)?.[1];
-  if (stitcherPlu) out.push({ id: stitcherPlu, feed: 'pluto' });
 
   return out;
 }
@@ -292,148 +362,6 @@ function parseXmltvTime(raw: string): number {
   if (!m[7]) return utcMs;
   const offsetMinutes = (m[7] === '-' ? -1 : 1) * (Number(m[8]) * 60 + Number(m[9]));
   return utcMs - offsetMinutes * 60_000;
-}
-
-function normalizeRatingBadge(raw: string): string | undefined {
-  const clean = raw.trim().toUpperCase().replace(/\s+/g, '');
-  if (!clean || clean === 'NA' || clean === 'N/A' || clean === 'NONE' || clean === 'UNRATED' || clean === 'UNKNOWN' || clean === '-') {
-    return undefined;
-  }
-  const table: Record<string, string> = {
-    TVY: 'TV-Y',
-    'TV-Y': 'TV-Y',
-    Y: 'TV-Y',
-    C: 'TV-Y',
-    P: 'TV-Y',
-    TVY7: 'TV-Y7',
-    'TV-Y7': 'TV-Y7',
-    TVY7FV: 'TV-Y7',
-    'TV-Y7-FV': 'TV-Y7',
-    Y7: 'TV-Y7',
-    C8: 'TV-Y7',
-    '7': 'TV-Y7',
-    '7+': 'TV-Y7',
-    '8': 'TV-Y7',
-    'FSK6': 'TV-Y7',
-    '6': 'TV-Y7',
-    '6+': 'TV-Y7',
-    TVG: 'TV-G',
-    'TV-G': 'TV-G',
-    G: 'G',
-    U: 'TV-G',
-    AL: 'TV-G',
-    ALL: 'TV-G',
-    TP: 'TV-G',
-    T: 'TV-G',
-    L: 'TV-G',
-    KT: 'TV-G',
-    'FSK0': 'TV-G',
-    '0': 'TV-G',
-    '3': 'TV-G',
-    '4': 'TV-G',
-    '5': 'TV-G',
-    TVPG: 'TV-PG',
-    'TV-PG': 'TV-PG',
-    PG: 'PG',
-    PG8: 'TV-PG',
-    M: 'TV-PG',
-    '9': 'TV-PG',
-    '10': 'TV-PG',
-    '10+': 'TV-PG',
-    '11': 'TV-PG',
-    '12': 'TV-PG',
-    '12+': 'TV-PG',
-    '12A': 'PG-13',
-    'FSK12': 'TV-PG',
-    PG13: 'PG-13',
-    'PG-13': 'PG-13',
-    '13': 'PG-13',
-    '13+': 'PG-13',
-    TV14: 'TV-14',
-    'TV-14': 'TV-14',
-    '14': 'TV-14',
-    '14+': 'TV-14',
-    '14A': 'TV-14',
-    VM14: 'TV-14',
-    '15': 'TV-14',
-    '15+': 'TV-14',
-    '16': 'TV-14',
-    '16+': 'TV-14',
-    'FSK16': 'TV-14',
-    MA15: 'TV-14',
-    'MA15+': 'TV-14',
-    'AV15+': 'TV-14',
-    TVMA: 'TV-MA',
-    'TV-MA': 'TV-MA',
-    R: 'R',
-    NC17: 'NC-17',
-    'NC-17': 'NC-17',
-    '18': 'TV-MA',
-    '18+': 'TV-MA',
-    '18A': 'TV-MA',
-    'R18+': 'TV-MA',
-    M18: 'TV-MA',
-    R21: 'TV-MA',
-    VM18: 'TV-MA',
-    'FSK18': 'TV-MA',
-  };
-  return table[clean] || (/^(TV-Y|TV-Y7|TV-G|TV-PG|TV-14|TV-MA|G|PG|PG-13|R|NC-17)$/.test(clean) ? clean : undefined);
-}
-
-function getDefaultRatingForCategory(category?: string, channelName?: string): string {
-  const cat = (category || '').toLowerCase();
-  const name = (channelName || '').toLowerCase();
-  if (cat.includes('kids') || name.includes('cartoon') || name.includes('kids') || name.includes('family') || cat.includes('animation')) return 'TV-G';
-  if (cat.includes('news') || cat.includes('ambiance') || cat.includes('music') || cat.includes('lifestyle') || name.includes('news') || name.includes('radio')) return 'TV-G';
-  if (cat.includes('sci-fi') || cat.includes('horror') || cat.includes('crime') || cat.includes('action')) return 'TV-14';
-  if (cat.includes('comedy') || cat.includes('entertainment') || cat.includes('series') || cat.includes('movies') || cat.includes('drama') || cat.includes('reality') || cat.includes('game show')) return 'TV-PG';
-  return 'TV-PG';
-}
-
-function getGuaranteedContentRating(title: string): string | undefined {
-  const t = title.toLowerCase();
-  if (
-    t.includes('south park') ||
-    t.includes('rick and morty') ||
-    t.includes('family guy') ||
-    t.includes('american dad') ||
-    t.includes('robot chicken') ||
-    t.includes('breaking bad') ||
-    t.includes('game of thrones') ||
-    t.includes('succession') ||
-    t.includes('sopranos') ||
-    t.includes('wire') ||
-    t.includes('the boys') ||
-    t.includes('peacemaker') ||
-    t.includes('fargo') ||
-    t.includes('dexter') ||
-    t.includes('true detective') ||
-    t.includes('metalocalypse') ||
-    t.includes('aqua teen') ||
-    t.includes('superjail') ||
-    t.includes('boondocks')
-  ) {
-    return 'TV-MA';
-  }
-  if (
-    t.includes('enemy of the state') ||
-    t.includes('pulp fiction') ||
-    t.includes('fight club') ||
-    t.includes('terminator') ||
-    t.includes('matrix') ||
-    t.includes('die hard') ||
-    t.includes('deadpool') ||
-    t.includes('goodfellas') ||
-    t.includes('scarface') ||
-    t.includes('godfather') ||
-    t.includes('saving private ryan') ||
-    t.includes('gladiator') ||
-    t.includes('john wick') ||
-    t.includes('mad max')
-  ) {
-    return 'R';
-  }
-  return undefined;
 }
 
 function parseEpisodeInfo(programmeBody: string, title: string, desc?: string): string | undefined {
@@ -492,32 +420,19 @@ function parseProgrammeCategory(programmeBody: string): string | undefined {
   return cats.length ? cats.join(', ').slice(0, 80) : undefined;
 }
 
-const CHANNEL_BY_ID = new Map<string, TVChannel>(TV_CHANNELS.map((c) => [c.id, c]));
-
-const TMDB_API_KEY = process.env.TMDB_API_KEY || 'e378bd904d6b4952f9261f8f27882a9c';
-const TMDB_BASE = 'https://api.themoviedb.org/3';
-const TMDB_TIMEOUT_MS = 8000;
-const TMDB_LOOKUP_CONCURRENCY = 8;
-const RATING_ENRICH_WAIT_MS = 4000;
-const tmdbRatingLookups = new Map<string, Promise<string | undefined>>();
-const tmdbRatingResults = new Map<string, string | undefined>();
-
-function normalizeTitleKey(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
 function buildSearchTitleVariants(title: string): string[] {
   const clean = decodeXmlEntities(title)
     .replace(/\((?:19|20)\d{2}\)/g, '')
-    .replace(/\b(?:new|live|repeat|encore|hd)\b$/i, '')
+    .replace(/\b(?:new|live|repeat|encore|hd|broadcast edit)\b/gi, '')
+    .replace(/\[[^\]]+\]/g, '')
     .trim();
   const base = clean.split(/[:|–—-]/)[0]?.trim() || clean;
   const variants = [clean, base].filter((s) => s.length >= 2);
   return Array.from(new Set(variants));
 }
 
-async function tmdbGet<T>(path: string, params: Record<string, string> = {}): Promise<T> {
-  const url = new URL(`${TMDB_BASE}${path}`);
+async function tmdbGet<T>(reqPath: string, params: Record<string, string> = {}): Promise<T> {
+  const url = new URL(`${TMDB_BASE}${reqPath}`);
   url.searchParams.set('api_key', TMDB_API_KEY);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   const res = await fetch(url, { signal: AbortSignal.timeout(TMDB_TIMEOUT_MS) });
@@ -536,7 +451,7 @@ async function resolveTmdbRating(title: string): Promise<string | undefined> {
   for (const query of variants) {
     const search = await tmdbGet<{ results: { id: number; media_type: string; name?: string; title?: string }[] }>(
       '/search/multi',
-      { query, include_adult: 'false', language: 'en-US' },
+      { query, include_adult: 'false', language: 'en-US' }
     );
     match = search.results?.find((result) => {
       if (result.media_type !== 'movie' && result.media_type !== 'tv') return false;
@@ -552,7 +467,7 @@ async function resolveTmdbRating(title: string): Promise<string | undefined> {
 
   if (match.media_type === 'movie') {
     const data = await tmdbGet<{ results: { iso_3166_1: string; release_dates: { certification?: string }[] }[] }>(
-      `/movie/${match.id}/release_dates`,
+      `/movie/${match.id}/release_dates`
     );
     for (const regionCode of ['US', 'CA', 'GB', 'AU']) {
       const certification = data.results
@@ -574,7 +489,7 @@ async function resolveTmdbRating(title: string): Promise<string | undefined> {
   return undefined;
 }
 
-function lookupTmdbRating(title: string): Promise<string | undefined> {
+export function lookupTmdbRating(title: string): Promise<string | undefined> {
   const key = normalizeTitleKey(title);
   if (!key) return Promise.resolve(undefined);
   if (tmdbRatingResults.has(key)) return Promise.resolve(tmdbRatingResults.get(key));
@@ -593,41 +508,51 @@ function lookupTmdbRating(title: string): Promise<string | undefined> {
   return lookup;
 }
 
-function prewarmTmdbRatingsInBackground() {
-  if (prewarmActive) return;
+export async function prewarmAllTmdbRatings(maxTitles = 1200): Promise<number> {
+  if (prewarmActive) return 0;
   prewarmActive = true;
-  (async () => {
-    try {
-      const snapshot = getNowNextSnapshot();
-      const pending = new Set<string>();
-      for (const ch of TV_CHANNELS) {
-        const entry = snapshot.programs[ch.id];
-        if (!entry) continue;
-        for (const p of [entry.now, entry.next]) {
-          if (!p || p.rating) continue;
-          const key = normalizeTitleKey(p.title);
-          if (!key || tmdbRatingResults.has(key)) continue;
-          // Prioritize TMDB for series, movies, entertainment, anime, horror, sci-fi, comedy
-          const isNewsOrRadioOnly = /\b(live broadcast|radio|weather|oireachtas|parliament|test cricket|bulletin)\b/i.test(p.title);
-          if (!isNewsOrRadioOnly) {
-            pending.add(p.title);
-          }
+  let resolvedCount = 0;
+  try {
+    const nowMs = Date.now();
+    const pending = new Set<string>();
+    for (const ch of TV_CHANNELS) {
+      const list = cachedProgramsByChannelId[ch.id];
+      if (!list?.length) continue;
+      const upcoming = list.filter((p) => p.stop > nowMs).slice(0, 4);
+      for (const p of upcoming) {
+        if (p.rating && p.rating !== 'TV-PG') continue;
+        const key = normalizeTitleKey(p.title);
+        if (!key || tmdbRatingResults.has(key)) continue;
+        const isLiveNewsOrRadio = /\b(live broadcast|live radio|live coverage|featured broadcast|weather|oireachtas|parliament|test cricket|bulletin|morning news|evening news|world news|live news)\b/i.test(p.title);
+        if (!isLiveNewsOrRadio) {
+          pending.add(p.title);
         }
       }
-      const queue = [...pending];
-      const worker = async () => {
-        while (queue.length) {
-          const title = queue.shift()!;
-          await lookupTmdbRating(title);
-        }
-      };
-      await Promise.all(Array.from({ length: Math.min(8, queue.length) }, worker));
-    } catch {
-      // ignore prewarm failures
-    } finally {
-      prewarmActive = false;
     }
-  })();
+    const queue = [...pending].slice(0, maxTitles);
+    const worker = async () => {
+      while (queue.length) {
+        const title = queue.shift();
+        if (!title) break;
+        const r = await lookupTmdbRating(title);
+        if (r) resolvedCount++;
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(TMDB_LOOKUP_CONCURRENCY, queue.length) }, worker));
+    if (resolvedCount > 0 || pending.size > 0) {
+      saveEpgToDisk();
+    }
+    return resolvedCount;
+  } catch {
+    return resolvedCount;
+  } finally {
+    prewarmActive = false;
+  }
+}
+
+function prewarmTmdbRatingsInBackground() {
+  if (prewarmActive) return;
+  void prewarmAllTmdbRatings(1200);
 }
 
 async function withTmdbRatings(snapshot: ReturnType<typeof getNowNextSnapshot>): Promise<ReturnType<typeof getNowNextSnapshot>> {
@@ -636,11 +561,10 @@ async function withTmdbRatings(snapshot: ReturnType<typeof getNowNextSnapshot>):
     const entry = snapshot.programs[ch.id];
     if (!entry) continue;
     for (const programme of [entry.now, entry.next]) {
-      if (programme && !programme.rating) {
+      if (programme && (!programme.rating || programme.rating === 'TV-PG')) {
         const key = normalizeTitleKey(programme.title);
         if (key && !tmdbRatingResults.has(key)) {
-          // Always try TMDB first for scripted/VOD/entertainment titles
-          const isObviousLiveRadio = /\b(live broadcast|radio|weather|oireachtas)\b/i.test(programme.title);
+          const isObviousLiveRadio = /\b(live broadcast|live radio|live coverage|weather|oireachtas|bulletin)\b/i.test(programme.title);
           if (!isObviousLiveRadio) {
             pendingTitles.add(programme.title);
           }
@@ -649,42 +573,31 @@ async function withTmdbRatings(snapshot: ReturnType<typeof getNowNextSnapshot>):
     }
   }
 
-  const queue = [...pendingTitles].slice(0, 48);
-  if (queue.length) {
-    // Run TMDB lookups completely non-blocking in background
+  if (pendingTitles.size > 0 && !prewarmActive) {
     setTimeout(() => {
-      const worker = async () => {
-        while (queue.length) {
-          const t = queue.shift();
-          if (t) await lookupTmdbRating(t);
-        }
-      };
-      Promise.all(Array.from({ length: Math.min(TMDB_LOOKUP_CONCURRENCY, queue.length) }, worker)).catch(() => {});
+      void prewarmAllTmdbRatings(1200);
     }, 10);
   }
 
-  const applyRating = (programme?: EpgProgramme, channelCategory?: string, channelName?: string): EpgProgramme | undefined => {
+  const applyRating = (programme: EpgProgramme | undefined, ch: TVChannel | undefined): EpgProgramme | undefined => {
     if (!programme) return undefined;
     const { category: _cat, ...rest } = programme;
-    
-    const guaranteed = getGuaranteedContentRating(programme.title);
-    if (guaranteed) {
-      return { ...rest, rating: guaranteed };
-    }
-
-    if (programme.rating && programme.rating.toLowerCase() !== 'none' && programme.rating.toLowerCase() !== 'n/a' && programme.rating !== 'TV-PG') {
-      return rest;
-    }
-    const tmdbRating = tmdbRatingResults.get(normalizeTitleKey(programme.title));
-    const fallbackRating = getDefaultRatingForCategory(programme.category || channelCategory, channelName);
-    return { ...rest, rating: tmdbRating || fallbackRating };
+    const cls = ch ? classifyChannel(ch) : undefined;
+    const chInfo = {
+      id: ch?.id,
+      name: ch?.name,
+      category: cls?.category || ch?.category,
+      subType: cls?.subType,
+    };
+    const accurate = resolveAccurateProgrammeRating(programme, chInfo, tmdbRatingResults);
+    return { ...rest, rating: accurate };
   };
 
   const programs: Record<string, ChannelNowNext> = {};
   for (const [channelId, entry] of Object.entries(snapshot.programs)) {
     const ch = CHANNEL_BY_ID.get(channelId);
-    const now = applyRating(entry.now, ch?.category, ch?.name);
-    const next = applyRating(entry.next, ch?.category, ch?.name);
+    const now = applyRating(entry.now, ch);
+    const next = applyRating(entry.next, ch);
     programs[channelId] = { ...(now ? { now } : {}), ...(next ? { next } : {}) };
   }
   return { updatedAt: snapshot.updatedAt, programs };
@@ -697,7 +610,7 @@ async function fetchBufferWithRetry(url: string, timeoutMs: number, retries = 2)
       const res = await fetch(url, {
         headers: {
           'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-          'Accept': 'application/xml,text/xml,application/gzip,application/octet-stream,*/*;q=0.8',
+          'Accept': 'application/xml,text/xml,application/json,application/gzip,application/octet-stream,*/*;q=0.8',
           'Cache-Control': 'no-cache',
         },
         redirect: 'follow',
@@ -711,6 +624,58 @@ async function fetchBufferWithRetry(url: string, timeoutMs: number, retries = 2)
     }
   }
   throw lastError;
+}
+
+async function fetchPlutoApiFeed(windowStart: number, windowEnd: number): Promise<ParsedFeed> {
+  const channels = new Map<string, string[]>();
+  const programmes = new Map<string, EpgProgramme[]>();
+  try {
+    const startIso = new Date(Math.max(windowStart, Date.now() - 2 * 3600_000)).toISOString();
+    const stopIso = new Date(Math.min(windowEnd, Date.now() + 10 * 3600_000)).toISOString();
+    const url = `https://api.pluto.tv/v2/channels?start=${encodeURIComponent(startIso)}&stop=${encodeURIComponent(stopIso)}`;
+    const buf = await fetchBufferWithRetry(url, 15000, 1);
+    const list: any[] = JSON.parse(buf.toString('utf8'));
+    if (Array.isArray(list)) {
+      for (const ch of list) {
+        const chId = String(ch?._id || '').trim();
+        const chName = String(ch?.name || '').trim();
+        if (!chId) continue;
+        if (chName) channels.set(chId, [chName]);
+        const timelines = Array.isArray(ch?.timelines) ? ch.timelines : [];
+        const progs: EpgProgramme[] = [];
+        for (const item of timelines) {
+          const start = Date.parse(item?.start || '');
+          const stop = Date.parse(item?.stop || '');
+          const title = String(item?.title || '').trim();
+          if (!Number.isFinite(start) || !Number.isFinite(stop) || stop <= start || !title) continue;
+          const ep = item?.episode || {};
+          const rawRating = ep?.rating || item?.rating || '';
+          const rating = typeof rawRating === 'string' ? normalizeRatingBadge(rawRating) : undefined;
+          const desc = typeof ep?.description === 'string' ? ep.description.trim().slice(0, 180) : undefined;
+          const category = typeof ep?.genre === 'string' ? ep.genre.trim() : undefined;
+          const season = Number(ep?.season);
+          const number = Number(ep?.number);
+          const episode =
+            Number.isFinite(season) && Number.isFinite(number) && season > 0 && number > 0
+              ? `S${String(season).padStart(2, '0')}E${String(number).padStart(2, '0')}`
+              : undefined;
+          progs.push({
+            title,
+            start,
+            stop,
+            ...(desc ? { desc } : {}),
+            ...(rating ? { rating } : {}),
+            ...(category ? { category } : {}),
+            ...(episode ? { episode } : {}),
+          });
+        }
+        if (progs.length) programmes.set(chId, progs);
+      }
+    }
+  } catch (err: any) {
+    console.debug(`[EPG] Pluto JSON API skipped: ${err?.message || err}`);
+  }
+  return { tag: 'pluto_api', channels, programmes };
 }
 
 async function fetchAndParseXmltvFeed(source: FeedSource, windowStart: number, windowEnd: number): Promise<ParsedFeed> {
@@ -946,149 +911,93 @@ function dedupeAndSortProgrammes(rawProgs: EpgProgramme[]): EpgProgramme[] {
 function getChannelRoutingHints(ch: TVChannel): {
   preferredFeeds: FeedTag[];
   strictRegionOnly: boolean;
+  countryCode?: string;
 } {
   const cat = (ch.category || '').trim();
   const id = ch.id.toLowerCase();
 
   if (cat === 'Australia' || /-au-/.test(id)) {
-    return { preferredFeeds: ['au_syd', 'au', 'custom'], strictRegionOnly: true };
+    return { preferredFeeds: ['au_syd', 'au', 'custom'], strictRegionOnly: true, countryCode: 'AU' };
   }
   if (cat === 'Ireland' || /-ie-/.test(id)) {
-    return { preferredFeeds: ['ie', 'uk', 'freeview', 'custom'], strictRegionOnly: true };
+    return { preferredFeeds: ['ie', 'uk', 'freeview', 'custom'], strictRegionOnly: true, countryCode: 'IE' };
   }
   if (cat === 'New Zealand' || /-nz-/.test(id)) {
-    return { preferredFeeds: ['nz', 'au_syd', 'au', 'custom'], strictRegionOnly: true };
+    return { preferredFeeds: ['nz', 'au_syd', 'au', 'custom'], strictRegionOnly: true, countryCode: 'NZ' };
   }
   if (cat === 'UK' || /-uk-/.test(id)) {
-    return { preferredFeeds: ['freeview', 'uk', 'samsung', 'pluto', 'plex', 'plex1', 'custom'], strictRegionOnly: true };
+    return { preferredFeeds: ['freeview', 'uk', 'samsung', 'pluto', 'plex', 'plex1', 'custom'], strictRegionOnly: true, countryCode: 'GB' };
   }
   if (cat === 'Canada' || /-ca-/.test(id)) {
-    return { preferredFeeds: ['ca', 'samsung', 'pluto', 'plex', 'plex1', 'custom'], strictRegionOnly: true };
+    return { preferredFeeds: ['ca', 'samsung', 'pluto', 'plex', 'plex1', 'custom'], strictRegionOnly: true, countryCode: 'CA' };
+  }
+  if (cat === 'Malta' || /-mt-/.test(id)) {
+    return { preferredFeeds: ['custom'], strictRegionOnly: true, countryCode: 'MT' };
+  }
+  if (cat === 'Nigeria' || /-ng-/.test(id)) {
+    return { preferredFeeds: ['custom'], strictRegionOnly: true, countryCode: 'NG' };
+  }
+  if (cat === 'Kenya' || /-ke-/.test(id)) {
+    return { preferredFeeds: ['custom'], strictRegionOnly: true, countryCode: 'KE' };
   }
   if (id.startsWith('pluto-')) {
-    return { preferredFeeds: ['pluto', 'samsung', 'plex', 'plex1', 'roku', 'us', 'custom'], strictRegionOnly: false };
+    return { preferredFeeds: ['pluto_api', 'pluto', 'samsung', 'plex', 'plex1', 'roku', 'us', 'custom'], strictRegionOnly: false, countryCode: 'US' };
   }
   if (id.startsWith('samsung-')) {
-    return { preferredFeeds: ['samsung', 'pluto', 'plex', 'plex1', 'roku', 'us', 'custom'], strictRegionOnly: false };
+    return { preferredFeeds: ['samsung', 'pluto_api', 'pluto', 'plex', 'plex1', 'roku', 'us', 'custom'], strictRegionOnly: false, countryCode: 'US' };
   }
   if (id.startsWith('roku-')) {
-    return { preferredFeeds: ['roku', 'samsung', 'pluto', 'plex', 'plex1', 'us', 'custom'], strictRegionOnly: false };
+    return { preferredFeeds: ['roku', 'samsung', 'pluto_api', 'pluto', 'plex', 'plex1', 'us', 'custom'], strictRegionOnly: false, countryCode: 'US' };
   }
   if (id.startsWith('fast-')) {
-    return { preferredFeeds: ['plex', 'plex1', 'pluto', 'samsung', 'roku', 'distrotv', 'us', 'custom'], strictRegionOnly: false };
+    return { preferredFeeds: ['plex', 'plex1', 'pluto_api', 'pluto', 'samsung', 'roku', 'distrotv', 'us', 'custom'], strictRegionOnly: false, countryCode: 'US' };
   }
   return {
-    preferredFeeds: ['custom', 'us', 'pluto', 'samsung', 'plex', 'plex1', 'roku', 'distrotv', 'au_syd', 'uk', 'freeview', 'ca', 'sg'],
+    preferredFeeds: ['custom', 'us', 'plex', 'plex1', 'pluto_api', 'pluto', 'samsung', 'roku', 'distrotv', 'au_syd', 'uk', 'freeview', 'ca', 'sg'],
     strictRegionOnly: false,
+    countryCode: 'US',
   };
 }
 
-function buildMetadataFallbackSchedule(ch: TVChannel, nowMs: number = Date.now()): EpgProgramme[] {
-  const hourStart = Math.floor(nowMs / 3600_000) * 3600_000;
-  const hourEnd = hourStart + 3600_000;
-  const nextEnd = hourEnd + 3600_000;
-  const cleanName = stripCircledSymbols(ch.name);
-  const cat = (ch.category || '').trim();
-  const isRadio = /\b(fm|radio|newstalk|spin 103|classic hits)\b/i.test(cleanName);
-  const isNews = cat === 'News' || /\b(news|oireachtas|al jazeera)\b/i.test(cleanName);
+function scoreCandidateForChannel(candidate: CandidateEntry, ch: TVChannel, countryCode?: string): number {
+  const xmlId = candidate.xmlId;
+  let score = 0;
 
-  if (ch.id === 'pbs-kids') {
-    const pbsShows = [
-      { title: "Daniel Tiger's Neighborhood", desc: "Explore life's little lessons with Daniel Tiger and friends." },
-      { title: "Curious George", desc: "Join everyone's favorite curious monkey on educational adventures." },
-      { title: "Wild Kratts", desc: "Chris and Martin Kratt dive into creature habitats around the world." },
-      { title: "Alma's Way", desc: "Alma Rivera speaks up, listens to others, and solves problems in the Bronx." },
-      { title: "Lyla in the Loop", desc: "Lyla, her blue sidekick Stu, and her family tackle creative problem-solving." },
-      { title: "Work It Out Wombats!", desc: "Malik, Zadie, and Hamilton practice computational thinking in the Treeborhood." },
-      { title: "Pinkalicious & Peterrific", desc: "Inspiring kids to engage in the arts and self-expression." },
-      { title: "Elinor Wonders Why", desc: "Elinor and her pals explore nature, curiosity, and asking why." },
-      { title: "Donkey Hodie", desc: "Empowering preschoolers to be resourceful and resilient problem solvers." },
-      { title: "Xavier Riddle and the Secret Museum", desc: "Xavier and friends travel back in time to meet historical heroes." },
-      { title: "Molly of Denali", desc: "Molly shares her life in rural Alaska with humor and resourcefulness." },
-      { title: "Arthur", desc: "Classic animated adventures with Arthur Read and friends in Elwood City." }
-    ];
-    const currentHourIndex = Math.floor(nowMs / 3600_000);
-    const nowShow = pbsShows[currentHourIndex % pbsShows.length];
-    const nextShow = pbsShows[(currentHourIndex + 1) % pbsShows.length];
-    const laterShow = pbsShows[(currentHourIndex + 2) % pbsShows.length];
+  // Check Samsung STVP country prefixes (US, GB, CA, IN, IT, ES, FR, DE, BR, MX, KR)
+  const stvpCountry = xmlId.match(/^([A-Z]{2})[A-Z0-9]{6,}$/)?.[1];
+  const suffixCountry = xmlId.match(/\.([a-z0-9_]+)$/i)?.[1]?.toLowerCase();
 
-    return [
-      {
-        title: nowShow.title,
-        start: hourStart,
-        stop: hourEnd,
-        desc: nowShow.desc,
-        category: 'Family',
-        rating: 'TV-Y',
-      },
-      {
-        title: nextShow.title,
-        start: hourEnd,
-        stop: nextEnd,
-        desc: nextShow.desc,
-        category: 'Family',
-        rating: 'TV-Y',
-      },
-      {
-        title: laterShow.title,
-        start: nextEnd,
-        stop: nextEnd + 3600_000,
-        desc: laterShow.desc,
-        category: 'Family',
-        rating: 'TV-Y',
+  if (countryCode === 'GB') {
+    if (suffixCountry === 'uk' || stvpCountry === 'GB') score += 100;
+    else if (stvpCountry && stvpCountry !== 'GB') score -= 120;
+    else if (suffixCountry && suffixCountry !== 'uk') score -= 100;
+  } else if (countryCode === 'CA') {
+    if (suffixCountry === 'ca' || suffixCountry === 'ca2' || stvpCountry === 'CA') score += 100;
+    else if (stvpCountry && stvpCountry !== 'CA') score -= 120;
+  } else if (countryCode === 'AU') {
+    if (suffixCountry === 'au' || xmlId.startsWith('mjh-')) score += 100;
+  } else if (countryCode === 'IE') {
+    if (suffixCountry === 'ie') score += 100;
+    else if (suffixCountry === 'uk') score += 50;
+  } else if (countryCode === 'US') {
+    if (suffixCountry === 'us' || suffixCountry === 'us2' || suffixCountry === 'us_locals1' || stvpCountry === 'US' || xmlId.includes('.plex') || /^[a-f0-9]{24}/.test(xmlId)) {
+      score += 100;
+    } else if (stvpCountry && !['US', 'CA', 'GB'].includes(stvpCountry)) {
+      // Avoid picking India/Italy/Brazil/Germany Samsung feed when US/EN exists
+      if (!ch.name.toLowerCase().includes('india') && !ch.name.toLowerCase().includes('ndtv') && !ch.name.toLowerCase().includes('wion') && !ch.name.toLowerCase().includes('cnbc tv18') && !ch.name.toLowerCase().includes('cnn news18') && !ch.name.toLowerCase().includes('news9') && !ch.name.toLowerCase().includes('republic')) {
+        score -= 100;
       }
-    ];
+    }
   }
 
-  let nowTitle = `${cleanName} Live Broadcast`;
-  let nextTitle = `${cleanName} Continuing Broadcast`;
-
-  if (isRadio) {
-    nowTitle = `${cleanName} — Live Radio`;
-    nextTitle = `${cleanName} — Continuous Music & Talk`;
-  } else if (isNews) {
-    nowTitle = `${cleanName} — Live Coverage`;
-    nextTitle = `${cleanName} — News & Analysis`;
-  } else if (cat === 'Kids') {
-    nowTitle = `${cleanName} — Kids Programming`;
-    nextTitle = `${cleanName} — Family Favorites`;
-  } else if (cat === 'Sports') {
-    nowTitle = `${cleanName} — Sports & Highlights`;
-    nextTitle = `${cleanName} — Action Replay`;
-  } else if (cat === 'Documentary' || cat === 'Gaming & Tech') {
-    nowTitle = `${cleanName} — Featured Programming`;
-    nextTitle = `${cleanName} — Upcoming Feature`;
-  } else if (cat === 'Comedy' || cat === 'Sci-Fi & Horror' || cat === 'Series' || cat === 'Movies' || cat === 'VOD Movies (EN)') {
-    nowTitle = `${cleanName} — Continuous Feature`;
-    nextTitle = `${cleanName} — Next Showcase`;
-  }
-
-  const defaultRating = getDefaultRatingForCategory(ch.category, cleanName);
-
-  return [
-    {
-      title: nowTitle,
-      start: hourStart,
-      stop: hourEnd,
-      desc: ch.description || `Live programming on ${cleanName}.`,
-      category: ch.category,
-      rating: defaultRating,
-    },
-    {
-      title: nextTitle,
-      start: hourEnd,
-      stop: nextEnd,
-      desc: ch.description || `Continuing broadcast on ${cleanName}.`,
-      category: ch.category,
-      rating: defaultRating,
-    },
-  ];
+  return score;
 }
 
 function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgramme[]) {
   const feedsByTag = new Map<FeedTag, ParsedFeed>();
   const programmesByFeedAndXmlId = new Map<string, EpgProgramme[]>();
-  const candidatesByFeed = new Map<FeedTag, Map<string, CandidateEntry>>();
+  const strictCandidatesByFeed = new Map<FeedTag, Map<string, CandidateEntry[]>>();
+  const looseCandidatesByFeed = new Map<FeedTag, Map<string, CandidateEntry[]>>();
 
   for (const feed of feeds) {
     if (!feed) continue;
@@ -1103,23 +1012,31 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
   }
 
   for (const [tag, feed] of feedsByTag) {
-    const feedIndex = new Map<string, CandidateEntry>();
+    const strictIndex = new Map<string, CandidateEntry[]>();
+    const looseIndex = new Map<string, CandidateEntry[]>();
     for (const [xmlId, progs] of feed.programmes) {
       programmesByFeedAndXmlId.set(`${tag}::${xmlId}`, progs);
     }
     for (const [xmlId, names] of feed.channels) {
       if (!feed.programmes.has(xmlId)) continue;
-      const normNames = new Set<string>();
+      const entry: CandidateEntry = { xmlId, feedTag: tag, names };
       for (const n of names) {
-        const nn = normalizeChannelName(n);
-        if (nn) normNames.add(nn);
-      }
-      const entry: CandidateEntry = { xmlId, feedTag: tag, names, normNames };
-      for (const nn of normNames) {
-        if (!feedIndex.has(nn)) feedIndex.set(nn, entry);
+        const sn = normalizeStrictName(n);
+        if (sn) {
+          const list = strictIndex.get(sn) || [];
+          if (!list.includes(entry)) list.push(entry);
+          strictIndex.set(sn, list);
+        }
+        const ln = normalizeLooseName(n);
+        if (ln) {
+          const list = looseIndex.get(ln) || [];
+          if (!list.includes(entry)) list.push(entry);
+          looseIndex.set(ln, list);
+        }
       }
     }
-    candidatesByFeed.set(tag, feedIndex);
+    strictCandidatesByFeed.set(tag, strictIndex);
+    looseCandidatesByFeed.set(tag, looseIndex);
   }
 
   const byChannelId: Record<string, EpgProgramme[]> = {};
@@ -1136,7 +1053,7 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
     let matchedFeed: FeedTag | undefined;
     let matchedXmlId: string | undefined;
 
-    const { preferredFeeds, strictRegionOnly } = getChannelRoutingHints(ch);
+    const { preferredFeeds, strictRegionOnly, countryCode } = getChannelRoutingHints(ch);
     const searchOrderFeeds = strictRegionOnly
       ? preferredFeeds
       : Array.from(new Set([...preferredFeeds, ...feeds.map((f) => f?.tag).filter(Boolean) as FeedTag[]]));
@@ -1144,7 +1061,11 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
     // 1. Exact Provider Stream ID mappings (Pluto / Roku / Samsung STVP / Plex Part UUID)
     const providerIds = extractProviderXmltvIds(ch.url);
     for (const pid of providerIds) {
-      const feedCheckOrder = pid.feed ? [pid.feed, ...searchOrderFeeds.filter((t) => t !== pid.feed)] : searchOrderFeeds;
+      const feedCheckOrder = pid.feed
+        ? pid.feed === 'pluto_api'
+          ? ['pluto_api' as FeedTag, 'pluto' as FeedTag, ...searchOrderFeeds.filter((t) => t !== 'pluto_api' && t !== 'pluto')]
+          : [pid.feed, ...searchOrderFeeds.filter((t) => t !== pid.feed)]
+        : searchOrderFeeds;
       for (const tag of feedCheckOrder) {
         const feed = feedsByTag.get(tag);
         if (feed?.programmes.has(pid.id)) {
@@ -1172,26 +1093,39 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
       }
     }
 
-    // 3. Exact normalized display-name match respecting regional / provider feed priority
-    if (!matchedXmlId) {
-      const nameVariants = [
-        ch.name,
-        stripCircledSymbols(ch.name).replace(/^(Pluto TV |Roku |Samsung )/i, '').trim(),
-      ];
+    // 3. Exact strict normalized display-name match respecting regional & provider priority
+    const nameVariants = [
+      ch.name,
+      stripCircledSymbols(ch.name).replace(/^(Pluto TV |Roku |Samsung )/i, '').trim(),
+    ];
+
+    const tryMatchByNormalizer = (indexMap: Map<FeedTag, Map<string, CandidateEntry[]>>, normFn: (s: string) => string) => {
       for (const rawName of nameVariants) {
-        const targetNorm = normalizeChannelName(rawName);
+        const targetNorm = normFn(rawName);
         if (!targetNorm) continue;
         for (const tag of searchOrderFeeds) {
-          const idx = candidatesByFeed.get(tag);
-          const candidate = idx?.get(targetNorm);
-          if (candidate) {
-            matchedFeed = candidate.feedTag;
-            matchedXmlId = candidate.xmlId;
-            break;
+          const idx = indexMap.get(tag);
+          const list = idx?.get(targetNorm);
+          if (!list?.length) continue;
+          const sorted = [...list]
+            .map((entry) => ({ entry, score: scoreCandidateForChannel(entry, ch, countryCode) }))
+            .sort((a, b) => b.score - a.score);
+          const best = sorted[0];
+          if (best && best.score >= -50) {
+            matchedFeed = best.entry.feedTag;
+            matchedXmlId = best.entry.xmlId;
+            return true;
           }
         }
-        if (matchedXmlId) break;
       }
+      return false;
+    };
+
+    if (!matchedXmlId) {
+      tryMatchByNormalizer(strictCandidatesByFeed, normalizeStrictName);
+    }
+    if (!matchedXmlId && !strictRegionOnly) {
+      tryMatchByNormalizer(looseCandidatesByFeed, normalizeLooseName);
     }
 
     if (matchedXmlId && matchedFeed) {
@@ -1200,6 +1134,17 @@ function buildChannelScheduleMap(feeds: ParsedFeed[], adultSwimProgs: EpgProgram
       if (rawPrograms.length) {
         byChannelId[ch.id] = dedupeAndSortProgrammes(rawPrograms);
       }
+    } else {
+      // Ensure every channel always has a curated channel-aware schedule stored in cache too
+      const cls = classifyChannel(ch);
+      byChannelId[ch.id] = buildChannelFallbackSchedule({
+        id: ch.id,
+        name: ch.name,
+        category: cls.category || ch.category,
+        subType: cls.subType,
+        description: ch.description,
+      });
+      tvgIds[ch.id] = ch.id;
     }
   }
 
@@ -1212,18 +1157,19 @@ export async function refreshEpgCache(customUrls?: string[], force = false): Pro
 
   const run = async () => {
     const now = Date.now();
-    const windowStart = now - 10 * 60_000;
-    const windowEnd = now + 12 * 3600_000;
+    const windowStart = now - 30 * 60_000;
+    const windowEnd = now + 36 * 3600_000;
     const sources: FeedSource[] = [
       ...(customUrls || []).map((url) => ({ tag: 'custom' as FeedTag, url })),
       ...DEFAULT_XMLTV_FEEDS,
     ];
-    const [parsedFeeds, selectiveFeeds, adultSwimProgs] = await Promise.all([
+    const [plutoApiFeed, parsedFeeds, selectiveFeeds, adultSwimProgs] = await Promise.all([
+      fetchPlutoApiFeed(windowStart, windowEnd),
       fetchFeedsWithConcurrency(sources, windowStart, windowEnd, MAX_CONCURRENT_FEEDS),
       Promise.all(SELECTIVE_STREAM_FEEDS.map((s) => fetchSelectiveXmltvStream(s, windowStart, windowEnd))),
       fetchAdultSwimSchedule(),
     ]);
-    const { byChannelId, tvgIds } = buildChannelScheduleMap([...parsedFeeds, ...selectiveFeeds], adultSwimProgs);
+    const { byChannelId, tvgIds } = buildChannelScheduleMap([plutoApiFeed, ...parsedFeeds, ...selectiveFeeds], adultSwimProgs);
     if (Object.keys(byChannelId).length) {
       cachedProgramsByChannelId = { ...cachedProgramsByChannelId, ...byChannelId };
       cachedTvgIdMap = { ...cachedTvgIdMap, ...tvgIds };
@@ -1249,7 +1195,12 @@ export function getNowNextSnapshot(nowMs: number = Date.now()): {
   for (const ch of TV_CHANNELS) {
     const cachedList = cachedProgramsByChannelId[ch.id];
     const hasUpcoming = cachedList?.some((p) => p.stop > nowMs);
-    const list = hasUpcoming ? cachedList : buildMetadataFallbackSchedule(ch, nowMs);
+    const cls = classifyChannel(ch);
+    const fallbackList = buildChannelFallbackSchedule(
+      { id: ch.id, name: ch.name, category: cls.category || ch.category, subType: cls.subType, description: ch.description },
+      nowMs
+    );
+    const list = hasUpcoming ? cachedList : fallbackList;
     let nowProg: EpgProgramme | undefined;
     let nextProg: EpgProgramme | undefined;
     for (let i = 0; i < list.length; i++) {
@@ -1270,9 +1221,17 @@ export function getNowNextSnapshot(nowMs: number = Date.now()): {
         break;
       }
     }
-    if (!nowProg && !nextProg && list.length > 0) {
-      nowProg = list[0];
-      nextProg = list[1] || list[0];
+    if (!nowProg && nextProg && fallbackList.length > 0) {
+      const fbNow = fallbackList.find((p) => p.start <= nowMs && nowMs < p.stop) || fallbackList[0];
+      nowProg = { ...fbNow, start: Math.min(fbNow.start, nowMs), stop: nextProg.start };
+    }
+    if (nowProg && !nextProg && fallbackList.length > 0) {
+      const fbNext = fallbackList.find((p) => p.start >= nowProg!.stop) || fallbackList[1] || fallbackList[0];
+      nextProg = { ...fbNext, start: nowProg.stop, stop: Math.max(nowProg.stop + 1800_000, fbNext.stop) };
+    }
+    if (!nowProg && !nextProg && fallbackList.length > 0) {
+      nowProg = fallbackList[0];
+      nextProg = fallbackList[1] || fallbackList[0];
     }
     if (nowProg || nextProg) {
       programs[ch.id] = { ...(nowProg ? { now: nowProg } : {}), ...(nextProg ? { next: nextProg } : {}) };
@@ -1306,7 +1265,6 @@ export function initEpgRoutes(app: express.Express) {
         ensureFreshEpg();
       }
       res.setHeader('Cache-Control', 'public, max-age=30');
-      // Instant non-blocking response from memory
       res.json(await withTmdbRatings(getNowNextSnapshot()));
     } catch {
       res.status(500).json({ error: 'Failed to load EPG guide', programs: {} });

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'motion/react';
 import { 
   Heart, 
   RotateCw, 
@@ -76,51 +75,62 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     };
   }, [game.id, game.name]);
 
-  // Screen Wake Lock & Inactivity Resume for Chromebooks
+  // Screen Wake Lock & Inactivity Resume for Chromebooks (zero per-click IPC overhead)
   useEffect(() => {
     let wakeLockSentinel: any = null;
+    let cancelled = false;
 
     const requestWakeLock = async () => {
+      if (cancelled || wakeLockSentinel) return;
       try {
         if ('wakeLock' in navigator && (navigator as any).wakeLock) {
-          wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
+          const sentinel = await (navigator as any).wakeLock.request('screen');
+          if (cancelled) {
+            sentinel?.release?.().catch(() => {});
+            return;
+          }
+          wakeLockSentinel = sentinel;
+          sentinel?.addEventListener?.('release', () => {
+            if (wakeLockSentinel === sentinel) {
+              wakeLockSentinel = null;
+            }
+          }, { once: true });
         }
       } catch {
         // Silent fail
       }
     };
 
-    requestWakeLock();
+    void requestWakeLock();
 
-    const handleWakeAndFocus = () => {
-      requestWakeLock();
-      if (iframeRef.current) {
+    const focusGameIfNeeded = () => {
+      const el = iframeRef.current;
+      if (el && document.activeElement !== el) {
         try {
-          iframeRef.current.focus();
-          iframeRef.current.contentWindow?.postMessage({ type: 'RESUME_GAME' }, '*');
-          iframeRef.current.contentWindow?.postMessage({ type: 'WAKE_GAME' }, '*');
-        } catch {
-          // Silent
-        }
+          el.focus();
+          el.contentWindow?.postMessage({ type: 'RESUME_GAME' }, '*');
+          el.contentWindow?.postMessage({ type: 'WAKE_GAME' }, '*');
+        } catch {}
       }
     };
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        handleWakeAndFocus();
+        void requestWakeLock();
+        focusGameIfNeeded();
       }
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('focus', handleWakeAndFocus);
-    window.addEventListener('pointerdown', handleWakeAndFocus);
+    window.addEventListener('focus', focusGameIfNeeded);
 
     return () => {
+      cancelled = true;
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('focus', handleWakeAndFocus);
-      window.removeEventListener('pointerdown', handleWakeAndFocus);
+      window.removeEventListener('focus', focusGameIfNeeded);
       if (wakeLockSentinel && typeof wakeLockSentinel.release === 'function') {
         wakeLockSentinel.release().catch(() => {});
+        wakeLockSentinel = null;
       }
     };
   }, []);
@@ -134,7 +144,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
   }, []);
 
-  // Keyboard shortcut: Escape to close player, and wake game on any game keypress
+  // Keyboard shortcut: Escape to close player, and refocus game only when focus drifted
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !document.fullscreenElement) {
@@ -145,7 +155,6 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         try {
           iframeRef.current.focus();
           iframeRef.current.contentWindow?.postMessage({ type: 'RESUME_GAME' }, '*');
-          iframeRef.current.contentWindow?.postMessage({ type: 'WAKE_GAME' }, '*');
         } catch {}
       }
     };
@@ -250,12 +259,12 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const activeLaunchUrl = stealthUrl || directUrl || getPlayableGameUrl(game);
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 animate-in fade-in duration-150 p-0 sm:p-4">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#05070c] p-0 sm:p-4">
       
       {/* Outer Game Theater Frame: Edge-to-edge on mobile, theater framed on desktop */}
       <div 
         ref={containerRef}
-        className={`relative flex flex-col bg-black overflow-hidden transition-all ${
+        className={`relative flex flex-col bg-black overflow-hidden ${
           isFullscreen 
             ? 'h-[100dvh] w-screen border-none rounded-none' 
             : 'w-full h-[100dvh] sm:h-auto sm:max-w-5xl sm:aspect-video sm:max-h-[85vh] bg-white dark:bg-slate-900 rounded-none sm:rounded-2xl shadow-2xl'
@@ -297,12 +306,10 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
             <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
               
               {/* Favorite Button */}
-              <motion.button
+              <button
                 type="button"
-                whileHover={{ scale: 1.08 }}
-                whileTap={{ scale: 0.92 }}
                 onClick={() => onToggleFavorite(game.id)}
-                className={`min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl border transition-all cursor-pointer ${
+                className={`min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl border transition-[transform,colors] duration-100 hover:scale-105 active:scale-95 cursor-pointer ${
                   isFavorite
                     ? 'bg-[var(--brand-blue)] text-white border-[var(--brand-blue)] shadow-md shadow-[var(--brand-blue-glow)]'
                     : 'bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:text-[var(--brand-blue)] dark:hover:text-[var(--brand-blue)] border-slate-200 dark:border-slate-700 hover:border-blue-200 dark:hover:border-blue-700'
@@ -310,58 +317,50 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 title={isFavorite ? 'Saved to Favorites' : 'Add to Favorites'}
               >
                 <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
-              </motion.button>
+              </button>
 
               {/* Stealth about:blank button */}
               {activeLaunchUrl && (
-                <motion.button
+                <button
                   type="button"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
                   onClick={() => launchAboutBlank(activeLaunchUrl, game.name)}
-                  className="hidden sm:flex items-center gap-1.5 px-3 min-h-[40px] bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-[var(--brand-blue)] dark:hover:text-[var(--brand-blue)] hover:border-blue-200 dark:hover:border-blue-700 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
+                  className="hidden sm:flex items-center gap-1.5 px-3 min-h-[40px] bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:text-[var(--brand-blue)] dark:hover:text-[var(--brand-blue)] hover:border-blue-200 dark:hover:border-blue-700 text-xs font-bold rounded-xl border border-slate-200 dark:border-slate-700 transition-[transform,colors] duration-100 hover:scale-105 active:scale-95 cursor-pointer"
                   title="Open stealth tab (about:blank cloak)"
                 >
                   <EyeOff className="w-3.5 h-3.5" />
                   <span>Stealth Window</span>
-                </motion.button>
+                </button>
               )}
 
               {/* Reload button */}
-              <motion.button
+              <button
                 type="button"
-                whileHover={{ scale: 1.08, rotate: 180 }}
-                whileTap={{ scale: 0.92 }}
                 onClick={reloadGame}
-                className="min-w-[40px] min-h-[40px] flex items-center justify-center bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-[var(--brand-blue)] dark:hover:text-[var(--brand-blue)] rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
+                className="min-w-[40px] min-h-[40px] flex items-center justify-center bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-[var(--brand-blue)] dark:hover:text-[var(--brand-blue)] rounded-xl border border-slate-200 dark:border-slate-700 transition-[transform,colors] duration-100 hover:scale-105 active:scale-95 cursor-pointer"
                 title="Reload game"
               >
                 <RotateCw className="w-4 h-4" />
-              </motion.button>
+              </button>
 
               {/* Fullscreen button */}
-              <motion.button
+              <button
                 type="button"
-                whileHover={{ scale: 1.08 }}
-                whileTap={{ scale: 0.92 }}
                 onClick={toggleFullscreen}
-                className="min-w-[40px] min-h-[40px] flex items-center justify-center bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-[var(--brand-blue)] dark:hover:text-[var(--brand-blue)] rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
+                className="min-w-[40px] min-h-[40px] flex items-center justify-center bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 hover:text-[var(--brand-blue)] dark:hover:text-[var(--brand-blue)] rounded-xl border border-slate-200 dark:border-slate-700 transition-[transform,colors] duration-100 hover:scale-105 active:scale-95 cursor-pointer"
                 title="Enter Fullscreen"
               >
                 <Maximize2 className="w-4 h-4" />
-              </motion.button>
+              </button>
 
               {/* Close button */}
-              <motion.button
+              <button
                 type="button"
-                whileHover={{ scale: 1.08 }}
-                whileTap={{ scale: 0.92 }}
                 onClick={onClose}
-                className="min-w-[40px] min-h-[40px] flex items-center justify-center bg-[var(--brand-blue)] hover:bg-red-500 text-white font-bold rounded-xl transition-all cursor-pointer ml-0.5 border border-[var(--brand-blue)] hover:border-red-500 shadow-lg shadow-[var(--brand-blue-glow)]"
+                className="min-w-[40px] min-h-[40px] flex items-center justify-center bg-[var(--brand-blue)] hover:bg-red-500 text-white font-bold rounded-xl transition-[transform,colors] duration-100 hover:scale-105 active:scale-95 cursor-pointer ml-0.5 border border-[var(--brand-blue)] hover:border-red-500 shadow-lg shadow-[var(--brand-blue-glow)]"
                 title="Close game (Esc)"
               >
                 <X className="w-4 h-4 stroke-[3]" />
-              </motion.button>
+              </button>
 
             </div>
 
@@ -369,11 +368,12 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         )}
 
 
-        {/* Game Canvas Container: Occupies full screen in fullscreen */}
+        {/* Game Canvas Container: Isolated hardware layer for steady 60+ fps gameplay */}
         <div 
           className="relative flex-1 w-full h-full bg-black overflow-hidden"
+          style={{ contain: 'strict', isolation: 'isolate' }}
           onClick={() => {
-            if (iframeRef.current) {
+            if (iframeRef.current && document.activeElement !== iframeRef.current) {
               try {
                 iframeRef.current.focus();
                 iframeRef.current.contentWindow?.postMessage({ type: 'RESUME_GAME' }, '*');
@@ -382,13 +382,13 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           }}
         >
           
-          {/* Floating exit fullscreen button (visible on touchscreens, hover-revealed on desktop) */}
+          {/* Floating exit fullscreen button (no backdrop-blur over gameplay surface) */}
           {isFullscreen && (
-            <div className="absolute top-3 right-3 z-30 opacity-90 sm:opacity-0 sm:hover:opacity-100 transition-opacity duration-200 flex items-center gap-2">
+            <div className="absolute top-3 right-3 z-30 opacity-90 sm:opacity-0 sm:hover:opacity-100 transition-opacity duration-150 flex items-center gap-2">
               <button
                 type="button"
                 onClick={reloadGame}
-                className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl bg-black/75 hover:bg-black text-white hover:text-[var(--brand-blue)] backdrop-blur-md border border-white/20 transition-all cursor-pointer shadow-xl"
+                className="min-w-[40px] min-h-[40px] flex items-center justify-center rounded-xl bg-black/90 hover:bg-black text-white hover:text-[var(--brand-blue)] border border-white/20 transition-colors cursor-pointer shadow-xl"
                 title="Reload Game"
               >
                 <RotateCw className="w-4 h-4" />
@@ -396,7 +396,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               <button
                 type="button"
                 onClick={toggleFullscreen}
-                className="flex items-center gap-1.5 px-3 min-h-[40px] rounded-xl bg-black/75 hover:bg-black text-white hover:text-[var(--brand-blue)] backdrop-blur-md border border-white/20 transition-all cursor-pointer shadow-xl text-xs font-semibold"
+                className="flex items-center gap-1.5 px-3 min-h-[40px] rounded-xl bg-black/90 hover:bg-black text-white hover:text-[var(--brand-blue)] border border-white/20 transition-colors cursor-pointer shadow-xl text-xs font-semibold"
                 title="Exit Fullscreen (Esc)"
               >
                 <Minimize2 className="w-4 h-4 text-[var(--brand-blue)]" />

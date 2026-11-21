@@ -21,6 +21,7 @@
   "dependencies": {
     "@distube/ytdl-core": "^5.2.1",
     "@giphy/js-fetch-api": "^5.8.0",
+    "@google/genai": "^3.6.1",
     "@mercuryworkshop/epoxy-transport": "3.0.2",
     "@mercuryworkshop/libcurl-transport": "2.0.6",
     "@mercuryworkshop/scramjet": "2.0.67-alpha.2",
