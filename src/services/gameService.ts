@@ -494,11 +494,15 @@ export function getPlayableGameUrl(game: GameItem): string {
  */
 export function shouldUseScramjetByDefault(game: GameItem): boolean {
   if (!game) return false;
-  // GN-Math native game embeds run directly as-is
-  if (game.source === 'native') {
-    return false;
-  }
-  return true;
+  const name = (game.name || '').toLowerCase().trim();
+  const scramjetAllowed = new Set([
+    'undertale',
+    'gemini',
+    'soundboard 2',
+    'soundboard',
+    'deltarune',
+  ]);
+  return scramjetAllowed.has(name);
 }
 
 /**
@@ -584,6 +588,12 @@ export const FEATURED_APP_CONFIG = {
     url: 'https://gemini.google.com',
     coverUrl: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1d/Google_Gemini_icon_2025.svg/960px-Google_Gemini_icon_2025.svg.png?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=thumbnail',
   },
+  ddlc: {
+    name: 'Doki Doki Literature Club',
+    url: 'https://sethabout3653-sketch.github.io/EmeraldGreenR.github.io/',
+    coverUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRMamlkw5KBVusv5915HUGcPYcq7bVp4q1bvP60VydMhw&s=10',
+    author: 'By Steam',
+  },
 };
 
 const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
@@ -631,6 +641,21 @@ const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
     fallbackCover: FEATURED_APP_CONFIG.google.coverUrl,
     localCover: FEATURED_APP_CONFIG.google.coverUrl,
     resolvedUrl: FEATURED_APP_CONFIG.google.url,
+  },
+  {
+    id: 900004,
+    name: FEATURED_APP_CONFIG.ddlc.name,
+    cover: FEATURED_APP_CONFIG.ddlc.coverUrl,
+    url: FEATURED_APP_CONFIG.ddlc.url,
+    author: FEATURED_APP_CONFIG.ddlc.author,
+    special: ['doki doki', 'literature club', 'ddlc', 'steam', 'horror'],
+    featured: true,
+    source: 'native',
+    category: 'Horror & Mystery',
+    resolvedCover: FEATURED_APP_CONFIG.ddlc.coverUrl,
+    fallbackCover: FEATURED_APP_CONFIG.ddlc.coverUrl,
+    localCover: FEATURED_APP_CONFIG.ddlc.coverUrl,
+    resolvedUrl: FEATURED_APP_CONFIG.ddlc.url,
   },
 ];
 
