@@ -1,13 +1,30 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { DbUser } from '../server/wsDatabase';
 
+const env = (import.meta as any).env || {};
+const customTurnUrls: string[] = String(env.VITE_TURN_URLS || '')
+  .split(',')
+  .map((s: string) => s.trim())
+  .filter(Boolean);
+
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
+    { urls: 'stun:openrelay.metered.ca:80' },
+    ...(customTurnUrls.length
+      ? [{
+          urls: customTurnUrls,
+          username: env.VITE_TURN_USERNAME || '',
+          credential: env.VITE_TURN_CREDENTIAL || '',
+        }]
+      : []),
     {
       urls: [
         'turn:openrelay.metered.ca:80',
+        'turn:openrelay.metered.ca:80?transport=tcp',
+        'turn:openrelay.metered.ca:443',
         'turn:openrelay.metered.ca:443?transport=tcp',
         'turns:openrelay.metered.ca:443?transport=tcp',
       ],
@@ -15,9 +32,10 @@ const RTC_CONFIG: RTCConfiguration = {
       credential: 'openrelayproject',
     },
   ],
+  iceTransportPolicy: 'all',
   bundlePolicy: 'max-bundle',
   rtcpMuxPolicy: 'require',
-  iceCandidatePoolSize: 2,
+  iceCandidatePoolSize: 4,
 };
 
 // Optimizes Opus SDP to completely disable DTX (discontinuous transmission)
