@@ -23,13 +23,8 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { slideInVariants } from '../utils/animations';
-import {
-  AI_PERSONALITIES,
-  AIPersonalityId,
-  DEFAULT_AI_PERSONALITY,
-  buildAISystemInstruction,
-  isAIPersonalityId,
-} from '../data/aiPersonalities';
+import { buildAISystemInstruction } from '../data/aiAssistantPrompt';
+import { OPENROUTER_CHAT_URL, OPENROUTER_MODEL } from '../utils/openRouterEdgeHelper';
 
 export interface ThinkingStep {
   id: string;
@@ -62,14 +57,6 @@ const QUICK_PROMPTS = [
   { icon: Globe, label: 'Live Web Info', prompt: 'Who won the Super Bowl in 2025?' },
   { icon: Lightbulb, label: 'History Overview', prompt: 'What was the American Revolution about?' },
 ];
-
-function cleanShortAnswer(text: string): string {
-  if (!text) return '';
-  const cleaned = text
-    .replace(/(?:\r?\n)+(?:Would you like|Do you want|Let me know|Hope this helps|Feel free to|Should I|If you want|If you'd like|Can I help|Do you need)[\s\S]*$/i, '')
-    .trim();
-  return cleaned || text.trim();
-}
 
 function preprocessLaTeX(text: string): string {
   if (!text) return '';
@@ -271,37 +258,20 @@ export const AIAssistantView: React.FC = () => {
   const [activeSteps, setActiveSteps] = useState<ThinkingStep[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedStepsMap, setExpandedStepsMap] = useState<Record<string, boolean>>({});
-  const [personality, setPersonality] = useState<AIPersonalityId>(() => {
-    try {
-      const saved = localStorage.getItem('frosthub_ai_personality');
-      return isAIPersonalityId(saved) ? saved : DEFAULT_AI_PERSONALITY;
-    } catch {
-      return DEFAULT_AI_PERSONALITY;
-    }
-  });
-
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const assistantScrollRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const requestIdRef = useRef<number>(0);
 
-  const getActiveGroqKey = (): string => {
+  const getActiveOpenRouterKey = (): string => {
     return (
-      (import.meta.env.VITE_GROQ_API_KEY as string) ||
-      (import.meta.env.GROQ_API_KEY as string) ||
-      (typeof process !== 'undefined' && process.env?.GROQ_API_KEY ? process.env.GROQ_API_KEY : '') ||
-      ((window as any).GROQ_API_KEY as string) ||
+      (import.meta.env.VITE_OPENROUTER_API_KEY as string) ||
+      (import.meta.env.OPENROUTER_API_KEY as string) ||
+      (typeof process !== 'undefined' && process.env?.OPENROUTER_API_KEY ? process.env.OPENROUTER_API_KEY : '') ||
+      ((window as any).OPENROUTER_API_KEY as string) ||
       ''
     ).replace(/^["']|["']$/g, '').trim();
-  };
-
-  const handlePersonalityChange = (value: string) => {
-    if (!isAIPersonalityId(value)) return;
-    setPersonality(value);
-    try {
-      localStorage.setItem('frosthub_ai_personality', value);
-    } catch {}
   };
 
   const scrollToBottom = () => {
@@ -346,46 +316,42 @@ export const AIAssistantView: React.FC = () => {
     ]);
   };
 
-  const callDirectGroq = async (promptText: string, msgHistory: any[], signal?: AbortSignal): Promise<string> => {
-    const rawGroqKey = getActiveGroqKey();
-    if (!rawGroqKey) return '';
-    const groqMessages = [
-      { role: 'system', content: buildAISystemInstruction(personality) },
+  const callDirectOpenRouter = async (promptText: string, msgHistory: any[], signal?: AbortSignal): Promise<string> => {
+    const openRouterKey = getActiveOpenRouterKey();
+    if (!openRouterKey) return '';
+    const chatMessages = [
+      { role: 'system', content: buildAISystemInstruction() },
       ...msgHistory.map((m: any) => ({
         role: m.role === 'user' ? 'user' : 'assistant',
         content: m.text,
       })),
       { role: 'user', content: promptText },
     ];
-    const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
-    for (const model of groqModels) {
-      if (signal?.aborted) return '';
-      try {
-        const timeoutController = new AbortController();
-        const timeoutId = setTimeout(() => timeoutController.abort(), 8000);
-        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${rawGroqKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model,
-            messages: groqMessages,
-            temperature: 0.3,
-            max_tokens: 220,
-          }),
-          signal: timeoutController.signal,
-        });
-        clearTimeout(timeoutId);
-        if (res.ok) {
-          const data = await res.json();
-          const text = data.choices?.[0]?.message?.content;
-          if (text) return cleanShortAnswer(text);
-        }
-      } catch (mErr: any) {
-        if (mErr?.name === 'AbortError' || signal?.aborted) return '';
+    try {
+      const timeoutController = new AbortController();
+      const timeoutId = setTimeout(() => timeoutController.abort(), 8000);
+      const res = await fetch(OPENROUTER_CHAT_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${openRouterKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: OPENROUTER_MODEL,
+          messages: chatMessages,
+          temperature: 0.3,
+          max_tokens: 220,
+        }),
+        signal: timeoutController.signal,
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        const text = data.choices?.[0]?.message?.content;
+        if (text) return text.trim();
       }
+    } catch (mErr: any) {
+      if (mErr?.name === 'AbortError' || signal?.aborted) return '';
     }
     if (signal?.aborted) return '';
     throw new Error("API error. Please check your key.");
@@ -415,7 +381,7 @@ export const AIAssistantView: React.FC = () => {
       role: m.sender === 'user' ? 'user' : 'assistant',
       text: m.text,
     }));
-    const activeGroqKey = getActiveGroqKey();
+    const activeOpenRouterKey = getActiveOpenRouterKey();
     let replyText = '';
     let serverError = '';
     let messageSources: MessageSource[] = [];
@@ -427,11 +393,10 @@ export const AIAssistantView: React.FC = () => {
         body: JSON.stringify({
           prompt: textToSend,
           history,
-          groqApiKey: activeGroqKey,
-          model: 'openai/gpt-oss-20b',
+          openRouterApiKey: activeOpenRouterKey,
+          model: OPENROUTER_MODEL,
           searchMode: 'auto',
-          personality,
-        }),
+          }),
         signal: abortController.signal,
       });
       if (abortController.signal.aborted || currentRequestId !== requestIdRef.current) return;
@@ -496,11 +461,10 @@ export const AIAssistantView: React.FC = () => {
           body: JSON.stringify({
             prompt: textToSend,
             history,
-            groqApiKey: activeGroqKey,
-            model: 'openai/gpt-oss-20b',
+            openRouterApiKey: activeOpenRouterKey,
+            model: OPENROUTER_MODEL,
             searchMode: 'auto',
-            personality,
-          }),
+            }),
           signal: abortController.signal,
         });
         const standardCt = (standardRes.headers.get('content-type') || '').toLowerCase();
@@ -518,9 +482,9 @@ export const AIAssistantView: React.FC = () => {
         if (jsonErr?.name === 'AbortError' || abortController.signal.aborted || currentRequestId !== requestIdRef.current) return;
       }
     }
-    if (!replyText && activeGroqKey) {
+    if (!replyText && activeOpenRouterKey) {
       try {
-        replyText = await callDirectGroq(textToSend, history, abortController.signal);
+        replyText = await callDirectOpenRouter(textToSend, history, abortController.signal);
       } catch (clientErr: any) {
         if (clientErr?.name === 'AbortError' || abortController.signal.aborted || currentRequestId !== requestIdRef.current) return;
       }
@@ -538,7 +502,7 @@ export const AIAssistantView: React.FC = () => {
       setActiveSteps([]);
       return;
     }
-    const cleaned = cleanShortAnswer(replyText);
+    const cleaned = replyText.trim();
     const aiMsg: Message = {
       id: (Date.now() + 1).toString(),
       sender: 'ai',
@@ -563,20 +527,6 @@ export const AIAssistantView: React.FC = () => {
   return (
     <div className="w-full h-full flex-1 min-h-0 px-3 sm:px-8 py-2.5 sm:py-4 flex flex-col font-sans overflow-hidden">
       <div className="mb-2.5 sm:mb-4 flex items-center justify-end gap-2 sm:gap-3 shrink-0">
-        <label className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
-          <span className="hidden sm:inline">Personality</span>
-          <select
-            value={personality}
-            onChange={(e) => handlePersonalityChange(e.target.value)}
-            disabled={isLoading}
-            aria-label="AI personality"
-            className="px-3 py-2 sm:py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 text-xs font-bold shadow-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--brand-blue)] disabled:opacity-50"
-          >
-            {AI_PERSONALITIES.map((p) => (
-              <option key={p.id} value={p.id}>{p.label}</option>
-            ))}
-          </select>
-        </label>
         <motion.button
           type="button"
           whileHover={{ scale: 1.05 }}

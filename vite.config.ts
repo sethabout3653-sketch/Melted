@@ -50,13 +50,13 @@ function copyScramjetAssetsPlugin(): Plugin {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
-  const groqKey = env.GROQ_API_KEY || process.env.GROQ_API_KEY || '';
+  const openRouterKey = env.OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY || '';
 
   return {
     define: {
-      'process.env.GROQ_API_KEY': JSON.stringify(groqKey),
+      'process.env.OPENROUTER_API_KEY': JSON.stringify(openRouterKey),
     },
-    envPrefix: ['VITE_', 'GROQ_'],
+    envPrefix: ['VITE_', 'OPENROUTER_'],
     plugins: [
       react(),
       tailwindcss(),
