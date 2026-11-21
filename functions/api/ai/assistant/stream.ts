@@ -31,7 +31,6 @@ export async function onRequest(context: CFContext): Promise<Response> {
     openRouterApiKey?: string;
     model?: string;
     searchMode?: 'auto' | 'always' | 'off';
-    personality?: unknown;
   };
 
   const encoder = new TextEncoder();
@@ -68,7 +67,6 @@ export async function onRequest(context: CFContext): Promise<Response> {
           history: body.history,
           model: body.model,
           searchMode: body.searchMode,
-          personality: body.personality,
           onStep: (step) => sendEvent({ type: 'step', ...step }),
         });
 

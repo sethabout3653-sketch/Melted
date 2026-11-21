@@ -1,4 +1,4 @@
-import { buildAISystemInstruction } from '../data/aiPersonalities';
+import { buildAISystemInstruction } from '../data/aiAssistantPrompt';
 
 export interface WebSearchResult {
   title: string;
@@ -38,17 +38,6 @@ export function extractOpenRouterKey(env?: Record<string, any>, requestKey?: str
     }
   }
   return '';
-}
-
-export function cleanShortAnswer(text: string): string {
-  if (!text) return '';
-  const cleaned = text
-    .replace(
-      /(?:\r?\n)+(?:Would you like|Do you want|Let me know|Hope this helps|Feel free to|Should I|If you want|If you'd like|Can I help|Do you need)[\s\S]*$/i,
-      ''
-    )
-    .trim();
-  return cleaned || text.trim();
 }
 
 export function shouldSearchWeb(prompt: string, searchMode?: 'auto' | 'always' | 'off'): boolean {
@@ -154,7 +143,6 @@ export async function runOpenRouterAssistantEdge(params: {
   history?: Array<{ role?: string; text?: string }>;
   model?: string;
   searchMode?: 'auto' | 'always' | 'off';
-  personality?: unknown;
   onStep?: (step: AIThinkingStep) => void;
 }): Promise<{
   reply: string;
@@ -162,7 +150,7 @@ export async function runOpenRouterAssistantEdge(params: {
   steps: AIThinkingStep[];
   errorDetail?: string;
 }> {
-  const { openRouterKey, prompt, history, model: customModel, searchMode, personality, onStep } = params;
+  const { openRouterKey, prompt, history, model: customModel, searchMode, onStep } = params;
   const steps: AIThinkingStep[] = [];
 
   const recordStep = (
@@ -200,7 +188,7 @@ export async function runOpenRouterAssistantEdge(params: {
   const targetModel = typeof customModel === 'string' && customModel.trim() ? customModel.trim() : OPENROUTER_MODEL;
   recordStep('synthesizing', 'Synthesizing Answer', `Formulating direct response with ${targetModel}...`, 'sparkles');
 
-  const systemInstruction = buildAISystemInstruction(personality);
+  const systemInstruction = buildAISystemInstruction();
   let searchContext = '';
   if (searchResults.length > 0) {
     searchContext =
@@ -241,7 +229,7 @@ export async function runOpenRouterAssistantEdge(params: {
         model: targetModel,
         messages: chatMessages,
         temperature: 0.3,
-        max_tokens: 240,
+        max_tokens: 1024,
       }),
       signal: controller.signal,
     });
@@ -250,7 +238,7 @@ export async function runOpenRouterAssistantEdge(params: {
     if (res.ok) {
       const data = (await res.json()) as any;
       const text = data.choices?.[0]?.message?.content;
-      if (text) replyText = cleanShortAnswer(text);
+      if (text) replyText = text.trim();
     } else {
       const errText = await res.text().catch(() => '');
       lastError = `OpenRouter HTTP ${res.status}: ${errText.slice(0, 140)}`;

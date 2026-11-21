@@ -23,13 +23,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { slideInVariants } from '../utils/animations';
-import {
-  AI_PERSONALITIES,
-  AIPersonalityId,
-  DEFAULT_AI_PERSONALITY,
-  buildAISystemInstruction,
-  isAIPersonalityId,
-} from '../data/aiPersonalities';
+import { buildAISystemInstruction } from '../data/aiAssistantPrompt';
 import { OPENROUTER_CHAT_URL, OPENROUTER_MODEL } from '../utils/openRouterEdgeHelper';
 
 export interface ThinkingStep {
@@ -63,14 +57,6 @@ const QUICK_PROMPTS = [
   { icon: Globe, label: 'Live Web Info', prompt: 'Who won the Super Bowl in 2025?' },
   { icon: Lightbulb, label: 'History Overview', prompt: 'What was the American Revolution about?' },
 ];
-
-function cleanShortAnswer(text: string): string {
-  if (!text) return '';
-  const cleaned = text
-    .replace(/(?:\r?\n)+(?:Would you like|Do you want|Let me know|Hope this helps|Feel free to|Should I|If you want|If you'd like|Can I help|Do you need)[\s\S]*$/i, '')
-    .trim();
-  return cleaned || text.trim();
-}
 
 function preprocessLaTeX(text: string): string {
   if (!text) return '';
@@ -272,15 +258,6 @@ export const AIAssistantView: React.FC = () => {
   const [activeSteps, setActiveSteps] = useState<ThinkingStep[]>([]);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [expandedStepsMap, setExpandedStepsMap] = useState<Record<string, boolean>>({});
-  const [personality, setPersonality] = useState<AIPersonalityId>(() => {
-    try {
-      const saved = localStorage.getItem('frosthub_ai_personality');
-      return isAIPersonalityId(saved) ? saved : DEFAULT_AI_PERSONALITY;
-    } catch {
-      return DEFAULT_AI_PERSONALITY;
-    }
-  });
-
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const assistantScrollRef = useRef<HTMLDivElement>(null);
@@ -295,14 +272,6 @@ export const AIAssistantView: React.FC = () => {
       ((window as any).OPENROUTER_API_KEY as string) ||
       ''
     ).replace(/^["']|["']$/g, '').trim();
-  };
-
-  const handlePersonalityChange = (value: string) => {
-    if (!isAIPersonalityId(value)) return;
-    setPersonality(value);
-    try {
-      localStorage.setItem('frosthub_ai_personality', value);
-    } catch {}
   };
 
   const scrollToBottom = () => {
@@ -351,7 +320,7 @@ export const AIAssistantView: React.FC = () => {
     const openRouterKey = getActiveOpenRouterKey();
     if (!openRouterKey) return '';
     const chatMessages = [
-      { role: 'system', content: buildAISystemInstruction(personality) },
+      { role: 'system', content: buildAISystemInstruction() },
       ...msgHistory.map((m: any) => ({
         role: m.role === 'user' ? 'user' : 'assistant',
         content: m.text,
@@ -379,7 +348,7 @@ export const AIAssistantView: React.FC = () => {
       if (res.ok) {
         const data = await res.json();
         const text = data.choices?.[0]?.message?.content;
-        if (text) return cleanShortAnswer(text);
+        if (text) return text.trim();
       }
     } catch (mErr: any) {
       if (mErr?.name === 'AbortError' || signal?.aborted) return '';
@@ -427,8 +396,7 @@ export const AIAssistantView: React.FC = () => {
           openRouterApiKey: activeOpenRouterKey,
           model: OPENROUTER_MODEL,
           searchMode: 'auto',
-          personality,
-        }),
+          }),
         signal: abortController.signal,
       });
       if (abortController.signal.aborted || currentRequestId !== requestIdRef.current) return;
@@ -496,8 +464,7 @@ export const AIAssistantView: React.FC = () => {
             openRouterApiKey: activeOpenRouterKey,
             model: OPENROUTER_MODEL,
             searchMode: 'auto',
-            personality,
-          }),
+            }),
           signal: abortController.signal,
         });
         const standardCt = (standardRes.headers.get('content-type') || '').toLowerCase();
@@ -535,7 +502,7 @@ export const AIAssistantView: React.FC = () => {
       setActiveSteps([]);
       return;
     }
-    const cleaned = cleanShortAnswer(replyText);
+    const cleaned = replyText.trim();
     const aiMsg: Message = {
       id: (Date.now() + 1).toString(),
       sender: 'ai',
@@ -560,20 +527,6 @@ export const AIAssistantView: React.FC = () => {
   return (
     <div className="w-full h-full flex-1 min-h-0 px-3 sm:px-8 py-2.5 sm:py-4 flex flex-col font-sans overflow-hidden">
       <div className="mb-2.5 sm:mb-4 flex items-center justify-end gap-2 sm:gap-3 shrink-0">
-        <label className="flex items-center gap-2 text-xs font-bold text-slate-500 dark:text-slate-400">
-          <span className="hidden sm:inline">Personality</span>
-          <select
-            value={personality}
-            onChange={(e) => handlePersonalityChange(e.target.value)}
-            disabled={isLoading}
-            aria-label="AI personality"
-            className="px-3 py-2 sm:py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-100 text-xs font-bold shadow-sm cursor-pointer focus:outline-none focus:ring-2 focus:ring-[var(--brand-blue)] disabled:opacity-50"
-          >
-            {AI_PERSONALITIES.map((p) => (
-              <option key={p.id} value={p.id}>{p.label}</option>
-            ))}
-          </select>
-        </label>
         <motion.button
           type="button"
           whileHover={{ scale: 1.05 }}

@@ -7,7 +7,7 @@ import {
 } from '@google/genai';
 import type http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
-import { AI_PERSONALITIES, DEFAULT_AI_PERSONALITY, buildAISystemInstruction } from '../data/aiPersonalities';
+import { buildLiveSystemInstruction } from '../data/aiAssistantPrompt';
 
 export interface UploadedFilePayload {
   name: string;
@@ -451,7 +451,6 @@ export function createGeminiLiveUpgradeHandler() {
     const requestedVoice = reqUrl.searchParams.get('voice') || 'Zephyr';
     const voiceName = VALID_LIVE_VOICES.has(requestedVoice) ? requestedVoice : 'Zephyr';
     const useExtendedThinking = reqUrl.searchParams.get('thinking') === 'true';
-    const personality = reqUrl.searchParams.get('personality') || 'balanced';
     const model = useExtendedThinking ? 'gemini-3.8-live-extended-thinking' : 'gemini-3.8-live';
 
     const dispatchInputToSession = (msg: { type: string; data?: string; mimeType?: string; text?: string }) => {
@@ -517,14 +516,7 @@ export function createGeminiLiveUpgradeHandler() {
 
     try {
       const ai = createGeminiClient('v1beta');
-      const selectedPersona =
-        AI_PERSONALITIES.find((p) => p.id === personality) ??
-        AI_PERSONALITIES.find((p) => p.id === DEFAULT_AI_PERSONALITY)!;
-      const liveInstruction = `You are in a live, real-time voice and vision conversation with the user, just like native Gemini Live.
-Speak naturally, warmly, and fluidly with human pacing—never robotic or stiff. Keep spoken responses concise, engaging, and conversational.
-Never read out markdown formatting, asterisks, URLs, or LaTeX symbols. If something the user says sounds casual, brief, or like an informal greeting or fragment, react naturally and conversationally rather than giving rigid error boilerplate.
-LIVE CAMERA VISION: You receive real-time camera video frames from the user's camera. You CAN see the user's camera feed in real time. Whenever the camera is active, or the user shows something, asks "what is this?", "can you check this?", "what do you see?", "what am I looking at?", or points their camera at any object, document, book, screen, or surroundings, inspect the camera video frames and describe, identify, and answer questions about what is shown in the camera feed immediately and directly.
-Conversational tone: ${selectedPersona.tone}`;
+      const liveInstruction = buildLiveSystemInstruction();
 
       const liveConfig: Record<string, any> = {
         responseModalities: [Modality.AUDIO],

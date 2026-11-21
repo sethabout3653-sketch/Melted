@@ -32,7 +32,6 @@ export async function onRequest(context: CFContext): Promise<Response> {
       openRouterApiKey?: string;
       model?: string;
       searchMode?: 'auto' | 'always' | 'off';
-      personality?: unknown;
     };
 
     const prompt = body?.prompt;
@@ -59,7 +58,6 @@ export async function onRequest(context: CFContext): Promise<Response> {
       history: body.history,
       model: body.model,
       searchMode: body.searchMode,
-      personality: body.personality,
     });
 
     if (!result.reply) {

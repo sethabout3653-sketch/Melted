@@ -13,7 +13,7 @@ import { initWebSocketDatabase, globalWsDb, broadcastTable, broadcastWss, sendTo
 import { server as wispServer } from '@mercuryworkshop/wisp-js/server';
 import { processGameHtml, getScaffoldingBuffer } from './src/server/scaffoldingLoader';
 import { FALLBACK_OPENROUTER_MODELS, OPENROUTER_CHAT_URL, OPENROUTER_MODEL } from './src/utils/openRouterEdgeHelper';
-import { buildAISystemInstruction } from './src/data/aiPersonalities';
+import { buildAISystemInstruction } from './src/data/aiAssistantPrompt';
 import { initSethsrcEngine } from './src/server/sethsrcEngine';
 
 // Prevent server crashes from unhandled fetch terminations / ECONNRESET errors
@@ -1683,15 +1683,6 @@ async function searchWeb(query: string): Promise<WebSearchResult[]> {
   return results;
 }
 
-function cleanShortAnswer(text: string): string {
-  if (!text) return '';
-  // Strip any trailing pleasantries, disclaimers, or "Would you like..." / "Do you want..." follow-ups
-  let cleaned = text
-    .replace(/(?:\r?\n)+(?:Would you like|Do you want|Let me know|Hope this helps|Feel free to|Should I|If you want|If you'd like|Can I help|Do you need)[\s\S]*$/i, '')
-    .trim();
-  return cleaned || text.trim();
-}
-
 function shouldSearchWeb(prompt: string, searchMode?: 'auto' | 'always' | 'off'): boolean {
   if (searchMode === 'off') return false;
   if (searchMode === 'always') return true;
@@ -1732,7 +1723,7 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
   };
 
   try {
-    const { prompt, history, openRouterApiKey, model: customModel, searchMode, personality } = req.body;
+    const { prompt, history, openRouterApiKey, model: customModel, searchMode } = req.body;
     if (!prompt) {
       sendEvent({ type: 'error', error: 'Missing prompt' });
       return res.end();
@@ -1787,7 +1778,7 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
     const targetModel = typeof customModel === 'string' && customModel.trim() ? customModel.trim() : OPENROUTER_MODEL;
     recordStep('synthesizing', 'Synthesizing Answer', `Formulating direct response with ${targetModel}...`, 'sparkles');
 
-    const systemInstruction = buildAISystemInstruction(personality);
+    const systemInstruction = buildAISystemInstruction();
 
     let searchContext = '';
     if (searchResults.length > 0) {
@@ -1830,7 +1821,7 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
             model: targetModel,
             messages: chatMessages,
             temperature: 0.3,
-            max_tokens: 240,
+            max_tokens: 1024,
           }),
           signal: controller.signal,
         });
@@ -1840,7 +1831,7 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
         if (openRouterRes.ok) {
           const data = await openRouterRes.json();
           const text = data.choices?.[0]?.message?.content;
-          if (text) replyText = cleanShortAnswer(text);
+          if (text) replyText = text.trim();
         } else {
           const errBody = await openRouterRes.text().catch(() => '');
           console.warn(`[OpenRouter AI Stream] returned ${openRouterRes.status}:`, errBody.slice(0, 150));
@@ -1878,12 +1869,12 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
 // AI Study Assistant Endpoint (Standard JSON) - Powered exclusively by OpenRouter with Web Search
 app.post('/api/ai/assistant', async (req, res) => {
   try {
-    const { prompt, history, openRouterApiKey, model: customModel, searchMode, personality } = req.body;
+    const { prompt, history, openRouterApiKey, model: customModel, searchMode } = req.body;
     if (!prompt) {
       return res.status(400).json({ error: 'Missing prompt' });
     }
 
-    const systemInstruction = buildAISystemInstruction(personality);
+    const systemInstruction = buildAISystemInstruction();
 
     // Auto-detect OpenRouter API Key from keyforopenrouter.txt or server environment secrets
     const openRouterKey = readOpenRouterApiKey(openRouterApiKey as string);
@@ -1952,7 +1943,7 @@ app.post('/api/ai/assistant', async (req, res) => {
           model: targetModel,
           messages: chatMessages,
           temperature: 0.3,
-          max_tokens: 240,
+          max_tokens: 1024,
         }),
         signal: controller.signal,
       });
@@ -1962,7 +1953,7 @@ app.post('/api/ai/assistant', async (req, res) => {
       if (openRouterRes.ok) {
         const data = await openRouterRes.json();
         const text = data.choices?.[0]?.message?.content;
-        if (text) replyText = cleanShortAnswer(text);
+        if (text) replyText = text.trim();
       } else {
         const errBody = await openRouterRes.text().catch(() => '');
         console.warn(`[OpenRouter AI] returned ${openRouterRes.status}:`, errBody.slice(0, 150));
