@@ -277,8 +277,12 @@ export default function App() {
 
   const handleSelectCategory = useCallback((cat: GameCategory) => {
     setSelectedCategory(cat);
-    if (cat === 'Favorites') setShowFavoritesOnly(true);
-    else setShowFavoritesOnly(false);
+    if (cat === 'Favorites') {
+      setShowFavoritesOnly(true);
+      setCurrentTab('games');
+    } else {
+      setShowFavoritesOnly(false);
+    }
   }, []);
 
   const handleSortChange = useCallback((sort: 'popular' | 'alpha-asc' | 'alpha-desc' | 'random') => {
@@ -286,7 +290,13 @@ export default function App() {
   }, []);
 
   const handleToggleFavoritesOnly = useCallback(() => {
-    setShowFavoritesOnly((prev) => !prev);
+    setShowFavoritesOnly((prev) => {
+      const next = !prev;
+      if (next) {
+        setCurrentTab('games');
+      }
+      return next;
+    });
   }, []);
 
   const filteredGames = useMemo(() => {
@@ -474,16 +484,16 @@ export default function App() {
           >
             <LiveTVView />
           </motion.div>
-        ) : null}
-      </AnimatePresence>
-
-      <motion.main
-        ref={gamesScrollRef as any}
-        variants={tabTransition}
-        initial="initial"
-        animate={currentTab === 'games' ? 'animate' : 'initial'}
-        className={`flex-1 w-full overflow-y-auto ${currentTab === 'games' ? '' : 'hidden'}`}
-      >
+        ) : currentTab === 'games' ? (
+          <motion.main
+            key="games-tab-view"
+            ref={gamesScrollRef as any}
+            variants={tabTransition}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className="flex-1 w-full overflow-y-auto"
+          >
             <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pb-24 lg:pb-16 sm:pt-6">
             {/* Categories & Sorting */}
             <div className="mb-4 sm:mb-6">
@@ -602,7 +612,9 @@ export default function App() {
                 </div>
               </div>
             </footer>
-      </motion.main>
+          </motion.main>
+        ) : null}
+      </AnimatePresence>
         </div>
 
       {/* Game Player Modal */}

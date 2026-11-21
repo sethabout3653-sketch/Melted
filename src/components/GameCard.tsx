@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Heart, Gamepad2 } from 'lucide-react';
+import { motion } from 'motion/react';
 import { GameItem } from '../types/game';
 import { generateGameSvgCover } from '../services/gameService';
+import { entryVariants, cardHover } from '../utils/animations';
 
 interface GameCardProps {
   game: GameItem;
@@ -59,8 +61,13 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
   };
 
   return (
-    <div 
-      className={`group relative bg-white/90 dark:bg-[#10101a] border border-slate-200/80 dark:border-white/10 shadow-sm dark:shadow-none hover:border-[var(--brand-blue)] hover:shadow-lg hover:shadow-black/5 rounded-2xl p-2 flex flex-col transition-[transform,border-color,box-shadow] duration-150 ease-out hover:-translate-y-1 active:scale-[0.98] [contain:layout_style] ${
+    <motion.div 
+      variants={entryVariants}
+      initial="hidden"
+      animate="visible"
+      custom={index}
+      whileHover={cardHover}
+      className={`group relative bg-white/90 dark:bg-[#10101a] border border-slate-200/80 dark:border-white/10 shadow-sm dark:shadow-none hover:border-[var(--brand-blue)] hover:shadow-lg hover:shadow-black/5 rounded-2xl p-2 flex flex-col transition-[border-color,box-shadow] duration-200 [contain:layout_style] ${
         variant === 'large' ? 'md:col-span-2 md:row-span-2' : ''
       }`}
     >
@@ -143,6 +150,6 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
         </button>
       </div>
 
-    </div>
+    </motion.div>
   );
 });

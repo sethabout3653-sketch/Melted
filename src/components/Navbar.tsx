@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Film, Gamepad2, Menu, MessageSquare, Search, Sparkles, Tv, X } from 'lucide-react';
+import { motion } from 'motion/react';
 import { FrostHubLogo } from './FrostHubLogo';
 import { AppTab } from './AppSidebar';
 
@@ -83,7 +84,12 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
   const isGames = currentTab === 'games';
 
   return (
-    <header className={`sticky top-0 z-50 w-full shrink-0 text-slate-900 dark:text-white ${isGames ? '' : 'lg:hidden'}`}>
+    <motion.header
+      initial={{ opacity: 0, y: -12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.55, ease: [0.16, 1, 0.3, 1] }}
+      className={`sticky top-0 z-50 w-full shrink-0 text-slate-900 dark:text-white ${isGames ? '' : 'lg:hidden'}`}
+    >
       <div className="bg-white/95 dark:bg-[#070d1a]/95 border-b border-slate-200/70 dark:border-white/10 transition-colors">
         <div className="h-14 lg:h-[4.25rem] px-3 sm:px-6 lg:px-8 flex items-center gap-2 sm:gap-4">
           <button
@@ -134,6 +140,6 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
           )}
         </div>
       </div>
-    </header>
+    </motion.header>
   );
 });
