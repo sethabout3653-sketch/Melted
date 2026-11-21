@@ -23,9 +23,9 @@ interface Env {
     get(key: string, type: 'json'): Promise<unknown>;
     put(key: string, value: string): Promise<void>;
   };
-  GROQ_API_KEY?: string;
-  VITE_GROQ_API_KEY?: string;
-  GROQ_KEY?: string;
+  OPENROUTER_API_KEY?: string;
+  VITE_OPENROUTER_API_KEY?: string;
+  OPENROUTER_KEY?: string;
 }
 
 type Handler = (context: { request: Request; env: Env; params: Record<string, string> }) => Promise<Response>;

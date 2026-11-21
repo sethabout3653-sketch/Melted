@@ -11,8 +11,8 @@ import { promisify } from 'util';
 import { Readable } from 'stream';
 import { initWebSocketDatabase, globalWsDb, broadcastTable, broadcastWss, sendToUserSockets } from './src/server/wsDatabase';
 import { server as wispServer } from '@mercuryworkshop/wisp-js/server';
-import Groq from 'groq-sdk';
 import { processGameHtml, getScaffoldingBuffer } from './src/server/scaffoldingLoader';
+import { FALLBACK_OPENROUTER_MODELS, OPENROUTER_CHAT_URL, OPENROUTER_MODEL } from './src/utils/openRouterEdgeHelper';
 import { buildAISystemInstruction } from './src/data/aiPersonalities';
 import { initSethsrcEngine } from './src/server/sethsrcEngine';
 
@@ -1567,9 +1567,9 @@ app.get('/api/giphy/search', async (req, res) => {
   }
 });
 
-function readGroqApiKey(requestKey?: string): string {
+function readOpenRouterApiKey(requestKey?: string): string {
   try {
-    const keyFilePath = path.resolve(__dirname, 'keyforgroq.txt');
+    const keyFilePath = path.resolve(__dirname, 'keyforopenrouter.txt');
     if (fs.existsSync(keyFilePath)) {
       const fileKey = fs.readFileSync(keyFilePath, 'utf8').replace(/^["']|["']$/g, '').trim();
       if (fileKey) return fileKey;
@@ -1577,126 +1577,16 @@ function readGroqApiKey(requestKey?: string): string {
   } catch {}
 
   return (
-    process.env.GROQ_API_KEY ||
-    process.env.VITE_GROQ_API_KEY ||
+    process.env.OPENROUTER_API_KEY ||
+    process.env.VITE_OPENROUTER_API_KEY ||
     requestKey ||
-    (process.env.GEMINI_API_KEY?.startsWith('gsk_') ? process.env.GEMINI_API_KEY : '') ||
     ''
   ).replace(/^["']|["']$/g, '').trim();
 }
 
-// AI Groq Models Endpoint - Option 1: groq-sdk models.list() / Option 2: Native fetch
-app.get('/api/ai/models', async (req, res) => {
-  const fallbackModels = [
-    { id: 'llama-3.1-8b-instant', owned_by: 'Meta', context_window: 131072, description: 'Super fast & lightweight (recommended)' },
-    { id: 'llama-3.3-70b-versatile', owned_by: 'Meta', context_window: 131072, description: 'High reasoning & versatile' },
-    { id: 'llama-3.2-1b-preview', owned_by: 'Meta', context_window: 131072, description: 'Ultra-lightweight instant response' },
-    { id: 'llama-3.2-3b-preview', owned_by: 'Meta', context_window: 131072, description: 'Fast compact model' },
-    { id: 'mixtral-8x7b-32768', owned_by: 'Mistral AI', context_window: 32768, description: 'Balanced MoE architecture' },
-    { id: 'gemma2-9b-it', owned_by: 'Google', context_window: 8192, description: 'Google Gemma 2 instruct model' },
-    { id: 'deepseek-r1-distill-llama-70b', owned_by: 'DeepSeek', context_window: 131072, description: 'Deep reasoning & problem solving' },
-  ];
-
-  const groqKey = readGroqApiKey(req.query.apiKey as string);
-
-  if (!groqKey) {
-    return res.json({
-      success: true,
-      hasKey: false,
-      models: fallbackModels,
-      source: 'curated-free',
-    });
-  }
-
-  // Option 1: Official groq-sdk
-  try {
-    const groq = new Groq({ apiKey: groqKey });
-    const response = await groq.models.list();
-    if (response && Array.isArray(response.data) && response.data.length > 0) {
-      const chatModels = response.data
-        .filter((m: any) => {
-          if (m.active === false) return false;
-          const id = (m.id || '').toLowerCase();
-          return !id.includes('whisper') && !id.includes('guard') && !id.includes('orpheus') && !id.includes('tts') && !id.includes('embed');
-        })
-        .map((m: any) => ({
-          id: m.id,
-          owned_by: m.owned_by || 'Groq',
-          context_window: m.context_window || 131072,
-          description: m.id.includes('oss-20b')
-            ? 'Super fast & lightweight (recommended)'
-            : m.id.includes('8b') || m.id.includes('7b')
-            ? 'Ultra-fast & lightweight'
-            : m.id.includes('70b') || m.id.includes('120b')
-            ? 'High reasoning & versatile'
-            : 'Active Groq chat model',
-        }));
-
-      if (chatModels.length > 0) {
-        return res.json({
-          success: true,
-          hasKey: true,
-          models: chatModels,
-          source: 'groq-sdk',
-        });
-      }
-    }
-  } catch (sdkErr: any) {
-    console.warn('[Groq Models] Official SDK models.list() notice:', sdkErr?.message);
-  }
-
-  // Option 2: Native fetch fallback
-  try {
-    const fetchRes = await fetch('https://api.groq.com/openai/v1/models', {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${groqKey}`,
-        'Content-Type': 'application/json',
-      },
-    });
-
-    if (fetchRes.ok) {
-      const data = await fetchRes.json();
-      if (Array.isArray(data.data) && data.data.length > 0) {
-        const chatModels = data.data
-          .filter((m: any) => {
-            if (m.active === false) return false;
-            const id = (m.id || '').toLowerCase();
-            return !id.includes('whisper') && !id.includes('guard') && !id.includes('orpheus') && !id.includes('tts') && !id.includes('embed');
-          })
-          .map((m: any) => ({
-            id: m.id,
-            owned_by: m.owned_by || 'Groq',
-            context_window: m.context_window || 131072,
-            description: m.id.includes('oss-20b')
-              ? 'Super fast & lightweight (recommended)'
-              : m.id.includes('8b') || m.id.includes('7b')
-              ? 'Ultra-fast & lightweight'
-              : m.id.includes('70b') || m.id.includes('120b')
-              ? 'High reasoning & versatile'
-              : 'Active Groq chat model',
-          }));
-
-        if (chatModels.length > 0) {
-          return res.json({
-            success: true,
-            hasKey: true,
-            models: chatModels,
-            source: 'native-fetch',
-          });
-        }
-      }
-    }
-  } catch (fetchErr: any) {
-    console.warn('[Groq Models] Native fetch notice:', fetchErr?.message);
-  }
-
-  return res.json({
-    success: true,
-    hasKey: true,
-    models: fallbackModels,
-    source: 'curated-free',
-  });
+app.get('/api/ai/models', (req, res) => {
+  const hasKey = Boolean(readOpenRouterApiKey(req.query.apiKey as string));
+  res.json({ success: true, hasKey, models: FALLBACK_OPENROUTER_MODELS, source: 'curated-free' });
 });
 
 // Web Search helper: DuckDuckGo HTML with Wikipedia Fallback
@@ -1842,7 +1732,7 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
   };
 
   try {
-    const { prompt, history, groqApiKey, model: customModel, searchMode, personality } = req.body;
+    const { prompt, history, openRouterApiKey, model: customModel, searchMode, personality } = req.body;
     if (!prompt) {
       sendEvent({ type: 'error', error: 'Missing prompt' });
       return res.end();
@@ -1858,13 +1748,13 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
 
     // Step 1: Logic starting...
 
-    // Auto-detect Groq API Key from keyforgroq.txt or environment
-    const groqKey = readGroqApiKey(groqApiKey as string);
+    // Auto-detect OpenRouter API Key from keyforopenrouter.txt or environment
+    const openRouterKey = readOpenRouterApiKey(openRouterApiKey as string);
 
-    if (!groqKey) {
+    if (!openRouterKey) {
       sendEvent({
         type: 'error',
-        error: 'Groq API Key is not configured on the server. Please add GROQ_API_KEY to your server environment secrets.',
+        error: 'OpenRouter API Key is not configured on the server. Please add OPENROUTER_API_KEY to your server environment secrets.',
       });
       return res.end();
     }
@@ -1887,14 +1777,14 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
           { sources: searchResults.map((s) => ({ title: s.title, url: s.url })) }
         );
       } else {
-        recordStep('reading', 'Direct Knowledge', 'Consulting fast Groq inference engine...', 'cpu');
+        recordStep('reading', 'Direct Knowledge', 'Consulting OpenRouter model...', 'cpu');
       }
     }
 
     if (isAborted) return res.end();
 
-    // Step 3: Synthesis with Groq
-    const targetModel = typeof customModel === 'string' && customModel.trim() ? customModel.trim() : 'openai/gpt-oss-20b';
+    // Step 3: Synthesis with OpenRouter
+    const targetModel = typeof customModel === 'string' && customModel.trim() ? customModel.trim() : OPENROUTER_MODEL;
     recordStep('synthesizing', 'Synthesizing Answer', `Formulating direct response with ${targetModel}...`, 'sparkles');
 
     const systemInstruction = buildAISystemInstruction(personality);
@@ -1906,14 +1796,14 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
         `\nUse the above live web facts to answer accurately and concisely.`;
     }
 
-    const groqMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+    const chatMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
       { role: 'system', content: systemInstruction + searchContext },
     ];
 
     if (Array.isArray(history) && history.length > 0) {
       for (const msg of history) {
         if (msg.role && msg.text) {
-          groqMessages.push({
+          chatMessages.push({
             role: msg.role === 'user' ? 'user' : 'assistant',
             content: msg.text,
           });
@@ -1921,35 +1811,24 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
       }
     }
 
-    groqMessages.push({ role: 'user', content: prompt });
-
-    const groqModels = [
-      targetModel,
-      'openai/gpt-oss-20b',
-      'llama-3.1-8b-instant',
-      'qwen/qwen3.8-27b',
-      'openai/gpt-oss-120b',
-      'allam-2-7b',
-      'llama-3.3-70b-versatile',
-    ].filter((m, idx, arr) => arr.indexOf(m) === idx);
+    chatMessages.push({ role: 'user', content: prompt });
 
     let replyText = '';
 
-    for (const model of groqModels) {
-      if (isAborted) break;
+    if (!isAborted) {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 9000);
 
-        const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        const openRouterRes = await fetch(OPENROUTER_CHAT_URL, {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${groqKey}`,
+            'Authorization': `Bearer ${openRouterKey}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            model: model,
-            messages: groqMessages,
+            model: targetModel,
+            messages: chatMessages,
             temperature: 0.3,
             max_tokens: 240,
           }),
@@ -1958,17 +1837,16 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
 
         clearTimeout(timeoutId);
 
-        if (groqRes.ok) {
-          const data = await groqRes.json();
+        if (openRouterRes.ok) {
+          const data = await openRouterRes.json();
           const text = data.choices?.[0]?.message?.content;
-          if (text) {
-            replyText = cleanShortAnswer(text);
-            console.log(`[Groq AI Stream] Success with model ${model}`);
-            break;
-          }
+          if (text) replyText = cleanShortAnswer(text);
+        } else {
+          const errBody = await openRouterRes.text().catch(() => '');
+          console.warn(`[OpenRouter AI Stream] returned ${openRouterRes.status}:`, errBody.slice(0, 150));
         }
       } catch (mErr: any) {
-        console.warn(`[Groq AI Stream] Model ${model} fetch failed:`, mErr?.message || mErr);
+        console.warn('[OpenRouter AI Stream] fetch failed:', mErr?.message || mErr);
       }
     }
 
@@ -1977,7 +1855,7 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
     if (!replyText) {
       sendEvent({
         type: 'error',
-        error: 'Groq API request failed or timed out. Please check your Groq API key.',
+        error: 'OpenRouter API request failed or timed out. Please check your OpenRouter API key.',
       });
       return res.end();
     }
@@ -1997,22 +1875,22 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
   }
 });
 
-// AI Study Assistant Endpoint (Standard JSON) - Powered exclusively by Groq with Web Search
+// AI Study Assistant Endpoint (Standard JSON) - Powered exclusively by OpenRouter with Web Search
 app.post('/api/ai/assistant', async (req, res) => {
   try {
-    const { prompt, history, groqApiKey, model: customModel, searchMode, personality } = req.body;
+    const { prompt, history, openRouterApiKey, model: customModel, searchMode, personality } = req.body;
     if (!prompt) {
       return res.status(400).json({ error: 'Missing prompt' });
     }
 
     const systemInstruction = buildAISystemInstruction(personality);
 
-    // Auto-detect Groq API Key from keyforgroq.txt or server environment secrets
-    const groqKey = readGroqApiKey(groqApiKey as string);
+    // Auto-detect OpenRouter API Key from keyforopenrouter.txt or server environment secrets
+    const openRouterKey = readOpenRouterApiKey(openRouterApiKey as string);
 
-    if (!groqKey) {
+    if (!openRouterKey) {
       return res.status(503).json({
-        error: 'Groq API Key is not configured on the server. Please add GROQ_API_KEY to your server environment secrets.',
+        error: 'OpenRouter API Key is not configured on the server. Please add OPENROUTER_API_KEY to your server environment secrets.',
       });
     }
 
@@ -2040,14 +1918,14 @@ app.post('/api/ai/assistant', async (req, res) => {
         `\nUse the above live web facts to answer accurately and concisely.`;
     }
 
-    const groqMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+    const chatMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
       { role: 'system', content: systemInstruction + searchContext },
     ];
 
     if (Array.isArray(history) && history.length > 0) {
       for (const msg of history) {
         if (msg.role && msg.text) {
-          groqMessages.push({
+          chatMessages.push({
             role: msg.role === 'user' ? 'user' : 'assistant',
             content: msg.text,
           });
@@ -2055,63 +1933,47 @@ app.post('/api/ai/assistant', async (req, res) => {
       }
     }
 
-    groqMessages.push({ role: 'user', content: prompt });
+    chatMessages.push({ role: 'user', content: prompt });
 
-    const targetModel = typeof customModel === 'string' && customModel.trim() ? customModel.trim() : 'openai/gpt-oss-20b';
-    const groqModels = [
-      targetModel,
-      'openai/gpt-oss-20b',
-      'llama-3.1-8b-instant',
-      'qwen/qwen3.8-27b',
-      'openai/gpt-oss-120b',
-      'allam-2-7b',
-      'llama-3.3-70b-versatile',
-    ].filter((m, idx, arr) => arr.indexOf(m) === idx);
-
+    const targetModel = typeof customModel === 'string' && customModel.trim() ? customModel.trim() : OPENROUTER_MODEL;
     let replyText = '';
 
-    for (const model of groqModels) {
-      try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 9000);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 9000);
 
-        const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${groqKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: model,
-            messages: groqMessages,
-            temperature: 0.3,
-            max_tokens: 240,
-          }),
-          signal: controller.signal,
-        });
+      const openRouterRes = await fetch(OPENROUTER_CHAT_URL, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openRouterKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: targetModel,
+          messages: chatMessages,
+          temperature: 0.3,
+          max_tokens: 240,
+        }),
+        signal: controller.signal,
+      });
 
-        clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
 
-        if (groqRes.ok) {
-          const data = await groqRes.json();
-          const text = data.choices?.[0]?.message?.content;
-          if (text) {
-            replyText = cleanShortAnswer(text);
-            console.log(`[Groq AI] Fast success with model ${model}`);
-            break;
-          }
-        } else {
-          const errBody = await groqRes.text().catch(() => '');
-          console.warn(`[Groq AI] Model ${model} returned ${groqRes.status}:`, errBody.slice(0, 150));
-        }
-      } catch (mErr: any) {
-        console.warn(`[Groq AI] Model ${model} fetch failed:`, mErr?.message || mErr);
+      if (openRouterRes.ok) {
+        const data = await openRouterRes.json();
+        const text = data.choices?.[0]?.message?.content;
+        if (text) replyText = cleanShortAnswer(text);
+      } else {
+        const errBody = await openRouterRes.text().catch(() => '');
+        console.warn(`[OpenRouter AI] returned ${openRouterRes.status}:`, errBody.slice(0, 150));
       }
+    } catch (mErr: any) {
+      console.warn('[OpenRouter AI] fetch failed:', mErr?.message || mErr);
     }
 
     if (!replyText) {
       return res.status(502).json({
-        error: 'Groq API request failed or timed out. Please check your Groq API key.',
+        error: 'OpenRouter API request failed or timed out. Please check your OpenRouter API key.',
       });
     }
 
@@ -2585,7 +2447,7 @@ async function startServer() {
     res.status(503).send(`<!doctype html><html><body style="background:#0f172a;color:#94a3b8;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;"><div style="text-align:center;"><p style="margin:0 0 8px;color:#e2e8f0;font-weight:600;">Initializing proxy service worker…</p><script>(async function(){try{if('serviceWorker' in navigator){await navigator.serviceWorker.register('/sj-sw.js',{scope:'/',updateViaCache:'none'}).catch(function(){});var reg=await navigator.serviceWorker.ready;if(reg&&reg.active){try{reg.active.postMessage({$controller$swrevive:{}});}catch(e){}}if(!sessionStorage.getItem('sj_srv_recover')){sessionStorage.setItem('sj_srv_recover','1');setTimeout(function(){location.reload();},350);return;}sessionStorage.removeItem('sj_srv_recover');}}catch(e){}})();</script></div></body></html>`);
   });
 
-  app.use('/keyforgroq.txt', (_req, res) => {
+  app.use('/keyforopenrouter.txt', (_req, res) => {
     res.status(404).send('Not found');
   });
 

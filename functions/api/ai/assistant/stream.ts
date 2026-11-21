@@ -1,4 +1,4 @@
-import { extractGroqKey, runGroqAssistantEdge } from '../../../../src/utils/groqEdgeHelper';
+import { extractOpenRouterKey, runOpenRouterAssistantEdge } from '../../../../src/utils/openRouterEdgeHelper';
 
 interface CFContext {
   request: Request;
@@ -28,7 +28,7 @@ export async function onRequest(context: CFContext): Promise<Response> {
   const body = (await request.json().catch(() => ({}))) as {
     prompt?: string;
     history?: Array<{ role?: string; text?: string }>;
-    groqApiKey?: string;
+    openRouterApiKey?: string;
     model?: string;
     searchMode?: 'auto' | 'always' | 'off';
     personality?: unknown;
@@ -52,18 +52,18 @@ export async function onRequest(context: CFContext): Promise<Response> {
           return;
         }
 
-        const groqKey = extractGroqKey(env, body.groqApiKey);
-        if (!groqKey) {
+        const openRouterKey = extractOpenRouterKey(env, body.openRouterApiKey);
+        if (!openRouterKey) {
           sendEvent({
             type: 'error',
-            error: 'Groq API Key is not configured on Cloudflare. Add GROQ_API_KEY in Worker/Pages secrets and redeploy.',
+            error: 'OpenRouter API Key is not configured on Cloudflare. Add OPENROUTER_API_KEY in Worker/Pages secrets and redeploy.',
           });
           controller.close();
           return;
         }
 
-        const result = await runGroqAssistantEdge({
-          groqKey,
+        const result = await runOpenRouterAssistantEdge({
+          openRouterKey,
           prompt,
           history: body.history,
           model: body.model,
@@ -75,7 +75,7 @@ export async function onRequest(context: CFContext): Promise<Response> {
         if (!result.reply) {
           sendEvent({
             type: 'error',
-            error: result.errorDetail || 'Groq API request failed or timed out. Please check your Groq API key.',
+            error: result.errorDetail || 'OpenRouter API request failed or timed out. Please check your OpenRouter API key.',
           });
           controller.close();
           return;

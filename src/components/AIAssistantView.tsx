@@ -30,6 +30,7 @@ import {
   buildAISystemInstruction,
   isAIPersonalityId,
 } from '../data/aiPersonalities';
+import { OPENROUTER_CHAT_URL, OPENROUTER_MODEL } from '../utils/openRouterEdgeHelper';
 
 export interface ThinkingStep {
   id: string;
@@ -286,12 +287,12 @@ export const AIAssistantView: React.FC = () => {
   const abortControllerRef = useRef<AbortController | null>(null);
   const requestIdRef = useRef<number>(0);
 
-  const getActiveGroqKey = (): string => {
+  const getActiveOpenRouterKey = (): string => {
     return (
-      (import.meta.env.VITE_GROQ_API_KEY as string) ||
-      (import.meta.env.GROQ_API_KEY as string) ||
-      (typeof process !== 'undefined' && process.env?.GROQ_API_KEY ? process.env.GROQ_API_KEY : '') ||
-      ((window as any).GROQ_API_KEY as string) ||
+      (import.meta.env.VITE_OPENROUTER_API_KEY as string) ||
+      (import.meta.env.OPENROUTER_API_KEY as string) ||
+      (typeof process !== 'undefined' && process.env?.OPENROUTER_API_KEY ? process.env.OPENROUTER_API_KEY : '') ||
+      ((window as any).OPENROUTER_API_KEY as string) ||
       ''
     ).replace(/^["']|["']$/g, '').trim();
   };
@@ -346,10 +347,10 @@ export const AIAssistantView: React.FC = () => {
     ]);
   };
 
-  const callDirectGroq = async (promptText: string, msgHistory: any[], signal?: AbortSignal): Promise<string> => {
-    const rawGroqKey = getActiveGroqKey();
-    if (!rawGroqKey) return '';
-    const groqMessages = [
+  const callDirectOpenRouter = async (promptText: string, msgHistory: any[], signal?: AbortSignal): Promise<string> => {
+    const openRouterKey = getActiveOpenRouterKey();
+    if (!openRouterKey) return '';
+    const chatMessages = [
       { role: 'system', content: buildAISystemInstruction(personality) },
       ...msgHistory.map((m: any) => ({
         role: m.role === 'user' ? 'user' : 'assistant',
@@ -357,35 +358,31 @@ export const AIAssistantView: React.FC = () => {
       })),
       { role: 'user', content: promptText },
     ];
-    const groqModels = ['llama-3.3-70b-versatile', 'llama-3.1-8b-instant'];
-    for (const model of groqModels) {
-      if (signal?.aborted) return '';
-      try {
-        const timeoutController = new AbortController();
-        const timeoutId = setTimeout(() => timeoutController.abort(), 8000);
-        const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${rawGroqKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model,
-            messages: groqMessages,
-            temperature: 0.3,
-            max_tokens: 220,
-          }),
-          signal: timeoutController.signal,
-        });
-        clearTimeout(timeoutId);
-        if (res.ok) {
-          const data = await res.json();
-          const text = data.choices?.[0]?.message?.content;
-          if (text) return cleanShortAnswer(text);
-        }
-      } catch (mErr: any) {
-        if (mErr?.name === 'AbortError' || signal?.aborted) return '';
+    try {
+      const timeoutController = new AbortController();
+      const timeoutId = setTimeout(() => timeoutController.abort(), 8000);
+      const res = await fetch(OPENROUTER_CHAT_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${openRouterKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: OPENROUTER_MODEL,
+          messages: chatMessages,
+          temperature: 0.3,
+          max_tokens: 220,
+        }),
+        signal: timeoutController.signal,
+      });
+      clearTimeout(timeoutId);
+      if (res.ok) {
+        const data = await res.json();
+        const text = data.choices?.[0]?.message?.content;
+        if (text) return cleanShortAnswer(text);
       }
+    } catch (mErr: any) {
+      if (mErr?.name === 'AbortError' || signal?.aborted) return '';
     }
     if (signal?.aborted) return '';
     throw new Error("API error. Please check your key.");
@@ -415,7 +412,7 @@ export const AIAssistantView: React.FC = () => {
       role: m.sender === 'user' ? 'user' : 'assistant',
       text: m.text,
     }));
-    const activeGroqKey = getActiveGroqKey();
+    const activeOpenRouterKey = getActiveOpenRouterKey();
     let replyText = '';
     let serverError = '';
     let messageSources: MessageSource[] = [];
@@ -427,8 +424,8 @@ export const AIAssistantView: React.FC = () => {
         body: JSON.stringify({
           prompt: textToSend,
           history,
-          groqApiKey: activeGroqKey,
-          model: 'openai/gpt-oss-20b',
+          openRouterApiKey: activeOpenRouterKey,
+          model: OPENROUTER_MODEL,
           searchMode: 'auto',
           personality,
         }),
@@ -496,8 +493,8 @@ export const AIAssistantView: React.FC = () => {
           body: JSON.stringify({
             prompt: textToSend,
             history,
-            groqApiKey: activeGroqKey,
-            model: 'openai/gpt-oss-20b',
+            openRouterApiKey: activeOpenRouterKey,
+            model: OPENROUTER_MODEL,
             searchMode: 'auto',
             personality,
           }),
@@ -518,9 +515,9 @@ export const AIAssistantView: React.FC = () => {
         if (jsonErr?.name === 'AbortError' || abortController.signal.aborted || currentRequestId !== requestIdRef.current) return;
       }
     }
-    if (!replyText && activeGroqKey) {
+    if (!replyText && activeOpenRouterKey) {
       try {
-        replyText = await callDirectGroq(textToSend, history, abortController.signal);
+        replyText = await callDirectOpenRouter(textToSend, history, abortController.signal);
       } catch (clientErr: any) {
         if (clientErr?.name === 'AbortError' || abortController.signal.aborted || currentRequestId !== requestIdRef.current) return;
       }

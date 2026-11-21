@@ -8,4 +8,4 @@ coverage/
 !.env.example
 bun.lock
 bun.lockb
-keyforgroq.txt
+keyforopenrouter.txt

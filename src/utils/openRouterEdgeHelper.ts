@@ -16,25 +16,20 @@ export interface AIThinkingStep {
   sources?: Array<{ title: string; url: string }>;
 }
 
-export const FALLBACK_GROQ_MODELS = [
-  { id: 'llama-3.1-8b-instant', owned_by: 'Meta', context_window: 131072, description: 'Super fast & lightweight (recommended)' },
-  { id: 'llama-3.3-70b-versatile', owned_by: 'Meta', context_window: 131072, description: 'High reasoning & versatile' },
-  { id: 'llama-3.2-1b-preview', owned_by: 'Meta', context_window: 131072, description: 'Ultra-lightweight instant response' },
-  { id: 'llama-3.2-3b-preview', owned_by: 'Meta', context_window: 131072, description: 'Fast compact model' },
-  { id: 'mixtral-8x7b-32768', owned_by: 'Mistral AI', context_window: 32768, description: 'Balanced MoE architecture' },
-  { id: 'gemma2-9b-it', owned_by: 'Google', context_window: 8192, description: 'Google Gemma 2 instruct model' },
-  { id: 'deepseek-r1-distill-llama-70b', owned_by: 'DeepSeek', context_window: 131072, description: 'Deep reasoning & problem solving' },
+export const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
+
+export const OPENROUTER_MODEL = 'cognitivecomputations/dolphin-mistral-24b-venice-edition:free';
+
+export const FALLBACK_OPENROUTER_MODELS = [
+  { id: OPENROUTER_MODEL, owned_by: 'Cognitive Computations', description: 'Dolphin Mistral 24B Venice Edition (free)' },
 ];
 
-export function extractGroqKey(env?: Record<string, any>, requestKey?: string): string {
+export function extractOpenRouterKey(env?: Record<string, any>, requestKey?: string): string {
   const candidates = [
-    env?.GROQ_API_KEY,
-    env?.VITE_GROQ_API_KEY,
-    env?.GROQ_KEY,
+    env?.OPENROUTER_API_KEY,
+    env?.VITE_OPENROUTER_API_KEY,
+    env?.OPENROUTER_KEY,
     requestKey,
-    typeof env?.GEMINI_API_KEY === 'string' && env.GEMINI_API_KEY.startsWith('gsk_')
-      ? env.GEMINI_API_KEY
-      : '',
   ];
   for (const raw of candidates) {
     if (typeof raw === 'string') {
@@ -153,8 +148,8 @@ export async function searchWebEdge(query: string): Promise<WebSearchResult[]> {
   return results;
 }
 
-export async function runGroqAssistantEdge(params: {
-  groqKey: string;
+export async function runOpenRouterAssistantEdge(params: {
+  openRouterKey: string;
   prompt: string;
   history?: Array<{ role?: string; text?: string }>;
   model?: string;
@@ -167,7 +162,7 @@ export async function runGroqAssistantEdge(params: {
   steps: AIThinkingStep[];
   errorDetail?: string;
 }> {
-  const { groqKey, prompt, history, model: customModel, searchMode, personality, onStep } = params;
+  const { openRouterKey, prompt, history, model: customModel, searchMode, personality, onStep } = params;
   const steps: AIThinkingStep[] = [];
 
   const recordStep = (
@@ -198,11 +193,11 @@ export async function runGroqAssistantEdge(params: {
         { sources: searchResults.map((s) => ({ title: s.title, url: s.url })) }
       );
     } else {
-      recordStep('reading', 'Direct Knowledge', 'Consulting fast Groq inference engine...', 'cpu');
+      recordStep('reading', 'Direct Knowledge', 'Consulting OpenRouter model...', 'cpu');
     }
   }
 
-  const targetModel = typeof customModel === 'string' && customModel.trim() ? customModel.trim() : 'openai/gpt-oss-20b';
+  const targetModel = typeof customModel === 'string' && customModel.trim() ? customModel.trim() : OPENROUTER_MODEL;
   recordStep('synthesizing', 'Synthesizing Answer', `Formulating direct response with ${targetModel}...`, 'sparkles');
 
   const systemInstruction = buildAISystemInstruction(personality);
@@ -214,77 +209,60 @@ export async function runGroqAssistantEdge(params: {
       `\nUse the above live web facts to answer accurately and concisely.`;
   }
 
-  const groqMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
+  const chatMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }> = [
     { role: 'system', content: systemInstruction + searchContext },
   ];
 
   if (Array.isArray(history) && history.length > 0) {
     for (const msg of history) {
       if (msg?.role && msg?.text) {
-        groqMessages.push({
+        chatMessages.push({
           role: msg.role === 'user' ? 'user' : 'assistant',
           content: String(msg.text),
         });
       }
     }
   }
-  groqMessages.push({ role: 'user', content: prompt });
-
-  const groqModels = [
-    targetModel,
-    'openai/gpt-oss-20b',
-    'llama-3.1-8b-instant',
-    'llama-3.3-70b-versatile',
-    'qwen/qwen3-32b',
-    'openai/gpt-oss-120b',
-  ].filter((m, idx, arr) => arr.indexOf(m) === idx);
+  chatMessages.push({ role: 'user', content: prompt });
 
   let replyText = '';
   let lastError = '';
 
-  for (const model of groqModels) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 9000);
-      const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${groqKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model,
-          messages: groqMessages,
-          temperature: 0.3,
-          max_tokens: 240,
-        }),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 9000);
+    const res = await fetch(OPENROUTER_CHAT_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${openRouterKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: targetModel,
+        messages: chatMessages,
+        temperature: 0.3,
+        max_tokens: 240,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
 
-      if (groqRes.ok) {
-        const data = (await groqRes.json()) as any;
-        const text = data.choices?.[0]?.message?.content;
-        if (text) {
-          replyText = cleanShortAnswer(text);
-          break;
-        }
-      } else {
-        const errText = await groqRes.text().catch(() => '');
-        lastError = `Groq HTTP ${groqRes.status}: ${errText.slice(0, 140)}`;
-        if (groqRes.status === 401 || groqRes.status === 403) {
-          break;
-        }
-      }
-    } catch (err: any) {
-      lastError = err?.message || 'Groq request error';
+    if (res.ok) {
+      const data = (await res.json()) as any;
+      const text = data.choices?.[0]?.message?.content;
+      if (text) replyText = cleanShortAnswer(text);
+    } else {
+      const errText = await res.text().catch(() => '');
+      lastError = `OpenRouter HTTP ${res.status}: ${errText.slice(0, 140)}`;
     }
+  } catch (err: any) {
+    lastError = err?.message || 'OpenRouter request error';
   }
 
   return {
     reply: replyText,
     sources: searchResults.map((s) => ({ title: s.title, url: s.url })),
     steps,
-    errorDetail: replyText ? undefined : lastError || 'Groq API request failed or timed out.',
+    errorDetail: replyText ? undefined : lastError || 'OpenRouter API request failed or timed out.',
   };
 }

@@ -403,7 +403,7 @@ export async function inspectUploadedFileWithGemini(
 }
 
 /**
- * Fallback Stage 2 Text Synthesizer when Groq text model is unavailable.
+ * Fallback Stage 2 Text Synthesizer when the OpenRouter text model is unavailable.
  */
 export async function generateTextWithGeminiFallback(
   systemInstruction: string,

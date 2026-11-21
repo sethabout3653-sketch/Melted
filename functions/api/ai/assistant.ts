@@ -1,4 +1,4 @@
-import { extractGroqKey, runGroqAssistantEdge } from '../../../src/utils/groqEdgeHelper';
+import { extractOpenRouterKey, runOpenRouterAssistantEdge } from '../../../src/utils/openRouterEdgeHelper';
 
 interface CFContext {
   request: Request;
@@ -29,7 +29,7 @@ export async function onRequest(context: CFContext): Promise<Response> {
     const body = (await request.json().catch(() => ({}))) as {
       prompt?: string;
       history?: Array<{ role?: string; text?: string }>;
-      groqApiKey?: string;
+      openRouterApiKey?: string;
       model?: string;
       searchMode?: 'auto' | 'always' | 'off';
       personality?: unknown;
@@ -43,18 +43,18 @@ export async function onRequest(context: CFContext): Promise<Response> {
       });
     }
 
-    const groqKey = extractGroqKey(env, body.groqApiKey);
-    if (!groqKey) {
+    const openRouterKey = extractOpenRouterKey(env, body.openRouterApiKey);
+    if (!openRouterKey) {
       return new Response(
         JSON.stringify({
-          error: 'Groq API Key is not configured on Cloudflare. Add GROQ_API_KEY in Worker/Pages secrets and redeploy.',
+          error: 'OpenRouter API Key is not configured on Cloudflare. Add OPENROUTER_API_KEY in Worker/Pages secrets and redeploy.',
         }),
         { status: 503, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
       );
     }
 
-    const result = await runGroqAssistantEdge({
-      groqKey,
+    const result = await runOpenRouterAssistantEdge({
+      openRouterKey,
       prompt,
       history: body.history,
       model: body.model,
@@ -65,7 +65,7 @@ export async function onRequest(context: CFContext): Promise<Response> {
     if (!result.reply) {
       return new Response(
         JSON.stringify({
-          error: result.errorDetail || 'Groq API request failed or timed out. Please check your Groq API key.',
+          error: result.errorDetail || 'OpenRouter API request failed or timed out. Please check your OpenRouter API key.',
         }),
         { status: 502, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
       );
