@@ -417,90 +417,116 @@ export function useGlobalChat({
     if (isJoiningVoiceRef.current || isInVideoRef.current) return;
     isJoiningVoiceRef.current = true;
     try {
-      let audioStream: MediaStream | null = null;
-      let micGranted = false;
       setMicError(null);
+      setCameraError(null);
 
-      try {
-        audioStream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-          video: false,
-        });
-        micGranted = true;
-        setMicPermissionStatus('granted');
-        setIsMuted(false);
-      } catch (micErr) {
-        try {
-          audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
-          micGranted = true;
-          setMicPermissionStatus('granted');
-          setIsMuted(false);
-        } catch (retryError) {
-          console.warn('[useGlobalChat] Microphone capture failed:', retryError || micErr);
-          setMicError(retryError instanceof Error ? retryError.message : 'Microphone access was denied or no microphone is available.');
-          setIsMuted(true);
-          setMicPermissionStatus('denied');
-        }
-      }
-
-      if (micStreamRef.current && micStreamRef.current !== audioStream) {
-        micStreamRef.current.getTracks().forEach((t) => {
-          t.onended = null;
-          t.enabled = false;
-          t.stop();
-        });
-      }
-      micStreamRef.current = audioStream;
-      setLocalAudioStream(audioStream);
-      isInVideoRef.current = true;
-      setIsInVideo(true);
-
+      // Immediately enter the voice room and broadcast presence so WebRTC ICE/SDP handshake starts at 0ms
       const nextChannel = 'video-general' as const;
       const nextActivity = 'In General Voice';
+      isInVideoRef.current = true;
+      setIsInVideo(true);
+      setIsMuted(true);
 
       setCurrentUser(prev => ({
         ...prev,
         current_channel: nextChannel,
-        activity: nextActivity
+        activity: nextActivity,
+        has_video: false,
+        is_muted: true,
       }));
-
-      if (withVideo) {
-        try {
-          const videoStream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60, max: 60 } },
-            audio: false,
-          });
-          cameraStreamRef.current = videoStream;
-          setCameraStream(videoStream);
-          setIsVideoEnabled(true);
-          setCameraError(null);
-          const camTrack = videoStream.getVideoTracks()[0];
-          if (camTrack) {
-            camTrack.onended = () => {
-              cameraStreamRef.current?.getTracks().forEach((track) => {
-                track.onended = null;
-                track.enabled = false;
-                track.stop();
-              });
-              cameraStreamRef.current = null;
-              setCameraStream(null);
-              setIsVideoEnabled(false);
-              setCurrentUser((prev) => ({ ...prev, has_video: false }));
-              updateUserRef.current({ has_video: false });
-            };
-          }
-        } catch (camErr) {
-          setCameraError(camErr instanceof Error ? camErr.message : 'Camera access was denied or no camera is available.');
-          console.warn('[useGlobalChat] Camera error:', camErr);
-        }
-      }
 
       updateUserRef.current({
         current_channel: nextChannel,
         activity: nextActivity,
-        has_video: withVideo && Boolean(cameraStreamRef.current),
-        is_muted: !micGranted,
+        has_video: false,
+        is_muted: true,
       });
+
+      // Acquire microphone & optional camera concurrently without blocking initial WebRTC peer connection
+      const micPromise = (async () => {
+        let audioStream: MediaStream | null = null;
+        let micGranted = false;
+        try {
+          audioStream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+            video: false,
+          });
+          micGranted = true;
+          setMicPermissionStatus('granted');
+          setIsMuted(false);
+        } catch (micErr) {
+          try {
+            audioStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+            micGranted = true;
+            setMicPermissionStatus('granted');
+            setIsMuted(false);
+          } catch (retryError) {
+            console.warn('[useGlobalChat] Microphone capture failed:', retryError || micErr);
+            setMicError(retryError instanceof Error ? retryError.message : 'Microphone access was denied or no microphone is available.');
+            setIsMuted(true);
+            setMicPermissionStatus('denied');
+          }
+        }
+
+        if (!isInVideoRef.current) {
+          audioStream?.getTracks().forEach((t) => t.stop());
+          return false;
+        }
+
+        if (micStreamRef.current && micStreamRef.current !== audioStream) {
+          micStreamRef.current.getTracks().forEach((t) => {
+            t.onended = null;
+            t.enabled = false;
+            t.stop();
+          });
+        }
+        micStreamRef.current = audioStream;
+        setLocalAudioStream(audioStream);
+        setCurrentUser(prev => ({ ...prev, is_muted: !micGranted }));
+        updateUserRef.current({ is_muted: !micGranted });
+        return micGranted;
+      })();
+
+      const camPromise = withVideo
+        ? (async () => {
+            try {
+              const videoStream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60, max: 60 } },
+                audio: false,
+              });
+              if (!isInVideoRef.current) {
+                videoStream.getTracks().forEach((t) => t.stop());
+                return;
+              }
+              cameraStreamRef.current = videoStream;
+              setCameraStream(videoStream);
+              setIsVideoEnabled(true);
+              setCameraError(null);
+              setCurrentUser(prev => ({ ...prev, has_video: true }));
+              updateUserRef.current({ has_video: true });
+              const camTrack = videoStream.getVideoTracks()[0];
+              if (camTrack) {
+                camTrack.onended = () => {
+                  cameraStreamRef.current?.getTracks().forEach((track) => {
+                    track.onended = null;
+                    track.enabled = false;
+                    track.stop();
+                  });
+                  cameraStreamRef.current = null;
+                  setCameraStream(null);
+                  setIsVideoEnabled(false);
+                  setCurrentUser((prev) => ({ ...prev, has_video: false }));
+                  updateUserRef.current({ has_video: false });
+                };
+              }
+            } catch (camErr) {
+              setCameraError(camErr instanceof Error ? camErr.message : 'Camera access was denied or no camera is available.');
+              console.warn('[useGlobalChat] Camera error:', camErr);
+            }
+          })()
+        : Promise.resolve();
+
+      await Promise.all([micPromise, camPromise]);
     } finally {
       isJoiningVoiceRef.current = false;
     }

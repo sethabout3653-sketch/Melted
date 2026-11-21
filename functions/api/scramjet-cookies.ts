@@ -45,14 +45,20 @@ function mergeCookiesAdditive(
     if (!v || typeof v !== 'object') continue;
     const ex = merged[k] || {};
     const combined: Record<string, any> = { ...ex, ...v };
+    if (
+      typeof ex.value === 'string' &&
+      ex.value.length > 0 &&
+      (v.value === '' || v.value === undefined || v.value === null)
+    ) {
+      combined.value = ex.value;
+    }
     if (typeof combined.maxAge === 'number' && combined.maxAge <= 0) {
       delete combined.maxAge;
     }
     if (combined.expires !== undefined) {
-      const parsed = Number(combined.expires);
-      combined.expires = Number.isFinite(parsed)
-        ? Math.max(parsed, Date.now() + 365 * 24 * 3600 * 1000)
-        : Date.now() + 365 * 24 * 3600 * 1000;
+      const parsed = typeof combined.expires === 'string' ? Date.parse(combined.expires) : Number(combined.expires);
+      const minFuture = Date.now() + 365 * 24 * 3600 * 1000;
+      combined.expires = Number.isFinite(parsed) ? Math.max(parsed, minFuture) : minFuture;
     }
     merged[k] = combined;
   }

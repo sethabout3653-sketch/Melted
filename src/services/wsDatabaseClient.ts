@@ -208,6 +208,8 @@ export function useWebSocketDatabase(currentUser: {
   const deletedIdsRef = useRef<Set<string>>(new Set());
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
   const processedRtcSignalsRef = useRef<Set<string>>(new Set());
+  const sessionBootTimeRef = useRef<number>(Date.now());
+  const lastHttpSyncAtRef = useRef<number>(0);
 
   const currentUserRef = useRef(currentUser);
   currentUserRef.current = currentUser;
@@ -364,7 +366,10 @@ export function useWebSocketDatabase(currentUser: {
           snapshot.docChanges().forEach((change) => {
             if (change.type !== 'added') return;
             const s = change.doc.data();
-            if (s && s.fromUserId && s.fromUserId !== myUserId) {
+            const sigTs = Number(s?.timestamp || 0);
+            const now = Date.now();
+            const isStale = !sigTs || sigTs < sessionBootTimeRef.current - 3000 || now - sigTs > 15000;
+            if (!isStale && s && s.fromUserId && s.fromUserId !== myUserId) {
               const sigKey = s.sigId || change.doc.id;
               if (!processedRtcSignalsRef.current.has(sigKey)) {
                 processedRtcSignalsRef.current.add(sigKey);
@@ -472,8 +477,13 @@ export function useWebSocketDatabase(currentUser: {
       const sigRes = await fetch(`/api/ws-db/signals/${encodeURIComponent(u.id)}`);
       if (sigRes.ok) {
         const sigData = await sigRes.json();
+        const now = Date.now();
         if (sigData.success && Array.isArray(sigData.signals)) {
           sigData.signals.forEach((s: any) => {
+            const sigTs = Number(s?.timestamp || 0);
+            if (sigTs && (sigTs < sessionBootTimeRef.current - 3000 || now - sigTs > 20000)) {
+              return;
+            }
             if (s.targetUserId === u.id && s.fromUserId !== u.id) {
               const sigKey = s.sigId || s.id;
               if (!processedRtcSignalsRef.current.has(sigKey)) {
@@ -629,9 +639,7 @@ export function useWebSocketDatabase(currentUser: {
           } else if (msg.type === 'USER_LEFT_MEDIA') {
             if (onUserLeftMediaRef.current) onUserLeftMediaRef.current(msg.userId, msg.channel);
           } else if (msg.type === 'USER_MEDIA_UPDATE') {
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-              wsRef.current.send(JSON.stringify({ type: 'GET_USERS' }));
-            }
+            // Authoritative users table is already broadcast right before USER_MEDIA_UPDATE
           }
         } catch {}
       };
@@ -662,10 +670,20 @@ export function useWebSocketDatabase(currentUser: {
   }, [startHeartbeat, stopHeartbeat, publishUsers]);
 
   useEffect(() => {
+    lastHttpSyncAtRef.current = Date.now();
     fetchHttpSync();
     connect();
-    httpSyncIntervalRef.current = setInterval(fetchHttpSync, 4000);
+    httpSyncIntervalRef.current = setInterval(() => {
+      const wsOpen = wsRef.current?.readyState === WebSocket.OPEN;
+      const minInterval = wsOpen ? 4000 : 1200;
+      const now = Date.now();
+      if (now - lastHttpSyncAtRef.current >= minInterval) {
+        lastHttpSyncAtRef.current = now;
+        fetchHttpSync();
+      }
+    }, 1200);
     const handleOnline = () => {
+      lastHttpSyncAtRef.current = Date.now();
       fetchHttpSync();
       if (!wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) connect();
     };

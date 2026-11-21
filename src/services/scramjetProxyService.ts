@@ -231,12 +231,23 @@ function parseCookieDump(raw: unknown): Record<string, any> {
  */
 export function deepMergeCookies(...sources: Array<Record<string, any> | undefined | null>): Record<string, any> {
   const result: Record<string, any> = {};
+  const now = Date.now();
+  const minRenewalThreshold = now + 30 * 24 * 3600 * 1000;
+  const extendedExpiry = now + 365 * 24 * 3600 * 1000;
+
   for (const src of sources) {
     if (!src || typeof src !== 'object') continue;
     for (const [key, val] of Object.entries(src)) {
       if (!val || typeof val !== 'object') continue;
       const existing = result[key] || {};
-      const mergedVal = { ...existing, ...val };
+      const mergedVal: Record<string, any> = { ...existing, ...val };
+      if (
+        typeof existing.value === 'string' &&
+        existing.value.length > 0 &&
+        (val.value === '' || val.value === undefined || val.value === null)
+      ) {
+        mergedVal.value = existing.value;
+      }
       if (mergedVal.name && mergedVal.value !== undefined) {
         // If maxAge was negative or zero (e.g. deletion attempt), remove it so cookie is preserved
         if (typeof mergedVal.maxAge === 'number' && mergedVal.maxAge <= 0) {
@@ -244,16 +255,42 @@ export function deepMergeCookies(...sources: Array<Record<string, any> | undefin
         }
         // Ensure expiration is kept in the distant future so getCookies never drops it
         if (mergedVal.expires !== undefined) {
-          const parsed = Number(mergedVal.expires);
+          const parsed =
+            typeof mergedVal.expires === 'string' ? Date.parse(mergedVal.expires) : Number(mergedVal.expires);
           mergedVal.expires = Number.isFinite(parsed)
-            ? Math.max(parsed, Date.now() + 365 * 24 * 3600 * 1000)
-            : Date.now() + 365 * 24 * 3600 * 1000;
+            ? parsed < minRenewalThreshold
+              ? extendedExpiry
+              : parsed
+            : extendedExpiry;
         }
         result[key] = mergedVal;
       }
     }
   }
   return result;
+}
+
+function getCookieSnapshotKey(cookies: Record<string, any>): string {
+  const keys = Object.keys(cookies || {}).sort();
+  return keys
+    .map((k) => {
+      const c = cookies[k];
+      return `${k}=${c?.value ?? ''}|${c?.domain ?? ''}|${c?.path ?? ''}`;
+    })
+    .join('\n');
+}
+
+function hasExpiredOrShortLivedCookie(cookies: Record<string, any>): boolean {
+  const minThreshold = Date.now() + 24 * 3600 * 1000;
+  for (const val of Object.values(cookies || {})) {
+    if (!val || typeof val !== 'object') continue;
+    if (typeof val.maxAge === 'number' && val.maxAge <= 0) return true;
+    if (val.expires !== undefined) {
+      const parsed = typeof val.expires === 'string' ? Date.parse(val.expires) : Number(val.expires);
+      if (!Number.isFinite(parsed) || parsed < minThreshold) return true;
+    }
+  }
+  return false;
 }
 
 export function readLocalSavedCookies(): Record<string, any> {
@@ -348,22 +385,31 @@ export async function fetchRemoteSavedCookies(): Promise<Record<string, any>> {
   const userId = getCookieStoreUserId();
   const origins = resolveBackendOrigins();
   if (origins.length === 0) return {};
-  for (const origin of origins) {
-    try {
-      const res = await fetch(`${origin}/api/scramjet-cookies?userId=${encodeURIComponent(userId)}`, {
-        signal: AbortSignal.timeout(800),
-      });
-      const ct = (res.headers.get('content-type') || '').toLowerCase();
-      if (!res.ok || !ct.includes('application/json')) continue;
-      const data = await res.json();
-      if (data && typeof data.cookies === 'object') {
-        return parseCookieDump(data.cookies);
+
+  const fetchForId = async (id: string): Promise<Record<string, any>> => {
+    for (const origin of origins) {
+      try {
+        const res = await fetch(`${origin}/api/scramjet-cookies?userId=${encodeURIComponent(id)}`, {
+          signal: AbortSignal.timeout(800),
+        });
+        const ct = (res.headers.get('content-type') || '').toLowerCase();
+        if (!res.ok || !ct.includes('application/json')) continue;
+        const data = await res.json();
+        if (data && typeof data.cookies === 'object') {
+          return parseCookieDump(data.cookies);
+        }
+      } catch {
+        // Try next backend origin
       }
-    } catch {
-      // Try next backend origin
     }
+    return {};
+  };
+
+  if (userId !== 'default') {
+    const [defaultCookies, userCookies] = await Promise.all([fetchForId('default'), fetchForId(userId)]);
+    return deepMergeCookies(defaultCookies, userCookies);
   }
-  return {};
+  return fetchForId(userId);
 }
 
 export function pushRemoteSavedCookies(cookies: Record<string, any>, immediate = false): void {
@@ -431,7 +477,7 @@ function attachCookieLifecycleListeners(): void {
     }
   });
 
-  // Periodic background checkpoint so website sessions never drop on sudden tab closes
+  // Periodic background checkpoint so website sessions & updated tokens never drop on sudden tab closes
   periodicFlushTimer = window.setInterval(() => {
     const controller = cachedController;
     if (!controller?.cookieJar) return;
@@ -439,7 +485,7 @@ function attachCookieLifecycleListeners(): void {
       const inMemory = parseCookieDump(controller.cookieJar.dump());
       const localStored = readLocalSavedCookies();
       const merged = deepMergeCookies(localStored, inMemory);
-      if (Object.keys(merged).length > Object.keys(localStored).length) {
+      if (getCookieSnapshotKey(merged) !== getCookieSnapshotKey(localStored)) {
         writeLocalSavedCookies(merged);
         pushRemoteSavedCookies(merged, false);
         controller.persistCookies?.().catch(() => {});
@@ -449,14 +495,121 @@ function attachCookieLifecycleListeners(): void {
   void periodicFlushTimer;
 }
 
+const instanceMutateListeners = new WeakMap<object, () => void>();
+
+export function protectCookieJarPrototype(target: any): void {
+  if (!target) return;
+  const candidateProto =
+    target?.CookieJar?.prototype ||
+    (typeof target === 'function' ? target.prototype : null) ||
+    (typeof target?.clear === 'function' && typeof target?.dump === 'function'
+      ? Object.getPrototypeOf(target)
+      : target);
+
+  if (!candidateProto || candidateProto === Object.prototype || candidateProto.__frostProtoProtected) return;
+  candidateProto.__frostProtoProtected = true;
+
+  // NEVER RESET COOKIES - Neutralize clear and removeById (leave unindexCookie intact so cookie updates don't duplicate entries)
+  candidateProto.clear = function () {};
+  candidateProto.removeById = function () {};
+
+  const origLoad = typeof candidateProto.load === 'function' ? candidateProto.load : null;
+  if (origLoad) {
+    candidateProto.load = function (rawInput: any) {
+      let rawJson = '';
+      if (typeof rawInput === 'object' && rawInput !== null) {
+        rawJson = JSON.stringify(rawInput);
+      } else if (typeof rawInput === 'string') {
+        rawJson = rawInput;
+      }
+      if (this.__frostLoading) {
+        return origLoad.call(this, rawJson);
+      }
+      this.__frostLoading = true;
+      try {
+        const current = parseCookieDump(typeof this.dump === 'function' ? this.dump() : '{}');
+        const stored = readLocalSavedCookies();
+        const incoming = parseCookieDump(rawJson);
+        const merged = deepMergeCookies(stored, current, incoming);
+        if (getCookieSnapshotKey(merged) !== getCookieSnapshotKey(stored)) {
+          writeLocalSavedCookies(merged);
+          pushRemoteSavedCookies(merged, false);
+        }
+        return origLoad.call(this, JSON.stringify(merged));
+      } finally {
+        this.__frostLoading = false;
+      }
+    };
+  }
+
+  const origSetCookies = typeof candidateProto.setCookies === 'function' ? candidateProto.setCookies : null;
+  if (origSetCookies) {
+    candidateProto.setCookies = function (...args: any[]) {
+      const before = parseCookieDump(typeof this.dump === 'function' ? this.dump() : '{}');
+      const res = origSetCookies.apply(this, args);
+      try {
+        const after = parseCookieDump(typeof this.dump === 'function' ? this.dump() : '{}');
+        const stored = readLocalSavedCookies();
+        const merged = deepMergeCookies(stored, before, after);
+
+        // If site sent an expired date, maxAge<=0, or blank deletion value, immediately restore the preserved cookie in-memory
+        if (
+          origLoad &&
+          !this.__frostLoading &&
+          (getCookieSnapshotKey(merged) !== getCookieSnapshotKey(after) || hasExpiredOrShortLivedCookie(after))
+        ) {
+          this.__frostLoading = true;
+          try {
+            origLoad.call(this, JSON.stringify(merged));
+          } finally {
+            this.__frostLoading = false;
+          }
+        }
+
+        writeLocalSavedCookies(merged);
+        pushRemoteSavedCookies(merged, false);
+
+        // Cross-sync iframe cookie updates back into main controller jar so reloads & new tabs have them immediately
+        const mainJar = (cachedController as any)?.cookieJar;
+        if (mainJar && mainJar !== this && !this.__frostSyncing && !mainJar.__frostSyncing) {
+          this.__frostSyncing = true;
+          mainJar.__frostSyncing = true;
+          try {
+            if (typeof mainJar.load === 'function') {
+              mainJar.load(JSON.stringify(merged));
+            }
+            cachedController?.persistCookies?.().catch(() => {});
+          } finally {
+            this.__frostSyncing = false;
+            mainJar.__frostSyncing = false;
+          }
+        }
+
+        instanceMutateListeners.get(this)?.();
+      } catch {}
+      return res;
+    };
+  }
+}
+
 export function protectCookieJarInstance(jar: any, onMutate?: () => void): void {
-  if (!jar || jar.__frostProtected) return;
+  if (!jar) return;
+  if (onMutate) {
+    instanceMutateListeners.set(jar, onMutate);
+  }
+  protectCookieJarPrototype(jar);
+  if (jar.__frostProtected) return;
   jar.__frostProtected = true;
 
-  // NEVER RESET COOKIES - Neutralize clear, removeById, and unindexCookie
+  // Ensure direct own-property overrides also exist in case prototype calls are bypassed
+  const proto = Object.getPrototypeOf(jar);
+  if (proto?.__frostProtoProtected) {
+    // Prototype already wraps clear, removeById, load, setCookies cleanly
+    return;
+  }
+
   jar.clear = () => {};
   jar.removeById = () => {};
-  jar.unindexCookie = () => {};
 
   const origLoad = typeof jar.load === 'function' ? jar.load.bind(jar) : null;
   if (origLoad) {
@@ -470,7 +623,6 @@ export function protectCookieJarInstance(jar: any, onMutate?: () => void): void 
       const current = parseCookieDump(typeof jar.dump === 'function' ? jar.dump() : '{}');
       const stored = readLocalSavedCookies();
       const incoming = parseCookieDump(rawJson);
-      // ADDITIVE MERGE: stored + current + incoming! NEVER WIPE PREVIOUS COOKIES!
       const merged = deepMergeCookies(stored, current, incoming);
       writeLocalSavedCookies(merged);
       pushRemoteSavedCookies(merged, false);
@@ -481,14 +633,18 @@ export function protectCookieJarInstance(jar: any, onMutate?: () => void): void 
   const origSetCookies = typeof jar.setCookies === 'function' ? jar.setCookies.bind(jar) : null;
   if (origSetCookies) {
     jar.setCookies = (...args: any[]) => {
+      const before = parseCookieDump(jar.dump());
       const res = origSetCookies(...args);
       try {
-        const inMemory = parseCookieDump(jar.dump());
+        const after = parseCookieDump(jar.dump());
         const stored = readLocalSavedCookies();
-        const merged = deepMergeCookies(stored, inMemory);
+        const merged = deepMergeCookies(stored, before, after);
+        if (origLoad && (getCookieSnapshotKey(merged) !== getCookieSnapshotKey(after) || hasExpiredOrShortLivedCookie(after))) {
+          origLoad(JSON.stringify(merged));
+        }
         writeLocalSavedCookies(merged);
         pushRemoteSavedCookies(merged, false);
-        onMutate?.();
+        instanceMutateListeners.get(jar)?.();
       } catch {}
       return res;
     };
@@ -500,17 +656,10 @@ async function protectAndHydrateCookies(controller: Controller): Promise<void> {
   if (!jar) return;
 
   attachCookieLifecycleListeners();
-
-  // Also protect prototype if Scramjet exposed it globally
-  try {
-    const sj = (window as any).$scramjet;
-    if (sj?.CookieJar?.prototype && !sj.CookieJar.prototype.__frostProtoProtected) {
-      sj.CookieJar.prototype.__frostProtoProtected = true;
-      sj.CookieJar.prototype.clear = function () {};
-      sj.CookieJar.prototype.removeById = function () {};
-      sj.CookieJar.prototype.unindexCookie = function () {};
-    }
-  } catch {}
+  protectCookieJarPrototype((window as any).$scramjet);
+  protectCookieJarInstance(jar, () => {
+    controller.persistCookies?.().catch(() => {});
+  });
 
   // Merge cookies across remote store, localStorage, IndexedDB, and live jar
   const [remoteCookies, idbCookies] = await Promise.all([
@@ -521,14 +670,11 @@ async function protectAndHydrateCookies(controller: Controller): Promise<void> {
   const jarCookies = parseCookieDump(jar.dump());
   const merged = deepMergeCookies(remoteCookies, idbCookies, localCookies, jarCookies);
 
-  protectCookieJarInstance(jar, () => {
-    controller.persistCookies?.().catch(() => {});
-  });
-
   if (Object.keys(merged).length > 0) {
     const mergedJson = JSON.stringify(merged);
     jar.load(mergedJson);
     writeLocalSavedCookies(merged);
+    await seedControllerIdbCookies(merged);
     if (typeof controller.persistCookies === 'function') {
       await controller.persistCookies().catch(() => {});
     }
@@ -541,7 +687,7 @@ async function protectAndHydrateCookies(controller: Controller): Promise<void> {
         const current = parseCookieDump(jar.dump());
         const stored = readLocalSavedCookies();
         const combined = deepMergeCookies(stored, current);
-        if (Object.keys(combined).length > Object.keys(current).length) {
+        if (getCookieSnapshotKey(combined) !== getCookieSnapshotKey(current) || hasExpiredOrShortLivedCookie(current)) {
           jar.load(JSON.stringify(combined));
         }
         writeLocalSavedCookies(combined);
@@ -1943,11 +2089,12 @@ export async function initScramjetProxy(): Promise<Controller> {
     }
 
     // 1. Pre-seed IndexedDB cookie store before Controller constructor reads it
-    const [localPre, remotePre] = await Promise.all([
+    const [localPre, remotePre, idbPre] = await Promise.all([
       Promise.resolve(readLocalSavedCookies()),
       fetchRemoteSavedCookies(),
+      readControllerIdbCookies(),
     ]);
-    const preMerged = { ...remotePre, ...localPre };
+    const preMerged = deepMergeCookies(remotePre, idbPre, localPre);
     if (Object.keys(preMerged).length > 0) {
       writeLocalSavedCookies(preMerged);
       await seedControllerIdbCookies(preMerged);
@@ -1956,6 +2103,7 @@ export async function initScramjetProxy(): Promise<Controller> {
     // 2. Clean legacy SWs + load Scramjet 2.0.67-alpha.2 runtime, WASM, and Controller API
     await cleanupLegacyServiceWorkers();
     await loadScriptOnce('/scramjet/scramjet.js', () => Boolean(window.$scramjet));
+    protectCookieJarPrototype((window as any).$scramjet);
     await loadScriptOnce('/controller/controller.api.js', () => Boolean(window.$scramjetController));
     await ensureValidScramjetWasm();
 
@@ -1994,6 +2142,10 @@ export async function initScramjetProxy(): Promise<Controller> {
           },
         },
       });
+
+      // Immediately protect Controller's bundled CookieJar prototype & instance before any frame/SW sync fires
+      protectCookieJarPrototype(controller.cookieJar);
+      protectCookieJarInstance(controller.cookieJar);
 
       patchControllerRequestHandler(controller);
 
@@ -2086,12 +2238,28 @@ export async function launchInScramjetFrame(
     const Tap = (window.$scramjet as any)?.Tap;
     if (Tap && typeof Tap.tap === 'function') {
       try {
-        Tap.tap(frame.hooks.init.post, ({ client }: any) => {
+        Tap.tap(frame.hooks.init.pre, ({ window: win, client }: any) => {
+          protectCookieJarPrototype(win?.$scramjet);
           if (client?.context?.cookieJar) {
+            protectCookieJarPrototype(client.context.cookieJar);
+            protectCookieJarInstance(client.context.cookieJar);
+            try {
+              const saved = readLocalSavedCookies();
+              if (Object.keys(saved).length > 0) {
+                client.context.cookieJar.load(JSON.stringify(saved));
+              }
+            } catch {}
+          }
+        });
+      } catch {}
+      try {
+        Tap.tap(frame.hooks.init.post, ({ client }: any) => {
+          const win = client?.global as any;
+          protectCookieJarPrototype(win?.$scramjet);
+          if (client?.context?.cookieJar) {
+            protectCookieJarPrototype(client.context.cookieJar);
             protectCookieJarInstance(client.context.cookieJar);
           }
-
-          const win = client?.global as any;
           if (!win || win.__frostCompatPatched) return;
           win.__frostCompatPatched = true;
 

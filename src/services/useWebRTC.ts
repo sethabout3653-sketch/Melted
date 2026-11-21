@@ -4,13 +4,10 @@ import { DbUser } from '../server/wsDatabase';
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [
     { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
     { urls: 'stun:stun.cloudflare.com:3478' },
     {
       urls: [
         'turn:openrelay.metered.ca:80',
-        'turn:openrelay.metered.ca:443',
         'turn:openrelay.metered.ca:443?transport=tcp',
         'turns:openrelay.metered.ca:443?transport=tcp',
       ],
@@ -18,7 +15,9 @@ const RTC_CONFIG: RTCConfiguration = {
       credential: 'openrelayproject',
     },
   ],
-  iceCandidatePoolSize: 10,
+  bundlePolicy: 'max-bundle',
+  rtcpMuxPolicy: 'require',
+  iceCandidatePoolSize: 2,
 };
 
 // Optimizes Opus SDP to completely disable DTX (discontinuous transmission)
@@ -186,6 +185,7 @@ export function useWebRTC({
   const lastSentMetaRef = useRef<Map<string, string>>(new Map());
   const fallbackTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const earlySignalsRef = useRef<{ fromUserId: string; signal: any; receivedAt: number }[]>([]);
+  const signalQueuesRef = useRef<Map<string, Promise<void>>>(new Map());
   const renegotiateRef = useRef<(peerId: string) => void>(() => {});
   const processSignalRef = useRef<(fromUserId: string, signal: any) => Promise<void>>(async () => {});
 
@@ -254,6 +254,7 @@ export function useWebRTC({
     pendingCandidates.current.delete(peerId);
     makingOfferRef.current.delete(peerId);
     isNegotiatingRef.current.delete(peerId);
+    signalQueuesRef.current.delete(peerId);
 
     setRemoteStreams((prev) => {
       if (!prev[peerId]) return prev;
@@ -572,6 +573,7 @@ export function useWebRTC({
       pendingCandidates.current.clear();
       makingOfferRef.current.clear();
       isNegotiatingRef.current.clear();
+      signalQueuesRef.current.clear();
       setRemoteStreams({});
       setRemoteScreenAudioStreams({});
       setRemoteCameraStreams({});
@@ -799,7 +801,7 @@ export function useWebRTC({
       } else if (pc.connectionState === 'failed') {
         scheduleIceRestart(0);
       } else if (pc.connectionState === 'disconnected') {
-        scheduleIceRestart(4000);
+        scheduleIceRestart(1500);
       } else if (pc.connectionState === 'closed') {
         clearRecoveryTimer();
       }
@@ -811,7 +813,7 @@ export function useWebRTC({
       } else if (pc.iceConnectionState === 'failed') {
         scheduleIceRestart(0);
       } else if (pc.iceConnectionState === 'disconnected') {
-        scheduleIceRestart(4000);
+        scheduleIceRestart(1500);
       }
     };
 
@@ -943,6 +945,19 @@ export function useWebRTC({
     } finally {
       makingOfferRef.current.set(peerId, false);
       isNegotiatingRef.current.set(peerId, false);
+      if (
+        pendingRenegotiatePeersRef.current.has(peerId) &&
+        isMediaActiveRef.current &&
+        peerBundles.current.has(peerId) &&
+        pc.connectionState !== 'closed'
+      ) {
+        pendingRenegotiatePeersRef.current.delete(peerId);
+        queueMicrotask(() => {
+          if (isMediaActiveRef.current && peerBundles.current.has(peerId)) {
+            renegotiateRef.current(peerId);
+          }
+        });
+      }
     }
   }, [getOrCreatePeerBundle, attachLocalTracksToBundle, buildLocalMetaFields, sendRtcSignal]);
 
@@ -1001,13 +1016,13 @@ export function useWebRTC({
         if (
           pc.remoteDescription === null &&
           pc.signalingState === 'stable' &&
-          Date.now() - bundle.createdAt > 2500 &&
+          Date.now() - bundle.createdAt > 1000 &&
           !isNegotiatingRef.current.get(peerId)
         ) {
           renegotiateWithPeer(peerId);
         }
       });
-    }, 3500);
+    }, 1000);
     return () => clearInterval(interval);
   }, [isMediaActive, syncLocalTracks, renegotiateWithPeer]);
 
@@ -1017,8 +1032,17 @@ export function useWebRTC({
       (joinedUserId, _channel) => {
         if (!isMediaActiveRef.current || !joinedUserId || joinedUserId === currentUserIdRef.current) return;
         const existing = peerBundles.current.get(joinedUserId);
-        if (existing && Date.now() - existing.createdAt > 3000) {
-          clearPeerState(joinedUserId);
+        const shouldResetExisting =
+          existing &&
+          (existing.pc.connectionState === 'failed' ||
+            existing.pc.connectionState === 'closed' ||
+            (existing.pc.connectionState !== 'connected' && Date.now() - existing.createdAt > 1500) ||
+            (existing.pc.connectionState === 'connected' && Date.now() - existing.createdAt > 2500));
+
+        if (!existing || shouldResetExisting) {
+          if (existing) {
+            clearPeerState(joinedUserId);
+          }
           const isInitiator = currentUserIdRef.current < joinedUserId;
           if (isInitiator) {
             renegotiateWithPeer(joinedUserId);
@@ -1035,16 +1059,21 @@ export function useWebRTC({
     );
   }, [setMediaHandlers, clearPeerState, renegotiateWithPeer, getOrCreatePeerBundle, sendRtcSignal]);
 
-  // Core signal processor (Perfect Negotiation + track-meta + peer-ready)
-  const processSignal = useCallback(async (fromUserId: string, signal: any) => {
-    if (!isMediaActiveRef.current) return;
-    if (!fromUserId || fromUserId === currentUserIdRef.current) return;
+  // Core signal processor (Perfect Negotiation + track-meta + peer-ready), serialized per peer
+  const processSignal = useCallback((fromUserId: string, signal: any): Promise<void> => {
+    if (!isMediaActiveRef.current) return Promise.resolve();
+    if (!fromUserId || fromUserId === currentUserIdRef.current) return Promise.resolve();
 
-    const bundle = getOrCreatePeerBundle(fromUserId);
-    const pc = bundle.pc;
-    const isPolite = currentUserIdRef.current > fromUserId;
+    const prevQueue = signalQueuesRef.current.get(fromUserId) || Promise.resolve();
+    const nextTask = prevQueue
+      .catch(() => {})
+      .then(async () => {
+        if (!isMediaActiveRef.current) return;
+        const bundle = getOrCreatePeerBundle(fromUserId);
+        const pc = bundle.pc;
+        const isPolite = currentUserIdRef.current > fromUserId;
 
-    try {
+        try {
       if (signal.type === 'peer-ready') {
         // Joining peer signals readiness: send current meta and offer if needed
         const metaPayload = {
@@ -1055,8 +1084,17 @@ export function useWebRTC({
         sendRtcSignal(fromUserId, metaPayload);
 
         if (!pc.remoteDescription) {
-          // If our earlier offer was dropped while peer wasn't ready yet, roll back and re-offer
           if (pc.signalingState === 'have-local-offer') {
+            // If an offer is freshly in flight (<1500ms), re-send the exact same offer instead of rolling back and breaking the peer's answer
+            if (Date.now() - bundle.createdAt < 1500 && pc.localDescription) {
+              const offerMeta = buildLocalMetaFields(bundle);
+              sendRtcSignal(fromUserId, {
+                type: 'offer',
+                offer: { type: pc.localDescription.type, sdp: pc.localDescription.sdp },
+                ...offerMeta,
+              });
+              return;
+            }
             try {
               await pc.setLocalDescription({ type: 'rollback' });
             } catch {
@@ -1278,6 +1316,10 @@ export function useWebRTC({
     } catch (err) {
       console.warn('[useWebRTC] Signal handling error:', err);
     }
+      });
+
+    signalQueuesRef.current.set(fromUserId, nextTask);
+    return nextTask;
   }, [
     getOrCreatePeerBundle,
     buildLocalMetaFields,
@@ -1300,7 +1342,7 @@ export function useWebRTC({
       if (!isMediaActiveRef.current) {
         const now = Date.now();
         earlySignalsRef.current = [
-          ...earlySignalsRef.current.filter((item) => now - item.receivedAt < 4000).slice(-19),
+          ...earlySignalsRef.current.filter((item) => now - item.receivedAt < 8000).slice(-29),
           { fromUserId, signal, receivedAt: now },
         ];
         return;
@@ -1313,7 +1355,7 @@ export function useWebRTC({
   useEffect(() => {
     if (!isMediaActive) return;
     const now = Date.now();
-    const buffered = earlySignalsRef.current.filter((item) => now - item.receivedAt < 4000);
+    const buffered = earlySignalsRef.current.filter((item) => now - item.receivedAt < 8000);
     earlySignalsRef.current = [];
     if (buffered.length > 0) {
       (async () => {
@@ -1341,7 +1383,7 @@ export function useWebRTC({
           // Notify existing peer we are ready so if they had an old connection or missed our join, they offer immediately
           sendRtcSignal(peer.id, { type: 'peer-ready' });
 
-          // Fallback safety net: if no offer arrives within 2.5s, proactively initiate
+          // Fast fallback: if no offer arrives within 500ms, proactively initiate (Perfect Negotiation resolves any glare)
           const oldTimer = fallbackTimersRef.current.get(peer.id);
           if (oldTimer) clearTimeout(oldTimer);
           const timer = setTimeout(() => {
@@ -1351,7 +1393,7 @@ export function useWebRTC({
             if (b && b.pc.remoteDescription === null && b.pc.signalingState === 'stable') {
               renegotiateWithPeer(peer.id);
             }
-          }, 2500);
+          }, 500);
           fallbackTimersRef.current.set(peer.id, timer);
         }
       }

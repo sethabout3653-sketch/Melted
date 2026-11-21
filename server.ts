@@ -1075,15 +1075,22 @@ app.post('/api/scramjet-cookies', (req, res) => {
     for (const [k, v] of Object.entries(cookies)) {
       if (!v || typeof v !== 'object') continue;
       const ex = merged[k] || {};
-      const combined = { ...ex, ...v };
+      const incoming = v as Record<string, any>;
+      const combined: Record<string, any> = { ...ex, ...incoming };
+      if (
+        typeof ex.value === 'string' &&
+        ex.value.length > 0 &&
+        (incoming.value === '' || incoming.value === undefined || incoming.value === null)
+      ) {
+        combined.value = ex.value;
+      }
       if (typeof combined.maxAge === 'number' && combined.maxAge <= 0) {
         delete combined.maxAge;
       }
       if (combined.expires !== undefined) {
-        const parsed = Number(combined.expires);
-        combined.expires = Number.isFinite(parsed)
-          ? Math.max(parsed, Date.now() + 365 * 24 * 3600 * 1000)
-          : Date.now() + 365 * 24 * 3600 * 1000;
+        const parsed = typeof combined.expires === 'string' ? Date.parse(combined.expires) : Number(combined.expires);
+        const minFuture = Date.now() + 365 * 24 * 3600 * 1000;
+        combined.expires = Number.isFinite(parsed) ? Math.max(parsed, minFuture) : minFuture;
       }
       merged[k] = combined;
     }
@@ -1293,6 +1300,7 @@ app.post('/api/ws-db/register', (req, res) => {
       return res.status(400).json({ error: 'Missing user object or user.id' });
     }
     const existingUser = globalWsDb.getUser(user.id);
+    const oldChannel = existingUser?.current_channel || 'text-general';
     const userObj = {
       id: user.id,
       username: user.username || existingUser?.username || 'Player',
@@ -1311,6 +1319,17 @@ app.post('/api/ws-db/register', (req, res) => {
     };
     globalWsDb.upsertUser(userObj as any);
     broadcastTable('users', globalWsDb.getUsers());
+    if (
+      userObj.current_channel !== oldChannel &&
+      (userObj.current_channel === 'voice-general' || userObj.current_channel === 'video-general')
+    ) {
+      broadcastWss({
+        type: 'USER_JOINED_MEDIA',
+        userId: user.id,
+        channel: userObj.current_channel,
+        timestamp: Date.now(),
+      });
+    }
     res.json({ success: true, user: userObj, users: globalWsDb.getUsers() });
   } catch (err: any) {
     res.status(500).json({ error: 'Register failed', message: err?.message });
@@ -1324,6 +1343,7 @@ app.post('/api/ws-db/update-user', (req, res) => {
       return res.status(400).json({ error: 'Missing id or set parameters' });
     }
     const existing = globalWsDb.getUser(id);
+    const oldChannel = existing?.current_channel || 'text-general';
     const updated = {
       id,
       username: existing?.username || 'Player',
@@ -1340,8 +1360,31 @@ app.post('/api/ws-db/update-user', (req, res) => {
       ...set,
       updated_at: Date.now(),
     };
+    if (updated.current_channel === 'text-general' || updated.current_channel === 'offline') {
+      updated.has_video = false;
+      updated.is_screen_sharing = false;
+      updated.is_speaking = false;
+    }
     globalWsDb.upsertUser(updated as any);
     broadcastTable('users', globalWsDb.getUsers());
+    if (set?.current_channel !== undefined && set.current_channel !== oldChannel) {
+      if (set.current_channel === 'voice-general' || set.current_channel === 'video-general') {
+        broadcastWss({
+          type: 'USER_JOINED_MEDIA',
+          userId: id,
+          channel: set.current_channel,
+          timestamp: Date.now(),
+        });
+      }
+      if (oldChannel === 'voice-general' || oldChannel === 'video-general') {
+        broadcastWss({
+          type: 'USER_LEFT_MEDIA',
+          userId: id,
+          channel: oldChannel,
+          timestamp: Date.now(),
+        });
+      }
+    }
     res.json({ success: true, user: updated, users: globalWsDb.getUsers() });
   } catch (err: any) {
     res.status(500).json({ error: 'Update user failed', message: err?.message });
@@ -1433,7 +1476,7 @@ app.delete('/api/ws-db/messages/all', (req, res) => {
 
 app.post('/api/ws-db/signal', (req, res) => {
   try {
-    const { fromUserId, targetUserId, signal } = req.body;
+    const { fromUserId, targetUserId, signal, sigId } = req.body;
     if (!targetUserId || targetUserId === fromUserId) {
       return res.status(400).json({ error: 'Invalid targetUserId' });
     }
@@ -1443,13 +1486,14 @@ app.post('/api/ws-db/signal', (req, res) => {
       fromUserId,
       targetUserId,
       signal,
+      sigId: sigId || `sig-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
       timestamp: Date.now(),
     };
 
     const delivered = sendToUserSockets(targetUserId, payload);
     if (!delivered) {
       globalWsDb.addPendingSignal({
-        id: 'sig-' + Date.now(),
+        id: payload.sigId,
         ...payload,
       });
     }
@@ -1490,6 +1534,24 @@ app.get('/api/giphy/search', async (req, res) => {
   }
 });
 
+function readGroqApiKey(requestKey?: string): string {
+  try {
+    const keyFilePath = path.resolve(__dirname, 'keyforgroq.txt');
+    if (fs.existsSync(keyFilePath)) {
+      const fileKey = fs.readFileSync(keyFilePath, 'utf8').replace(/^["']|["']$/g, '').trim();
+      if (fileKey) return fileKey;
+    }
+  } catch {}
+
+  return (
+    process.env.GROQ_API_KEY ||
+    process.env.VITE_GROQ_API_KEY ||
+    requestKey ||
+    (process.env.GEMINI_API_KEY?.startsWith('gsk_') ? process.env.GEMINI_API_KEY : '') ||
+    ''
+  ).replace(/^["']|["']$/g, '').trim();
+}
+
 // AI Groq Models Endpoint - Option 1: groq-sdk models.list() / Option 2: Native fetch
 app.get('/api/ai/models', async (req, res) => {
   const fallbackModels = [
@@ -1502,13 +1564,7 @@ app.get('/api/ai/models', async (req, res) => {
     { id: 'deepseek-r1-distill-llama-70b', owned_by: 'DeepSeek', context_window: 131072, description: 'Deep reasoning & problem solving' },
   ];
 
-  const groqKey = (
-    process.env.GROQ_API_KEY ||
-    process.env.VITE_GROQ_API_KEY ||
-    (req.query.apiKey as string) ||
-    (process.env.GEMINI_API_KEY?.startsWith('gsk_') ? process.env.GEMINI_API_KEY : '') ||
-    ''
-  ).replace(/^["']|["']$/g, '').trim();
+  const groqKey = readGroqApiKey(req.query.apiKey as string);
 
   if (!groqKey) {
     return res.json({
@@ -1769,14 +1825,8 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
 
     // Step 1: Logic starting...
 
-    // Auto-detect Groq API Key
-    const groqKey = (
-      process.env.GROQ_API_KEY ||
-      process.env.VITE_GROQ_API_KEY ||
-      (groqApiKey as string) ||
-      (process.env.GEMINI_API_KEY?.startsWith('gsk_') ? process.env.GEMINI_API_KEY : '') ||
-      ''
-    ).replace(/^["']|["']$/g, '').trim();
+    // Auto-detect Groq API Key from keyforgroq.txt or environment
+    const groqKey = readGroqApiKey(groqApiKey as string);
 
     if (!groqKey) {
       sendEvent({
@@ -1924,14 +1974,8 @@ app.post('/api/ai/assistant', async (req, res) => {
 
     const systemInstruction = buildAISystemInstruction(personality);
 
-    // Auto-detect Groq API Key from server environment secrets (GROQ_API_KEY) or request body
-    const groqKey = (
-      process.env.GROQ_API_KEY ||
-      process.env.VITE_GROQ_API_KEY ||
-      (groqApiKey as string) ||
-      (process.env.GEMINI_API_KEY?.startsWith('gsk_') ? process.env.GEMINI_API_KEY : '') ||
-      ''
-    ).replace(/^["']|["']$/g, '').trim();
+    // Auto-detect Groq API Key from keyforgroq.txt or server environment secrets
+    const groqKey = readGroqApiKey(groqApiKey as string);
 
     if (!groqKey) {
       return res.status(503).json({
@@ -2506,6 +2550,10 @@ async function startServer() {
     res.setHeader('Cache-Control', 'no-store, must-revalidate');
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(503).send(`<!doctype html><html><body style="background:#0f172a;color:#94a3b8;font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;"><div style="text-align:center;"><p style="margin:0 0 8px;color:#e2e8f0;font-weight:600;">Initializing proxy service worker…</p><script>(async function(){try{if('serviceWorker' in navigator){await navigator.serviceWorker.register('/sj-sw.js',{scope:'/',updateViaCache:'none'}).catch(function(){});var reg=await navigator.serviceWorker.ready;if(reg&&reg.active){try{reg.active.postMessage({$controller$swrevive:{}});}catch(e){}}if(!sessionStorage.getItem('sj_srv_recover')){sessionStorage.setItem('sj_srv_recover','1');setTimeout(function(){location.reload();},350);return;}sessionStorage.removeItem('sj_srv_recover');}}catch(e){}})();</script></div></body></html>`);
+  });
+
+  app.use('/keyforgroq.txt', (_req, res) => {
+    res.status(404).send('Not found');
   });
 
   if (!IS_PROD) {
