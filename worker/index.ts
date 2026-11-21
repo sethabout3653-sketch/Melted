@@ -5,6 +5,9 @@ import { onRequest as raw } from '../functions/api/raw/[filename]';
 import { onRequest as proxyStream } from '../functions/api/proxy-stream';
 import { onRequest as proxyImage } from '../functions/api/proxy-image';
 import { onRequest as epgNowNext } from '../functions/api/epg/now-next';
+import { onRequest as aiModels } from '../functions/api/ai/models';
+import { onRequest as aiAssistant } from '../functions/api/ai/assistant';
+import { onRequest as aiAssistantStream } from '../functions/api/ai/assistant/stream';
 import { SignalingHub } from './signalingHub';
 
 export { SignalingHub };
@@ -19,6 +22,9 @@ interface Env {
     get(key: string, type: 'json'): Promise<unknown>;
     put(key: string, value: string): Promise<void>;
   };
+  GROQ_API_KEY?: string;
+  VITE_GROQ_API_KEY?: string;
+  GROQ_KEY?: string;
 }
 
 type Handler = (context: { request: Request; env: Env; params: Record<string, string> }) => Promise<Response>;
@@ -31,6 +37,9 @@ const routes: Array<{ pattern: RegExp; handler: Handler }> = [
   { pattern: /^\/api\/proxy-stream\/?$/, handler: proxyStream },
   { pattern: /^\/api\/proxy-image\/?$/, handler: proxyImage },
   { pattern: /^\/api\/epg\/now-next\/?$/, handler: epgNowNext },
+  { pattern: /^\/api\/ai\/models\/?$/, handler: ({ request, env }) => aiModels({ request, env }) },
+  { pattern: /^\/api\/ai\/assistant\/stream\/?$/, handler: ({ request, env }) => aiAssistantStream({ request, env }) },
+  { pattern: /^\/api\/ai\/assistant\/?$/, handler: ({ request, env }) => aiAssistant({ request, env }) },
 ];
 
 export default {

@@ -419,6 +419,7 @@ export const AIAssistantView: React.FC = () => {
     }));
     const activeGroqKey = getActiveGroqKey();
     let replyText = '';
+    let serverError = '';
     let messageSources: MessageSource[] = [];
     let completedSteps: ThinkingStep[] = [];
     try {
@@ -436,7 +437,8 @@ export const AIAssistantView: React.FC = () => {
         signal: abortController.signal,
       });
       if (abortController.signal.aborted || currentRequestId !== requestIdRef.current) return;
-      if (res.ok && res.body) {
+      const contentType = (res.headers.get('content-type') || '').toLowerCase();
+      if (res.ok && res.body && contentType.includes('text/event-stream')) {
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
@@ -476,6 +478,8 @@ export const AIAssistantView: React.FC = () => {
                   if (event.steps && Array.isArray(event.steps)) {
                     completedSteps = event.steps;
                   }
+                } else if (event.type === 'error' && event.error) {
+                  serverError = String(event.error);
                 }
               } catch {}
             }
@@ -501,12 +505,15 @@ export const AIAssistantView: React.FC = () => {
           }),
           signal: abortController.signal,
         });
-        if (standardRes.ok) {
+        const standardCt = (standardRes.headers.get('content-type') || '').toLowerCase();
+        if (standardCt.includes('application/json')) {
           const data = await standardRes.json();
-          if (data.success && data.reply) {
+          if (standardRes.ok && data.success && data.reply) {
             replyText = data.reply;
             messageSources = data.sources || [];
             completedSteps = data.steps || completedSteps;
+          } else if (data?.error) {
+            serverError = String(data.error);
           }
         }
       } catch (jsonErr: any) {
@@ -525,7 +532,7 @@ export const AIAssistantView: React.FC = () => {
       const errorMsg: Message = {
         id: (Date.now() + 1).toString(),
         sender: 'ai',
-        text: "I'm currently unable to retrieve a response.",
+        text: serverError || "I'm currently unable to retrieve a response.",
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };
       setMessages((prev) => [...prev, errorMsg]);
