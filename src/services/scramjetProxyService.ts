@@ -160,12 +160,22 @@ function getWispCandidates(): string[] {
   };
 
   try {
-    // 1. User or environment overrides always take top priority
+    // 1. Explicit Epoxy Server endpoint, followed by the existing Wisp overrides.
+    // Set VITE_EPOXY_SERVER_URL to the public WebSocket URL exposed by epoxy-server
+    // (for example: wss://your-host.example/wisp/).
     const params = new URLSearchParams(window.location.search);
+    const paramEpoxyWisp = params.get('epoxyWisp');
+    if (paramEpoxyWisp) pushWisp(paramEpoxyWisp, false);
     const paramWisp = params.get('wisp');
     if (paramWisp) pushWisp(paramWisp, false);
+
+    const storedEpoxyWisp = localStorage.getItem('frosthub_epoxy_wisp_url');
+    if (storedEpoxyWisp) pushWisp(storedEpoxyWisp, false);
     const storedWisp = localStorage.getItem('frosthub_wisp_url');
     if (storedWisp) pushWisp(storedWisp, false);
+
+    const envEpoxyWisp = (import.meta as any).env?.VITE_EPOXY_SERVER_URL;
+    if (envEpoxyWisp) pushWisp(envEpoxyWisp, false);
     const envWisp = (import.meta as any).env?.VITE_WISP_URL;
     if (envWisp) pushWisp(envWisp, false);
 
@@ -1669,7 +1679,7 @@ async function createWispTransport(): Promise<ProxyTransport> {
         const { default: EpoxyTransport } = await import('@mercuryworkshop/epoxy-transport');
         const epoxy = new (EpoxyTransport as any)({
           wisp: wispUrl,
-          disable_certificate_validation: true,
+          wisp_v2: true,
         });
         await withPromiseTimeout(epoxy.init(), 6000, `Epoxy init (${wispUrl})`);
         epoxyClients.set(wispUrl, epoxy);
