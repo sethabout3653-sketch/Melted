@@ -1210,9 +1210,19 @@ async function serverFallbackFetch(
       (k.toLowerCase() === 'sec-fetch-dest' && v.toLowerCase() === 'document') ||
       (k.toLowerCase() === 'accept' && v.includes('text/html'))
   );
-  const retryDelays = isDocReq ? [300, 800] : [250, 700];
-  let lastErrorMsg = 'Proxy request failed';
   const isYoutube = isYoutubeMediaHost(remote.hostname);
+  const isYoutubeVideoChunk =
+    remote.hostname.toLowerCase() === 'googlevideo.com' ||
+    remote.hostname.toLowerCase().endsWith('.googlevideo.com');
+  // YouTube requests should fail over promptly instead of leaving the player spinner active forever.
+  // Video chunks get a longer window because they can be larger than player/API responses.
+  const requestTimeoutMs = isYoutubeVideoChunk ? 30000 : isYoutube ? 18000 : 20000;
+  const retryDelays = isYoutube
+    ? [250]
+    : isDocReq
+      ? [300, 800]
+      : [250, 700];
+  let lastErrorMsg = 'Proxy request failed';
 
   for (let originIdx = 0; originIdx < origins.length; originIdx++) {
     const endpoint = `${origins[originIdx]}/api/scramjet-fetch`;
@@ -1222,22 +1232,37 @@ async function serverFallbackFetch(
         throw new DOMException('Aborted', 'AbortError');
       }
 
+      const requestController = new AbortController();
+      const relayOuterAbort = () => {
+        try {
+          requestController.abort(signal?.reason || new DOMException('Aborted', 'AbortError'));
+        } catch {}
+      };
+      if (signal?.aborted) {
+        relayOuterAbort();
+      } else {
+        signal?.addEventListener('abort', relayOuterAbort, { once: true });
+      }
+      const requestTimeout = window.setTimeout(() => {
+        try {
+          requestController.abort(
+            new DOMException(`Proxy request timed out after ${requestTimeoutMs}ms`, 'TimeoutError')
+          );
+        } catch {}
+      }, requestTimeoutMs);
+
       try {
         const res = await fetch(endpoint, {
           method: 'POST',
           headers: reqHeaders,
           body: body as BodyInit | null,
-          signal,
+          signal: requestController.signal,
         });
 
         if (res.ok) {
           const decoded = await decodeProxyFetchResponse(res);
           if (decoded) {
-            return (
-              isYoutube
-                ? await maybeBypassYoutubeBotBlock(remote, body, decoded as any)
-                : decoded
-            ) as any;
+            return decoded as any;
           }
         }
 
@@ -1276,13 +1301,18 @@ async function serverFallbackFetch(
           break;
         }
       } catch (err: any) {
-        if (err?.name === 'AbortError' || signal?.aborted) {
+        // Only the caller's abort should cancel the entire proxy operation. Our own timeout
+        // is recoverable: continue to the next retry/origin/transport instead of hanging.
+        if (signal?.aborted) {
           throw err;
         }
         lastErrorMsg = String(err?.message || 'Network error').replace(/<[^>]+>/g, ' ').slice(0, 150);
         if (attempt >= retryDelays.length) {
           break;
         }
+      } finally {
+        window.clearTimeout(requestTimeout);
+        signal?.removeEventListener('abort', relayOuterAbort);
       }
 
       await new Promise((r) => window.setTimeout(r, retryDelays[attempt]));
@@ -1376,8 +1406,6 @@ function isYoutubeMediaHost(hostname: string): boolean {
   return (
     h === 'youtube.com' ||
     h.endsWith('.youtube.com') ||
-    h === 'youtube-nocookie.com' ||
-    h.endsWith('.youtube-nocookie.com') ||
     h === 'googlevideo.com' ||
     h.endsWith('.googlevideo.com') ||
     h === 'ytimg.com' ||
@@ -1429,28 +1457,6 @@ function isLibcurlPreferredHost(hostname: string): boolean {
     }
   }
   return false;
-}
-
-async function fetchYoutubeFallbackPlayer(videoId: string): Promise<Record<string, any> | null> {
-  if (!videoId || !/^[a-zA-Z0-9_-]{6,20}$/.test(videoId)) return null;
-  const origins = resolveBackendOrigins();
-  for (const origin of origins) {
-    try {
-      const res = await fetch(`${origin}/api/yt-player-fallback`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoId }),
-        signal: AbortSignal.timeout(7000),
-      });
-      const ct = (res.headers.get('content-type') || '').toLowerCase();
-      if (!res.ok || !ct.includes('application/json')) continue;
-      const data = await res.json();
-      if (data?.ok && data?.playerResponse?.streamingData) {
-        return data.playerResponse;
-      }
-    } catch {}
-  }
-  return null;
 }
 
 function getLocalWispUrl(): string {
@@ -1556,156 +1562,6 @@ async function readTransportBodyBytes(body: any): Promise<Uint8Array | null> {
     return merged;
   }
   return null;
-}
-
-function patchWatchHtmlPlayerResponse(html: string, vrData: Record<string, any>): string | null {
-  const marker = 'var ytInitialPlayerResponse = ';
-  const idx = html.indexOf(marker);
-  if (idx === -1) return null;
-  const start = idx + marker.length;
-  let depth = 0;
-  let inStr = false;
-  let esc = false;
-  let end = -1;
-
-  for (let i = start; i < html.length; i++) {
-    const ch = html[i];
-    if (esc) {
-      esc = false;
-      continue;
-    }
-    if (ch === '\\') {
-      esc = true;
-      continue;
-    }
-    if (ch === '"') {
-      inStr = !inStr;
-      continue;
-    }
-    if (inStr) continue;
-    if (ch === '{') depth++;
-    else if (ch === '}') {
-      depth--;
-      if (depth === 0) {
-        end = i + 1;
-        break;
-      }
-    }
-  }
-  if (end === -1) return null;
-  try {
-    const parsed = JSON.parse(html.slice(start, end)) as Record<string, any>;
-    const patched = {
-      ...parsed,
-      playabilityStatus: vrData.playabilityStatus || { status: 'OK', playableInEmbed: true },
-      streamingData: vrData.streamingData || parsed.streamingData,
-      videoDetails: parsed.videoDetails || vrData.videoDetails,
-      captions: parsed.captions || vrData.captions,
-      storyboards: parsed.storyboards || vrData.storyboards,
-    };
-    return html.slice(0, start) + JSON.stringify(patched) + html.slice(end);
-  } catch {
-    return null;
-  }
-}
-
-let ytServerMediaAffinityUntil = 0;
-
-async function maybeBypassYoutubeBotBlock(
-  remote: URL,
-  reqBody: ArrayBuffer | Uint8Array | string | null,
-  res: { body: any; headers: RawHeaderPair[]; status: number; statusText: string }
-): Promise<{ body: any; headers: RawHeaderPair[]; status: number; statusText: string }> {
-  const host = remote.hostname.toLowerCase();
-  if (res.status !== 200 || (host !== 'youtube.com' && !host.endsWith('.youtube.com'))) {
-    return res;
-  }
-
-  const isPlayerEndpoint = remote.pathname.startsWith('/youtubei/v1/player');
-  const isWatchPage = remote.pathname === '/watch';
-  if (!isPlayerEndpoint && !isWatchPage) {
-    return res;
-  }
-
-  const bytes = await readTransportBodyBytes(res.body);
-  if (!bytes) return res;
-
-  const text = new TextDecoder().decode(bytes);
-  const hasBotBlock =
-    text.includes('LOGIN_REQUIRED') ||
-    text.includes('UNPLAYABLE') ||
-    text.includes('not a bot');
-
-  if (!hasBotBlock) {
-    return { ...res, body: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) };
-  }
-
-  if (isPlayerEndpoint) {
-    try {
-      const parsed = JSON.parse(text) as Record<string, any>;
-      let videoId = String(parsed?.videoDetails?.videoId || '');
-      if (!videoId && reqBody) {
-        try {
-          const reqStr =
-            typeof reqBody === 'string'
-              ? reqBody
-              : new TextDecoder().decode(
-                  reqBody instanceof ArrayBuffer
-                    ? new Uint8Array(reqBody)
-                    : reqBody
-                );
-          const reqJson = JSON.parse(reqStr);
-          videoId = String(reqJson?.videoId || '');
-        } catch {}
-      }
-      const vrData = await fetchYoutubeFallbackPlayer(videoId);
-      if (vrData?.streamingData) {
-        // Bind subsequent googlevideo.com chunk requests to the same server transport session/IP
-        ytServerMediaAffinityUntil = Date.now() + 10 * 60 * 1000;
-        const merged = {
-          ...parsed,
-          playabilityStatus: vrData.playabilityStatus || { status: 'OK', playableInEmbed: true },
-          streamingData: vrData.streamingData,
-          videoDetails: parsed.videoDetails || vrData.videoDetails,
-          captions: parsed.captions || vrData.captions,
-          storyboards: parsed.storyboards || vrData.storyboards,
-        };
-        const outBytes = new TextEncoder().encode(JSON.stringify(merged));
-        const cleanHeaders = (res.headers || []).filter(([k]) => {
-          const l = k.toLowerCase();
-          return l !== 'set-cookie' && l !== 'content-length';
-        });
-        cleanHeaders.push(['content-length', String(outBytes.byteLength)]);
-        return {
-          ...res,
-          headers: cleanHeaders,
-          body: outBytes.buffer,
-        };
-      }
-    } catch {}
-  } else if (isWatchPage) {
-    const videoId = remote.searchParams.get('v') || '';
-    const vrData = await fetchYoutubeFallbackPlayer(videoId);
-    if (vrData?.streamingData) {
-      ytServerMediaAffinityUntil = Date.now() + 10 * 60 * 1000;
-      const patchedHtml = patchWatchHtmlPlayerResponse(text, vrData);
-      if (patchedHtml) {
-        const outBytes = new TextEncoder().encode(patchedHtml);
-        const cleanHeaders = (res.headers || []).filter(([k]) => {
-          const l = k.toLowerCase();
-          return l !== 'set-cookie' && l !== 'content-length';
-        });
-        cleanHeaders.push(['content-length', String(outBytes.byteLength)]);
-        return {
-          ...res,
-          headers: cleanHeaders,
-          body: outBytes.buffer,
-        };
-      }
-    }
-  }
-
-  return { ...res, body: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) };
 }
 
 function normalizeGoogleRemoteUrl(remoteUrl: URL): URL {
@@ -1883,7 +1739,6 @@ async function createWispTransport(): Promise<ProxyTransport> {
       const safeBody = await normalizeRequestBody(method, body);
       const targetHost = targetRemote.hostname.toLowerCase();
       const targetPath = targetRemote.pathname.toLowerCase();
-      const isYoutube = isYoutubeMediaHost(targetHost);
       const isGoogle =
         targetHost === 'google.com' ||
         targetHost.endsWith('.google.com') ||
@@ -1946,17 +1801,13 @@ async function createWispTransport(): Promise<ProxyTransport> {
         out.headers = cleanDecompressedHeaders(out.headers);
         out.body = await normalizeQuirkyHtml(targetRemote, out.body);
         captureResponseCookies(out);
-        return isYoutube ? await maybeBypassYoutubeBotBlock(targetRemote, safeBody, out) : out;
+        return out;
       };
 
       const hasBackendOrigin = resolveBackendOrigins().length > 0;
-      const shouldPreferServerProxy =
-        hasBackendOrigin &&
-        (isGoogle ||
-          isYoutubeWatchOrPlayer ||
-          (isYoutube && Date.now() < ytServerMediaAffinityUntil));
+      const shouldPreferServerProxy = hasBackendOrigin && (isGoogle || isYoutubeWatchOrPlayer);
 
-      // Route all Google domains, YouTube watch/shorts/player/affinity chunks directly through sticky US server proxy
+      // Route Google domains and YouTube watch/shorts/player requests through the server proxy
       if (shouldPreferServerProxy) {
         try {
           const res = await serverFallbackFetch(targetRemote, method, safeBody, cleanHeaders, signal);
@@ -2540,7 +2391,7 @@ export async function launchInScramjetFrame(
             }
           } catch {}
 
-          // 1b. Prevent YouTube player hydration freezes & mount nocookie /embed/ fallback if bot-gate DOM still renders
+          // 1b. Recover stalled YouTube players with the regular youtube.com/embed player
           try {
             const clientHost = String(client?.url?.hostname || '').toLowerCase();
             if (clientHost.includes('youtube.com')) {
@@ -2569,6 +2420,19 @@ export async function launchInScramjetFrame(
               let videoObservedAt = 0;
               let checkTimer: number | null = null;
               let pollTimer: number | null = null;
+              let embedRetryTimer: number | null = null;
+
+              let embedMessageListener: ((event: MessageEvent) => void) | null = null;
+              const clearEmbedRetryTimer = () => {
+                if (embedRetryTimer !== null) {
+                  window.clearTimeout(embedRetryTimer);
+                  embedRetryTimer = null;
+                }
+                if (embedMessageListener) {
+                  win.removeEventListener('message', embedMessageListener);
+                  embedMessageListener = null;
+                }
+              };
 
               const hideErrorOverlays = (doc: Document) => {
                 const errorSelectors = [
@@ -2593,74 +2457,180 @@ export async function launchInScramjetFrame(
                 } catch {}
               };
 
+              const showYoutubeEmbedFailure = (doc: Document, playerSlot: Element, vid: string) => {
+                try {
+                  let notice = doc.getElementById('__frost_yt_notice') as HTMLDivElement | null;
+                  if (!notice) {
+                    notice = doc.createElement('div');
+                    notice.id = '__frost_yt_notice';
+                    notice.style.cssText =
+                      'position:absolute;inset:0;z-index:2147483642;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;padding:20px;box-sizing:border-box;background:#000;color:#fff;text-align:center;font:14px Arial,sans-serif;';
+                    const message = doc.createElement('div');
+                    message.textContent = 'This video could not be loaded in the embedded player.';
+                    notice.appendChild(message);
+                    const link = doc.createElement('a');
+                    link.href = `https://www.youtube.com/watch?v=${encodeURIComponent(vid)}`;
+                    link.target = '_blank';
+                    link.rel = 'noopener noreferrer';
+                    link.textContent = 'Open on YouTube';
+                    link.style.cssText = 'color:#8ab4f8;text-decoration:underline;';
+                    notice.appendChild(link);
+                  }
+                  if (win.getComputedStyle(playerSlot).position === 'static') {
+                    (playerSlot as HTMLElement).style.position = 'relative';
+                  }
+                  if (!playerSlot.contains(notice)) playerSlot.appendChild(notice);
+                } catch {}
+              };
+
               const mountNativeYoutubeFallback = (doc: Document, playerSlot: Element, vid: string) => {
                 lastPatchedVideoId = vid;
                 hideErrorOverlays(doc);
+                clearEmbedRetryTimer();
 
-                // Pause and mute underlying native videos so streams do not conflict
+                // Stop the original player before mounting the regular YouTube embed.
                 try {
-                  const innerVideos = playerSlot.querySelectorAll('video');
-                  innerVideos.forEach((vEl: any) => {
+                  playerSlot.querySelectorAll('video').forEach((vEl: any) => {
                     try {
-                      if (vEl.id !== '__frost_yt_player') {
-                        vEl.muted = true;
-                        vEl.pause?.();
-                      }
+                      vEl.muted = true;
+                      vEl.pause?.();
+                      if (vEl.id === '__frost_yt_player') vEl.remove();
                     } catch {}
                   });
                 } catch {}
 
-                const streamUrl = `/__frost_yt_stream__?v=${encodeURIComponent(vid)}`;
-
-                const existingVideo = doc.getElementById('__frost_yt_player') as HTMLVideoElement | null;
-                if (existingVideo) {
-                  if (existingVideo.dataset.vid !== vid) {
-                    existingVideo.dataset.vid = vid;
-                    existingVideo.src = streamUrl;
-                    existingVideo.play?.().catch(() => {});
-                  }
-                  if (!playerSlot.contains(existingVideo)) {
-                    playerSlot.appendChild(existingVideo);
-                  }
+                const existingEmbed = doc.getElementById('__frost_yt_embed') as HTMLIFrameElement | null;
+                if (existingEmbed && existingEmbed.dataset.vid === vid && playerSlot.contains(existingEmbed)) {
                   return;
                 }
-
-                const videoEl = doc.createElement('video');
-                videoEl.id = '__frost_yt_player';
-                videoEl.dataset.vid = vid;
-                videoEl.src = streamUrl;
-                videoEl.controls = true;
-                videoEl.autoplay = true;
-                videoEl.playsInline = true;
-                videoEl.preload = 'auto';
-                videoEl.style.cssText =
-                  'position:absolute;inset:0;width:100%;height:100%;border:0;z-index:2147483640;background:#000;object-fit:contain;';
-
-                videoEl.onerror = () => {
-                  try {
-                    let embedIframe = doc.getElementById('__frost_yt_embed') as HTMLIFrameElement | null;
-                    if (!embedIframe && videoEl.parentElement) {
-                      embedIframe = doc.createElement('iframe');
-                      embedIframe.id = '__frost_yt_embed';
-                      embedIframe.allow =
-                        'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
-                      embedIframe.allowFullscreen = true;
-                      embedIframe.style.cssText =
-                        'position:absolute;inset:0;width:100%;height:100%;border:0;z-index:2147483641;background:#000;';
-                      videoEl.parentElement.appendChild(embedIframe);
-                    }
-                    if (embedIframe) {
-                      embedIframe.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(vid)}?autoplay=1&playsinline=1`;
-                    }
-                    videoEl.remove();
-                  } catch {}
-                };
+                existingEmbed?.remove();
+                doc.getElementById('__frost_yt_player')?.remove();
+                doc.getElementById('__frost_yt_notice')?.remove();
 
                 if (win.getComputedStyle(playerSlot).position === 'static') {
                   (playerSlot as HTMLElement).style.position = 'relative';
                 }
-                playerSlot.appendChild(videoEl);
-                videoEl.play?.().catch(() => {});
+
+                const embedIframe = doc.createElement('iframe');
+                embedIframe.id = '__frost_yt_embed';
+                embedIframe.dataset.vid = vid;
+                embedIframe.title = 'YouTube video player';
+                embedIframe.allow =
+                  'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+                embedIframe.allowFullscreen = true;
+                embedIframe.referrerPolicy = 'strict-origin-when-cross-origin';
+                embedIframe.setAttribute('loading', 'eager');
+                embedIframe.style.cssText =
+                  'position:absolute;inset:0;width:100%;height:100%;border:0;z-index:2147483641;background:#000;';
+
+                let attempt = 0;
+                let playerReady = false;
+                const MAX_EMBED_ATTEMPTS = 2;
+                const EMBED_READY_TIMEOUT_MS = 18000;
+
+                const failEmbed = () => {
+                  clearEmbedRetryTimer();
+                  embedIframe.remove();
+                  showYoutubeEmbedFailure(doc, playerSlot, vid);
+                };
+
+                const onEmbedMessage = (event: MessageEvent) => {
+                  if (event.source !== embedIframe.contentWindow) return;
+                  if (event.origin !== 'https://www.youtube.com') return;
+
+                  let payload: any = event.data;
+                  if (typeof payload === 'string') {
+                    try {
+                      payload = JSON.parse(payload);
+                    } catch {
+                      return;
+                    }
+                  }
+                  if (!payload || typeof payload !== 'object') return;
+
+                  if (payload.event === 'onReady' || payload.event === 'initialDelivery') {
+                    playerReady = true;
+                    clearEmbedRetryTimer();
+                    return;
+                  }
+
+                  if (payload.event === 'infoDelivery' && payload.info) {
+                    // Any player-state report proves the embedded player initialized.
+                    if (typeof payload.info.playerState === 'number') {
+                      playerReady = true;
+                      clearEmbedRetryTimer();
+                    }
+                  }
+
+                  if (payload.event === 'onError' || payload.info?.errorCode) {
+                    failEmbed();
+                  }
+                };
+
+                win.addEventListener('message', onEmbedMessage);
+                embedMessageListener = onEmbedMessage;
+
+                const startEmbedAttempt = () => {
+                  if (!embedIframe.isConnected || embedIframe.dataset.vid !== vid) return;
+                  if (embedRetryTimer !== null) {
+                    window.clearTimeout(embedRetryTimer);
+                    embedRetryTimer = null;
+                  }
+                  attempt++;
+                  playerReady = false;
+                  embedIframe.dataset.loaded = '';
+                  embedIframe.dataset.attempt = String(attempt);
+
+                  const parentOrigin = encodeURIComponent(String(win.location?.origin || ''));
+                  embedIframe.src =
+                    `https://www.youtube.com/embed/${encodeURIComponent(vid)}` +
+                    `?autoplay=1&playsinline=1&rel=0&controls=1&enablejsapi=1&origin=${parentOrigin}`;
+
+                  // An iframe load event alone does not mean the YouTube player is ready.
+                  // Keep a watchdog active until the player reports that it initialized.
+                  embedRetryTimer = window.setTimeout(() => {
+                    if (!embedIframe.isConnected || playerReady) return;
+                    if (attempt < MAX_EMBED_ATTEMPTS) {
+                      startEmbedAttempt();
+                    } else {
+                      failEmbed();
+                    }
+                  }, EMBED_READY_TIMEOUT_MS);
+                };
+
+                embedIframe.addEventListener('load', () => {
+                  if (!embedIframe.isConnected) return;
+                  embedIframe.dataset.loaded = '1';
+                  try {
+                    const target = 'https://www.youtube.com';
+                    embedIframe.contentWindow?.postMessage(
+                      JSON.stringify({ event: 'listening', id: '__frost_yt_embed' }),
+                      target
+                    );
+                    embedIframe.contentWindow?.postMessage(
+                      JSON.stringify({
+                        event: 'command',
+                        func: 'addEventListener',
+                        args: ['onReady'],
+                        id: '__frost_yt_embed',
+                      }),
+                      target
+                    );
+                    embedIframe.contentWindow?.postMessage(
+                      JSON.stringify({
+                        event: 'command',
+                        func: 'addEventListener',
+                        args: ['onError'],
+                        id: '__frost_yt_embed',
+                      }),
+                      target
+                    );
+                  } catch {}
+                });
+                embedIframe.addEventListener('error', failEmbed);
+
+                playerSlot.appendChild(embedIframe);
+                startEmbedAttempt();
               };
 
               // Intercept window.location signin redirect attempts so YouTube cannot throw user to accounts.google.com
@@ -2727,10 +2697,12 @@ export async function launchInScramjetFrame(
                   }
 
                   if (!vid || !/^[a-zA-Z0-9_-]{6,20}$/.test(vid)) {
+                    clearEmbedRetryTimer();
                     lastPatchedVideoId = '';
                     currentObservedVid = '';
                     doc.getElementById('__frost_yt_player')?.remove();
                     doc.getElementById('__frost_yt_embed')?.remove();
+                    doc.getElementById('__frost_yt_notice')?.remove();
                     return;
                   }
 
@@ -2740,9 +2712,11 @@ export async function launchInScramjetFrame(
                   }
 
                   if (lastPatchedVideoId && lastPatchedVideoId !== vid) {
+                    clearEmbedRetryTimer();
                     lastPatchedVideoId = '';
                     doc.getElementById('__frost_yt_player')?.remove();
                     doc.getElementById('__frost_yt_embed')?.remove();
+                    doc.getElementById('__frost_yt_notice')?.remove();
                   }
 
                   let playerSlot: Element | null = null;
@@ -2764,8 +2738,9 @@ export async function launchInScramjetFrame(
                   }
                   if (!playerSlot) return;
 
-                  const existingPlayer = doc.getElementById('__frost_yt_player');
-                  if (lastPatchedVideoId === vid && existingPlayer && playerSlot.contains(existingPlayer)) {
+                  const existingFallback =
+                    doc.getElementById('__frost_yt_embed') || doc.getElementById('__frost_yt_notice');
+                  if (lastPatchedVideoId === vid && existingFallback && playerSlot.contains(existingFallback)) {
                     hideErrorOverlays(doc);
                     return;
                   }
@@ -2792,10 +2767,12 @@ export async function launchInScramjetFrame(
                       nativeVideo.videoWidth > 0 &&
                       !nativeVideo.error
                   );
+                  // Give YouTube time to hydrate and buffer. The old 3-second threshold
+                  // replaced healthy players before their first media segment arrived.
                   const stalledTooLong =
                     !nativePlayingOk &&
                     videoObservedAt > 0 &&
-                    Date.now() - videoObservedAt > 3000;
+                    Date.now() - videoObservedAt > 15000;
 
                   if (!hasPlayabilityError && !nativeHasError && !stalledTooLong) {
                     return;
@@ -2807,6 +2784,7 @@ export async function launchInScramjetFrame(
 
               let obs: MutationObserver | null = null;
               const cleanupObserver = () => {
+                clearEmbedRetryTimer();
                 if (checkTimer !== null) {
                   window.clearTimeout(checkTimer);
                   checkTimer = null;
@@ -2841,7 +2819,6 @@ export async function launchInScramjetFrame(
                   });
                   pollTimer = window.setInterval(checkBotGateOverlay, 1000);
                 } catch {}
-              };
               };
               win.addEventListener?.('pagehide', cleanupObserver, { once: true });
               win.addEventListener?.('unload', cleanupObserver, { once: true });
