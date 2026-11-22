@@ -235,36 +235,48 @@ export function deepMergeCookies(...sources: Array<Record<string, any> | undefin
   const minRenewalThreshold = now + 30 * 24 * 3600 * 1000;
   const extendedExpiry = now + 365 * 24 * 3600 * 1000;
 
+  const allKeys = new Set<string>();
   for (const src of sources) {
-    if (!src || typeof src !== 'object') continue;
-    for (const [key, val] of Object.entries(src)) {
-      if (!val || typeof val !== 'object') continue;
-      const existing = result[key] || {};
-      const mergedVal: Record<string, any> = { ...existing, ...val };
-      if (
-        typeof existing.value === 'string' &&
-        existing.value.length > 0 &&
-        (val.value === '' || val.value === undefined || val.value === null)
-      ) {
-        mergedVal.value = existing.value;
-      }
-      if (mergedVal.name && mergedVal.value !== undefined) {
-        // If maxAge was negative or zero (e.g. deletion attempt), remove it so cookie is preserved
-        if (typeof mergedVal.maxAge === 'number' && mergedVal.maxAge <= 0) {
-          delete mergedVal.maxAge;
+    if (src && typeof src === 'object') {
+      for (const k of Object.keys(src)) allKeys.add(k);
+    }
+  }
+
+  for (const key of allKeys) {
+    let bestVal: any = null;
+    for (const src of sources) {
+      if (src && src[key] && typeof src[key] === 'object') {
+        const candidate = src[key];
+        if (!bestVal) {
+          bestVal = { ...candidate };
+        } else {
+          bestVal = { ...bestVal, ...candidate };
+          if (
+            typeof bestVal.value === 'string' &&
+            bestVal.value.length === 0 &&
+            typeof candidate.value === 'string' &&
+            candidate.value.length > 0
+          ) {
+            bestVal.value = candidate.value;
+          }
         }
-        // Ensure expiration is kept in the distant future so getCookies never drops it
-        if (mergedVal.expires !== undefined) {
-          const parsed =
-            typeof mergedVal.expires === 'string' ? Date.parse(mergedVal.expires) : Number(mergedVal.expires);
-          mergedVal.expires = Number.isFinite(parsed)
-            ? parsed < minRenewalThreshold
-              ? extendedExpiry
-              : parsed
-            : extendedExpiry;
-        }
-        result[key] = mergedVal;
       }
+    }
+
+    if (bestVal && bestVal.name && bestVal.value !== undefined) {
+      if (typeof bestVal.maxAge === 'number' && bestVal.maxAge <= 0) {
+        delete bestVal.maxAge;
+      }
+      if (bestVal.expires !== undefined) {
+        const parsed =
+          typeof bestVal.expires === 'string' ? Date.parse(bestVal.expires) : Number(bestVal.expires);
+        bestVal.expires = Number.isFinite(parsed)
+          ? parsed < minRenewalThreshold
+            ? extendedExpiry
+            : parsed
+          : extendedExpiry;
+      }
+      result[key] = bestVal;
     }
   }
   return result;

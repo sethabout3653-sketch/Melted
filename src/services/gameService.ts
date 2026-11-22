@@ -8,8 +8,8 @@ import fileMapData from '../data/gnMathFileMap.json';
 
 const fileMap = fileMapData as Record<string, string>;
 
-export const UGS_INDEX_URL = 'https://raw.githack.com/gmshelf/ugs/main/ugs.json';
-export const UGS_BASE_URL = 'https://raw.githack.com/gmshelf/ugs/main';
+export const UGS_INDEX_URL = 'https://cdn.jsdelivr.net/gh/gmshelf/ugs@main/ugs.json';
+export const UGS_BASE_URL = 'https://cdn.jsdelivr.net/gh/gmshelf/ugs@main';
 
 // ============================================================================
 // 1. GAME COVERS RESOLUTION SYSTEM (IMAGES ONLY)

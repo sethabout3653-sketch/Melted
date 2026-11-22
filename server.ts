@@ -2222,7 +2222,7 @@ app.get('/api/ugs/:path(*)', async (req, res) => {
   const cleanPath = ugsPath.startsWith('/') ? ugsPath : `/${ugsPath}`;
   const fullPath = cleanPath.startsWith('/ugs/') ? cleanPath : `/ugs${cleanPath}`;
 
-  const primaryUrl = `https://raw.githack.com/gmshelf/ugs/main${fullPath}`;
+  const primaryUrl = `https://cdn.jsdelivr.net/gh/gmshelf/ugs@main${fullPath}`;
   const fallbackUrl = `https://raw.githubusercontent.com/gmshelf/ugs/main${fullPath}`;
 
   try {
@@ -2267,7 +2267,15 @@ app.get('/api/ugs/:path(*)', async (req, res) => {
 
     if (isHtml) {
       const rawText = await response.text();
-      const processedHtml = processGameHtml(rawText, '/api/ugs/script.js');
+      let processedHtml = processGameHtml(rawText, '/api/ugs/script.js');
+      const baseTag = `<base href="https://cdn.jsdelivr.net/gh/gmshelf/ugs@main/ugs/">`;
+      if (processedHtml.includes('<head>')) {
+        processedHtml = processedHtml.replace('<head>', `<head>${baseTag}`);
+      } else if (processedHtml.includes('<html>')) {
+        processedHtml = processedHtml.replace('<html>', `<html><head>${baseTag}</head>`);
+      } else {
+        processedHtml = `${baseTag}${processedHtml}`;
+      }
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Access-Control-Allow-Origin', '*');
       res.setHeader('Cache-Control', 'public, max-age=86400');

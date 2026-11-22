@@ -195,11 +195,11 @@ export function getCachedGameRating(name: string): GameRatingInfo | undefined {
     let des = 'No Content Descriptors';
     let syn = 'Browser or emulated web game.';
 
-    if (low.includes('gore') || low.includes('doom') || low.includes('gta') || low.includes('call of duty') || low.includes('resident evil') || low.includes('silent hill') || low.includes('max payne')) {
+    if (low.includes('gore') || low.includes('doom') || low.includes('gta') || low.includes('call of duty') || low.includes('resident evil') || low.includes('silent hill') || low.includes('max payne') || low.includes('doki') || low.includes('ddlc') || low.includes('literature')) {
       code = 'M';
       label = 'Mature 17+';
-      des = 'Blood and Gore, Intense Violence, Strong Language';
-      syn = 'Mature action game.';
+      des = 'Blood and Gore, Intense Violence, Strong Language, Psychological Horror';
+      syn = 'Mature psychological horror game.';
     } else if (low.includes('horror') || low.includes('fnaf') || low.includes('five nights') || low.includes('bendy') || low.includes('undertale') || low.includes('terraria') || low.includes('portal') || low.includes('superhot') || low.includes('fnf') || low.includes('friday night')) {
       code = 'T';
       label = 'Teen';

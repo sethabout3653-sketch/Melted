@@ -216,21 +216,11 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           if (!active) return;
           // Note: Keep isLoadingProxy=true until iframe onLoad fires so user never sees a bare black screen
         } catch (err: any) {
-          console.warn('[GamePlayer] Scramjet v2 unavailable:', err);
+          console.warn('[GamePlayer] Scramjet v2 launch error:', err);
           if (!active) return;
           setIsLoadingProxy(false);
-          if (game.source === 'scramjet') {
-            setErrorDetail(String(err?.message || '').trim());
-            setHasError(true);
-            return;
-          }
-          setUseScramjet(false);
-          if (fallbackUrl) {
-            setDirectUrl(fallbackUrl);
-          } else {
-            setErrorDetail(String(err?.message || '').trim());
-            setHasError(true);
-          }
+          setErrorDetail(String(err?.message || '').trim());
+          setHasError(true);
         }
       }, 0);
 
@@ -361,6 +351,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               >
                 <RotateCw className="w-4 h-4" />
               </button>
+
 
               {/* Fullscreen button */}
               <button

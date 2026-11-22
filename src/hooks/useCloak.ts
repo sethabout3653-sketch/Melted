@@ -1,4 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
+import { GameItem } from '../types/game';
+import { shouldUseScramjetByDefault, getScramjetTargetUrl, getPlayableGameUrl } from '../services/gameService';
+import { initScramjetProxy, launchInScramjetFrame } from '../services/scramjetProxyService';
 
 export interface CloakPreset {
   id: string;
@@ -193,3 +196,55 @@ export function launchAboutBlank(gameUrl: string, gameTitle: string) {
     window.open(gameUrl, '_blank');
   }
 }
+
+export async function launchGameInNewTab(game: GameItem) {
+  const gameTitle = game.name || 'Game';
+  const useSj = shouldUseScramjetByDefault(game);
+  const targetUrl = useSj ? getScramjetTargetUrl(game) : getPlayableGameUrl(game);
+
+  try {
+    const win = window.open('about:blank', '_blank');
+    if (!win) {
+      window.open(targetUrl, '_blank');
+      return;
+    }
+
+    win.document.title = `${gameTitle} — Google Classroom`;
+    
+    const script = win.document.createElement('script');
+    script.textContent = `(function(){try{var u='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';Object.defineProperty(navigator,'userAgent',{get:function(){return u},configurable:true});Object.defineProperty(navigator,'platform',{get:function(){return'Win32'},configurable:true});Object.defineProperty(navigator,'vendor',{get:function(){return'Google Inc.'},configurable:true});}catch(e){}})();`;
+    win.document.head.appendChild(script);
+
+    const link = win.document.createElement('link');
+    link.rel = 'icon';
+    link.href = 'https://ssl.gstatic.com/classroom/favicon.png';
+    win.document.head.appendChild(link);
+
+    const iframe = win.document.createElement('iframe');
+    iframe.style.position = 'fixed';
+    iframe.style.top = '0';
+    iframe.style.left = '0';
+    iframe.style.width = '100vw';
+    iframe.style.height = '100vh';
+    iframe.style.border = 'none';
+    iframe.allowFullscreen = true;
+    iframe.setAttribute('allow', 'fullscreen; autoplay; gamepad; microphone; clipboard-read; clipboard-write; focus-without-user-activation; pointer-lock');
+
+    win.document.body.style.margin = '0';
+    win.document.body.style.padding = '0';
+    win.document.body.style.overflow = 'hidden';
+    win.document.body.style.backgroundColor = '#000';
+    win.document.body.appendChild(iframe);
+
+    if (useSj && targetUrl) {
+      await initScramjetProxy();
+      await launchInScramjetFrame(iframe, targetUrl);
+    } else {
+      iframe.src = targetUrl;
+    }
+  } catch (err) {
+    console.error('Failed to launch game in new tab:', err);
+    window.open(targetUrl, '_blank');
+  }
+}
+
