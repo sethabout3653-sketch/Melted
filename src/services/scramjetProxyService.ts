@@ -1299,6 +1299,13 @@ function isRecoverableTransportError(err: unknown): boolean {
 }
 
 const KNOWN_HTTP2_INCOMPATIBLE_HOSTS = new Set([
+  'duckduckgo.com',
+  'www.duckduckgo.com',
+  'links.duckduckgo.com',
+  'icons.duckduckgo.com',
+  'imgg.duckduckgo.com',
+  'external-content.duckduckgo.com',
+  'html.duckduckgo.com',
   'tiktok.com',
   'www.tiktok.com',
   'm.tiktok.com',
@@ -1315,6 +1322,15 @@ const KNOWN_HTTP2_INCOMPATIBLE_HOSTS = new Set([
 
 function isKnownHttp2Incompatible(hostname: string): boolean {
   const h = hostname.toLowerCase();
+  if (
+    h.includes('duckduckgo') ||
+    h.includes('tiktok') ||
+    h.includes('byteoversea') ||
+    h.includes('ibytedtos') ||
+    h.includes('ttwstatic')
+  ) {
+    return true;
+  }
   for (const known of KNOWN_HTTP2_INCOMPATIBLE_HOSTS) {
     if (h === known || h.endsWith('.' + known)) {
       return true;
@@ -1340,6 +1356,13 @@ function isYoutubeMediaHost(hostname: string): boolean {
 }
 
 const LIBCURL_PREFERRED_HOSTS = new Set([
+  'duckduckgo.com',
+  'www.duckduckgo.com',
+  'links.duckduckgo.com',
+  'icons.duckduckgo.com',
+  'imgg.duckduckgo.com',
+  'external-content.duckduckgo.com',
+  'html.duckduckgo.com',
   'tiktok.com',
   'tiktokcdn.com',
   'tiktokcdn-us.com',
@@ -1365,6 +1388,9 @@ const LIBCURL_PREFERRED_HOSTS = new Set([
 
 function isLibcurlPreferredHost(hostname: string): boolean {
   const h = hostname.toLowerCase();
+  if (h.includes('duckduckgo') || h.includes('tiktok')) {
+    return true;
+  }
   for (const known of LIBCURL_PREFERRED_HOSTS) {
     if (h === known || h.endsWith('.' + known)) {
       return true;
@@ -1868,6 +1894,17 @@ async function createWispTransport(): Promise<ProxyTransport> {
         } catch (err: any) {
           if (signal?.aborted) throw err;
           lastTransportError = err;
+          const errMsg = String(err?.message || err || '').toLowerCase();
+          if (
+            errMsg.includes('goaway') ||
+            errMsg.includes('http2') ||
+            errMsg.includes('protocol_error') ||
+            errMsg.includes('sendrequest')
+          ) {
+            KNOWN_HTTP2_INCOMPATIBLE_HOSTS.add(remote.hostname.toLowerCase());
+            LIBCURL_PREFERRED_HOSTS.add(remote.hostname.toLowerCase());
+            break;
+          }
           if (isDocument) {
             rotateToNextWisp();
           }

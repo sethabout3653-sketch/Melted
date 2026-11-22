@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Play, Heart, Gamepad2 } from 'lucide-react';
-import { GameItem } from '../types/game';
+import { GameItem, GameRatingInfo } from '../types/game';
 import { generateGameSvgCover } from '../services/gameService';
-import { resolveGameRating } from '../services/gameRatingService';
+import {
+  getCachedGameRating,
+  requestEsrbRating,
+  subscribeToGameRatings,
+} from '../services/gameRatingService';
 import { EsrbBadge } from './EsrbBadge';
 
 interface GameCardProps {
@@ -26,7 +30,21 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
   const primaryCover = game.resolvedCover || game.cover || '';
   const [currentCover, setCurrentCover] = useState<string>(primaryCover);
   const [fallbackLevel, setFallbackLevel] = useState<number>(0);
-  const rating = game.rating || resolveGameRating(game.name, game.special, game.category);
+  const [esrbRating, setEsrbRating] = useState<GameRatingInfo | undefined>(
+    () => game.rating || getCachedGameRating(game.name)
+  );
+
+  useEffect(() => {
+    const sync = () => {
+      const next = game.rating || getCachedGameRating(game.name);
+      setEsrbRating(next);
+    };
+    sync();
+    if (!game.rating && !getCachedGameRating(game.name)) {
+      requestEsrbRating(game.name);
+    }
+    return subscribeToGameRatings(sync);
+  }, [game.id, game.name, game.rating]);
 
   const isFirstRunRef = useRef(true);
   useEffect(() => {
@@ -113,23 +131,12 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
           <Heart className={`w-4 h-4 sm:w-3.5 sm:h-3.5 ${isFavorite ? 'fill-current' : ''}`} />
         </button>
 
-        {/* Official ESRB Rating Badge (Cover Only) */}
-        <EsrbBadge
-          rating={rating}
-          className="absolute bottom-1.5 left-1.5 z-10 w-[44px] sm:w-[52px]"
-        />
-
-        {/* Special 13+ / 17+ / 18+ Content Tag on Cover */}
-        {rating.coverTag && (
-          <div
-            className={`absolute bottom-1.5 right-1.5 z-10 pointer-events-none select-none px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-extrabold tracking-tight shadow-[0_4px_12px_rgba(0,0,0,0.7)] border ${
-              rating.code === 'AO' || rating.code === 'M'
-                ? 'bg-red-950/95 text-red-100 border-red-400/50'
-                : 'bg-black/85 text-amber-100 border-amber-400/45'
-            }`}
-          >
-            {rating.coverTag}
-          </div>
+        {/* Official ESRB Rating Badge (Only shown for games with a verified real ESRB rating) */}
+        {esrbRating && (
+          <EsrbBadge
+            rating={esrbRating}
+            className="absolute bottom-1.5 left-1.5 z-10 w-[30px] sm:w-[36px]"
+          />
         )}
 
         {/* Hover Play Overlay */}
@@ -152,9 +159,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
         </h3>
         <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
           {game.author || game.category || 'Instant Play'}
-          {rating.specialTags?.[1] && (rating.code === 'AO' || rating.code === 'M' || rating.code === 'T')
-            ? ` · ${rating.specialTags[1]}`
-            : ''}
+          {esrbRating?.descriptors ? ` · ${esrbRating.descriptors.split(',')[0].trim()}` : ''}
         </p>
       </div>
 

@@ -9,6 +9,8 @@ import { onRequest as epgNowNext } from '../functions/api/epg/now-next';
 import { onRequest as aiModels } from '../functions/api/ai/models';
 import { onRequest as aiAssistant } from '../functions/api/ai/assistant';
 import { onRequest as aiAssistantStream } from '../functions/api/ai/assistant/stream';
+import { onRequest as esrbImage } from '../functions/api/esrb/image';
+import { onRequest as esrbRatings } from '../functions/api/esrb/ratings';
 import { SignalingHub } from './signalingHub';
 
 export { SignalingHub };
@@ -38,6 +40,8 @@ const routes: Array<{ pattern: RegExp; handler: Handler }> = [
   { pattern: /^\/api\/cover\/(.+)\/?$/, handler: ({ request, params }) => cover({ request, params: { path: params.filename } }) },
   { pattern: /^\/api\/proxy-stream\/?$/, handler: proxyStream },
   { pattern: /^\/api\/proxy-image\/?$/, handler: proxyImage },
+  { pattern: /^\/api\/esrb\/image\/?$/, handler: ({ request }) => esrbImage({ request }) },
+  { pattern: /^\/api\/esrb\/ratings\/?$/, handler: ({ request, env }) => esrbRatings({ request, env }) },
   { pattern: /^\/api\/epg\/now-next\/?$/, handler: epgNowNext },
   { pattern: /^\/api\/ai\/models\/?$/, handler: ({ request, env }) => aiModels({ request, env }) },
   { pattern: /^\/api\/ai\/assistant\/stream\/?$/, handler: ({ request, env }) => aiAssistantStream({ request, env }) },

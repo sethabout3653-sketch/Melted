@@ -8,13 +8,17 @@ import {
   AlertCircle,
   ShieldAlert
 } from 'lucide-react';
-import { GameItem } from '../types/game';
+import { GameItem, GameRatingInfo } from '../types/game';
 import {
   getPlayableGameUrl,
   getScramjetTargetUrl,
   shouldUseScramjetByDefault,
 } from '../services/gameService';
-import { resolveGameRating } from '../services/gameRatingService';
+import {
+  fetchSingleEsrbRating,
+  getCachedGameRating,
+} from '../services/gameRatingService';
+import { EsrbBadge } from './EsrbBadge';
 import {
   launchInScramjetFrame,
   flushScramjetCookies,
@@ -35,8 +39,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   onToggleFavorite,
   isFavorite,
 }) => {
-  const ratingInfo = game.rating || resolveGameRating(game.name, game.special, game.category);
-  const [ageConfirmed, setAgeConfirmed] = useState<boolean>(() => !ratingInfo.requiresGate);
+  const initialRating = game.rating || getCachedGameRating(game.name) || null;
+  const [ratingInfo, setRatingInfo] = useState<GameRatingInfo | null>(initialRating);
+  const [ageConfirmed, setAgeConfirmed] = useState<boolean>(() => !initialRating?.requiresGate);
   const [useScramjet, setUseScramjet] = useState<boolean>(() => shouldUseScramjetByDefault(game));
   const [directUrl, setDirectUrl] = useState<string>('');
   const [reloadNonce, setReloadNonce] = useState<number>(0);
@@ -49,15 +54,31 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const prevGameIdRef = useRef<number | string | null>(null);
 
-  // Sync default Scramjet mode and age gate whenever switching to a different game
+  // Sync default Scramjet mode and fetch real ESRB rating whenever switching to a different game
   useEffect(() => {
+    let active = true;
+    const cached = game.rating || getCachedGameRating(game.name) || null;
     if (prevGameIdRef.current !== game.id) {
       prevGameIdRef.current = game.id;
-      const nextRating = game.rating || resolveGameRating(game.name, game.special, game.category);
-      setAgeConfirmed(!nextRating.requiresGate);
+      setRatingInfo(cached);
+      setAgeConfirmed(!cached?.requiresGate);
       setUseScramjet(shouldUseScramjetByDefault(game));
       setReloadNonce(0);
     }
+
+    if (!cached) {
+      fetchSingleEsrbRating(game.name).then((realRating) => {
+        if (!active || !realRating) return;
+        setRatingInfo(realRating);
+        if (realRating.requiresGate) {
+          setAgeConfirmed(false);
+        }
+      });
+    }
+
+    return () => {
+      active = false;
+    };
   }, [game]);
 
   // Background Auto-Save Sync Listener from Iframe Game Stream
@@ -292,15 +313,25 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   className="w-full h-full object-cover" 
                 />
               </div>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base truncate font-heading">
-                    {game.name}
-                  </h3>
+              <div className="min-w-0 flex items-center gap-2.5">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-extrabold text-slate-900 dark:text-white text-sm sm:text-base truncate font-heading">
+                      {game.name}
+                    </h3>
+                  </div>
+                  <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate font-bold flex items-center gap-2">
+                    <span>{game.author ? `By ${game.author}` : game.category}</span>
+                    {ratingInfo?.descriptors && (
+                      <span className="hidden sm:inline text-slate-400 dark:text-slate-500 font-medium truncate">
+                        · {ratingInfo.descriptors}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate font-bold flex items-center gap-2">
-                  <span>{game.author ? `By ${game.author}` : game.category}</span>
-                </div>
+                {ratingInfo && (
+                  <EsrbBadge rating={ratingInfo} className="w-[24px] sm:w-[26px] shrink-0" />
+                )}
               </div>
             </div>
 
@@ -395,31 +426,32 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           )}
 
           {/* Interactive Age / Content Warning Gate (blocks iframe/port load until confirmed) */}
-          {!ageConfirmed && (
+          {!ageConfirmed && ratingInfo && (
             <div className="absolute inset-0 z-20 flex items-center justify-center p-4 sm:p-8 bg-black/95 overflow-y-auto">
               <div className="w-full max-w-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-5 sm:p-6 shadow-2xl text-center space-y-4">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/35 text-amber-500 flex items-center justify-center mx-auto">
-                  <ShieldAlert className="w-6 h-6" />
+                <div className="flex items-center justify-center gap-3">
+                  <EsrbBadge rating={ratingInfo} className="w-[46px] shrink-0" />
+                  <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/35 text-amber-500 flex items-center justify-center">
+                    <ShieldAlert className="w-6 h-6" />
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">
                   <div className="text-[11px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
                     {ratingInfo.gateMinAge === '18+'
-                      ? '18+ Adults Only Content Warning'
-                      : ratingInfo.gateMinAge === '17+'
-                      ? '17+ Mature Content Warning'
-                      : '13+ Teen Content Advisory'}
+                      ? 'ESRB 18+ Adults Only Rating'
+                      : 'ESRB 17+ Mature Content Rating'}
                   </div>
                   <h4 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white font-heading">
                     {game.name}
                   </h4>
-                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
+                  <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed line-clamp-4">
                     {ratingInfo.warningMessage ||
-                      `This title is rated ${ratingInfo.code} (${ratingInfo.label}) and may contain ${ratingInfo.descriptors || 'mature, violent, or frightening themes'}.`}
+                      `Rated ${ratingInfo.code} (${ratingInfo.label}) by the ESRB${ratingInfo.descriptors ? `: ${ratingInfo.descriptors}` : ''}.`}
                   </p>
                 </div>
 
-                {/* Special 13+ / 17+ / 18+ Content Tags */}
+                {/* Real ESRB Content Descriptors */}
                 {ratingInfo.specialTags && ratingInfo.specialTags.length > 0 && (
                   <div className="flex flex-wrap items-center justify-center gap-1.5 pt-1">
                     {ratingInfo.specialTags.map((tag) => (
@@ -448,9 +480,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                   >
                     {ratingInfo.gateMinAge === '18+'
                       ? 'I understand and am 18+'
-                      : ratingInfo.gateMinAge === '17+'
-                      ? 'I understand and am 17+'
-                      : 'I understand and am 13+'}
+                      : 'I understand and am 17+'}
                   </button>
                 </div>
               </div>

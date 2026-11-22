@@ -15,6 +15,14 @@ import { processGameHtml, getScaffoldingBuffer } from './src/server/scaffoldingL
 import { FALLBACK_OPENROUTER_MODELS, OPENROUTER_CHAT_URL, OPENROUTER_MODEL } from './src/utils/openRouterEdgeHelper';
 import { buildAISystemInstruction } from './src/data/aiAssistantPrompt';
 import { initSethsrcEngine } from './src/server/sethsrcEngine';
+import {
+  ESRB_ORIGIN,
+  OFFICIAL_ESRB_IMAGE_PATHS,
+  fetchEsrbRatingDetailed,
+  isValidEsrbBadgePath,
+  normalizeRatingLookupKey,
+} from './src/utils/esrbRatingCore';
+import type { EsrbRatingCode, GameRatingInfo } from './src/types/game';
 
 // Prevent server crashes from unhandled fetch terminations / ECONNRESET errors
 process.on('uncaughtException', (err) => {
@@ -1297,6 +1305,158 @@ app.get('/api/proxy-image', async (req, res) => {
   }
 });
 
+// Official ESRB Rating Image Proxy (fetches real ESRB SVGs directly from esrb.org)
+const esrbImageCache = new Map<string, { contentType: string; buffer: Buffer }>();
+app.get('/api/esrb/image', async (req, res) => {
+  try {
+    const srcParam = String(req.query.src || '').trim();
+    const codeParam = String(req.query.code || '').trim().toUpperCase() as EsrbRatingCode;
+    let badgePath = isValidEsrbBadgePath(srcParam);
+    if (!badgePath && codeParam && OFFICIAL_ESRB_IMAGE_PATHS[codeParam]) {
+      badgePath = OFFICIAL_ESRB_IMAGE_PATHS[codeParam];
+    }
+    if (!badgePath) {
+      return res.status(400).send('Invalid ESRB image path');
+    }
+
+    const cached = esrbImageCache.get(badgePath);
+    if (cached) {
+      res.setHeader('Content-Type', cached.contentType);
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Cache-Control', 'public, max-age=604800');
+      return res.send(cached.buffer);
+    }
+
+    const encodedPath = badgePath.replace(/\+/g, '%2B');
+    const upstream = await fetch(`${ESRB_ORIGIN}${encodedPath}`, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        Accept: 'image/svg+xml,image/png,image/webp,image/*,*/*;q=0.8',
+        Referer: `${ESRB_ORIGIN}/`,
+      },
+      redirect: 'follow',
+      signal: AbortSignal.timeout(8000),
+    });
+
+    if (!upstream.ok) {
+      return res.status(404).send('ESRB badge not found upstream');
+    }
+
+    const contentType =
+      upstream.headers.get('content-type') ||
+      (badgePath.endsWith('.svg') ? 'image/svg+xml; charset=utf-8' : 'image/png');
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+    esrbImageCache.set(badgePath, { contentType, buffer });
+
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=604800');
+    return res.send(buffer);
+  } catch {
+    return res.status(502).send('Failed to fetch ESRB badge');
+  }
+});
+
+// Real ESRB Rating Lookup Endpoint (queries official esrb.org search & caches verified results)
+const esrbDiskCacheState: { mtimeMs: number; ratings: Record<string, GameRatingInfo>; unrated: Set<string> } = {
+  mtimeMs: 0,
+  ratings: {},
+  unrated: new Set<string>(),
+};
+const esrbLiveMemoryCache = new Map<string, GameRatingInfo | null>();
+const esrbUnavailableRetryUntil = new Map<string, number>();
+
+function ensureEsrbDiskCacheLoaded() {
+  const candidates = [
+    path.resolve(__dirname, 'public/esrb-cache.json'),
+    path.resolve(__dirname, 'dist/esrb-cache.json'),
+  ];
+  for (const p of candidates) {
+    if (!fs.existsSync(p)) continue;
+    try {
+      const stat = fs.statSync(p);
+      if (stat.mtimeMs === esrbDiskCacheState.mtimeMs) return;
+      const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
+      esrbDiskCacheState.ratings = parsed?.ratings && typeof parsed.ratings === 'object' ? parsed.ratings : {};
+      esrbDiskCacheState.unrated = new Set<string>(Array.isArray(parsed?.unrated) ? parsed.unrated.map(String) : []);
+      esrbDiskCacheState.mtimeMs = stat.mtimeMs;
+      break;
+    } catch {}
+  }
+}
+
+async function resolveEsrbTitleServer(
+  title: string
+): Promise<{ key: string; rating: GameRatingInfo | null; status: 'matched' | 'unrated' | 'unavailable' }> {
+  ensureEsrbDiskCacheLoaded();
+  const key = normalizeRatingLookupKey(title);
+  if (!key || key.length < 2) {
+    return { key, rating: null, status: 'unrated' };
+  }
+  if (key in esrbDiskCacheState.ratings) {
+    return { key, rating: esrbDiskCacheState.ratings[key], status: 'matched' };
+  }
+  if (esrbDiskCacheState.unrated.has(key)) {
+    return { key, rating: null, status: 'unrated' };
+  }
+  if (esrbLiveMemoryCache.has(key)) {
+    const cached = esrbLiveMemoryCache.get(key) || null;
+    return { key, rating: cached, status: cached ? 'matched' : 'unrated' };
+  }
+  const retryAt = esrbUnavailableRetryUntil.get(key);
+  if (retryAt && Date.now() < retryAt) {
+    return { key, rating: null, status: 'unavailable' };
+  }
+
+  const fetched = await fetchEsrbRatingDetailed(title);
+  if (fetched.status === 'unavailable') {
+    esrbUnavailableRetryUntil.set(key, Date.now() + 60_000);
+    return { key, rating: null, status: 'unavailable' };
+  }
+  esrbUnavailableRetryUntil.delete(key);
+  esrbLiveMemoryCache.set(key, fetched.rating);
+  return { key, rating: fetched.rating, status: fetched.status };
+}
+
+app.get('/api/esrb/ratings', async (req, res) => {
+  const title = String(req.query.title || '').trim();
+  if (!title) {
+    return res.status(400).json({ error: 'Missing title query param' });
+  }
+  const { key, rating, status } = await resolveEsrbTitleServer(title);
+  res.setHeader('Cache-Control', status === 'unavailable' ? 'no-store' : 'public, max-age=3600');
+  return res.json({ key, rating, unavailable: status === 'unavailable', source: 'esrb' });
+});
+
+app.post('/api/esrb/ratings', async (req, res) => {
+  const body = req.body as { titles?: unknown } | undefined;
+  const titles = Array.isArray(body?.titles)
+    ? body.titles.filter((t): t is string => typeof t === 'string' && t.trim().length > 0).slice(0, 20)
+    : [];
+
+  const ratings: Record<string, GameRatingInfo | null> = {};
+  const unavailable: string[] = [];
+  const CONCURRENCY = 2;
+  let cursor = 0;
+  async function worker() {
+    while (cursor < titles.length) {
+      const idx = cursor++;
+      const { key, rating, status } = await resolveEsrbTitleServer(titles[idx]);
+      if (key) {
+        if (status === 'unavailable') {
+          unavailable.push(key);
+        } else {
+          ratings[key] = rating;
+        }
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(CONCURRENCY, titles.length) }, () => worker()));
+
+  res.setHeader('Cache-Control', unavailable.length > 0 ? 'no-store' : 'public, max-age=3600');
+  return res.json({ ratings, unavailable, source: 'esrb' });
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
   res.json({
@@ -2439,6 +2599,8 @@ async function startServer() {
   app.use('/keyforopenrouter.txt', (_req, res) => {
     res.status(404).send('Not found');
   });
+
+  app.use(express.static(path.resolve(__dirname, 'public')));
 
   if (!IS_PROD) {
     const { createServer: createViteServer } = await import('vite');

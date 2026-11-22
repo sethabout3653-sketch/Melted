@@ -380,7 +380,7 @@ export function transformUgsEntry(
     resolvedUrl,
     featured: false,
     source: (isCkv ? 'CKV' : 'ugs'),
-    rating: resolveGameRating(trimmedName, [], category),
+    rating: resolveGameRating(trimmedName),
   };
 }
 
@@ -496,13 +496,16 @@ export function getPlayableGameUrl(game: GameItem): string {
  */
 export function shouldUseScramjetByDefault(game: GameItem): boolean {
   if (!game) return false;
+  if (game.source === 'scramjet') return true;
   const name = (game.name || '').toLowerCase().trim();
   const scramjetAllowed = new Set([
     'undertale',
     'gemini',
     'soundboard 2',
+    'soundboard 2 ',
     'soundboard',
     'deltarune',
+    'duckduckgo',
   ]);
   return scramjetAllowed.has(name);
 }
@@ -573,7 +576,6 @@ function generateSoundboardSvgCover(): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
-// Edit name, url, and coverUrl here to change the TikTok and Soundboard featured apps
 export const FEATURED_APP_CONFIG = {
   tiktok: {
     name: 'Soundboard 2 ',
@@ -589,6 +591,12 @@ export const FEATURED_APP_CONFIG = {
     name: 'Gemini',
     url: 'https://gemini.google.com',
     coverUrl: 'https://thumb.wikimedia.org/wikipedia/commons/thumb/1/1d/Google_Gemini_icon_2025.svg/960px-Google_Gemini_icon_2025.svg.png?utm_source=commons.wikimedia.org&utm_campaign=index&utm_content=thumbnail',
+  },
+  duckduckgo: {
+    name: 'Duckduckgo',
+    url: 'https://duckduckgo.com',
+    coverUrl: '/assets/duckduckgo.svg',
+    author: 'DuckDuckGo',
   },
   ddlc: {
     name: 'Doki Doki Literature Club',
@@ -645,6 +653,21 @@ const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
     resolvedUrl: FEATURED_APP_CONFIG.google.url,
   },
   {
+    id: 900005,
+    name: FEATURED_APP_CONFIG.duckduckgo.name,
+    cover: FEATURED_APP_CONFIG.duckduckgo.coverUrl,
+    url: FEATURED_APP_CONFIG.duckduckgo.url,
+    author: FEATURED_APP_CONFIG.duckduckgo.author,
+    special: ['duckduckgo', 'duck duck go', 'search', 'privacy', 'browser', 'scramjet'],
+    featured: true,
+    source: 'scramjet',
+    category: 'Featured',
+    resolvedCover: FEATURED_APP_CONFIG.duckduckgo.coverUrl,
+    fallbackCover: '/assets/duckduckgo.png',
+    localCover: FEATURED_APP_CONFIG.duckduckgo.coverUrl,
+    resolvedUrl: FEATURED_APP_CONFIG.duckduckgo.url,
+  },
+  {
     id: 900004,
     name: FEATURED_APP_CONFIG.ddlc.name,
     cover: FEATURED_APP_CONFIG.ddlc.coverUrl,
@@ -688,7 +711,7 @@ export function getAllGames(): GameItem[] {
       fallbackCover,
       localCover: resolvedCover,
       resolvedUrl,
-      rating: resolveGameRating(game.name, game.special, category),
+      rating: resolveGameRating(game.name),
     };
   });
 
@@ -729,7 +752,7 @@ export function getAllGames(): GameItem[] {
 
   const builtInsWithRatings = BUILTIN_SCRAMJET_GAMES.map((g) => ({
     ...g,
-    rating: g.rating || resolveGameRating(g.name, g.special, g.category),
+    rating: g.rating || resolveGameRating(g.name),
   }));
 
   return [...builtInsWithRatings, ...gnGames, ...ugsGames, ...ckvGames];

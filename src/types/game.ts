@@ -25,18 +25,26 @@ export type GameCategory =
   | 'Emulators & Ports'
   | 'Favorites';
 
-export type EsrbRatingCode = 'E' | 'E10+' | 'T' | 'M' | 'AO';
+export type EsrbRatingCode = 'E' | 'E10+' | 'T' | 'M' | 'AO' | 'RP';
 
 export interface GameRatingInfo {
   code: EsrbRatingCode;
   label: string;
-  age: string;
+  age?: string;
   descriptors?: string;
+  interactiveElements?: string;
+  synopsis?: string;
+  esrbTitle?: string;
+  esrbUrl?: string;
+  badgePath: string;
+  badgeUrl: string;
+  officialBadgeUrl: string;
   requiresGate: boolean;
-  gateMinAge?: '13+' | '17+' | '18+';
+  gateMinAge?: '17+' | '18+';
   specialTags: string[];
   coverTag?: string;
   warningMessage?: string;
+  source: 'esrb';
 }
 
 export interface GameItem extends RawGame {

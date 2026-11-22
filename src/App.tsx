@@ -14,6 +14,7 @@ import { InAppNotificationToast } from './components/InAppNotificationToast';
 import { VoiceAudioEngine } from './components/VoiceAudioEngine';
 import { PersistentVoiceDock } from './components/PersistentVoiceDock';
 import { getAllGames, resolveGameUrl, getUGSGames, getCKVGames, mergeUgsGames } from './services/gameService';
+import { initEsrbRatingsCache, getCachedGameRating, subscribeToGameRatings } from './services/gameRatingService';
 import { tabTransition } from './utils/animations';
 import { useCloak } from './hooks/useCloak';
 import { useGlobalChat } from './hooks/useGlobalChat';
@@ -126,6 +127,15 @@ export default function App() {
     return () => {
       isMounted = false;
     };
+  }, []);
+
+  // Load real ESRB ratings cache on startup and re-sync search metadata when updated
+  const [esrbVersion, setEsrbVersion] = useState(0);
+  useEffect(() => {
+    void initEsrbRatingsCache();
+    return subscribeToGameRatings(() => {
+      setEsrbVersion((v) => v + 1);
+    });
   }, []);
 
   // Immediately prewarm Scramjet SW & controller so games and soundboard launch cleanly on first click
@@ -309,13 +319,15 @@ export default function App() {
     const queryTokens = deferredQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
     if (queryTokens.length > 0) {
       result = result.filter((game) => {
+        const realRating = game.rating || getCachedGameRating(game.name);
         const searchableText = [
           game.name,
           game.category,
           game.author,
-          game.rating?.code,
-          game.rating?.label,
-          ...(game.rating?.specialTags || []),
+          realRating?.code,
+          realRating?.label,
+          realRating?.descriptors,
+          ...(realRating?.specialTags || []),
           ...(game.special || []),
         ].filter(Boolean).join(' ').toLowerCase();
         return queryTokens.every((token) => searchableText.includes(token));
@@ -328,7 +340,7 @@ export default function App() {
     if (sortBy === 'random') result.sort(() => Math.random() - 0.5);
 
     return result;
-  }, [allGames, selectedCategory, deferredQuery, favorites, showFavoritesOnly, sortBy]);
+  }, [allGames, selectedCategory, deferredQuery, favorites, showFavoritesOnly, sortBy, esrbVersion]);
 
   const categoryCounts = useMemo(() => {
     const counts: Record<GameCategory, number> = {

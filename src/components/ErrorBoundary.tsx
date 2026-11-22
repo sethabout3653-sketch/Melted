@@ -17,6 +17,16 @@ export class ErrorBoundary extends Component<Props, State> {
   };
 
   public static getDerivedStateFromError(error: Error): State {
+    const msg = String(error?.message || error || '');
+    if (
+      msg.includes('Hyper client') ||
+      msg.includes('GoAway') ||
+      msg.includes('Http2') ||
+      msg.includes('epoxy-transport') ||
+      msg.includes('wbindgen')
+    ) {
+      return { hasError: false };
+    }
     return { hasError: true, error };
   }
 
