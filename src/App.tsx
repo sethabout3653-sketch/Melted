@@ -272,9 +272,9 @@ export default function App() {
 
   const handleSelectCategory = useCallback((cat: GameCategory) => {
     setSelectedCategory(cat);
+    setCurrentTab('games');
     if (cat === 'Favorites') {
       setShowFavoritesOnly(true);
-      setCurrentTab('games');
     } else {
       setShowFavoritesOnly(false);
     }
@@ -287,8 +287,11 @@ export default function App() {
   const handleToggleFavoritesOnly = useCallback(() => {
     setShowFavoritesOnly((prev) => {
       const next = !prev;
+      setCurrentTab('games');
       if (next) {
-        setCurrentTab('games');
+        setSelectedCategory('Favorites');
+      } else {
+        setSelectedCategory('All');
       }
       return next;
     });

@@ -1,4 +1,7 @@
-import { buildAISystemInstruction } from '../data/aiAssistantPrompt';
+import { buildAISystemInstruction } from '../data/aiPersonalities';
+
+export const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
+export const OPENROUTER_MODEL = 'openrouter/free';
 
 export interface WebSearchResult {
   title: string;
@@ -16,12 +19,12 @@ export interface AIThinkingStep {
   sources?: Array<{ title: string; url: string }>;
 }
 
-export const OPENROUTER_CHAT_URL = 'https://openrouter.ai/api/v1/chat/completions';
-
-export const OPENROUTER_MODEL = 'openrouter/free';
-
 export const FALLBACK_OPENROUTER_MODELS = [
-  { id: OPENROUTER_MODEL, owned_by: 'OpenRouter', description: 'Free Models Router (free)' },
+  { id: 'openrouter/free', owned_by: 'OpenRouter', context_window: 131072, description: 'OpenRouter Free Model (Default)' },
+  { id: 'deepseek/deepseek-chat', owned_by: 'DeepSeek', context_window: 64000, description: 'DeepSeek V3 Chat' },
+  { id: 'google/gemini-2.0-flash-exp:free', owned_by: 'Google', context_window: 1048576, description: 'Gemini 2.0 Flash Experimental' },
+  { id: 'meta-llama/llama-3.3-70b-instruct:free', owned_by: 'Meta', context_window: 131072, description: 'Llama 3.3 70B Instruct' },
+  { id: 'mistralai/mistral-7b-instruct:free', owned_by: 'Mistral', context_window: 32768, description: 'Mistral 7B Instruct' },
 ];
 
 export function extractOpenRouterKey(env?: Record<string, any>, requestKey?: string): string {
@@ -30,6 +33,7 @@ export function extractOpenRouterKey(env?: Record<string, any>, requestKey?: str
     env?.VITE_OPENROUTER_API_KEY,
     env?.OPENROUTER_KEY,
     requestKey,
+    typeof env?.GEMINI_API_KEY === 'string' && !env.GEMINI_API_KEY.startsWith('AIza') ? env.GEMINI_API_KEY : '',
   ];
   for (const raw of candidates) {
     if (typeof raw === 'string') {
@@ -143,6 +147,7 @@ export async function runOpenRouterAssistantEdge(params: {
   history?: Array<{ role?: string; text?: string }>;
   model?: string;
   searchMode?: 'auto' | 'always' | 'off';
+  personality?: unknown;
   onStep?: (step: AIThinkingStep) => void;
 }): Promise<{
   reply: string;
@@ -150,7 +155,7 @@ export async function runOpenRouterAssistantEdge(params: {
   steps: AIThinkingStep[];
   errorDetail?: string;
 }> {
-  const { openRouterKey, prompt, history, model: customModel, searchMode, onStep } = params;
+  const { openRouterKey, prompt, history, model: customModel, searchMode, personality, onStep } = params;
   const steps: AIThinkingStep[] = [];
 
   const recordStep = (
@@ -188,7 +193,7 @@ export async function runOpenRouterAssistantEdge(params: {
   const targetModel = typeof customModel === 'string' && customModel.trim() ? customModel.trim() : OPENROUTER_MODEL;
   recordStep('synthesizing', 'Synthesizing Answer', `Formulating direct response with ${targetModel}...`, 'sparkles');
 
-  const systemInstruction = buildAISystemInstruction();
+  const systemInstruction = buildAISystemInstruction(personality);
   let searchContext = '';
   if (searchResults.length > 0) {
     searchContext =
@@ -213,38 +218,56 @@ export async function runOpenRouterAssistantEdge(params: {
   }
   chatMessages.push({ role: 'user', content: prompt });
 
+  const modelsToTry = [
+    targetModel,
+    'openrouter/free',
+    'deepseek/deepseek-chat',
+    'google/gemini-2.0-flash-exp:free',
+    'meta-llama/llama-3.3-70b-instruct:free',
+  ].filter((m, idx, arr) => arr.indexOf(m) === idx);
+
   let replyText = '';
   let lastError = '';
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 9000);
-    const res = await fetch(OPENROUTER_CHAT_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${openRouterKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: targetModel,
-        messages: chatMessages,
-        temperature: 0.3,
-        max_tokens: 1024,
-      }),
-      signal: controller.signal,
-    });
-    clearTimeout(timeoutId);
+  for (const model of modelsToTry) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 9000);
+      const res = await fetch(OPENROUTER_CHAT_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${openRouterKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://frosted.app',
+          'X-Title': 'FrostHub AI',
+        },
+        body: JSON.stringify({
+          model,
+          messages: chatMessages,
+          temperature: 0.3,
+          max_tokens: 1024,
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
 
-    if (res.ok) {
-      const data = (await res.json()) as any;
-      const text = data.choices?.[0]?.message?.content;
-      if (text) replyText = text.trim();
-    } else {
-      const errText = await res.text().catch(() => '');
-      lastError = `OpenRouter HTTP ${res.status}: ${errText.slice(0, 140)}`;
+      if (res.ok) {
+        const data = (await res.json()) as any;
+        const text = data.choices?.[0]?.message?.content;
+        if (text) {
+          replyText = text.trim();
+          break;
+        }
+      } else {
+        const errText = await res.text().catch(() => '');
+        lastError = `OpenRouter HTTP ${res.status}: ${errText.slice(0, 140)}`;
+        if (res.status === 401 || res.status === 403) {
+          break;
+        }
+      }
+    } catch (err: any) {
+      lastError = err?.message || 'OpenRouter request error';
     }
-  } catch (err: any) {
-    lastError = err?.message || 'OpenRouter request error';
   }
 
   return {
