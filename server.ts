@@ -11,6 +11,7 @@ import { promisify } from 'util';
 import { Readable } from 'stream';
 import { initWebSocketDatabase, globalWsDb, broadcastTable, broadcastWss, sendToUserSockets } from './src/server/wsDatabase';
 import { server as wispServer } from '@mercuryworkshop/wisp-js/server';
+import { Ytdl, Client as YtdlClient } from '@distube/ytdl-core';
 import { processGameHtml, getScaffoldingBuffer } from './src/server/scaffoldingLoader';
 import { FALLBACK_OPENROUTER_MODELS, OPENROUTER_CHAT_URL, OPENROUTER_MODEL } from './src/utils/openRouterEdgeHelper';
 import { buildAISystemInstruction } from './src/data/aiAssistantPrompt';
@@ -99,76 +100,458 @@ app.get('/sj-sw.js', (_req, res) => {
   res.sendFile(targetSwPath);
 });
 
-async function fetchYoutubeVrPlayer(videoId: string): Promise<Record<string, any> | null> {
+interface ResolvedYoutubeStream {
+  videoId: string;
+  url: string;
+  proxyUrlStr: string | null;
+  contentType: string;
+  contentLength?: number;
+  playerResponse: Record<string, any>;
+  expiresAt: number;
+}
+
+const ytStreamCache = new Map<string, ResolvedYoutubeStream>();
+const ytStreamPending = new Map<string, Promise<ResolvedYoutubeStream | null>>();
+const YT_STICKY_PROXY_SLOTS: Array<string | null> = [
+  'http://vncwbxva-3:d65j8vqe2th9@p.webshare.io:80/',
+  'http://vncwbxva-4:d65j8vqe2th9@p.webshare.io:80/',
+  'http://vncwbxva-6:d65j8vqe2th9@p.webshare.io:80/',
+  'http://vncwbxva-1:d65j8vqe2th9@p.webshare.io:80/',
+  null,
+];
+
+function openProxyHttpStream(
+  rawUrl: string,
+  proxyUrlStr: string | null,
+  method: string,
+  headersObj: Record<string, string>,
+  bodyBuf: Buffer | null,
+  timeoutMs = 15000,
+  maxRedirects = 5
+): Promise<{ status: number; statusText: string; headers: http.IncomingHttpHeaders; stream: http.IncomingMessage; cleanup: () => void }> {
+  return new Promise((resolve, reject) => {
+    let targetUrl: URL;
+    try {
+      targetUrl = new URL(rawUrl);
+    } catch {
+      return reject(new Error('Invalid stream URL'));
+    }
+
+    const doSingleRequest = (currentUrl: URL, hopsLeft: number) => {
+      const isHttps = currentUrl.protocol === 'https:';
+      const targetPort = Number(currentUrl.port || (isHttps ? 443 : 80));
+
+      const handleUpstreamResponse = (upRes: http.IncomingMessage, upReqRef: http.ClientRequest, cleanupFn: () => void) => {
+        const status = upRes.statusCode || 200;
+        const loc = upRes.headers.location;
+        if ([301, 302, 303, 307, 308].includes(status) && loc && hopsLeft > 0) {
+          upReqRef.removeAllListeners('error');
+          upReqRef.on('error', () => {});
+          upRes.resume();
+          cleanupFn();
+          try {
+            const nextUrl = new URL(loc, currentUrl);
+            doSingleRequest(nextUrl, hopsLeft - 1);
+          } catch (err) {
+            reject(err);
+          }
+          return;
+        }
+        resolve({
+          status,
+          statusText: upRes.statusMessage || '',
+          headers: upRes.headers,
+          stream: upRes,
+          cleanup: cleanupFn,
+        });
+      };
+
+      if (!proxyUrlStr) {
+        const lib = isHttps ? https : http;
+        const upReq = lib.request(
+          {
+            protocol: currentUrl.protocol,
+            hostname: currentUrl.hostname,
+            port: targetPort,
+            path: currentUrl.pathname + currentUrl.search,
+            method,
+            headers: headersObj,
+            maxHeaderSize: 131072,
+          } as any,
+          (upRes) => handleUpstreamResponse(upRes, upReq, () => {
+            try { upReq.destroy(); } catch {}
+          })
+        );
+        upReq.setTimeout(timeoutMs, () => upReq.destroy(new Error('Direct stream timeout')));
+        upReq.on('error', reject);
+        if (bodyBuf && bodyBuf.length > 0) upReq.write(bodyBuf);
+        upReq.end();
+        return;
+      }
+
+      let proxyUrl: URL;
+      try {
+        proxyUrl = new URL(proxyUrlStr);
+      } catch {
+        return reject(new Error('Invalid proxy URL'));
+      }
+      const proxyIsHttps = proxyUrl.protocol === 'https:';
+      const proxyLib = proxyIsHttps ? https : http;
+      const proxyAuth =
+        proxyUrl.username || proxyUrl.password
+          ? `Basic ${Buffer.from(
+              `${decodeURIComponent(proxyUrl.username)}:${decodeURIComponent(proxyUrl.password)}`
+            ).toString('base64')}`
+          : '';
+
+      if (isHttps) {
+        const connectHeaders: Record<string, string> = {
+          Host: `${currentUrl.hostname}:${targetPort}`,
+        };
+        if (proxyAuth) connectHeaders['Proxy-Authorization'] = proxyAuth;
+        const connectReq = proxyLib.request({
+          hostname: proxyUrl.hostname,
+          port: Number(proxyUrl.port || (proxyIsHttps ? 443 : 80)),
+          method: 'CONNECT',
+          path: `${currentUrl.hostname}:${targetPort}`,
+          headers: connectHeaders,
+        });
+        connectReq.setTimeout(8000, () => {
+          connectReq.destroy(new Error('Proxy CONNECT timeout'));
+        });
+        connectReq.on('error', reject);
+        connectReq.on('connect', (res, tunnelSocket) => {
+          if (res.statusCode !== 200) {
+            tunnelSocket.destroy();
+            reject(new Error(`Proxy CONNECT HTTP ${res.statusCode}`));
+            return;
+          }
+          const tlsSocket = tls.connect({
+            socket: tunnelSocket,
+            servername: currentUrl.hostname,
+            rejectUnauthorized: false,
+          });
+          tlsSocket.on('error', () => {
+            try { tlsSocket.destroy(); } catch {}
+          });
+          const upReq = https.request(
+            {
+              protocol: currentUrl.protocol,
+              hostname: currentUrl.hostname,
+              port: targetPort,
+              path: currentUrl.pathname + currentUrl.search,
+              method,
+              headers: headersObj,
+              maxHeaderSize: 131072,
+              createConnection: () => tlsSocket,
+            } as any,
+            (upRes) => handleUpstreamResponse(upRes, upReq, () => {
+              try { upReq.destroy(); } catch {}
+              try { tlsSocket.destroy(); } catch {}
+            })
+          );
+          upReq.setTimeout(timeoutMs, () => {
+            upReq.destroy(new Error('Proxied stream timeout'));
+          });
+          upReq.on('error', reject);
+          if (bodyBuf && bodyBuf.length > 0) upReq.write(bodyBuf);
+          upReq.end();
+        });
+        connectReq.end();
+      } else {
+        const proxiedHeaders: Record<string, string> = { ...headersObj };
+        if (proxyAuth) proxiedHeaders['proxy-authorization'] = proxyAuth;
+        const upReq = proxyLib.request(
+          {
+            hostname: proxyUrl.hostname,
+            port: Number(proxyUrl.port || (proxyIsHttps ? 443 : 80)),
+            path: currentUrl.href,
+            method,
+            headers: proxiedHeaders,
+            maxHeaderSize: 131072,
+          } as any,
+          (upRes) => handleUpstreamResponse(upRes, upReq, () => {
+            try { upReq.destroy(); } catch {}
+          })
+        );
+        upReq.setTimeout(timeoutMs, () => upReq.destroy(new Error('Proxied HTTP timeout')));
+        upReq.on('error', reject);
+        if (bodyBuf && bodyBuf.length > 0) upReq.write(bodyBuf);
+        upReq.end();
+      }
+    };
+
+    doSingleRequest(targetUrl, maxRedirects);
+  });
+}
+
+function createTunnelFetch(proxyUrlStr: string | null): typeof fetch {
+  return async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const rawUrl = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const method = (init?.method || (typeof input !== 'string' && !(input instanceof URL) ? input.method : 'GET') || 'GET').toUpperCase();
+    const hdrObj: Record<string, string> = {};
+    const addHeader = (k: string, v: string) => {
+      const lower = k.toLowerCase();
+      if (lower === 'host' || lower === 'content-length' || lower === 'connection') return;
+      hdrObj[lower] = v;
+    };
+    if (typeof input !== 'string' && !(input instanceof URL) && input.headers) {
+      input.headers.forEach((v, k) => addHeader(k, v));
+    }
+    if (init?.headers) {
+      if (init.headers instanceof Headers) {
+        init.headers.forEach((v, k) => addHeader(k, v));
+      } else if (Array.isArray(init.headers)) {
+        for (const [k, v] of init.headers) addHeader(k, v);
+      } else {
+        for (const [k, v] of Object.entries(init.headers)) {
+          if (v !== undefined) addHeader(k, String(v));
+        }
+      }
+    }
+    if (!hdrObj['accept-language']) hdrObj['accept-language'] = 'en-US,en;q=0.9';
+    hdrObj['accept-encoding'] = 'gzip, deflate, br';
+
+    let bodyBuf: Buffer | null = null;
+    if (init?.body && method !== 'GET' && method !== 'HEAD') {
+      if (typeof init.body === 'string') bodyBuf = Buffer.from(init.body, 'utf8');
+      else if (Buffer.isBuffer(init.body)) bodyBuf = init.body;
+      else if (init.body instanceof ArrayBuffer) bodyBuf = Buffer.from(init.body);
+      else if (ArrayBuffer.isView(init.body)) bodyBuf = Buffer.from(init.body.buffer, init.body.byteOffset, init.body.byteLength);
+      if (bodyBuf) hdrObj['content-length'] = String(bodyBuf.length);
+    }
+
+    const upstream = await openProxyHttpStream(rawUrl, proxyUrlStr, method, hdrObj, bodyBuf, 12000, 5);
+    const chunks: Buffer[] = [];
+    await new Promise<void>((resolve, reject) => {
+      upstream.stream.on('data', (c: Buffer) => chunks.push(c));
+      upstream.stream.on('error', reject);
+      upstream.stream.on('end', () => resolve());
+    });
+    let rawBuf: Buffer = Buffer.concat(chunks);
+    const enc = String(upstream.headers['content-encoding'] || '').toLowerCase().trim();
+    if (rawBuf.length > 0) {
+      try {
+        if (enc === 'gzip' || enc === 'x-gzip') rawBuf = Buffer.from(await gunzipAsync(rawBuf));
+        else if (enc === 'deflate') rawBuf = Buffer.from(await inflateAsync(rawBuf));
+        else if (enc === 'br') rawBuf = Buffer.from(await brotliDecompressAsync(rawBuf));
+      } catch {}
+    }
+
+    const outHeaders = new Headers();
+    for (const [k, v] of Object.entries(upstream.headers)) {
+      const lower = k.toLowerCase();
+      if (lower === 'content-encoding' || lower === 'content-length' || lower === 'transfer-encoding') continue;
+      if (Array.isArray(v)) {
+        for (const item of v) outHeaders.append(k, item);
+      } else if (v !== undefined) {
+        outHeaders.set(k, String(v));
+      }
+    }
+    const isNullStatus = upstream.status === 204 || upstream.status === 205 || upstream.status === 304 || upstream.status === 101;
+    return new Response(isNullStatus ? null : new Uint8Array(rawBuf), {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers: outHeaders,
+    });
+  };
+}
+
+async function verifyYoutubeStreamUrl(
+  streamUrl: string,
+  proxyUrlStr: string | null
+): Promise<{ ok: boolean; contentType: string; contentLength?: number }> {
+  try {
+    const res = await openProxyHttpStream(
+      streamUrl,
+      proxyUrlStr,
+      'GET',
+      {
+        Range: 'bytes=0-127',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+        Referer: 'https://www.youtube.com/',
+        'Accept-Encoding': 'identity',
+      },
+      null,
+      7000,
+      5
+    );
+    const chunks: Buffer[] = [];
+    await new Promise<void>((resolve) => {
+      res.stream.on('data', (c: Buffer) => chunks.push(c));
+      res.stream.on('end', () => resolve());
+      res.stream.on('error', () => resolve());
+    });
+    res.cleanup();
+    const ct = String(res.headers['content-type'] || 'video/mp4').split(';')[0].trim() || 'video/mp4';
+    const contentRange = String(res.headers['content-range'] || '');
+    const totalMatch = contentRange.match(/\/(\d+)$/);
+    const totalLen = totalMatch ? Number(totalMatch[1]) : undefined;
+    const byteCount = Buffer.concat(chunks).length;
+    const isVideoOrOctet = ct.startsWith('video/') || ct.startsWith('audio/') || ct === 'application/octet-stream';
+    if ((res.status === 200 || res.status === 206) && byteCount > 0 && isVideoOrOctet) {
+      return { ok: true, contentType: ct, contentLength: totalLen };
+    }
+    return { ok: false, contentType: ct };
+  } catch {
+    return { ok: false, contentType: 'video/mp4' };
+  }
+}
+
+async function resolvePlayableYoutubeStream(videoId: string, forceRefresh = false): Promise<ResolvedYoutubeStream | null> {
   if (!videoId || !/^[a-zA-Z0-9_-]{6,20}$/.test(videoId)) {
     return null;
   }
 
-  const attempts: Array<{ headers: Record<string, string>; body: Record<string, any> }> = [
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent':
-          'com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip',
-      },
-      body: {
-        videoId,
-        context: {
-          client: {
-            clientName: 'ANDROID_VR',
-            clientVersion: '1.60.19',
-            deviceMake: 'Oculus',
-            deviceModel: 'Quest 3',
-            osName: 'Android',
-            osVersion: '12L',
-            hl: 'en',
-            gl: 'US',
-          },
-        },
-      },
-    },
-    {
-      headers: {
-        'Content-Type': 'application/json',
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-        Origin: 'https://www.youtube-nocookie.com',
-        Referer: 'https://www.youtube-nocookie.com/',
-      },
-      body: {
-        videoId,
-        context: {
-          client: {
-            clientName: 'WEB_EMBEDDED_PLAYER',
-            clientVersion: '1.20241118.01.00',
-            hl: 'en',
-            gl: 'US',
-            thirdParty: {
-              embedUrl: 'https://www.youtube-nocookie.com/',
-            },
-          },
-        },
-      },
-    },
-  ];
-
-  for (const attempt of attempts) {
-    try {
-      const r = await fetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
-        method: 'POST',
-        headers: attempt.headers,
-        body: JSON.stringify(attempt.body),
-        signal: AbortSignal.timeout(7000),
-      });
-      if (!r.ok) continue;
-      const json = (await r.json()) as Record<string, any>;
-      if (json?.playabilityStatus?.status === 'OK' && json?.streamingData) {
-        return json;
-      }
-    } catch {}
+  if (!forceRefresh) {
+    const cached = ytStreamCache.get(videoId);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached;
+    }
+  } else {
+    ytStreamCache.delete(videoId);
   }
 
-  return null;
+  const inflight = ytStreamPending.get(videoId);
+  if (inflight) return inflight;
+
+  const task = (async (): Promise<ResolvedYoutubeStream | null> => {
+    for (const proxyUrlStr of YT_STICKY_PROXY_SLOTS) {
+      const tunnelFetch = createTunnelFetch(proxyUrlStr);
+
+      // Strategy 1: ANDROID_VR client over this sticky slot (excels on music & Vevo videos without PO token)
+      try {
+        const vrRes = await tunnelFetch('https://www.youtube.com/youtubei/v1/player?prettyPrint=false', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent':
+              'com.google.android.apps.youtube.vr.oculus/1.60.19 (Linux; U; Android 12L; eureka-user Build/SQ3A.220605.009.A1) gzip',
+          },
+          body: JSON.stringify({
+            videoId,
+            context: {
+              client: {
+                clientName: 'ANDROID_VR',
+                clientVersion: '1.60.19',
+                deviceMake: 'Oculus',
+                deviceModel: 'Quest 3',
+                osName: 'Android',
+                osVersion: '12L',
+                hl: 'en',
+                gl: 'US',
+              },
+            },
+          }),
+        });
+        if (vrRes.ok) {
+          const vrJson = (await vrRes.json()) as Record<string, any>;
+          const formats = Array.isArray(vrJson?.streamingData?.formats) ? vrJson.streamingData.formats : [];
+          const bestMuxed = formats.find((f: any) => f?.url && String(f.mimeType || '').includes('video/mp4')) || formats.find((f: any) => f?.url);
+          if (vrJson?.playabilityStatus?.status === 'OK' && bestMuxed?.url) {
+            const check = await verifyYoutubeStreamUrl(bestMuxed.url, proxyUrlStr);
+            if (check.ok) {
+              const entry: ResolvedYoutubeStream = {
+                videoId,
+                url: bestMuxed.url,
+                proxyUrlStr,
+                contentType: check.contentType,
+                contentLength: check.contentLength,
+                playerResponse: vrJson,
+                expiresAt: Date.now() + 20 * 60 * 1000,
+              };
+              ytStreamCache.set(videoId, entry);
+              return entry;
+            }
+          }
+        }
+      } catch {}
+
+      // Strategy 2: @distube/ytdl-core over the exact same sticky slot (handles cipher + PO token + standard/embed videos)
+      try {
+        const ytdl = new Ytdl({
+          fetch: tunnelFetch,
+          clients: [YtdlClient.WebEmbedded, YtdlClient.Tv, YtdlClient.Mweb],
+          lang: 'en',
+          country: 'US',
+          timeoutMs: 8000,
+        });
+        const info = await ytdl.getInfo(videoId);
+        const muxedMp4 = info.formats.filter(
+          (f) => f.hasVideo && f.hasAudio && f.url && (f.mimeType || '').includes('mp4')
+        );
+        const muxedAny = info.formats.filter((f) => f.hasVideo && f.hasAudio && f.url);
+        const candidates = [...muxedMp4, ...muxedAny];
+        for (const fmt of candidates) {
+          if (!fmt.url) continue;
+          const check = await verifyYoutubeStreamUrl(fmt.url, proxyUrlStr);
+          if (check.ok) {
+            const syntheticPlayer: Record<string, any> = {
+              playabilityStatus: { status: 'OK', playableInEmbed: true },
+              videoDetails: {
+                videoId,
+                title: info.videoDetails?.title || 'YouTube Video',
+                author: info.videoDetails?.author?.name || '',
+                lengthSeconds: String(info.videoDetails?.lengthSeconds || 0),
+                isLiveContent: Boolean(info.videoDetails?.isLive),
+              },
+              streamingData: {
+                expiresInSeconds: '21540',
+                formats: [
+                  {
+                    itag: fmt.itag || 18,
+                    url: `https://www.youtube.com/__frost_yt_stream__?v=${encodeURIComponent(videoId)}`,
+                    mimeType: fmt.mimeType || 'video/mp4; codecs="avc1.42001E, mp4a.40.2"',
+                    width: fmt.width || 640,
+                    height: fmt.height || 360,
+                    qualityLabel: fmt.qualityLabel || '360p',
+                    contentLength: check.contentLength ? String(check.contentLength) : undefined,
+                  },
+                ],
+                adaptiveFormats: [],
+              },
+            };
+            const entry: ResolvedYoutubeStream = {
+              videoId,
+              url: fmt.url,
+              proxyUrlStr,
+              contentType: check.contentType,
+              contentLength: check.contentLength,
+              playerResponse: syntheticPlayer,
+              expiresAt: Date.now() + 20 * 60 * 1000,
+            };
+            ytStreamCache.set(videoId, entry);
+            return entry;
+          }
+        }
+      } catch {}
+    }
+
+    return null;
+  })();
+
+  ytStreamPending.set(videoId, task);
+  try {
+    return await task;
+  } finally {
+    ytStreamPending.delete(videoId);
+  }
+}
+
+
+
+async function fetchYoutubeVrPlayer(videoId: string): Promise<Record<string, any> | null> {
+  const resolved = await resolvePlayableYoutubeStream(videoId);
+  if (!resolved) return null;
+  // Always return a copy whose muxed URL routes via __frost_yt_stream__ so client playback never hits IP-bound 403s
+  const cloned = JSON.parse(JSON.stringify(resolved.playerResponse)) as Record<string, any>;
+  if (Array.isArray(cloned?.streamingData?.formats)) {
+    cloned.streamingData.formats = cloned.streamingData.formats.map((f: any) => ({
+      ...f,
+      url: `https://www.youtube.com/__frost_yt_stream__?v=${encodeURIComponent(videoId)}`,
+    }));
+  }
+  return cloned;
 }
 
 function patchYtInitialPlayerResponseHtml(
@@ -246,15 +629,20 @@ const stickyHttpsAgent = new https.Agent({
 });
 
 function getProxyPoolList(): string[] {
-  const rawList = [
-    process.env.RESIDENTIAL_PROXY_URL || 'http://vncwbxva-rotate:d65j8vqe2th9@p.webshare.io:80/',
-    process.env.PROXY_POOL_URLS || '',
-  ]
+  const defaultStickyPool = [
+    'http://vncwbxva-3:d65j8vqe2th9@p.webshare.io:80/',
+    'http://vncwbxva-4:d65j8vqe2th9@p.webshare.io:80/',
+    'http://vncwbxva-6:d65j8vqe2th9@p.webshare.io:80/',
+    'http://vncwbxva-1:d65j8vqe2th9@p.webshare.io:80/',
+    'http://vncwbxva-7:d65j8vqe2th9@p.webshare.io:80/',
+    'http://vncwbxva-9:d65j8vqe2th9@p.webshare.io:80/',
+  ];
+  const envRaw = [process.env.RESIDENTIAL_PROXY_URL || '', process.env.PROXY_POOL_URLS || '']
     .join(',')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  return rawList;
+  return envRaw.length > 0 ? envRaw : defaultStickyPool;
 }
 
 function hashSessionIndex(sessionId: string, mod: number): number {
@@ -677,10 +1065,8 @@ app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), as
     forwardMap.set('sec-ch-ua', '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"');
     forwardMap.set('sec-ch-ua-mobile', '?0');
     forwardMap.set('sec-ch-ua-platform', '"Windows"');
-    if (!forwardMap.has('accept-language')) {
-      const incomingLang = String(req.headers['accept-language'] || '').trim();
-      forwardMap.set('accept-language', incomingLang || 'en-US,en;q=0.9');
-    }
+    // Force US English unconditionally so regional IPs never switch websites to Japanese/Chinese
+    forwardMap.set('accept-language', 'en-US,en;q=0.9');
     forwardMap.set('accept-encoding', 'gzip, deflate, br');
 
     // Sanitize Origin/Referer if they accidentally leaked the Cloud Run / Pages / localhost proxy host
@@ -774,8 +1160,8 @@ app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), as
       }
     }
 
-    const finalStatus = upstreamRes.status;
-    const finalStatusText = upstreamRes.statusText || '';
+    let finalStatus = upstreamRes.status;
+    let finalStatusText = upstreamRes.statusText || '';
 
     let rawBodyBuf = upstreamRes.body;
     const isNullBodyStatus =
@@ -785,7 +1171,9 @@ app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), as
       finalStatus === 304 ||
       method === 'HEAD';
 
-    // Bypass YouTube bot-gate ("Sign in to confirm you're not a bot" / LOGIN_REQUIRED) cleanly via ANDROID_VR fallback
+
+
+    // Bypass YouTube bot-gate ("Sign in to confirm you're not a bot" / LOGIN_REQUIRED) cleanly via resolved stream fallback
     if (!isNullBodyStatus && finalStatus === 200 && (host === 'youtube.com' || host.endsWith('.youtube.com'))) {
       const isPlayerEndpoint = targetUrl.pathname.startsWith('/youtubei/v1/player');
       const isWatchPage = targetUrl.pathname === '/watch';
@@ -816,7 +1204,7 @@ app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), as
               } catch {}
             }
             if (!videoId) {
-              videoId = targetUrl.searchParams.get('v') || 'dQw4w9WgXcQ';
+              videoId = targetUrl.searchParams.get('v') || '';
             }
             if (videoId) {
               const vrData = await fetchYoutubeVrPlayer(videoId);
@@ -830,7 +1218,6 @@ app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), as
                   storyboards: parsed.storyboards || vrData.storyboards,
                 };
                 rawBodyBuf = Buffer.from(JSON.stringify(merged), 'utf8');
-                // Do not persist a flagged bot-gate cookie over user's session
                 for (let i = outHeaders.length - 1; i >= 0; i--) {
                   if (outHeaders[i][0].toLowerCase() === 'set-cookie') outHeaders.splice(i, 1);
                 }
@@ -948,6 +1335,93 @@ app.post('/api/yt-player-fallback', async (req, res) => {
     return res.status(502).json({ ok: false, error: String(err?.message || err || 'Fallback failed') });
   }
 });
+
+// Direct Range-supporting YouTube MP4 video+audio proxy stream (matches IP used to sign URL)
+app.all('/api/yt-stream', async (req, res) => {
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    return res.status(405).end();
+  }
+  const videoId = String(req.query.v || '').trim();
+  if (!videoId || !/^[a-zA-Z0-9_-]{6,20}$/.test(videoId)) {
+    return res.status(400).json({ error: 'Invalid videoId' });
+  }
+
+  const pipeAttempt = async (forceRefresh: boolean): Promise<boolean> => {
+    const resolved = await resolvePlayableYoutubeStream(videoId, forceRefresh);
+    if (!resolved) return false;
+
+    const reqHeaders: Record<string, string> = {
+      'User-Agent':
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+      Referer: 'https://www.youtube.com/',
+      'Accept-Encoding': 'identity',
+    };
+    const range = req.headers.range;
+    if (range) reqHeaders['Range'] = String(range);
+
+    const upstream = await openProxyHttpStream(
+      resolved.url,
+      resolved.proxyUrlStr,
+      req.method,
+      reqHeaders,
+      null,
+      30000,
+      5
+    );
+
+    if ((upstream.status === 403 || upstream.status === 410) && !forceRefresh) {
+      upstream.stream.resume();
+      upstream.cleanup();
+      return false;
+    }
+
+    res.status(upstream.status);
+    res.setHeader('Content-Type', String(upstream.headers['content-type'] || resolved.contentType || 'video/mp4'));
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'no-store');
+    if (upstream.headers['content-length']) {
+      res.setHeader('Content-Length', String(upstream.headers['content-length']));
+    }
+    if (upstream.headers['content-range']) {
+      res.setHeader('Content-Range', String(upstream.headers['content-range']));
+    }
+
+    if (req.method === 'HEAD') {
+      upstream.stream.resume();
+      upstream.cleanup();
+      res.end();
+      return true;
+    }
+
+    res.on('close', () => {
+      upstream.cleanup();
+    });
+    upstream.stream.on('error', () => {
+      upstream.cleanup();
+      if (!res.headersSent) res.status(502).end();
+      else res.end();
+    });
+    upstream.stream.pipe(res);
+    return true;
+  };
+
+  try {
+    let ok = await pipeAttempt(false);
+    if (!ok) {
+      ok = await pipeAttempt(true);
+    }
+    if (!ok && !res.headersSent) {
+      return res.status(502).json({ error: 'Unable to resolve playable video stream' });
+    }
+  } catch (err: any) {
+    if (!res.headersSent) {
+      return res.status(502).json({ error: String(err?.message || 'YouTube stream failed') });
+    }
+    res.end();
+  }
+});
+
+
 
 // Ensure uploads directory exists for persistent local file hosting
 const uploadsDir = path.resolve(__dirname, 'uploads');

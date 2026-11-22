@@ -179,14 +179,11 @@ async function waitForControllerAndRoute(event) {
     return routeScramjetEvent(event);
   }
 
-  return new _NativeResponse(
-    '<!doctype html><html><body style="font-family:system-ui,sans-serif;background:#0f172a;color:#e2e8f0;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:24px;"><div style="max-width:440px;background:#1e293b;border:1px solid #334155;border-radius:16px;padding:24px;text-align:center;"><h2 style="margin:0 0 8px;font-size:17px;">Reconnecting Scramjet Proxy...</h2><p style="margin:0 0 16px;font-size:13px;color:#94a3b8;">The proxy service worker restarted. Reloading session...</p><script>setTimeout(function(){location.reload();},600);</script></div></body></html>',
-    {
-      status: 503,
-      statusText: 'Service Unavailable',
-      headers: [['content-type', 'text/html; charset=utf-8']],
-    }
-  );
+  try {
+    return fetch(event.request);
+  } catch {
+    return new _NativeResponse('Service Unavailable', { status: 503 });
+  }
 }
 
 self.addEventListener('fetch', (event) => {
@@ -220,6 +217,33 @@ self.addEventListener('fetch', (event) => {
       })
     );
     return;
+  }
+
+  // Bypass Scramjet WASM/Wisp routing for local YouTube stream proxy requests (even when rewritten inside /~/sj/)
+  if (reqUrl.origin === self.location.origin && reqUrl.href.includes('__frost_yt_stream__')) {
+    let vid = reqUrl.searchParams.get('v') || '';
+    if (!vid) {
+      try {
+        const decodedHref = decodeURIComponent(reqUrl.href);
+        const m = decodedHref.match(/[?&]v=([a-zA-Z0-9_-]{6,20})/);
+        if (m) vid = m[1];
+      } catch {}
+    }
+    if (vid && /^[a-zA-Z0-9_-]{6,20}$/.test(vid)) {
+      const forwardHeaders = new Headers();
+      const rangeHeader = event.request.headers.get('range');
+      if (rangeHeader) {
+        forwardHeaders.set('range', rangeHeader);
+      }
+      event.respondWith(
+        fetch('/api/yt-stream?v=' + encodeURIComponent(vid), {
+          method: event.request.method === 'HEAD' ? 'HEAD' : 'GET',
+          headers: forwardHeaders,
+          cache: 'no-store',
+        })
+      );
+      return;
+    }
   }
 
   if (typeof $scramjetController !== 'undefined' && $scramjetController.shouldRoute(event)) {

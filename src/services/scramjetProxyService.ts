@@ -173,15 +173,15 @@ function getWispCandidates(): string[] {
     if (!isStaticHostingHost()) {
       const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       pushWisp(`${wsProto}//${window.location.host}/wisp/`, false);
+    } else {
+      // 3. Verified live public Wisp servers (strictly fallback for static hosting without Node backend)
+      pushWisp('wss://anura.pro/', false);
+      pushWisp('wss://anura.pro/wisp/', false);
+      pushWisp('wss://wisp.mercurywork.shop/', false);
+      pushWisp('wss://wisp.mercurywork.shop/wisp/', false);
+      pushWisp('wss://gointospace.app/wisp/', false);
+      pushWisp('wss://wisp.terbiumon.top/wisp/', false);
     }
-
-    // 3. Verified live public Wisp servers (<120ms latency, confirmed Wisp greeting packet)
-    pushWisp('wss://anura.pro/', false);
-    pushWisp('wss://anura.pro/wisp/', false);
-    pushWisp('wss://wisp.mercurywork.shop/', false);
-    pushWisp('wss://wisp.mercurywork.shop/wisp/', false);
-    pushWisp('wss://gointospace.app/wisp/', false);
-    pushWisp('wss://wisp.terbiumon.top/wisp/', false);
 
     // 4. Configured backend origins
     const backendOrigins = resolveBackendOrigins().filter(Boolean);
@@ -1043,6 +1043,26 @@ function sanitizeTransportHeaders(
     }
   }
 
+  // Force US-English language preference unconditionally so any website renders in English, not Japanese or Chinese
+  map.set('accept-language', 'en-US,en;q=0.9');
+
+  // Force clean desktop Chrome UA and client hints to prevent Google / Cloudflare bot detection (unusual traffic captcha)
+  const defaultChromeUa = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+  const existingUa = map.get('user-agent') || '';
+  if (!existingUa || existingUa.includes('Headless') || existingUa.includes('Bot') || existingUa.includes('Scramjet')) {
+    map.set('user-agent', defaultChromeUa);
+  }
+
+  if (!map.has('sec-ch-ua')) {
+    map.set('sec-ch-ua', '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"');
+  }
+  if (!map.has('sec-ch-ua-mobile')) {
+    map.set('sec-ch-ua-mobile', '?0');
+  }
+  if (!map.has('sec-ch-ua-platform')) {
+    map.set('sec-ch-ua-platform', '"Windows"');
+  }
+
   // Preserve real browser fingerprint hints if Scramjet omitted them
   if (typeof navigator !== 'undefined') {
     if (!map.has('user-agent') && navigator.userAgent) {
@@ -1688,16 +1708,52 @@ async function maybeBypassYoutubeBotBlock(
   return { ...res, body: bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) };
 }
 
+function normalizeGoogleRemoteUrl(remoteUrl: URL): URL {
+  try {
+    const host = remoteUrl.hostname.toLowerCase();
+    // Normalize regional Google Search domains (google.com.hk, google.co.jp, google.cn, etc.) to US English www.google.com
+    if (
+      /^(www\.)?google\.(com\.[a-z]{2}|co\.[a-z]{2}|[a-z]{2,3})$/.test(host) &&
+      host !== 'google.com' &&
+      host !== 'www.google.com'
+    ) {
+      remoteUrl.hostname = 'www.google.com';
+    }
+    const normHost = remoteUrl.hostname.toLowerCase();
+    if (normHost === 'www.google.com' || normHost === 'google.com') {
+      remoteUrl.searchParams.set('hl', 'en');
+      remoteUrl.searchParams.set('gl', 'us');
+    } else if (normHost === 'www.bing.com' || normHost === 'bing.com') {
+      if (remoteUrl.pathname === '/search' || remoteUrl.pathname === '/') {
+        remoteUrl.searchParams.set('setlang', 'en-US');
+        remoteUrl.searchParams.set('cc', 'US');
+      }
+    } else if (normHost.includes('duckduckgo.com')) {
+      if (remoteUrl.pathname === '/' || remoteUrl.pathname.startsWith('/html')) {
+        remoteUrl.searchParams.set('kl', 'us-en');
+      }
+    } else if (normHost === 'www.youtube.com' || normHost === 'm.youtube.com') {
+      if (
+        remoteUrl.pathname === '/' ||
+        remoteUrl.pathname === '/watch' ||
+        remoteUrl.pathname === '/results' ||
+        remoteUrl.pathname.startsWith('/shorts/')
+      ) {
+        remoteUrl.searchParams.set('hl', 'en');
+        remoteUrl.searchParams.set('gl', 'US');
+      }
+    }
+  } catch {}
+  return remoteUrl;
+}
+
+
+
 async function probeWispCandidatesParallel(candidates: string[], timeoutMs = 2000): Promise<string[]> {
   if (candidates.length === 0) return [];
-  const results: string[] = [];
-  await Promise.all(
-    candidates.map(async (c) => {
-      const ok = await probeWispEndpoint(c, timeoutMs);
-      if (ok) results.push(c);
-    })
-  );
-  return results;
+  // Probe in parallel but preserve strict priority order of `candidates` so local US /wisp/ always beats foreign public servers
+  const okFlags = await Promise.all(candidates.map((c) => probeWispEndpoint(c, timeoutMs)));
+  return candidates.filter((_, idx) => okFlags[idx]);
 }
 
 function cleanDecompressedHeaders(headers: RawHeaderPair[] | undefined): RawHeaderPair[] {
@@ -1812,8 +1868,9 @@ async function createWispTransport(): Promise<ProxyTransport> {
       this.ready = true;
     },
     async request(remote, method, body, headers, signal) {
+      const targetRemote = normalizeGoogleRemoteUrl(new URL(remote.href));
       // 0. Neutralize ad, tracking, and telemetry networks immediately without network overhead
-      if (isAdOrTrackingUrl(remote.href)) {
+      if (isAdOrTrackingUrl(targetRemote.href)) {
         return {
           body: null,
           status: 204,
@@ -1822,9 +1879,21 @@ async function createWispTransport(): Promise<ProxyTransport> {
         };
       }
 
-      const cleanHeaders = sanitizeTransportHeaders(headers as any, method, remote.origin);
+      const cleanHeaders = sanitizeTransportHeaders(headers as any, method, targetRemote.origin);
       const safeBody = await normalizeRequestBody(method, body);
-      const isYoutube = isYoutubeMediaHost(remote.hostname);
+      const targetHost = targetRemote.hostname.toLowerCase();
+      const targetPath = targetRemote.pathname.toLowerCase();
+      const isYoutube = isYoutubeMediaHost(targetHost);
+      const isGoogle =
+        targetHost === 'google.com' ||
+        targetHost.endsWith('.google.com') ||
+        /^(www\.)?google\.(com|co\.[a-z]{2}|com\.[a-z]{2}|[a-z]{2,3})$/.test(targetHost);
+      const isYoutubeWatchOrPlayer =
+        (targetHost === 'youtube.com' || targetHost.endsWith('.youtube.com')) &&
+        (targetPath === '/watch' ||
+          targetPath.startsWith('/shorts') ||
+          targetPath.startsWith('/youtubei/v1/player') ||
+          targetPath.startsWith('/youtubei/v1/reel'));
       const isDocument = cleanHeaders.some(
         ([k, v]) =>
           (k.toLowerCase() === 'sec-fetch-dest' && v.toLowerCase() === 'document') ||
@@ -1834,7 +1903,7 @@ async function createWispTransport(): Promise<ProxyTransport> {
       // Inject stored cookies into outgoing request if not already present or partial
       if (cachedController?.cookieJar) {
         try {
-          const jarCookies = cachedController.cookieJar.getCookies(remote, false, 'lax');
+          const jarCookies = cachedController.cookieJar.getCookies(targetRemote, false, 'strict');
           if (jarCookies) {
             const idx = cleanHeaders.findIndex(([k]) => k.toLowerCase() === 'cookie');
             if (idx === -1) {
@@ -1862,7 +1931,7 @@ async function createWispTransport(): Promise<ProxyTransport> {
         for (const [k, v] of resp.headers) {
           if (k.toLowerCase() === 'set-cookie' && v) {
             try {
-              cachedController.cookieJar.setCookies(v, remote);
+              cachedController.cookieJar.setCookies(v, targetRemote);
               hasSetCookie = true;
             } catch {}
           }
@@ -1873,17 +1942,32 @@ async function createWispTransport(): Promise<ProxyTransport> {
       };
 
       const formatResponse = async (rawRes: any) => {
-        const out = ensureNullBodyConsistency(rawRes);
+        let out = ensureNullBodyConsistency(rawRes);
         out.headers = cleanDecompressedHeaders(out.headers);
-        out.body = await normalizeQuirkyHtml(remote, out.body);
+        out.body = await normalizeQuirkyHtml(targetRemote, out.body);
         captureResponseCookies(out);
-        return isYoutube ? await maybeBypassYoutubeBotBlock(remote, safeBody, out) : out;
+        return isYoutube ? await maybeBypassYoutubeBotBlock(targetRemote, safeBody, out) : out;
       };
+
+      const hasBackendOrigin = resolveBackendOrigins().length > 0;
+      const shouldPreferServerProxy =
+        hasBackendOrigin &&
+        (isGoogle ||
+          isYoutubeWatchOrPlayer ||
+          (isYoutube && Date.now() < ytServerMediaAffinityUntil));
+
+      // Route all Google domains, YouTube watch/shorts/player/affinity chunks directly through sticky US server proxy
+      if (shouldPreferServerProxy) {
+        try {
+          const res = await serverFallbackFetch(targetRemote, method, safeBody, cleanHeaders, signal);
+          return await formatResponse(res);
+        } catch {}
+      }
 
       // 1. Try EpoxyTransport across available Wisp servers (primary high-concurrency engine)
       const wispsToTry = workingWispUrls.length > 0 ? workingWispUrls : getWispCandidates();
       let lastTransportError: any = null;
-      const preferLibcurl = isKnownHttp2Incompatible(remote.hostname) || isLibcurlPreferredHost(remote.hostname);
+      const preferLibcurl = isKnownHttp2Incompatible(targetHost) || isLibcurlPreferredHost(targetHost);
       const epoxyAttempts = preferLibcurl ? 0 : Math.min(wispsToTry.length, 3);
 
       for (let i = 0; i < epoxyAttempts; i++) {
@@ -1893,7 +1977,7 @@ async function createWispTransport(): Promise<ProxyTransport> {
           const client = await getEpoxy(wispUrl);
           const rawRes = await withPromiseTimeout<any>(
             client.request(
-              remote,
+              targetRemote,
               method,
               safeBody === null ? undefined : safeBody,
               cleanHeaders,
@@ -1913,8 +1997,8 @@ async function createWispTransport(): Promise<ProxyTransport> {
             errMsg.includes('protocol_error') ||
             errMsg.includes('sendrequest')
           ) {
-            KNOWN_HTTP2_INCOMPATIBLE_HOSTS.add(remote.hostname.toLowerCase());
-            LIBCURL_PREFERRED_HOSTS.add(remote.hostname.toLowerCase());
+            KNOWN_HTTP2_INCOMPATIBLE_HOSTS.add(targetHost);
+            LIBCURL_PREFERRED_HOSTS.add(targetHost);
             break;
           }
           if (isDocument) {
@@ -1931,7 +2015,7 @@ async function createWispTransport(): Promise<ProxyTransport> {
           const client = await getLibcurl(wispUrl);
           const rawRes = await withPromiseTimeout<any>(
             client.request(
-              remote,
+              targetRemote,
               method,
               safeBody === null ? undefined : safeBody,
               cleanHeaders,
@@ -1951,9 +2035,9 @@ async function createWispTransport(): Promise<ProxyTransport> {
       }
 
       // 3. Fall back to server /api/scramjet-fetch when backend origin is present
-      if (resolveBackendOrigins().length > 0) {
+      if (hasBackendOrigin) {
         try {
-          const res = await serverFallbackFetch(remote, method, safeBody, cleanHeaders, signal);
+          const res = await serverFallbackFetch(targetRemote, method, safeBody, cleanHeaders, signal);
           return await formatResponse(res);
         } catch (err) {
           lastTransportError = err;
@@ -2332,6 +2416,10 @@ export async function launchInScramjetFrame(
                 get: () => false,
                 configurable: true,
               });
+              Object.defineProperty(nav, 'language', {
+                get: () => 'en-US',
+                configurable: true,
+              });
               Object.defineProperty(nav, 'languages', {
                 get: () => ['en-US', 'en'],
                 configurable: true,
@@ -2477,70 +2565,243 @@ export async function launchInScramjetFrame(
               }, { once: true });
 
               let lastPatchedVideoId = '';
+              let currentObservedVid = '';
+              let videoObservedAt = 0;
               let checkTimer: number | null = null;
+              let pollTimer: number | null = null;
+
+              const hideErrorOverlays = (doc: Document) => {
+                const errorSelectors = [
+                  '.ytp-playability-error-supported-renderers',
+                  '.ytp-error',
+                  'yt-playability-error-supported-renderers',
+                  'ytd-playability-error-supported-renderers',
+                  '#error-screen',
+                  '.error-message',
+                  'ytd-reel-player-overlay-renderer #error-screen',
+                  '.playability-error',
+                  '[id*="error-screen"]',
+                ];
+                try {
+                  doc.querySelectorAll(errorSelectors.join(', ')).forEach((el: any) => {
+                    try {
+                      el.style.setProperty('display', 'none', 'important');
+                      el.style.setProperty('opacity', '0', 'important');
+                      el.style.setProperty('pointer-events', 'none', 'important');
+                    } catch {}
+                  });
+                } catch {}
+              };
+
+              const mountNativeYoutubeFallback = (doc: Document, playerSlot: Element, vid: string) => {
+                lastPatchedVideoId = vid;
+                hideErrorOverlays(doc);
+
+                // Pause and mute underlying native videos so streams do not conflict
+                try {
+                  const innerVideos = playerSlot.querySelectorAll('video');
+                  innerVideos.forEach((vEl: any) => {
+                    try {
+                      if (vEl.id !== '__frost_yt_player') {
+                        vEl.muted = true;
+                        vEl.pause?.();
+                      }
+                    } catch {}
+                  });
+                } catch {}
+
+                const streamUrl = `/__frost_yt_stream__?v=${encodeURIComponent(vid)}`;
+
+                const existingVideo = doc.getElementById('__frost_yt_player') as HTMLVideoElement | null;
+                if (existingVideo) {
+                  if (existingVideo.dataset.vid !== vid) {
+                    existingVideo.dataset.vid = vid;
+                    existingVideo.src = streamUrl;
+                    existingVideo.play?.().catch(() => {});
+                  }
+                  if (!playerSlot.contains(existingVideo)) {
+                    playerSlot.appendChild(existingVideo);
+                  }
+                  return;
+                }
+
+                const videoEl = doc.createElement('video');
+                videoEl.id = '__frost_yt_player';
+                videoEl.dataset.vid = vid;
+                videoEl.src = streamUrl;
+                videoEl.controls = true;
+                videoEl.autoplay = true;
+                videoEl.playsInline = true;
+                videoEl.preload = 'auto';
+                videoEl.style.cssText =
+                  'position:absolute;inset:0;width:100%;height:100%;border:0;z-index:2147483640;background:#000;object-fit:contain;';
+
+                videoEl.onerror = () => {
+                  try {
+                    let embedIframe = doc.getElementById('__frost_yt_embed') as HTMLIFrameElement | null;
+                    if (!embedIframe && videoEl.parentElement) {
+                      embedIframe = doc.createElement('iframe');
+                      embedIframe.id = '__frost_yt_embed';
+                      embedIframe.allow =
+                        'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+                      embedIframe.allowFullscreen = true;
+                      embedIframe.style.cssText =
+                        'position:absolute;inset:0;width:100%;height:100%;border:0;z-index:2147483641;background:#000;';
+                      videoEl.parentElement.appendChild(embedIframe);
+                    }
+                    if (embedIframe) {
+                      embedIframe.src = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(vid)}?autoplay=1&playsinline=1`;
+                    }
+                    videoEl.remove();
+                  } catch {}
+                };
+
+                if (win.getComputedStyle(playerSlot).position === 'static') {
+                  (playerSlot as HTMLElement).style.position = 'relative';
+                }
+                playerSlot.appendChild(videoEl);
+                videoEl.play?.().catch(() => {});
+              };
+
+              // Intercept window.location signin redirect attempts so YouTube cannot throw user to accounts.google.com
+              try {
+                const origAssign = win.location.assign?.bind(win.location);
+                const origReplace = win.location.replace?.bind(win.location);
+                const isSignInUrl = (target: any) => {
+                  const s = String(target || '').toLowerCase();
+                  return (
+                    s.includes('accounts.google.com') ||
+                    s.includes('/servicelogin') ||
+                    s.includes('action_handle_signin') ||
+                    s.includes('/signin_passive')
+                  );
+                };
+                if (origAssign) {
+                  win.location.assign = (url: string) => {
+                    if (isSignInUrl(url)) return;
+                    return origAssign(url);
+                  };
+                }
+                if (origReplace) {
+                  win.location.replace = (url: string) => {
+                    if (isSignInUrl(url)) return;
+                    return origReplace(url);
+                  };
+                }
+              } catch {}
+
               const checkBotGateOverlay = () => {
                 try {
                   const doc = win.document;
-                  const existingEmbed = doc?.getElementById('__frost_yt_nocookie_embed') as HTMLIFrameElement | null;
-                  const realHref = resolveRealTargetUrl(win.location?.href || '', client?.url?.href) || client?.url?.href || '';
-                  if (!realHref) {
-                    existingEmbed?.remove();
-                    return;
-                  }
+                  if (!doc) return;
+                  const realHref =
+                    resolveRealTargetUrl(win.location?.href || '', client?.url?.href) ||
+                    client?.url?.href ||
+                    '';
+                  if (!realHref) return;
+
                   const parsedUrl = new URL(realHref);
-                  const vid =
+                  let vid =
                     parsedUrl.searchParams.get('v') ||
                     (parsedUrl.pathname.startsWith('/shorts/') ? parsedUrl.pathname.split('/')[2] : '') ||
                     '';
+
+                  const activeReel =
+                    doc.querySelector('ytd-reel-video-renderer[is-active]') ||
+                    doc.querySelector('ytd-reel-video-renderer');
+
+                  if (!vid && activeReel) {
+                    const reelLink = activeReel.querySelector(
+                      'a[href*="/shorts/"], a[href*="/watch?v="]'
+                    ) as HTMLAnchorElement | null;
+                    if (reelLink) {
+                      const m = (reelLink.getAttribute('href') || '').match(
+                        /\/(shorts|watch\?v=)(?:\/|\?v=)?([a-zA-Z0-9_-]{6,20})/
+                      );
+                      if (m && m[2]) vid = m[2];
+                    }
+                    if (!vid) {
+                      const attrVid = activeReel.getAttribute('video-id') || (activeReel as any).dataset?.videoId;
+                      if (attrVid && /^[a-zA-Z0-9_-]{6,20}$/.test(attrVid)) vid = attrVid;
+                    }
+                  }
+
                   if (!vid || !/^[a-zA-Z0-9_-]{6,20}$/.test(vid)) {
                     lastPatchedVideoId = '';
-                    existingEmbed?.remove();
+                    currentObservedVid = '';
+                    doc.getElementById('__frost_yt_player')?.remove();
+                    doc.getElementById('__frost_yt_embed')?.remove();
                     return;
                   }
+
+                  if (currentObservedVid !== vid) {
+                    currentObservedVid = vid;
+                    videoObservedAt = Date.now();
+                  }
+
                   if (lastPatchedVideoId && lastPatchedVideoId !== vid) {
                     lastPatchedVideoId = '';
-                    existingEmbed?.remove();
+                    doc.getElementById('__frost_yt_player')?.remove();
+                    doc.getElementById('__frost_yt_embed')?.remove();
                   }
 
-                  const playerSlot =
-                    doc?.querySelector('#player-container-inner') ||
-                    doc?.querySelector('#movie_player') ||
-                    doc?.querySelector('#player');
+                  let playerSlot: Element | null = null;
+                  if (parsedUrl.pathname.startsWith('/shorts') && activeReel) {
+                    playerSlot =
+                      activeReel.querySelector('.player-container') ||
+                      activeReel.querySelector('#player-container') ||
+                      activeReel.querySelector('#shorts-player') ||
+                      activeReel;
+                  }
+                  if (!playerSlot) {
+                    playerSlot =
+                      doc.querySelector('#player-container-inner') ||
+                      doc.querySelector('#movie_player') ||
+                      doc.querySelector('#shorts-player') ||
+                      doc.querySelector('#player-container') ||
+                      doc.querySelector('ytd-player') ||
+                      doc.querySelector('#player');
+                  }
                   if (!playerSlot) return;
 
-                  const slotText = (playerSlot.textContent || '').toLowerCase();
-                  const hasBotPrompt =
-                    slotText.includes('confirm you’re not a bot') ||
-                    slotText.includes("confirm you're not a bot") ||
-                    slotText.includes('sign in to confirm');
-                  if (!hasBotPrompt) return;
-                  if (lastPatchedVideoId === vid && existingEmbed) return;
-
-                  lastPatchedVideoId = vid;
-                  const embedSrc = `https://www.youtube-nocookie.com/embed/${encodeURIComponent(vid)}?autoplay=1&rel=0`;
-                  const rewritten = (window.$scramjet as any)?.rewriteUrl
-                    ? (window.$scramjet as any).rewriteUrl(embedSrc, client.context, {
-                        origin: new URL(location.href),
-                        base: new URL(location.href),
-                      })
-                    : embedSrc;
-
-                  if (existingEmbed) {
-                    existingEmbed.src = rewritten;
+                  const existingPlayer = doc.getElementById('__frost_yt_player');
+                  if (lastPatchedVideoId === vid && existingPlayer && playerSlot.contains(existingPlayer)) {
+                    hideErrorOverlays(doc);
                     return;
                   }
 
-                  const embedFrame = doc.createElement('iframe');
-                  embedFrame.id = '__frost_yt_nocookie_embed';
-                  embedFrame.src = rewritten;
-                  embedFrame.allow = 'autoplay; encrypted-media; fullscreen; picture-in-picture';
-                  embedFrame.allowFullscreen = true;
-                  embedFrame.style.cssText =
-                    'position:absolute;inset:0;width:100%;height:100%;border:0;z-index:9999;background:#000;';
-                  if (win.getComputedStyle(playerSlot).position === 'static') {
-                    (playerSlot as HTMLElement).style.position = 'relative';
+                  const slotText = (playerSlot.textContent || doc.body?.textContent || '').toLowerCase();
+                  const hasPlayabilityError =
+                    slotText.includes('confirm you’re not a bot') ||
+                    slotText.includes("confirm you're not a bot") ||
+                    slotText.includes('sign in to confirm') ||
+                    slotText.includes('an error occurred') ||
+                    slotText.includes('video unavailable') ||
+                    slotText.includes('something went wrong') ||
+                    slotText.includes('playback id');
+
+                  const nativeVideo = playerSlot.querySelector(
+                    'video:not(#__frost_yt_player)'
+                  ) as HTMLVideoElement | null;
+                  const nativeHasError = Boolean(
+                    nativeVideo && (nativeVideo.error || nativeVideo.networkState === 3)
+                  );
+                  const nativePlayingOk = Boolean(
+                    nativeVideo &&
+                      nativeVideo.readyState >= 2 &&
+                      nativeVideo.videoWidth > 0 &&
+                      !nativeVideo.error
+                  );
+                  const stalledTooLong =
+                    !nativePlayingOk &&
+                    videoObservedAt > 0 &&
+                    Date.now() - videoObservedAt > 3000;
+
+                  if (!hasPlayabilityError && !nativeHasError && !stalledTooLong) {
+                    return;
                   }
-                  playerSlot.appendChild(embedFrame);
+
+                  mountNativeYoutubeFallback(doc, playerSlot, vid);
                 } catch {}
               };
 
@@ -2549,6 +2810,10 @@ export async function launchInScramjetFrame(
                 if (checkTimer !== null) {
                   window.clearTimeout(checkTimer);
                   checkTimer = null;
+                }
+                if (pollTimer !== null) {
+                  window.clearInterval(pollTimer);
+                  pollTimer = null;
                 }
                 if (obs) {
                   try {
@@ -2562,10 +2827,21 @@ export async function launchInScramjetFrame(
                   if (!win.document?.body) return;
                   obs = new win.MutationObserver(() => {
                     if (checkTimer !== null) window.clearTimeout(checkTimer);
-                    checkTimer = window.setTimeout(checkBotGateOverlay, 450);
+                    checkTimer = window.setTimeout(checkBotGateOverlay, 250);
                   });
                   obs?.observe(win.document.body, { childList: true, subtree: true });
+                  win.addEventListener?.('yt-navigate-finish', () => {
+                    window.setTimeout(checkBotGateOverlay, 250);
+                  });
+                  win.addEventListener?.('yt-action', () => {
+                    window.setTimeout(checkBotGateOverlay, 250);
+                  });
+                  win.addEventListener?.('transitionend', () => {
+                    window.setTimeout(checkBotGateOverlay, 250);
+                  });
+                  pollTimer = window.setInterval(checkBotGateOverlay, 1000);
                 } catch {}
+              };
               };
               win.addEventListener?.('pagehide', cleanupObserver, { once: true });
               win.addEventListener?.('unload', cleanupObserver, { once: true });
