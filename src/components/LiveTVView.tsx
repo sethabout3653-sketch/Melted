@@ -627,12 +627,16 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
         ? randomizedChannels
         : channelsByCategory.get(selectedCategory) || randomizedChannels;
 
-    return searchChannels(pool, q, {
+    const scopedResults = searchChannels(pool, q, {
       boostPredicate: (channel) =>
         selectedCategory !== 'All' &&
         selectedCategory !== 'Favorites' &&
         getDisplayCategory(channel) === selectedCategory,
     });
+    if (scopedResults.length > 0 || pool === randomizedChannels) {
+      return scopedResults;
+    }
+    return searchChannels(randomizedChannels, q);
   }, [deferredSearchQuery, selectedCategory, favoriteSet, channelsByCategory, randomizedChannels]);
 
   useEffect(() => {

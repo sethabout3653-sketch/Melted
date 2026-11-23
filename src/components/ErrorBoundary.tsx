@@ -23,7 +23,8 @@ export class ErrorBoundary extends Component<Props, State> {
       msg.includes('GoAway') ||
       msg.includes('Http2') ||
       msg.includes('epoxy-transport') ||
-      msg.includes('wbindgen')
+      msg.includes('wbindgen') ||
+      msg.includes('sendrequest')
     ) {
       return { hasError: false };
     }
@@ -31,6 +32,17 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    const msg = String(error?.message || error || '');
+    if (
+      msg.includes('Hyper client') ||
+      msg.includes('GoAway') ||
+      msg.includes('Http2') ||
+      msg.includes('epoxy-transport') ||
+      msg.includes('wbindgen') ||
+      msg.includes('sendrequest')
+    ) {
+      return;
+    }
     console.error('[FrostHub render error]', error, errorInfo);
     this.props.onError?.(error);
   }

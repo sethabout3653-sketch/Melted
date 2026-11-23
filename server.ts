@@ -11,6 +11,7 @@ import { promisify } from 'util';
 import { Readable } from 'stream';
 import { initWebSocketDatabase, globalWsDb, broadcastTable, broadcastWss, sendToUserSockets } from './src/server/wsDatabase';
 import { server as wispServer } from '@mercuryworkshop/wisp-js/server';
+import { createSplitRoutingWispTCPSocket, dialSocks5Tunnel } from './src/server/wispSocks5Socket';
 import { Ytdl, Client as YtdlClient } from '@distube/ytdl-core';
 import { processGameHtml, getScaffoldingBuffer } from './src/server/scaffoldingLoader';
 import { FALLBACK_OPENROUTER_MODELS, OPENROUTER_CHAT_URL, OPENROUTER_MODEL } from './src/utils/openRouterEdgeHelper';
@@ -113,6 +114,7 @@ interface ResolvedYoutubeStream {
 const ytStreamCache = new Map<string, ResolvedYoutubeStream>();
 const ytStreamPending = new Map<string, Promise<ResolvedYoutubeStream | null>>();
 const YT_STICKY_PROXY_SLOTS: Array<string | null> = [
+  'socks5h://vncwbxva:d65j8vqe2th9@45.38.107.97:6014',
   'http://vncwbxva-3:d65j8vqe2th9@p.webshare.io:80/',
   'http://vncwbxva-4:d65j8vqe2th9@p.webshare.io:80/',
   'http://vncwbxva-6:d65j8vqe2th9@p.webshare.io:80/',
@@ -195,6 +197,65 @@ function openProxyHttpStream(
       } catch {
         return reject(new Error('Invalid proxy URL'));
       }
+      if (proxyUrl.protocol === 'socks5:' || proxyUrl.protocol === 'socks5h:') {
+        dialSocks5Tunnel(proxyUrl, currentUrl.hostname, targetPort, 8000)
+          .then((tunnelSocket) => {
+            if (isHttps) {
+              const tlsSocket = tls.connect({
+                socket: tunnelSocket,
+                servername: currentUrl.hostname,
+                rejectUnauthorized: false,
+              });
+              tlsSocket.on('error', () => {
+                try { tlsSocket.destroy(); } catch {}
+              });
+              const upReq = https.request(
+                {
+                  protocol: currentUrl.protocol,
+                  hostname: currentUrl.hostname,
+                  port: targetPort,
+                  path: currentUrl.pathname + currentUrl.search,
+                  method,
+                  headers: headersObj,
+                  maxHeaderSize: 131072,
+                  createConnection: () => tlsSocket,
+                } as any,
+                (upRes) => handleUpstreamResponse(upRes, upReq, () => {
+                  try { upReq.destroy(); } catch {}
+                  try { tlsSocket.destroy(); } catch {}
+                })
+              );
+              upReq.setTimeout(timeoutMs, () => upReq.destroy(new Error('SOCKS5H stream timeout')));
+              upReq.on('error', reject);
+              if (bodyBuf && bodyBuf.length > 0) upReq.write(bodyBuf);
+              upReq.end();
+            } else {
+              const upReq = http.request(
+                {
+                  protocol: currentUrl.protocol,
+                  hostname: currentUrl.hostname,
+                  port: targetPort,
+                  path: currentUrl.pathname + currentUrl.search,
+                  method,
+                  headers: headersObj,
+                  maxHeaderSize: 131072,
+                  createConnection: () => tunnelSocket,
+                } as any,
+                (upRes) => handleUpstreamResponse(upRes, upReq, () => {
+                  try { upReq.destroy(); } catch {}
+                  try { tunnelSocket.destroy(); } catch {}
+                })
+              );
+              upReq.setTimeout(timeoutMs, () => upReq.destroy(new Error('SOCKS5H HTTP stream timeout')));
+              upReq.on('error', reject);
+              if (bodyBuf && bodyBuf.length > 0) upReq.write(bodyBuf);
+              upReq.end();
+            }
+          })
+          .catch(reject);
+        return;
+      }
+
       const proxyIsHttps = proxyUrl.protocol === 'https:';
       const proxyLib = proxyIsHttps ? https : http;
       const proxyAuth =
@@ -630,19 +691,25 @@ const stickyHttpsAgent = new https.Agent({
 
 function getProxyPoolList(): string[] {
   const defaultStickyPool = [
-    'http://vncwbxva-3:d65j8vqe2th9@p.webshare.io:80/',
-    'http://vncwbxva-4:d65j8vqe2th9@p.webshare.io:80/',
-    'http://vncwbxva-6:d65j8vqe2th9@p.webshare.io:80/',
+    'socks5h://vncwbxva:d65j8vqe2th9@45.38.107.97:6014',
     'http://vncwbxva-1:d65j8vqe2th9@p.webshare.io:80/',
+    'http://vncwbxva-4:d65j8vqe2th9@p.webshare.io:80/',
     'http://vncwbxva-7:d65j8vqe2th9@p.webshare.io:80/',
-    'http://vncwbxva-9:d65j8vqe2th9@p.webshare.io:80/',
+    'http://vncwbxva-2:d65j8vqe2th9@p.webshare.io:80/',
+    'http://vncwbxva-5:d65j8vqe2th9@p.webshare.io:80/',
+    'http://vncwbxva-10:d65j8vqe2th9@p.webshare.io:80/',
   ];
-  const envRaw = [process.env.RESIDENTIAL_PROXY_URL || '', process.env.PROXY_POOL_URLS || '']
+  const envRaw = [process.env.SOCKS5_URL || '', process.env.RESIDENTIAL_PROXY_URL || '', process.env.PROXY_POOL_URLS || '']
     .join(',')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  return envRaw.length > 0 ? envRaw : defaultStickyPool;
+  if (envRaw.length === 0) return defaultStickyPool;
+  const combined = [...envRaw];
+  for (const fb of defaultStickyPool.slice(1)) {
+    if (!combined.includes(fb)) combined.push(fb);
+  }
+  return combined;
 }
 
 function hashSessionIndex(sessionId: string, mod: number): number {
@@ -654,10 +721,18 @@ function hashSessionIndex(sessionId: string, mod: number): number {
   return Math.abs(h) % mod;
 }
 
-function resolveStickyProxyUrl(sessionId: string): URL | null {
+function resolveStickyProxyUrl(sessionId: string, slotOffset = 0): URL | null {
   const pool = getProxyPoolList();
   if (pool.length === 0) return null;
-  const idx = hashSessionIndex(sessionId || 'default', pool.length);
+  let idx = 0;
+  if (pool.length === 1) {
+    idx = 0;
+  } else if (slotOffset === 0) {
+    // Slot 0 uses the primary user-configured Webshare SOCKS5H proxy
+    idx = 0;
+  } else {
+    idx = 1 + ((hashSessionIndex(sessionId || 'default', pool.length - 1) + slotOffset - 1) % (pool.length - 1));
+  }
   const rawTemplate = pool[idx].replace(/\{session\}/gi, encodeURIComponent(sessionId || 'default'));
   try {
     return new URL(rawTemplate);
@@ -774,7 +849,8 @@ function performRawUpstreamRequest(
   headersObj: Record<string, string>,
   bodyBuf: Buffer | null,
   timeoutMs = 60000,
-  sessionId = 'default'
+  sessionId = 'default',
+  slotOffset = 0
 ): Promise<{
   status: number;
   statusText: string;
@@ -782,9 +858,106 @@ function performRawUpstreamRequest(
   body: Buffer;
 }> {
   const isHttps = targetUrl.protocol === 'https:';
-  const proxyUrl = resolveStickyProxyUrl(sessionId);
+  const proxyUrl = resolveStickyProxyUrl(sessionId, slotOffset);
 
-  if (!proxyUrl || (proxyUrl.protocol !== 'http:' && proxyUrl.protocol !== 'https:')) {
+  if (!proxyUrl) {
+    return performDirectUpstreamRequest(targetUrl, method, headersObj, bodyBuf, timeoutMs);
+  }
+
+  if (proxyUrl.protocol === 'socks5:' || proxyUrl.protocol === 'socks5h:') {
+    const targetPort = Number(targetUrl.port || (isHttps ? 443 : 80));
+    return new Promise((resolve, reject) => {
+      let settled = false;
+      const fallbackToDirect = () => {
+        if (settled) return;
+        settled = true;
+        performDirectUpstreamRequest(targetUrl, method, headersObj, bodyBuf, timeoutMs)
+          .then(resolve)
+          .catch(reject);
+      };
+
+      dialSocks5Tunnel(proxyUrl, targetUrl.hostname, targetPort, 8000)
+        .then((tunnelSocket) => {
+          if (isHttps) {
+            const tlsSocket = tls.connect({
+              socket: tunnelSocket,
+              servername: targetUrl.hostname,
+              rejectUnauthorized: false,
+            });
+            tlsSocket.on('error', () => {
+              try {
+                tlsSocket.destroy();
+              } catch {}
+              fallbackToDirect();
+            });
+            const upReq = https.request(
+              {
+                protocol: targetUrl.protocol,
+                hostname: targetUrl.hostname,
+                port: targetPort,
+                path: targetUrl.pathname + targetUrl.search,
+                method,
+                headers: headersObj,
+                maxHeaderSize: 131072,
+                createConnection: () => tlsSocket,
+              } as any,
+              (upRes) => {
+                if (settled) return;
+                settled = true;
+                readUpstreamResponseStream(upRes, upReq, resolve, reject, () => {
+                  try {
+                    tlsSocket.destroy();
+                  } catch {}
+                });
+              }
+            );
+            upReq.setTimeout(timeoutMs, () => {
+              upReq.destroy(new Error('Upstream SOCKS5H request timeout'));
+            });
+            upReq.on('error', (err) => {
+              if (settled) reject(err);
+              else fallbackToDirect();
+            });
+            if (bodyBuf && bodyBuf.length > 0) upReq.write(bodyBuf);
+            upReq.end();
+          } else {
+            const upReq = http.request(
+              {
+                protocol: targetUrl.protocol,
+                hostname: targetUrl.hostname,
+                port: targetPort,
+                path: targetUrl.pathname + targetUrl.search,
+                method,
+                headers: headersObj,
+                maxHeaderSize: 131072,
+                createConnection: () => tunnelSocket,
+              } as any,
+              (upRes) => {
+                if (settled) return;
+                settled = true;
+                readUpstreamResponseStream(upRes, upReq, resolve, reject, () => {
+                  try {
+                    tunnelSocket.destroy();
+                  } catch {}
+                });
+              }
+            );
+            upReq.setTimeout(timeoutMs, () => {
+              upReq.destroy(new Error('Upstream SOCKS5H HTTP timeout'));
+            });
+            upReq.on('error', (err) => {
+              if (settled) reject(err);
+              else fallbackToDirect();
+            });
+            if (bodyBuf && bodyBuf.length > 0) upReq.write(bodyBuf);
+            upReq.end();
+          }
+        })
+        .catch(() => fallbackToDirect());
+    });
+  }
+
+  if (proxyUrl.protocol !== 'http:' && proxyUrl.protocol !== 'https:') {
     return performDirectUpstreamRequest(targetUrl, method, headersObj, bodyBuf, timeoutMs);
   }
 
@@ -916,6 +1089,18 @@ function performRawUpstreamRequest(
 }
 
 const SERVER_AD_AND_TRACKING_HOST_SUBSTRINGS = [
+  'adserv.',
+  'exoclick',
+  'trafficjunky',
+  'juicyads',
+  'tsyndicate',
+  'realsrv',
+  'popads',
+  'popcash',
+  'propellerads',
+  'adsterra',
+  'erohub',
+  'hilltopads',
   'googleadservices',
   'googlesyndication',
   'doubleclick.net',
@@ -1016,6 +1201,21 @@ app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), as
       return res.status(403).json({ error: 'Private/loopback host blocked' });
     }
 
+    if (isServerAdOrTrackingHost(host)) {
+      const blockedMeta = Buffer.from(
+        JSON.stringify({
+          status: 204,
+          statusText: 'No Content',
+          headers: [['content-type', 'text/plain; charset=utf-8']],
+        }),
+        'utf8'
+      ).toString('base64');
+      res.setHeader('X-SJ-Meta', blockedMeta);
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(200).send(Buffer.alloc(0));
+    }
+
     let parsedHeaders: [string, string][] = [];
     if (rawHeadersB64) {
       try {
@@ -1060,14 +1260,64 @@ app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), as
     }
     // Preserve genuine client fingerprints (User-Agent & Sec-CH-UA* client hints) without conflicting overrides
     const incomingUa = String(req.headers['user-agent'] || '').trim();
-    const ua = forwardMap.get('user-agent') || '';
-    forwardMap.set('user-agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36');
-    forwardMap.set('sec-ch-ua', '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"');
-    forwardMap.set('sec-ch-ua-mobile', '?0');
-    forwardMap.set('sec-ch-ua-platform', '"Windows"');
+    const existingUa = forwardMap.get('user-agent') || '';
+    if (!existingUa || existingUa.includes('Headless') || existingUa.includes('Scramjet')) {
+      forwardMap.set(
+        'user-agent',
+        incomingUa ||
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+      );
+    }
+    const effectiveUaLower = (forwardMap.get('user-agent') || '').toLowerCase();
+    const inferredPlatform = effectiveUaLower.includes('macintosh') || effectiveUaLower.includes('mac os')
+      ? '"macOS"'
+      : effectiveUaLower.includes('cros')
+      ? '"Chrome OS"'
+      : effectiveUaLower.includes('android')
+      ? '"Android"'
+      : effectiveUaLower.includes('iphone') || effectiveUaLower.includes('ipad')
+      ? '"iOS"'
+      : effectiveUaLower.includes('linux')
+      ? '"Linux"'
+      : '"Windows"';
+    const inferredMobile = effectiveUaLower.includes('mobile') || effectiveUaLower.includes('android') ? '?1' : '?0';
+    if (!forwardMap.has('sec-ch-ua')) {
+      forwardMap.set('sec-ch-ua', '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"');
+    }
+    if (!forwardMap.has('sec-ch-ua-mobile')) {
+      forwardMap.set('sec-ch-ua-mobile', inferredMobile);
+    }
+    if (!forwardMap.has('sec-ch-ua-platform')) {
+      forwardMap.set('sec-ch-ua-platform', inferredPlatform);
+    }
     // Force US English unconditionally so regional IPs never switch websites to Japanese/Chinese
     forwardMap.set('accept-language', 'en-US,en;q=0.9');
     forwardMap.set('accept-encoding', 'gzip, deflate, br');
+    forwardMap.delete('youtube-restrict');
+
+    // Disable SafeSearch at header/cookie/URL level for search engines
+    if (host.includes('duckduckgo.com')) {
+      const filteredCookies = (forwardMap.get('cookie') || '')
+        .split(';')
+        .map((c) => c.trim())
+        .filter((c) => c && !/^p=/i.test(c) && !/^kl=/i.test(c));
+      filteredCookies.push('p=-2', 'kl=us-en');
+      forwardMap.set('cookie', filteredCookies.join('; '));
+    } else if (host.includes('bing.com')) {
+      const rawCookie = forwardMap.get('cookie') || '';
+      if (/ADLT=(STRICT|DEMOTE)/i.test(rawCookie)) {
+        forwardMap.set('cookie', rawCookie.replace(/ADLT=(STRICT|DEMOTE)/gi, 'ADLT=OFF'));
+      } else if (!rawCookie.includes('ADLT=')) {
+        forwardMap.set('cookie', rawCookie ? `${rawCookie}; SRCHHPGUSR=ADLT=OFF` : 'SRCHHPGUSR=ADLT=OFF');
+      }
+    } else if (host.includes('search.brave.com')) {
+      const filteredCookies = (forwardMap.get('cookie') || '')
+        .split(';')
+        .map((c) => c.trim())
+        .filter((c) => c && !/^safesearch=/i.test(c));
+      filteredCookies.push('safesearch=off');
+      forwardMap.set('cookie', filteredCookies.join('; '));
+    }
 
     // Sanitize Origin/Referer if they accidentally leaked the Cloud Run / Pages / localhost proxy host
     const proxyHost = String(req.headers.host || '').split(':')[0].toLowerCase();
@@ -1105,14 +1355,51 @@ app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), as
       upstreamHeadersObj['content-length'] = String(reqBodyBuf.length);
     }
 
-    const upstreamRes = await performRawUpstreamRequest(
+    let upstreamRes = await performRawUpstreamRequest(
       targetUrl,
       method,
       upstreamHeadersObj,
       reqBodyBuf,
       60000,
-      stickySessionId
+      stickySessionId,
+      0
     );
+
+    const isSearchChallengeHost =
+      host === 'duckduckgo.com' ||
+      host.endsWith('.duckduckgo.com') ||
+      host === 'startpage.com' ||
+      host.endsWith('.startpage.com') ||
+      host === 'search.brave.com';
+
+    if (isSearchChallengeHost) {
+      const isDdgSoftBlock = (r: typeof upstreamRes) => {
+        if (r.status === 202 || r.status === 403 || r.status === 429) return true;
+        if (r.status === 200 && host.includes('links.duckduckgo.com')) {
+          const preview = r.body.subarray(0, 512).toString('utf8');
+          if (preview.includes('anomalyDetectionBlock')) return true;
+        }
+        return false;
+      };
+      const poolLen = getProxyPoolList().length;
+      for (let slotOffset = 1; slotOffset < Math.min(poolLen, 4) && isDdgSoftBlock(upstreamRes); slotOffset++) {
+        try {
+          const retryRes = await performRawUpstreamRequest(
+            targetUrl,
+            method,
+            upstreamHeadersObj,
+            reqBodyBuf,
+            25000,
+            stickySessionId,
+            slotOffset
+          );
+          if (!isDdgSoftBlock(retryRes) || retryRes.status === 200) {
+            upstreamRes = retryRes;
+            if (!isDdgSoftBlock(retryRes)) break;
+          }
+        } catch {}
+      }
+    }
 
     const outHeaders: [string, string][] = [];
 
@@ -3061,10 +3348,14 @@ async function startServer() {
       return;
     }
 
-    // Route /wisp/ specifically to wisp-js so it doesn't collide with other WebSocket endpoints
+    // Route /wisp/ specifically to wisp-js with split-routing SOCKS5 support for Google/YouTube/CAPTCHA
     if (req.url && (req.url.endsWith('/wisp/') || pathname.endsWith('/wisp/') || pathname === '/wisp' || pathname.startsWith('/wisp/'))) {
       req.url = '/wisp/';
-      wispServer.routeRequest(req, socket, head);
+      const forwarded = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+      const clientKey = forwarded || req.socket.remoteAddress || 'default';
+      (wispServer.routeRequest as any)(req, socket, head, {
+        TCPSocket: createSplitRoutingWispTCPSocket(clientKey),
+      });
       return;
     }
 

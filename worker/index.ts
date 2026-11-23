@@ -12,6 +12,7 @@ import { onRequest as aiAssistantStream } from '../functions/api/ai/assistant/st
 import { onRequest as esrbImage } from '../functions/api/esrb/image';
 import { onRequest as esrbRatings } from '../functions/api/esrb/ratings';
 import { SignalingHub } from './signalingHub';
+import { handleWispRequest } from './wispServer';
 
 export { SignalingHub };
 
@@ -59,6 +60,14 @@ export default {
     ) {
       const hub = env.SIGNALING_HUB.get(env.SIGNALING_HUB.idFromName('global'));
       return hub.fetch(request);
+    }
+
+    if (
+      url.pathname === '/wisp' ||
+      url.pathname === '/wisp/' ||
+      url.pathname.startsWith('/wisp/')
+    ) {
+      return handleWispRequest(request, env);
     }
 
     for (const { pattern, handler } of routes) {

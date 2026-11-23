@@ -1,3 +1,29 @@
+// Silence noisy benign Scramjet form/quirky-structure warnings in the Service Worker console
+const _isBenignSjLog = (args) => {
+  try {
+    for (let i = 0; i < args.length; i++) {
+      const a = args[i];
+      if (typeof a === 'string') {
+        if (
+          a.includes('Assuming <form> element') ||
+          a.includes('extraneous query parameter') ||
+          a.includes('detected quirky document structure parsing')
+        ) {
+          return true;
+        }
+      }
+    }
+  } catch {}
+  return false;
+};
+if (typeof self !== 'undefined' && self.console && typeof self.console.warn === 'function') {
+  const _origSwWarn = self.console.warn.bind(self.console);
+  self.console.warn = (...args) => {
+    if (_isBenignSjLog(args)) return;
+    return _origSwWarn(...args);
+  };
+}
+
 // Prevent 'Failed to construct Response: Response with null body status cannot have body'
 const _NativeResponse = self.Response;
 self.Response = class ScramjetPatchedResponse extends _NativeResponse {

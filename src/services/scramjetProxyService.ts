@@ -71,6 +71,18 @@ const AD_AND_TRACKING_URL_SUBSTRINGS = [
   'analytics.tiktok',
   'apps.apple.com',
   'play.google.com',
+  'adserv.',
+  'exoclick',
+  'trafficjunky',
+  'juicyads',
+  'tsyndicate',
+  'realsrv',
+  'popads',
+  'popcash',
+  'propellerads',
+  'adsterra',
+  'erohub',
+  'hilltopads',
 ];
 
 export function isAdOrTrackingUrl(url: string): boolean {
@@ -179,25 +191,21 @@ function getWispCandidates(): string[] {
     const envWisp = (import.meta as any).env?.VITE_WISP_URL;
     if (envWisp) pushWisp(envWisp, false);
 
-    // 2. Local Node/Express Wisp server (@mercuryworkshop/wisp-js/server mounted at /wisp/)
-    if (!isStaticHostingHost()) {
-      const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      pushWisp(`${wsProto}//${window.location.host}/wisp/`, false);
-    } else {
-      // 3. Verified live public Wisp servers (strictly fallback for static hosting without Node backend)
-      pushWisp('wss://anura.pro/', false);
-      pushWisp('wss://anura.pro/wisp/', false);
-      pushWisp('wss://wisp.mercurywork.shop/', false);
-      pushWisp('wss://wisp.mercurywork.shop/wisp/', false);
-      pushWisp('wss://gointospace.app/wisp/', false);
-      pushWisp('wss://wisp.terbiumon.top/wisp/', false);
-    }
+    // 2. Primary: Local or deployed Worker / Pages Wisp & epoxy-server endpoint on current host
+    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    pushWisp(`${wsProto}//${window.location.host}/wisp/`, false);
 
-    // 4. Configured backend origins
+    // 3. Configured backend origins
     const backendOrigins = resolveBackendOrigins().filter(Boolean);
     for (const origin of backendOrigins) {
       pushWisp(origin, true);
     }
+
+    // 4. Fallback public Wisp servers if local/worker host cannot be reached
+    pushWisp('wss://anura.pro/wisp/', false);
+    pushWisp('wss://anura.pro/', false);
+    pushWisp('wss://wisp.mercurywork.shop/wisp/', false);
+    pushWisp('wss://gointospace.app/wisp/', false);
   } catch {}
 
   return urls;
@@ -1021,7 +1029,7 @@ function sanitizeTransportHeaders(
     const key = String(pair[0] ?? '')
       .replace(/[\r\n\0:\s]+/g, '')
       .toLowerCase();
-    if (!key || FORBIDDEN_H2_HEADERS.has(key)) continue;
+    if (!key || FORBIDDEN_H2_HEADERS.has(key) || key === 'youtube-restrict') continue;
     if (isBodylessMethod && key === 'content-length') continue;
     // Browsers never send Origin on no-cors / navigate GETs (<link rel="stylesheet">, <script>, <img>);
     // Scramjet injects it unconditionally, which triggers Cloudflare gzip/Vary corruption on some CDNs.
@@ -1056,21 +1064,15 @@ function sanitizeTransportHeaders(
   // Force US-English language preference unconditionally so any website renders in English, not Japanese or Chinese
   map.set('accept-language', 'en-US,en;q=0.9');
 
-  // Force clean desktop Chrome UA and client hints to prevent Google / Cloudflare bot detection (unusual traffic captcha)
-  const defaultChromeUa = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+  // Preserve real browser User-Agent & Sec-CH-UA client hint headers to avoid TLS/header fingerprint mismatch bot blocks
+  const realBrowserUa = typeof navigator !== 'undefined' ? navigator.userAgent : '';
   const existingUa = map.get('user-agent') || '';
   if (!existingUa || existingUa.includes('Headless') || existingUa.includes('Bot') || existingUa.includes('Scramjet')) {
-    map.set('user-agent', defaultChromeUa);
-  }
-
-  if (!map.has('sec-ch-ua')) {
-    map.set('sec-ch-ua', '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"');
-  }
-  if (!map.has('sec-ch-ua-mobile')) {
-    map.set('sec-ch-ua-mobile', '?0');
-  }
-  if (!map.has('sec-ch-ua-platform')) {
-    map.set('sec-ch-ua-platform', '"Windows"');
+    map.set(
+      'user-agent',
+      realBrowserUa ||
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+    );
   }
 
   // Preserve real browser fingerprint hints if Scramjet omitted them
@@ -1091,6 +1093,29 @@ function sanitizeTransportHeaders(
       }
       if (!map.has('sec-ch-ua-platform') && uaData.platform) {
         map.set('sec-ch-ua-platform', `"${String(uaData.platform).replace(/"/g, '')}"`);
+      }
+    } else {
+      const uaLower = (map.get('user-agent') || '').toLowerCase();
+      let detectedPlatform = 'Windows';
+      let isMobile = false;
+      if (uaLower.includes('macintosh') || uaLower.includes('mac os')) detectedPlatform = 'macOS';
+      else if (uaLower.includes('cros')) detectedPlatform = 'Chrome OS';
+      else if (uaLower.includes('android')) {
+        detectedPlatform = 'Android';
+        isMobile = true;
+      } else if (uaLower.includes('iphone') || uaLower.includes('ipad')) {
+        detectedPlatform = 'iOS';
+        isMobile = true;
+      } else if (uaLower.includes('linux')) detectedPlatform = 'Linux';
+
+      if (!map.has('sec-ch-ua')) {
+        map.set('sec-ch-ua', '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"');
+      }
+      if (!map.has('sec-ch-ua-mobile')) {
+        map.set('sec-ch-ua-mobile', isMobile ? '?1' : '?0');
+      }
+      if (!map.has('sec-ch-ua-platform')) {
+        map.set('sec-ch-ua-platform', `"${detectedPlatform}"`);
       }
     }
   }
@@ -1577,8 +1602,12 @@ async function readTransportBodyBytes(body: any): Promise<Uint8Array | null> {
 function normalizeGoogleRemoteUrl(remoteUrl: URL): URL {
   try {
     const host = remoteUrl.hostname.toLowerCase();
-    // Normalize regional Google Search domains (google.com.hk, google.co.jp, google.cn, etc.) to US English www.google.com
+    const pathLower = remoteUrl.pathname.toLowerCase();
+    const isGoogleSearchPage =
+      pathLower === '/' || pathLower === '/search' || pathLower === '/webhp';
+    // Normalize regional Google Search domains ONLY on search pages; never touch /sorry/*, /recaptcha/*, or signed URLs
     if (
+      isGoogleSearchPage &&
       /^(www\.)?google\.(com\.[a-z]{2}|co\.[a-z]{2}|[a-z]{2,3})$/.test(host) &&
       host !== 'google.com' &&
       host !== 'www.google.com'
@@ -1586,17 +1615,47 @@ function normalizeGoogleRemoteUrl(remoteUrl: URL): URL {
       remoteUrl.hostname = 'www.google.com';
     }
     const normHost = remoteUrl.hostname.toLowerCase();
-    if (normHost === 'www.google.com' || normHost === 'google.com') {
-      remoteUrl.searchParams.set('hl', 'en');
-      remoteUrl.searchParams.set('gl', 'us');
+    if ((normHost === 'www.google.com' || normHost === 'google.com' || normHost === 'images.google.com') && isGoogleSearchPage) {
+      if (!remoteUrl.searchParams.has('hl')) remoteUrl.searchParams.set('hl', 'en');
+      if (!remoteUrl.searchParams.has('gl')) remoteUrl.searchParams.set('gl', 'us');
+      remoteUrl.searchParams.set('safe', 'off');
+    } else if (normHost === 'www.google.com' && (pathLower === '/images' || pathLower === '/imgres')) {
+      remoteUrl.searchParams.set('safe', 'off');
     } else if (normHost === 'www.bing.com' || normHost === 'bing.com') {
-      if (remoteUrl.pathname === '/search' || remoteUrl.pathname === '/') {
+      if (
+        remoteUrl.pathname === '/search' ||
+        remoteUrl.pathname === '/' ||
+        remoteUrl.pathname === '/images/search' ||
+        remoteUrl.pathname === '/videos/search'
+      ) {
         remoteUrl.searchParams.set('setlang', 'en-US');
         remoteUrl.searchParams.set('cc', 'US');
+        remoteUrl.searchParams.set('adlt', 'off');
       }
-    } else if (normHost.includes('duckduckgo.com')) {
-      if (remoteUrl.pathname === '/' || remoteUrl.pathname.startsWith('/html')) {
-        remoteUrl.searchParams.set('kl', 'us-en');
+    } else if (normHost === 'duckduckgo.com' || normHost === 'www.duckduckgo.com' || normHost === 'html.duckduckgo.com' || normHost === 'lite.duckduckgo.com') {
+      if (
+        remoteUrl.pathname === '/' ||
+        remoteUrl.pathname.startsWith('/html') ||
+        remoteUrl.pathname.startsWith('/lite')
+      ) {
+        if (!remoteUrl.searchParams.has('kl')) {
+          remoteUrl.searchParams.set('kl', 'us-en');
+        }
+        remoteUrl.searchParams.set('kp', '-2');
+      }
+    } else if (normHost === 'search.brave.com') {
+      if (
+        remoteUrl.pathname === '/' ||
+        remoteUrl.pathname === '/search' ||
+        remoteUrl.pathname === '/images' ||
+        remoteUrl.pathname === '/videos' ||
+        remoteUrl.pathname === '/news'
+      ) {
+        remoteUrl.searchParams.set('safesearch', 'off');
+      }
+    } else if (normHost === 'www.startpage.com' || normHost === 'startpage.com') {
+      if (remoteUrl.pathname === '/sp/search' || remoteUrl.pathname === '/do/search') {
+        remoteUrl.searchParams.set('ff', '0');
       }
     } else if (normHost === 'www.youtube.com' || normHost === 'm.youtube.com') {
       if (
@@ -1622,41 +1681,170 @@ async function probeWispCandidatesParallel(candidates: string[], timeoutMs = 200
   return candidates.filter((_, idx) => okFlags[idx]);
 }
 
+const STRIPPED_RESPONSE_HEADERS = new Set([
+  'content-encoding',
+  'transfer-encoding',
+  'content-length',
+  'cross-origin-embedder-policy',
+  'cross-origin-opener-policy',
+  'cross-origin-resource-policy',
+  'x-frame-options',
+  'content-security-policy',
+  'content-security-policy-report-only',
+  'origin-agent-cluster',
+  'clear-site-data',
+]);
+
 function cleanDecompressedHeaders(headers: RawHeaderPair[] | undefined): RawHeaderPair[] {
   if (!Array.isArray(headers)) return [];
   return headers.filter(([k]: RawHeaderPair) => {
-    const l = String(k).toLowerCase();
-    return l !== 'content-encoding' && l !== 'transfer-encoding' && l !== 'content-length';
+    const l = String(k).toLowerCase().trim();
+    return !STRIPPED_RESPONSE_HEADERS.has(l);
   });
 }
 
-async function normalizeQuirkyHtml(remote: URL, body: any): Promise<any> {
-  const host = remote.hostname.toLowerCase();
-  if (host.includes('undertale') || host.includes('workers.dev')) {
-    const bytes = await readTransportBodyBytes(body);
-    if (bytes) {
-      let text = new TextDecoder().decode(bytes);
-      // Undertale has: <head><base href="..."> <body oncontextmenu="return false;"> <meta ...> </head> <body> ...
-      // That stray <body ...> inside <head> triggers Scramjet's "detected quirky document structure" and injects scripts before <!DOCTYPE html>!
-      if (text.includes('<head>') && text.includes('<body oncontextmenu="return false;">')) {
-        text = text.replace(/<head>(\s*<base[^>]*>)\s*<body oncontextmenu="return false;">/i, '<head>$1');
-        return new TextEncoder().encode(text).buffer;
-      }
+function getHeaderValue(headers: RawHeaderPair[] | undefined, name: string): string {
+  if (!Array.isArray(headers)) return '';
+  const target = name.toLowerCase();
+  for (const [k, v] of headers) {
+    if (String(k).toLowerCase().trim() === target) {
+      return String(v || '');
     }
   }
-  return body;
+  return '';
+}
+
+function fixQuirkyHtmlString(text: string, isDocument: boolean): string {
+  let out = text;
+
+  // 1. Undertale / similar exports: stray <body oncontextmenu="return false;"> placed inside <head>
+  if (out.includes('<head>') && /<body\s+oncontextmenu\s*=\s*"return false;"\s*>/i.test(out)) {
+    out = out.replace(/<head>(\s*<base[^>]*>)\s*<body\s+oncontextmenu\s*=\s*"return false;"\s*>/i, '<head>$1');
+  }
+
+  const lower = out.toLowerCase();
+  const hasHtmlClose = lower.lastIndexOf('</html>');
+  if (hasHtmlClose !== -1) {
+    // 2. Trailing tags after </html> (e.g. DuckDuckGo trailing <script>DDG.index = ...</script>)
+    // Scramjet's htmlparser2 checks root childNodes and logs "detected quirky document structure parsing"
+    // if anything other than whitespace/comments exists outside <html>.
+    const trailing = out.slice(hasHtmlClose + 7);
+    const trailingWithoutComments = trailing.replace(/<!--[\s\S]*?-->/g, '').trim();
+    if (trailingWithoutComments.length > 0 && trailingWithoutComments.includes('<')) {
+      out = out.slice(0, hasHtmlClose + 7);
+      const bodyCloseIdx = out.toLowerCase().lastIndexOf('</body>');
+      if (bodyCloseIdx !== -1) {
+        out = out.slice(0, bodyCloseIdx) + trailingWithoutComments + out.slice(bodyCloseIdx);
+      } else {
+        const htmlCloseIdx = out.toLowerCase().lastIndexOf('</html>');
+        out = out.slice(0, htmlCloseIdx) + trailingWithoutComments + out.slice(htmlCloseIdx);
+      }
+    }
+
+    // 3. Move any stray tags placed between </head> and <body...> inside </head>
+    const lowerAfter = out.toLowerCase();
+    const headCloseIdx = lowerAfter.indexOf('</head>');
+    const bodyOpenIdx = lowerAfter.indexOf('<body');
+    if (headCloseIdx !== -1 && bodyOpenIdx !== -1 && bodyOpenIdx > headCloseIdx + 7) {
+      const between = out.slice(headCloseIdx + 7, bodyOpenIdx);
+      const betweenNonComments = between.replace(/<!--[\s\S]*?-->/g, '').trim();
+      if (betweenNonComments.length > 0 && betweenNonComments.includes('<')) {
+        out =
+          out.slice(0, headCloseIdx) +
+          between +
+          out.slice(headCloseIdx, headCloseIdx + 7) +
+          out.slice(bodyOpenIdx);
+      }
+    }
+
+    // 4. Move any leading stray tags before <html> (excluding doctype/xml/comments) inside <body> or <head>
+    const htmlOpenIdx = out.toLowerCase().indexOf('<html');
+    if (htmlOpenIdx > 0) {
+      const prefix = out.slice(0, htmlOpenIdx);
+      const cleanedPrefix = prefix
+        .replace(/<!doctype[^>]*>/gi, '')
+        .replace(/<\?xml[^>]*\?>/gi, '')
+        .replace(/<!--[\s\S]*?-->/g, '')
+        .trim();
+      if (cleanedPrefix.length > 0 && cleanedPrefix.includes('<')) {
+        const doctypeMatch = prefix.match(/<!doctype[^>]*>/i);
+        const keptPrefix = doctypeMatch ? `${doctypeMatch[0]}\n` : '';
+        out = keptPrefix + out.slice(htmlOpenIdx);
+        const targetBodyIdx = out.toLowerCase().search(/<body[^>]*>/i);
+        if (targetBodyIdx !== -1) {
+          const bodyTagEnd = out.indexOf('>', targetBodyIdx);
+          if (bodyTagEnd !== -1) {
+            out = out.slice(0, bodyTagEnd + 1) + cleanedPrefix + out.slice(bodyTagEnd + 1);
+          }
+        }
+      }
+    }
+  } else if (
+    isDocument &&
+    !lower.includes('<html') &&
+    !lower.includes('<svg') &&
+    !lower.includes('<?xml') &&
+    /<(div|p|span|script|style|h[1-6]|body|head|meta|title|form|a|img|ul|table|center|pre|section|main)\b/i.test(out)
+  ) {
+    out = `<!DOCTYPE html><html><head></head><body>${out}</body></html>`;
+  }
+
+  return out;
+}
+
+async function normalizeQuirkyHtml(
+  _remote: URL,
+  body: any,
+  headers?: RawHeaderPair[],
+  isDocument = false
+): Promise<any> {
+  if (!body) return body;
+  const ct = getHeaderValue(headers, 'content-type').toLowerCase();
+  const explicitlyNonHtml =
+    ct &&
+    !ct.includes('text/html') &&
+    !ct.includes('application/xhtml+xml');
+  if (explicitlyNonHtml) {
+    return body;
+  }
+  if (!ct.includes('text/html') && !ct.includes('application/xhtml+xml') && !isDocument) {
+    return body;
+  }
+
+  const bytes = await readTransportBodyBytes(body);
+  if (!bytes) return body;
+  if (bytes.byteLength === 0 || bytes.byteLength > 8 * 1024 * 1024) {
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+  }
+
+  const text = new TextDecoder().decode(bytes);
+  const fixed = fixQuirkyHtmlString(text, isDocument);
+  if (fixed !== text) {
+    return new TextEncoder().encode(fixed).buffer;
+  }
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 }
 
 async function createWispTransport(): Promise<ProxyTransport> {
   const wispCandidates = getWispCandidates();
-  let workingWispUrls = await probeWispCandidatesParallel(wispCandidates, 2200);
-  if (workingWispUrls.length === 0 && wispCandidates.length > 0) {
-    workingWispUrls = [...wispCandidates];
-  }
+  let workingWispUrls = wispCandidates.length > 0 ? [...wispCandidates] : [];
   let candidateIndex = 0;
   let activeWispUrl: string | null = workingWispUrls[0] || null;
 
   globalActiveWispUrl = activeWispUrl;
+
+  // Refine candidate order in background without blocking initial page render
+  if (wispCandidates.length > 1) {
+    probeWispCandidatesParallel(wispCandidates, 2000).then((liveCandidates) => {
+      if (liveCandidates && liveCandidates.length > 0) {
+        workingWispUrls = liveCandidates;
+        if (!activeWispUrl || !liveCandidates.includes(activeWispUrl)) {
+          activeWispUrl = liveCandidates[0];
+          globalActiveWispUrl = activeWispUrl;
+        }
+      }
+    }).catch(() => {});
+  }
 
   const epoxyClients = new Map<string, any>();
   const epoxyInitPromises = new Map<string, Promise<any>>();
@@ -1682,6 +1870,24 @@ async function createWispTransport(): Promise<ProxyTransport> {
           wisp_v2: true,
         });
         await withPromiseTimeout(epoxy.init(), 6000, `Epoxy init (${wispUrl})`);
+        const origReq = epoxy.request.bind(epoxy);
+        epoxy.request = async (...reqArgs: any[]) => {
+          try {
+            return await origReq(...reqArgs);
+          } catch (err: any) {
+            const msg = String(err?.message || err || '').toLowerCase();
+            if (
+              msg.includes('goaway') ||
+              msg.includes('http2') ||
+              msg.includes('hyper client') ||
+              msg.includes('sendrequest')
+            ) {
+              epoxyClients.delete(wispUrl);
+              epoxyInitPromises.delete(wispUrl);
+            }
+            throw err;
+          }
+        };
         epoxyClients.set(wispUrl, epoxy);
         return epoxy;
       })();
@@ -1790,6 +1996,43 @@ async function createWispTransport(): Promise<ProxyTransport> {
         } catch {}
       }
 
+      // Enforce SafeSearch OFF cookies across major search engines (without wiping user preferences)
+      {
+        const cookieIdx = cleanHeaders.findIndex(([k]) => k.toLowerCase() === 'cookie');
+        const currentCookie = cookieIdx !== -1 ? cleanHeaders[cookieIdx][1] || '' : '';
+        if (targetHost.includes('duckduckgo.com')) {
+          const filtered = currentCookie
+            .split(';')
+            .map((s) => s.trim())
+            .filter((s) => s && !/^p=/i.test(s) && !/^kl=/i.test(s));
+          filtered.push('p=-2', 'kl=us-en');
+          const nextCookie = filtered.join('; ');
+          if (cookieIdx !== -1) cleanHeaders[cookieIdx] = ['cookie', nextCookie];
+          else cleanHeaders.push(['cookie', nextCookie]);
+        } else if (targetHost.includes('bing.com')) {
+          let nextCookie = currentCookie;
+          if (/ADLT=(STRICT|DEMOTE)/i.test(nextCookie)) {
+            nextCookie = nextCookie.replace(/ADLT=(STRICT|DEMOTE)/gi, 'ADLT=OFF');
+          } else if (!nextCookie.includes('ADLT=')) {
+            nextCookie = nextCookie ? `${nextCookie}; SRCHHPGUSR=ADLT=OFF` : 'SRCHHPGUSR=ADLT=OFF';
+          }
+          if (cookieIdx !== -1) cleanHeaders[cookieIdx] = ['cookie', nextCookie];
+          else cleanHeaders.push(['cookie', nextCookie]);
+        } else if (targetHost.includes('search.brave.com')) {
+          const filtered = currentCookie
+            .split(';')
+            .map((s) => s.trim())
+            .filter((s) => s && !/^safesearch=/i.test(s));
+          filtered.push('safesearch=off');
+          const nextCookie = filtered.join('; ');
+          if (cookieIdx !== -1) cleanHeaders[cookieIdx] = ['cookie', nextCookie];
+          else cleanHeaders.push(['cookie', nextCookie]);
+        } else if (targetHost.includes('youtube.com') && currentCookie.includes('f2=8000000')) {
+          const nextCookie = currentCookie.replace(/(&?)f2=8000000(&?)/g, (_m, a, b) => (a && b ? '&' : ''));
+          if (cookieIdx !== -1) cleanHeaders[cookieIdx] = ['cookie', nextCookie];
+        }
+      }
+
       const captureResponseCookies = (resp: { headers?: RawHeaderPair[] } | null | undefined) => {
         if (!resp || !Array.isArray(resp.headers) || !cachedController?.cookieJar) return;
         let hasSetCookie = false;
@@ -1809,21 +2052,29 @@ async function createWispTransport(): Promise<ProxyTransport> {
       const formatResponse = async (rawRes: any) => {
         let out = ensureNullBodyConsistency(rawRes);
         out.headers = cleanDecompressedHeaders(out.headers);
-        out.body = await normalizeQuirkyHtml(targetRemote, out.body);
+        out.body = await normalizeQuirkyHtml(targetRemote, out.body, out.headers, isDocument);
         captureResponseCookies(out);
         return out;
       };
 
-      const hasBackendOrigin = resolveBackendOrigins().length > 0;
-      const shouldPreferServerProxy = hasBackendOrigin && (isGoogle || isYoutubeWatchOrPlayer);
+      const isSearchChallengeHost =
+        targetHost === 'duckduckgo.com' ||
+        targetHost.endsWith('.duckduckgo.com') ||
+        targetHost === 'startpage.com' ||
+        targetHost.endsWith('.startpage.com') ||
+        targetHost === 'search.brave.com';
+      const reqDest = getHeaderValue(cleanHeaders, 'sec-fetch-dest').toLowerCase();
+      const isCriticalSubresource =
+        reqDest === 'script' ||
+        reqDest === 'worker' ||
+        reqDest === 'sharedworker' ||
+        targetHost.includes('duckduckgo.com') ||
+        targetHost.includes('startpage.com') ||
+        targetHost.includes('search.brave.com') ||
+        targetHost.includes('bing.com') ||
+        isGoogle;
 
-      // Route Google domains and YouTube watch/shorts/player requests through the server proxy
-      if (shouldPreferServerProxy) {
-        try {
-          const res = await serverFallbackFetch(targetRemote, method, safeBody, cleanHeaders, signal);
-          return await formatResponse(res);
-        } catch {}
-      }
+      const hasBackendOrigin = resolveBackendOrigins().length > 0;
 
       // 1. Try EpoxyTransport across available Wisp servers (primary high-concurrency engine)
       const wispsToTry = workingWispUrls.length > 0 ? workingWispUrls : getWispCandidates();
@@ -1834,37 +2085,61 @@ async function createWispTransport(): Promise<ProxyTransport> {
       for (let i = 0; i < epoxyAttempts; i++) {
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         const wispUrl = activeWispUrl || wispsToTry[(candidateIndex + i) % wispsToTry.length];
-        try {
-          const client = await getEpoxy(wispUrl);
-          const rawRes = await withPromiseTimeout<any>(
-            client.request(
-              targetRemote,
-              method,
-              safeBody === null ? undefined : safeBody,
-              cleanHeaders,
-              signal
-            ),
-            20000,
-            `Epoxy fetch (${wispUrl})`
-          );
-          return await formatResponse(rawRes);
-        } catch (err: any) {
-          if (signal?.aborted) throw err;
-          lastTransportError = err;
-          const errMsg = String(err?.message || err || '').toLowerCase();
-          if (
-            errMsg.includes('goaway') ||
-            errMsg.includes('http2') ||
-            errMsg.includes('protocol_error') ||
-            errMsg.includes('sendrequest')
-          ) {
-            KNOWN_HTTP2_INCOMPATIBLE_HOSTS.add(targetHost);
-            LIBCURL_PREFERRED_HOSTS.add(targetHost);
+        for (let h2Retry = 0; h2Retry < 2; h2Retry++) {
+          try {
+            const client = await getEpoxy(wispUrl);
+            const rawRes = await withPromiseTimeout<any>(
+              client.request(
+                targetRemote,
+                method,
+                safeBody === null ? undefined : safeBody,
+                cleanHeaders,
+                signal
+              ),
+              20000,
+              `Epoxy fetch (${wispUrl})`
+            );
+            if (isSearchChallengeHost && rawRes?.status === 202 && hasBackendOrigin) {
+              throw new Error('Search engine returned 202 JSA challenge over Wisp; rotating to clean proxy slot');
+            }
+            return await formatResponse(rawRes);
+          } catch (err: any) {
+            if (signal?.aborted) throw err;
+            lastTransportError = err;
+            const errMsg = String(err?.message || err || '').toLowerCase();
+            const isPermanentH2Error =
+              errMsg.includes('protocol_error') ||
+              errMsg.includes('http_1_1_required') ||
+              errMsg.includes('inadequate_security') ||
+              errMsg.includes('frame_size_error');
+            const isTransientGoAway =
+              errMsg.includes('goaway') ||
+              errMsg.includes('http2') ||
+              errMsg.includes('sendrequest');
+
+            if (isPermanentH2Error) {
+              KNOWN_HTTP2_INCOMPATIBLE_HOSTS.add(targetHost);
+              LIBCURL_PREFERRED_HOSTS.add(targetHost);
+              epoxyClients.delete(wispUrl);
+              epoxyInitPromises.delete(wispUrl);
+              break;
+            }
+            if (isTransientGoAway) {
+              epoxyClients.delete(wispUrl);
+              epoxyInitPromises.delete(wispUrl);
+              if (h2Retry === 0) {
+                continue;
+              }
+              break;
+            }
+            if (isDocument) {
+              rotateToNextWisp();
+            }
             break;
           }
-          if (isDocument) {
-            rotateToNextWisp();
-          }
+        }
+        if (KNOWN_HTTP2_INCOMPATIBLE_HOSTS.has(targetHost)) {
+          break;
         }
       }
 
@@ -1885,6 +2160,9 @@ async function createWispTransport(): Promise<ProxyTransport> {
             20000,
             `Libcurl fetch (${wispUrl})`
           );
+          if (isSearchChallengeHost && rawRes?.status === 202 && hasBackendOrigin) {
+            throw new Error('Search engine returned 202 JSA challenge over Libcurl; falling back to multi-slot server proxy');
+          }
           return await formatResponse(rawRes);
         } catch (err: any) {
           if (signal?.aborted) throw err;
@@ -1905,6 +2183,16 @@ async function createWispTransport(): Promise<ProxyTransport> {
         }
       }
 
+      // Never silence critical script/search-API requests as empty 204 (triggers false "No results found")
+      if (!isDocument && isCriticalSubresource) {
+        return {
+          body: null,
+          status: 502,
+          statusText: 'Bad Gateway',
+          headers: [['content-type', reqDest === 'script' ? 'application/javascript; charset=utf-8' : 'text/plain; charset=utf-8']],
+        };
+      }
+
       // For non-critical subresources (third party analytics, beacons, broken trackers), return clean 204
       if (!isDocument) {
         return {
@@ -1912,6 +2200,23 @@ async function createWispTransport(): Promise<ProxyTransport> {
           status: 204,
           statusText: 'No Content',
           headers: [],
+        };
+      }
+
+      // If document navigation failed due to GoAway or HTTP/2 protocol error, return a friendly reconnecting page
+      if (
+        lastTransportError &&
+        (String(lastTransportError?.message || lastTransportError).includes('GoAway') ||
+         String(lastTransportError?.message || lastTransportError).includes('Http2') ||
+         String(lastTransportError?.message || lastTransportError).includes('Hyper client'))
+      ) {
+        return {
+          body: new TextEncoder().encode(
+            `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Reconnecting...</title><meta http-equiv="refresh" content="2"></head><body style="background:#0f172a;color:#94a3b8;font-family:sans-serif;padding:30px;text-align:center;"><h2>Reconnecting to destination...</h2><p>Connection refreshed. Retrying automatically.</p></body></html>`
+          ).buffer,
+          status: 200,
+          statusText: 'OK',
+          headers: [['content-type', 'text/html; charset=utf-8']],
         };
       }
 
@@ -2046,6 +2351,36 @@ function patchControllerRequestHandler(controller: Controller): void {
             body: '<!doctype html><html><body style="background:#0f172a;color:#94a3b8;font-family:sans-serif;padding:20px;">Session closed</body></html>',
             status: 404,
             statusText: 'Not Found',
+            headers: [['content-type', 'text/html; charset=utf-8']],
+          },
+          [],
+        ];
+      }
+
+      const errStr = String(err?.message || err || '');
+      if (
+        errStr.includes('GoAway') ||
+        errStr.includes('Http2') ||
+        errStr.includes('Hyper client') ||
+        errStr.includes('sendrequest')
+      ) {
+        const dest = data?.destination;
+        if (dest && dest !== 'document') {
+          return [
+            {
+              body: null,
+              status: 204,
+              statusText: 'No Content',
+              headers: [],
+            },
+            [],
+          ];
+        }
+        return [
+          {
+            body: '<!doctype html><html><head><meta charset="utf-8"><title>Reconnecting...</title><meta http-equiv="refresh" content="2"></head><body style="background:#0f172a;color:#94a3b8;font-family:sans-serif;padding:30px;text-align:center;"><h2>Reconnecting to destination...</h2><p>Connection refreshed. Retrying automatically.</p></body></html>',
+            status: 200,
+            statusText: 'OK',
             headers: [['content-type', 'text/html; charset=utf-8']],
           },
           [],
@@ -2229,10 +2564,41 @@ export async function launchInScramjetFrame(
   if (!frame || frame.controller !== controller) {
     frame = controller.createFrame(iframe);
     // Register Scramjet hooks via Tap.tap (Proxy properties do not expose .tap directly)
+    const nativeInnerHtmlDescMap = new WeakMap<Window, PropertyDescriptor>();
+    const silenceWindowConsole = (win: any) => {
+      if (!win?.console || win.console.__frostFiltered) return;
+      win.console.__frostFiltered = true;
+      const origWarn = typeof win.console.warn === 'function' ? win.console.warn.bind(win.console) : null;
+      if (origWarn) {
+        win.console.warn = (...args: any[]) => {
+          for (const a of args) {
+            if (
+              typeof a === 'string' &&
+              (a.includes('Assuming <form> element') ||
+                a.includes('extraneous query parameter') ||
+                a.includes('detected quirky document structure parsing'))
+            ) {
+              return;
+            }
+          }
+          return origWarn(...args);
+        };
+      }
+    };
+
     const Tap = (window.$scramjet as any)?.Tap;
     if (Tap && typeof Tap.tap === 'function') {
       try {
         Tap.tap(frame.hooks.init.pre, ({ window: win, client }: any) => {
+          silenceWindowConsole(win);
+          try {
+            if (win?.Element?.prototype) {
+              const desc = Object.getOwnPropertyDescriptor(win.Element.prototype, 'innerHTML');
+              if (desc?.set && !nativeInnerHtmlDescMap.has(win)) {
+                nativeInnerHtmlDescMap.set(win, desc);
+              }
+            }
+          } catch {}
           protectCookieJarPrototype(win?.$scramjet);
           if (client?.context?.cookieJar) {
             protectCookieJarPrototype(client.context.cookieJar);
@@ -2249,6 +2615,7 @@ export async function launchInScramjetFrame(
       try {
         Tap.tap(frame.hooks.init.post, ({ client }: any) => {
           const win = client?.global as any;
+          silenceWindowConsole(win);
           protectCookieJarPrototype(win?.$scramjet);
           if (client?.context?.cookieJar) {
             protectCookieJarPrototype(client.context.cookieJar);
@@ -2257,20 +2624,56 @@ export async function launchInScramjetFrame(
           if (!win || win.__frostCompatPatched) return;
           win.__frostCompatPatched = true;
 
-          // Spoof real Google Chrome browser environment to bypass "This browser or app may not be secure"
+          // Preserve exact native HTML5 parser serialization on detached pure-tag innerHTML checks (e.g. DuckDuckGo JSA challenge)
+          try {
+            const nativeDesc = nativeInnerHtmlDescMap.get(win);
+            const wrappedDesc = win.Element?.prototype
+              ? Object.getOwnPropertyDescriptor(win.Element.prototype, 'innerHTML')
+              : null;
+            if (nativeDesc?.set && wrappedDesc?.set && wrappedDesc.configurable) {
+              Object.defineProperty(win.Element.prototype, 'innerHTML', {
+                configurable: true,
+                enumerable: wrappedDesc.enumerable,
+                get: wrappedDesc.get,
+                set(val: any) {
+                  if (
+                    typeof val === 'string' &&
+                    val.length < 160 &&
+                    !(this as Element).isConnected &&
+                    /^<[a-z/><\s]*$/i.test(val)
+                  ) {
+                    return nativeDesc.set!.call(this, val);
+                  }
+                  return wrappedDesc.set!.call(this, val);
+                },
+              });
+            }
+          } catch {}
+
+          // Mirror real host browser navigator properties so HTTP User-Agent/Sec-CH-UA headers match DOM checks (Google BotGuard / reCAPTCHA)
           try {
             const nav = win.navigator;
+            const hostNav = typeof window !== 'undefined' ? window.navigator : undefined;
             if (nav) {
+              const realUa =
+                hostNav?.userAgent ||
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+              const realPlatform = hostNav?.platform || 'Win32';
+              const realVendor = hostNav?.vendor || 'Google Inc.';
+              const realConcurrency = hostNav?.hardwareConcurrency || 8;
+              const realMemory = (hostNav as any)?.deviceMemory || 8;
+              const realLanguages = ['en-US', 'en'];
+
               Object.defineProperty(nav, 'userAgent', {
-                get: () => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+                get: () => realUa,
                 configurable: true,
               });
               Object.defineProperty(nav, 'platform', {
-                get: () => 'Win32',
+                get: () => realPlatform,
                 configurable: true,
               });
               Object.defineProperty(nav, 'vendor', {
-                get: () => 'Google Inc.',
+                get: () => realVendor,
                 configurable: true,
               });
               Object.defineProperty(nav, 'webdriver', {
@@ -2282,15 +2685,15 @@ export async function launchInScramjetFrame(
                 configurable: true,
               });
               Object.defineProperty(nav, 'languages', {
-                get: () => ['en-US', 'en'],
+                get: () => realLanguages,
                 configurable: true,
               });
               Object.defineProperty(nav, 'hardwareConcurrency', {
-                get: () => 8,
+                get: () => realConcurrency,
                 configurable: true,
               });
               Object.defineProperty(nav, 'deviceMemory', {
-                get: () => 8,
+                get: () => realMemory,
                 configurable: true,
               });
             }
@@ -2304,20 +2707,37 @@ export async function launchInScramjetFrame(
             }
           } catch {}
 
-          // Neutralize framebusting and top-level redirection (YouTube & TikTok checks like top.location = ...)
+          // Trap top-level framebusting on the root proxied tab window only.
+          // Preserve parent & frameElement inside nested sub-iframes (reCAPTCHA anchor/bframe, BotGuard about:blank)
+          // so Scramjet cross-iframe postMessage and frame hierarchy keep working properly.
           try {
-            Object.defineProperty(win, 'top', {
-              get: () => win,
-              configurable: true,
-            });
-            Object.defineProperty(win, 'parent', {
-              get: () => win,
-              configurable: true,
-            });
-            Object.defineProperty(win, 'frameElement', {
-              get: () => null,
-              configurable: true,
-            });
+            const isRootProxiedWindow = (() => {
+              try {
+                return win === iframe.contentWindow || win.parent === window;
+              } catch {
+                return true;
+              }
+            })();
+
+            if (isRootProxiedWindow) {
+              Object.defineProperty(win, 'top', {
+                get: () => win,
+                configurable: true,
+              });
+              Object.defineProperty(win, 'parent', {
+                get: () => win,
+                configurable: true,
+              });
+              Object.defineProperty(win, 'frameElement', {
+                get: () => null,
+                configurable: true,
+              });
+            } else {
+              Object.defineProperty(win, 'top', {
+                get: () => iframe.contentWindow || win,
+                configurable: true,
+              });
+            }
           } catch {}
 
           // Create default Trusted Types policy to prevent YouTube and modern SPAs from crashing on HTML/Script assignments

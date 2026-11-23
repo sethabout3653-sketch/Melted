@@ -5,34 +5,45 @@ import './index.css';
 
 // Hide and suppress Maximum update depth exceeded, media play interruption, and proxy transport errors
 if (typeof window !== 'undefined') {
+  const isIgnorableProxyError = (val: unknown): boolean => {
+    const text = typeof val === 'string' ? val : (val as any)?.message || (val as any)?.stack || String(val || '');
+    return (
+      text.includes('Hyper client') ||
+      text.includes('GoAway') ||
+      text.includes('Http2') ||
+      text.includes('epoxy-transport') ||
+      text.includes('wbindgen') ||
+      text.includes('sendrequest') ||
+      text.includes('Assuming <form> element') ||
+      text.includes('extraneous query parameter') ||
+      text.includes('detected quirky document structure parsing') ||
+      text.includes('Maximum update depth exceeded') ||
+      text.includes('ResizeObserver') ||
+      text.includes('The play() request was interrupted')
+    );
+  };
+
+  const origConsoleError = console.error;
+  console.error = (...args: any[]) => {
+    if (args.some(isIgnorableProxyError)) return;
+    origConsoleError.apply(console, args);
+  };
+
+  const origConsoleWarn = console.warn;
+  console.warn = (...args: any[]) => {
+    if (args.some(isIgnorableProxyError)) return;
+    origConsoleWarn.apply(console, args);
+  };
+
   window.addEventListener('error', (event) => {
-    const msg = String(event?.message || event?.error?.message || '');
-    if (
-      msg.includes('Maximum update depth exceeded') ||
-      msg.includes('ResizeObserver') ||
-      msg.includes('The play() request was interrupted') ||
-      msg.includes('Hyper client') ||
-      msg.includes('GoAway') ||
-      msg.includes('Http2') ||
-      msg.includes('epoxy-transport') ||
-      msg.includes('wbindgen')
-    ) {
+    if (isIgnorableProxyError(event?.message) || isIgnorableProxyError(event?.error)) {
       event.preventDefault();
       event.stopImmediatePropagation();
     }
   });
 
   window.addEventListener('unhandledrejection', (event) => {
-    const reason = String(event?.reason?.message || event?.reason || '');
-    if (
-      reason.includes('Maximum update depth exceeded') ||
-      reason.includes('play()') ||
-      reason.includes('Hyper client') ||
-      reason.includes('GoAway') ||
-      reason.includes('Http2') ||
-      reason.includes('epoxy-transport') ||
-      reason.includes('wbindgen')
-    ) {
+    if (isIgnorableProxyError(event?.reason)) {
       event.preventDefault();
       event.stopImmediatePropagation?.();
     }

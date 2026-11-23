@@ -308,17 +308,12 @@ export default function App() {
   }, []);
 
   const filteredGames = useMemo(() => {
-    let result = [...allGames];
-
-    if (showFavoritesOnly) {
-      result = result.filter((g) => favorites.includes(g.id));
-    } else if (selectedCategory !== 'All') {
-      result = result.filter((g) => g.category === selectedCategory);
-    }
-
     const queryTokens = deferredQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
-    if (queryTokens.length > 0) {
-      result = result.filter((game) => {
+    const compactQuery = deferredQuery.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+    const applyQuery = (list: typeof allGames) => {
+      if (queryTokens.length === 0) return list;
+      return list.filter((game) => {
         const realRating = game.rating || getCachedGameRating(game.name);
         const searchableText = [
           game.name,
@@ -329,9 +324,37 @@ export default function App() {
           realRating?.descriptors,
           ...(realRating?.specialTags || []),
           ...(game.special || []),
-        ].filter(Boolean).join(' ').toLowerCase();
-        return queryTokens.every((token) => searchableText.includes(token));
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        if (queryTokens.every((token) => searchableText.includes(token))) {
+          return true;
+        }
+        if (compactQuery.length >= 2) {
+          const compactSearchable = searchableText.replace(/[^a-z0-9]/g, '');
+          if (compactSearchable.includes(compactQuery)) {
+            return true;
+          }
+        }
+        return false;
       });
+    };
+
+    let result = [...allGames];
+
+    if (showFavoritesOnly) {
+      result = result.filter((g) => favorites.includes(g.id));
+    } else if (selectedCategory === 'Featured') {
+      result = result.filter((g) => g.featured);
+    } else if (selectedCategory !== 'All') {
+      result = result.filter((g) => g.category === selectedCategory);
+    }
+
+    if (queryTokens.length > 0) {
+      const categoryMatched = applyQuery(result);
+      // If active category or favorites filter hid valid matches for the user's search query, search across the full catalog
+      result = categoryMatched.length > 0 ? categoryMatched : applyQuery(allGames);
     }
 
     // Sorting
