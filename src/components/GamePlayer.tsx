@@ -25,6 +25,10 @@ import {
   cleanupScramjetFrame,
 } from '../services/scramjetProxyService';
 import { storeGameSave, restoreAutoSaveToIframe, flushPendingSaves } from '../services/saveService';
+import { getGameControls } from '../services/gameControlsService';
+import { GameControlsOverlay } from './GameControlsOverlay';
+import { GameKeybindsModal } from './GameKeybindsModal';
+import { injectGameInputBridge } from '../utils/gameInputBridge';
 
 interface GamePlayerProps {
   game: GameItem;
@@ -49,6 +53,8 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const [errorDetail, setErrorDetail] = useState<string>('');
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isLoadingProxy, setIsLoadingProxy] = useState(false);
+  const [showKeybindsModal, setShowKeybindsModal] = useState(false);
+  const gameControls = getGameControls(game.name);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -518,14 +524,23 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                           import('../utils/scaffolding-loader').then(({ injectScaffolding }) => {
                             injectScaffolding(doc);
                           });
+                          injectGameInputBridge(doc, win);
                         }
                       } catch {
                         // Cross-origin frames restrict document access by browser security design; ignore silently.
                       }
+                    } else {
+                      try {
+                        const doc = iframeRef.current.contentDocument || win.document;
+                        if (doc) {
+                          injectGameInputBridge(doc, win);
+                        }
+                      } catch {}
                     }
 
                     try {
                       iframeRef.current.focus();
+                      win.focus();
                     } catch {}
                   }
                 }}
@@ -569,6 +584,24 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 </button>
               </div>
             </div>
+          )}
+
+          {/* On-Screen Mobile Controls Overlay & PC Keybinds Button */}
+          {ageConfirmed && (
+            <GameControlsOverlay
+              controls={gameControls}
+              iframeRef={iframeRef}
+              onOpenKeybindsModal={() => setShowKeybindsModal(true)}
+            />
+          )}
+
+          {/* Keybinds Modal */}
+          {showKeybindsModal && (
+            <GameKeybindsModal
+              controls={gameControls}
+              gameName={game.name}
+              onClose={() => setShowKeybindsModal(false)}
+            />
           )}
 
         </div>

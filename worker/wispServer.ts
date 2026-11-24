@@ -99,9 +99,8 @@ export function resolveSocks5Pool(env?: any, clientKey = 'default'): Socks5Confi
       } catch {}
     }
     if (list.length > 0) {
-      const start = hashClientKey(clientKey) % list.length;
-      return [...list.slice(start), ...list.slice(0, start)];
-    }
+    const start = hashClientKey(clientKey) % list.length;
+    return [...list.slice(start), ...list.slice(0, start)];
   }
 
   if (env?.SOCKS5_HOST) {
@@ -115,23 +114,7 @@ export function resolveSocks5Pool(env?: any, clientKey = 'default'): Socks5Confi
     ];
   }
 
-  // Primary user-configured Webshare SOCKS5H static proxy + verified clean fallback slots
-  const primaryProxy: Socks5Config = {
-    host: '45.38.107.97',
-    port: 6014,
-    user: 'vncwbxva',
-    pass: 'd65j8vqe2th9',
-  };
-  const cleanFallbacks: Socks5Config[] = [
-    { host: 'p.webshare.io', port: 1080, user: 'vncwbxva-1', pass: 'd65j8vqe2th9' },
-    { host: 'p.webshare.io', port: 1080, user: 'vncwbxva-4', pass: 'd65j8vqe2th9' },
-    { host: 'p.webshare.io', port: 1080, user: 'vncwbxva-7', pass: 'd65j8vqe2th9' },
-    { host: 'p.webshare.io', port: 1080, user: 'vncwbxva-2', pass: 'd65j8vqe2th9' },
-    { host: 'p.webshare.io', port: 1080, user: 'vncwbxva-5', pass: 'd65j8vqe2th9' },
-    { host: 'p.webshare.io', port: 1080, user: 'vncwbxva-10', pass: 'd65j8vqe2th9' },
-  ];
-  const fbStart = hashClientKey(clientKey) % cleanFallbacks.length;
-  return [primaryProxy, ...cleanFallbacks.slice(fbStart), ...cleanFallbacks.slice(0, fbStart)];
+  return [];
 }
 
 export function resolveSocks5Config(env?: any, clientKey = 'default'): Socks5Config | null {

@@ -218,6 +218,23 @@ export function getDisplayTitleFromUrl(url: string): string {
   }
 }
 
+export type ClientDeviceProfile = 'android_vr' | 'android_mobile' | 'desktop';
+const CLIENT_PROFILE_KEY = 'frosthub_client_profile_v1';
+
+export function getClientDeviceProfile(): ClientDeviceProfile {
+  try {
+    const raw = localStorage.getItem(CLIENT_PROFILE_KEY) as ClientDeviceProfile | null;
+    if (raw === 'android_vr' || raw === 'android_mobile' || raw === 'desktop') return raw;
+  } catch {}
+  return 'android_vr';
+}
+
+export function setClientDeviceProfile(profile: ClientDeviceProfile): void {
+  try {
+    localStorage.setItem(CLIENT_PROFILE_KEY, profile);
+  } catch {}
+}
+
 export function getFaviconForUrl(url: string): string {
   if (!url || url === 'about:newtab') return '';
   try {

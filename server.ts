@@ -690,26 +690,12 @@ const stickyHttpsAgent = new https.Agent({
 });
 
 function getProxyPoolList(): string[] {
-  const defaultStickyPool = [
-    'socks5h://vncwbxva:d65j8vqe2th9@45.38.107.97:6014',
-    'http://vncwbxva-1:d65j8vqe2th9@p.webshare.io:80/',
-    'http://vncwbxva-4:d65j8vqe2th9@p.webshare.io:80/',
-    'http://vncwbxva-7:d65j8vqe2th9@p.webshare.io:80/',
-    'http://vncwbxva-2:d65j8vqe2th9@p.webshare.io:80/',
-    'http://vncwbxva-5:d65j8vqe2th9@p.webshare.io:80/',
-    'http://vncwbxva-10:d65j8vqe2th9@p.webshare.io:80/',
-  ];
   const envRaw = [process.env.SOCKS5_URL || '', process.env.RESIDENTIAL_PROXY_URL || '', process.env.PROXY_POOL_URLS || '']
     .join(',')
     .split(',')
     .map((s) => s.trim())
     .filter(Boolean);
-  if (envRaw.length === 0) return defaultStickyPool;
-  const combined = [...envRaw];
-  for (const fb of defaultStickyPool.slice(1)) {
-    if (!combined.includes(fb)) combined.push(fb);
-  }
-  return combined;
+  return envRaw;
 }
 
 function hashSessionIndex(sessionId: string, mod: number): number {

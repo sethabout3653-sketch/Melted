@@ -1,5 +1,16 @@
 import type { ProxyTransport } from '@mercuryworkshop/proxy-transports';
 import type { Controller, Frame } from '@mercuryworkshop/scramjet-controller';
+import { getClientDeviceProfile } from './browserStorageService';
+
+function getProfileUserAgent(profile: string): string {
+  if (profile === 'android_vr') {
+    return 'Mozilla/5.0 (Linux; Android 12L; Quest 3 Build/SQ3A.220605.009.A1; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/131.0.6778.135 Mobile Safari/537.36';
+  }
+  if (profile === 'android_mobile') {
+    return 'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.135 Mobile Safari/537.36';
+  }
+  return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+}
 
 const COOKIE_STORAGE_KEY = 'sj_saved_cookies_v1';
 const USER_ID_STORAGE_KEY = 'frosthub_chat_user_id';
@@ -1064,15 +1075,13 @@ function sanitizeTransportHeaders(
   // Force US-English language preference unconditionally so any website renders in English, not Japanese or Chinese
   map.set('accept-language', 'en-US,en;q=0.9');
 
-  // Preserve real browser User-Agent & Sec-CH-UA client hint headers to avoid TLS/header fingerprint mismatch bot blocks
-  const realBrowserUa = typeof navigator !== 'undefined' ? navigator.userAgent : '';
-  const existingUa = map.get('user-agent') || '';
-  if (!existingUa || existingUa.includes('Headless') || existingUa.includes('Bot') || existingUa.includes('Scramjet')) {
-    map.set(
-      'user-agent',
-      realBrowserUa ||
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-    );
+  // Enforce Android VR / Android Mobile / Desktop client profile for bot verification bypass
+  const profile = getClientDeviceProfile();
+  const profileUa = getProfileUserAgent(profile);
+  map.set('user-agent', profileUa);
+  if (profile === 'android_vr' || profile === 'android_mobile') {
+    map.set('sec-ch-ua-platform', '"Android"');
+    map.set('sec-ch-ua-mobile', '?1');
   }
 
   // Preserve real browser fingerprint hints if Scramjet omitted them
@@ -2650,30 +2659,26 @@ export async function launchInScramjetFrame(
             }
           } catch {}
 
-          // Mirror real host browser navigator properties so HTTP User-Agent/Sec-CH-UA headers match DOM checks (Google BotGuard / reCAPTCHA)
+          // Enforce Android VR / Android Mobile / Desktop navigator fingerprint for Google bot verification bypass
           try {
             const nav = win.navigator;
-            const hostNav = typeof window !== 'undefined' ? window.navigator : undefined;
             if (nav) {
-              const realUa =
-                hostNav?.userAgent ||
-                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
-              const realPlatform = hostNav?.platform || 'Win32';
-              const realVendor = hostNav?.vendor || 'Google Inc.';
-              const realConcurrency = hostNav?.hardwareConcurrency || 8;
-              const realMemory = (hostNav as any)?.deviceMemory || 8;
-              const realLanguages = ['en-US', 'en'];
+              const profile = getClientDeviceProfile();
+              const profileUa = getProfileUserAgent(profile);
+              const isMobile = profile === 'android_vr' || profile === 'android_mobile';
+              const platformStr = profile === 'android_vr' ? 'Linux armv8l' : profile === 'android_mobile' ? 'Linux armv7l' : 'Win32';
+              const touchPoints = isMobile ? 5 : 0;
 
               Object.defineProperty(nav, 'userAgent', {
-                get: () => realUa,
+                get: () => profileUa,
                 configurable: true,
               });
               Object.defineProperty(nav, 'platform', {
-                get: () => realPlatform,
+                get: () => platformStr,
                 configurable: true,
               });
               Object.defineProperty(nav, 'vendor', {
-                get: () => realVendor,
+                get: () => 'Google Inc.',
                 configurable: true,
               });
               Object.defineProperty(nav, 'webdriver', {
@@ -2685,15 +2690,19 @@ export async function launchInScramjetFrame(
                 configurable: true,
               });
               Object.defineProperty(nav, 'languages', {
-                get: () => realLanguages,
+                get: () => ['en-US', 'en'],
+                configurable: true,
+              });
+              Object.defineProperty(nav, 'maxTouchPoints', {
+                get: () => touchPoints,
                 configurable: true,
               });
               Object.defineProperty(nav, 'hardwareConcurrency', {
-                get: () => realConcurrency,
+                get: () => 8,
                 configurable: true,
               });
               Object.defineProperty(nav, 'deviceMemory', {
-                get: () => realMemory,
+                get: () => 8,
                 configurable: true,
               });
             }

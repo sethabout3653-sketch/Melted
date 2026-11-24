@@ -63,7 +63,7 @@ function hashClientKey(key: string): number {
 }
 
 export function getStickySocks5Pool(clientKey = 'default'): Socks5Endpoint[] {
-  const envRaw = [process.env.SOCKS5_URL || '', process.env.RESIDENTIAL_PROXY_URL || '']
+  const envRaw = [process.env.SOCKS5_URL || '', process.env.RESIDENTIAL_PROXY_URL || '', process.env.PROXY_POOL_URLS || '']
     .join(',')
     .split(',')
     .map((s) => s.trim())
@@ -73,39 +73,18 @@ export function getStickySocks5Pool(clientKey = 'default'): Socks5Endpoint[] {
   for (const raw of envRaw) {
     try {
       const parsed = new URL(raw);
-      // Only use SOCKS5 endpoints directly; HTTP Webshare URLs on :80 also expose SOCKS5 on :1080
-      const isWebshareHttp = parsed.hostname === 'p.webshare.io' && (!parsed.port || parsed.port === '80');
       customList.push({
         host: parsed.hostname,
-        port: isWebshareHttp ? 1080 : Number(parsed.port || 1080),
+        port: Number(parsed.port || 1080),
         user: parsed.username ? decodeURIComponent(parsed.username) : undefined,
         pass: parsed.password ? decodeURIComponent(parsed.password) : undefined,
       });
     } catch {}
   }
 
-  // Primary user-configured Webshare SOCKS5H static proxy + verified clean fallback slots
-  const primaryProxy: Socks5Endpoint = {
-    host: '45.38.107.97',
-    port: 6014,
-    user: 'vncwbxva',
-    pass: 'd65j8vqe2th9',
-  };
-  const cleanFallbacks: Socks5Endpoint[] = [
-    { host: 'p.webshare.io', port: 1080, user: 'vncwbxva-1', pass: 'd65j8vqe2th9' },
-    { host: 'p.webshare.io', port: 1080, user: 'vncwbxva-4', pass: 'd65j8vqe2th9' },
-    { host: 'p.webshare.io', port: 1080, user: 'vncwbxva-7', pass: 'd65j8vqe2th9' },
-    { host: 'p.webshare.io', port: 1080, user: 'vncwbxva-2', pass: 'd65j8vqe2th9' },
-    { host: 'p.webshare.io', port: 1080, user: 'vncwbxva-5', pass: 'd65j8vqe2th9' },
-    { host: 'p.webshare.io', port: 1080, user: 'vncwbxva-10', pass: 'd65j8vqe2th9' },
-  ];
-
-  const fbStart = hashClientKey(clientKey || 'default') % cleanFallbacks.length;
-  const orderedFallbacks = [...cleanFallbacks.slice(fbStart), ...cleanFallbacks.slice(0, fbStart)];
-  if (customList.length > 0) {
-    return [...customList, ...orderedFallbacks];
-  }
-  return [primaryProxy, ...orderedFallbacks];
+  if (customList.length === 0) return [];
+  const start = hashClientKey(clientKey || 'default') % customList.length;
+  return [...customList.slice(start), ...customList.slice(0, start)];
 }
 
 class AsyncDataQueue {
