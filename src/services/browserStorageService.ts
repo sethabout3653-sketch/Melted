@@ -228,20 +228,22 @@ export function getDisplayTitleFromUrl(url: string): string {
   }
 }
 
-export type ClientDeviceProfile = 'android_vr' | 'android_mobile' | 'desktop';
+export type ClientDeviceProfile = 'desktop';
 const CLIENT_PROFILE_KEY = 'frosthub_client_profile_v1';
 
 export function getClientDeviceProfile(): ClientDeviceProfile {
   try {
-    const raw = localStorage.getItem(CLIENT_PROFILE_KEY) as ClientDeviceProfile | null;
-    if (raw === 'desktop' || raw === 'android_vr' || raw === 'android_mobile') return raw;
+    const raw = localStorage.getItem(CLIENT_PROFILE_KEY);
+    if (raw && raw !== 'desktop') {
+      localStorage.removeItem(CLIENT_PROFILE_KEY);
+    }
   } catch {}
   return 'desktop';
 }
 
-export function setClientDeviceProfile(profile: ClientDeviceProfile): void {
+export function setClientDeviceProfile(_profile: ClientDeviceProfile): void {
   try {
-    localStorage.setItem(CLIENT_PROFILE_KEY, profile);
+    localStorage.setItem(CLIENT_PROFILE_KEY, 'desktop');
   } catch {}
 }
 
