@@ -99,8 +99,9 @@ export function resolveSocks5Pool(env?: any, clientKey = 'default'): Socks5Confi
       } catch {}
     }
     if (list.length > 0) {
-    const start = hashClientKey(clientKey) % list.length;
-    return [...list.slice(start), ...list.slice(0, start)];
+      const start = hashClientKey(clientKey) % list.length;
+      return [...list.slice(start), ...list.slice(0, start)];
+    }
   }
 
   if (env?.SOCKS5_HOST) {
