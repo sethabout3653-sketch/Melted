@@ -94,7 +94,7 @@ export function enforceSafeSearchOffUrl(inputUrl: URL): URL {
       pathLower === '/complete/search' ||
       inputUrl.searchParams.has('q');
 
-    if (isGoogleSearchDomain(host)) {
+    if (isGoogleSearchDomain(host) && isGoogleSearchPage) {
       if (
         /^(www\.)?google\.(com\.[a-z]{2}|co\.[a-z]{2}|[a-z]{2,3})$/.test(host) &&
         host !== 'google.com' &&
@@ -106,8 +106,6 @@ export function enforceSafeSearchOffUrl(inputUrl: URL): URL {
       if (!inputUrl.searchParams.has('hl')) inputUrl.searchParams.set('hl', 'en');
       if (!inputUrl.searchParams.has('gl')) inputUrl.searchParams.set('gl', 'us');
       inputUrl.searchParams.set('safe', 'off');
-      inputUrl.searchParams.set('safeui', 'off');
-      inputUrl.searchParams.delete('ssui');
     } else if (
       host === 'duckduckgo.com' ||
       host === 'www.duckduckgo.com' ||
@@ -280,30 +278,14 @@ export function enforceSafeSearchOffCookieString(hostname: string, currentCookie
   }
 
   if (host.includes('google.')) {
-    let foundPref = false;
     const filtered = parts
       .filter((s) => !/^SSUI=/i.test(s))
       .map((s) => {
         if (/^PREF=/i.test(s)) {
-          foundPref = true;
-          let val = stripYoutubeRestrictedPrefValue(s.slice(5));
-          if (/safeui=[^&]*/i.test(val)) {
-            val = val.replace(/safeui=[^&]*/gi, 'safeui=off');
-          } else {
-            val = val ? `${val}&safeui=off` : 'safeui=off';
-          }
-          if (/safe=[^&]*/i.test(val)) {
-            val = val.replace(/safe=[^&]*/gi, 'safe=off');
-          } else {
-            val = `${val}&safe=off`;
-          }
-          return `PREF=${val}`;
+          return `PREF=${stripYoutubeRestrictedPrefValue(s.slice(5))}`;
         }
         return s;
       });
-    if (!foundPref) {
-      filtered.push('PREF=safe=off&safeui=off');
-    }
     return filtered.join('; ');
   }
 
@@ -331,20 +313,8 @@ export function sanitizeSafeSearchSetCookie(hostname: string, setCookie: string)
     const semiIdx = out.indexOf(';');
     const nameVal = semiIdx === -1 ? out : out.slice(0, semiIdx);
     const attrs = semiIdx === -1 ? '' : out.slice(semiIdx);
-    let val = stripYoutubeRestrictedPrefValue(nameVal.slice(5));
-    if (host.includes('google.')) {
-      if (/safeui=[^&]*/i.test(val)) {
-        val = val.replace(/safeui=[^&]*/gi, 'safeui=off');
-      } else {
-        val = val ? `${val}&safeui=off` : 'safeui=off';
-      }
-      if (/safe=[^&]*/i.test(val)) {
-        val = val.replace(/safe=[^&]*/gi, 'safe=off');
-      } else {
-        val = `${val}&safe=off`;
-      }
-    }
-    out = `PREF=${val}${attrs}`;
+    const val = nameVal.slice(5);
+    out = `PREF=${stripYoutubeRestrictedPrefValue(val)}${attrs}`;
   } else if (host.includes('yahoo.com') && /^sB=.*vm=(r|m)/i.test(out)) {
     out = out.replace(/vm=(r|m)/gi, 'vm=p');
   }

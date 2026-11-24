@@ -5,6 +5,14 @@ import {
   sanitizeSafeSearchSetCookie,
   sanitizeSafeSearchLocation,
 } from '../../src/utils/safeSearchOff';
+import {
+  isGoogleSearchDomain,
+  isGoogleBotChallenge,
+  isYoutubeBotGateText,
+  getGoogleBypassProfiles,
+  fetchYoutubePlayerBypassEdge,
+  patchYtWatchPlayerHtml,
+} from '../../src/utils/botBypassHelper';
 
 interface CFContext {
   request: Request;
@@ -401,7 +409,129 @@ export async function onRequest(context: CFContext): Promise<Response> {
     let finalOutStatus = finalStatus;
     let finalOutStatusText = finalStatusText;
 
+    // 1. Real Google Search /sorry/ or 429 bot verification bypass (Android VR Quest 3 / Android / clean cookie-less retry — never fake HTML)
+    if (!isNullBodyStatus && (isGoogleSearchDomain(host) || targetUrl.pathname.toLowerCase().startsWith('/sorry'))) {
+      const probeText = new TextDecoder().decode(rawBodyBytes.subarray(0, 24000));
+      const locHeader = upstreamRes.headers.get('location') || '';
+      const finalResUrl = upstreamRes.url || '';
+      if (
+        finalResUrl.toLowerCase().includes('/sorry/') ||
+        isGoogleBotChallenge(targetUrl, finalOutStatus, locHeader, probeText)
+      ) {
+        let retryTarget = targetUrl;
+        if (targetUrl.pathname.toLowerCase().startsWith('/sorry')) {
+          const cont = targetUrl.searchParams.get('continue');
+          if (cont) {
+            try {
+              retryTarget = enforceSafeSearchOffUrl(new URL(cont));
+            } catch {}
+          }
+        }
 
+        for (const profile of getGoogleBypassProfiles()) {
+          try {
+            const cleanUrl = new URL(retryTarget.href);
+            if (cleanUrl.pathname === '/search') {
+              cleanUrl.searchParams.set('safe', 'off');
+              cleanUrl.searchParams.set('hl', 'en');
+              cleanUrl.searchParams.set('gl', 'US');
+              if (profile.useGbv) {
+                cleanUrl.searchParams.set('gbv', '1');
+              }
+            }
+            const retryHeaders = new Headers(forwardHeaders);
+            retryHeaders.delete('cookie');
+            retryHeaders.set('user-agent', profile.userAgent);
+            if (profile.secChUa) retryHeaders.set('sec-ch-ua', profile.secChUa);
+            if (profile.secChUaMobile) retryHeaders.set('sec-ch-ua-mobile', profile.secChUaMobile);
+            if (profile.secChUaPlatform) retryHeaders.set('sec-ch-ua-platform', profile.secChUaPlatform);
+            if (profile.secChUaModel) retryHeaders.set('sec-ch-ua-model', profile.secChUaModel);
+            else retryHeaders.delete('sec-ch-ua-model');
+            if (profile.secChUaPlatformVersion) retryHeaders.set('sec-ch-ua-platform-version', profile.secChUaPlatformVersion);
+            else retryHeaders.delete('sec-ch-ua-platform-version');
+
+            const cleanRes = await fetch(cleanUrl.href, {
+              method: 'GET',
+              headers: retryHeaders,
+              redirect: 'manual',
+            });
+            const cleanLoc = cleanRes.headers.get('location') || '';
+            const cleanBytes = new Uint8Array(await cleanRes.arrayBuffer());
+            const cleanProbe = new TextDecoder().decode(cleanBytes.subarray(0, 24000));
+            if (
+              cleanRes.status === 200 &&
+              !(cleanRes.url || '').toLowerCase().includes('/sorry/') &&
+              !isGoogleBotChallenge(cleanUrl, cleanRes.status, cleanLoc, cleanProbe)
+            ) {
+              rawBodyBytes = cleanBytes;
+              finalOutStatus = 200;
+              finalOutStatusText = cleanRes.statusText || 'OK';
+              for (let i = outHeaders.length - 1; i >= 0; i--) {
+                const hk = outHeaders[i][0].toLowerCase();
+                if (hk === 'location' || hk === 'set-cookie' || hk === 'content-type' || hk === 'content-length') {
+                  outHeaders.splice(i, 1);
+                }
+              }
+              const ct = cleanRes.headers.get('content-type');
+              outHeaders.push(['content-type', ct || 'text/html; charset=utf-8']);
+              break;
+            }
+          } catch {}
+        }
+      }
+    }
+
+    // 2. YouTube bot-gate ("Sign in to confirm you're not a bot") bypass on Cloudflare Workers
+    if (!isNullBodyStatus && finalOutStatus === 200 && (host === 'youtube.com' || host.endsWith('.youtube.com'))) {
+      const isPlayerEndpoint = targetUrl.pathname.startsWith('/youtubei/v1/player');
+      const isWatchPage = targetUrl.pathname === '/watch';
+      if (isPlayerEndpoint || isWatchPage) {
+        const ytText = new TextDecoder().decode(rawBodyBytes);
+        if (isYoutubeBotGateText(ytText) || (isPlayerEndpoint && !ytText.includes('streamingData'))) {
+          let videoId = targetUrl.searchParams.get('v') || '';
+          if (!videoId && isPlayerEndpoint) {
+            try {
+              const parsed = JSON.parse(ytText);
+              videoId = String(parsed?.videoDetails?.videoId || '');
+            } catch {}
+            if (!videoId && bodyBuf && bodyBuf.byteLength > 0) {
+              try {
+                const reqJson = JSON.parse(new TextDecoder().decode(bodyBuf));
+                videoId = String(reqJson?.videoId || '');
+              } catch {}
+            }
+          }
+          if (videoId) {
+            const bypassData = await fetchYoutubePlayerBypassEdge(videoId);
+            if (bypassData?.streamingData) {
+              if (isPlayerEndpoint) {
+                let parsed: any = {};
+                try {
+                  parsed = JSON.parse(ytText);
+                } catch {}
+                const merged = {
+                  ...parsed,
+                  playabilityStatus: bypassData.playabilityStatus || { status: 'OK', playableInEmbed: true },
+                  streamingData: bypassData.streamingData,
+                  videoDetails: parsed.videoDetails || bypassData.videoDetails,
+                  captions: parsed.captions || bypassData.captions,
+                  storyboards: parsed.storyboards || bypassData.storyboards,
+                };
+                rawBodyBytes = new TextEncoder().encode(JSON.stringify(merged));
+              } else {
+                const patchedHtml = patchYtWatchPlayerHtml(ytText, bypassData);
+                if (patchedHtml) {
+                  rawBodyBytes = new TextEncoder().encode(patchedHtml);
+                }
+              }
+              for (let i = outHeaders.length - 1; i >= 0; i--) {
+                if (outHeaders[i][0].toLowerCase() === 'set-cookie') outHeaders.splice(i, 1);
+              }
+            }
+          }
+        }
+      }
+    }
 
     if (!isNullBodyStatus) {
       outHeaders.push(['content-length', String(rawBodyBytes.byteLength)]);

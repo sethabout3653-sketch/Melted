@@ -19,6 +19,11 @@ import {
   sanitizeSafeSearchSetCookie,
   sanitizeSafeSearchLocation,
 } from './src/utils/safeSearchOff';
+import {
+  isGoogleSearchDomain,
+  isGoogleBotChallenge,
+  getGoogleBypassProfiles,
+} from './src/utils/botBypassHelper';
 import { Ytdl, Client as YtdlClient } from '@distube/ytdl-core';
 import { processGameHtml, getScaffoldingBuffer } from './src/server/scaffoldingLoader';
 import { FALLBACK_OPENROUTER_MODELS, OPENROUTER_CHAT_URL, OPENROUTER_MODEL } from './src/utils/openRouterEdgeHelper';
@@ -1452,8 +1457,156 @@ app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), as
       finalStatus === 304 ||
       method === 'HEAD';
 
+    // Real Google /sorry/ or 429 bot verification bypass (proxy pool rotation + Android VR Quest 3 / Android / clean cookie-less retry — never fake HTML)
+    if (!isNullBodyStatus && (isGoogleSearchDomain(host) || targetUrl.pathname.toLowerCase().startsWith('/sorry'))) {
+      const locPair = outHeaders.find(([k]) => k.toLowerCase() === 'location');
+      const locVal = locPair ? locPair[1] : '';
+      const probeText = rawBodyBuf.subarray(0, 24000).toString('utf8');
+      if (isGoogleBotChallenge(targetUrl, finalStatus, locVal, probeText)) {
+        let retryTarget = targetUrl;
+        if (targetUrl.pathname.toLowerCase().startsWith('/sorry')) {
+          const cont = targetUrl.searchParams.get('continue');
+          if (cont) {
+            try {
+              retryTarget = enforceSafeSearchOffUrl(new URL(cont));
+            } catch {}
+          }
+        }
+        const poolLen = Math.max(1, getProxyPoolList().length);
+        const profiles = getGoogleBypassProfiles();
+        let recovered = false;
 
+        for (let slotOffset = 0; slotOffset < Math.min(poolLen + 1, 4) && !recovered; slotOffset++) {
+          for (const profile of profiles) {
+            try {
+              const cleanUrl = new URL(retryTarget.href);
+              if (cleanUrl.pathname === '/search') {
+                cleanUrl.searchParams.set('safe', 'off');
+                cleanUrl.searchParams.set('hl', 'en');
+                cleanUrl.searchParams.set('gl', 'US');
+                if (profile.useGbv) {
+                  cleanUrl.searchParams.set('gbv', '1');
+                }
+              }
+              const retryHeaders: Record<string, string> = { ...upstreamHeadersObj };
+              delete retryHeaders['cookie'];
+              retryHeaders['user-agent'] = profile.userAgent;
+              if (profile.secChUa) retryHeaders['sec-ch-ua'] = profile.secChUa;
+              if (profile.secChUaMobile) retryHeaders['sec-ch-ua-mobile'] = profile.secChUaMobile;
+              if (profile.secChUaPlatform) retryHeaders['sec-ch-ua-platform'] = profile.secChUaPlatform;
+              if (profile.secChUaModel) retryHeaders['sec-ch-ua-model'] = profile.secChUaModel;
+              else delete retryHeaders['sec-ch-ua-model'];
+              if (profile.secChUaPlatformVersion) retryHeaders['sec-ch-ua-platform-version'] = profile.secChUaPlatformVersion;
+              else delete retryHeaders['sec-ch-ua-platform-version'];
 
+              const cleanRes = await performRawUpstreamRequest(
+                cleanUrl,
+                'GET',
+                retryHeaders,
+                null,
+                15000,
+                stickySessionId,
+                slotOffset
+              );
+              const cleanProbe = cleanRes.body.subarray(0, 24000).toString('utf8');
+              const cleanLoc = (() => {
+                for (let i = 0; i + 1 < cleanRes.rawHeaders.length; i += 2) {
+                  if (cleanRes.rawHeaders[i].toLowerCase() === 'location') return cleanRes.rawHeaders[i + 1];
+                }
+                return '';
+              })();
+              if (cleanRes.status === 200 && !isGoogleBotChallenge(cleanUrl, cleanRes.status, cleanLoc, cleanProbe)) {
+                rawBodyBuf = cleanRes.body;
+                finalStatus = 200;
+                finalStatusText = 'OK';
+                for (let i = outHeaders.length - 1; i >= 0; i--) {
+                  const hk = outHeaders[i][0].toLowerCase();
+                  if (hk === 'location' || hk === 'set-cookie' || hk === 'content-length') {
+                    outHeaders.splice(i, 1);
+                  }
+                }
+                recovered = true;
+                break;
+              }
+            } catch {}
+          }
+        }
+      }
+    }
+
+    // Bypass YouTube bot-gate ("Sign in to confirm you're not a bot" / LOGIN_REQUIRED) cleanly via resolved stream fallback
+    if (!isNullBodyStatus && finalStatus === 200 && (host === 'youtube.com' || host.endsWith('.youtube.com'))) {
+      const isPlayerEndpoint = targetUrl.pathname.startsWith('/youtubei/v1/player');
+      const isWatchPage = targetUrl.pathname === '/watch';
+      if (isPlayerEndpoint) {
+        try {
+          const text = rawBodyBuf.toString('utf8');
+          const hasBotBlock =
+            text.includes('LOGIN_REQUIRED') ||
+            text.includes('UNPLAYABLE') ||
+            text.includes('not a bot') ||
+            text.includes('invalidparam') ||
+            text.includes('invalidVideodata') ||
+            text.includes('api.invalidparam') ||
+            !text.includes('streamingData');
+
+          if (hasBotBlock) {
+            let parsed: any = {};
+            try {
+              parsed = JSON.parse(text);
+            } catch {
+              parsed = { videoDetails: { videoId: 'dQw4w9WgXcQ', title: 'YouTube Video' } };
+            }
+            let videoId = String(parsed?.videoDetails?.videoId || '');
+            if (!videoId && hasBody && req.body) {
+              try {
+                const reqJson = JSON.parse(req.body.toString('utf8'));
+                videoId = String(reqJson?.videoId || '');
+              } catch {}
+            }
+            if (!videoId) {
+              videoId = targetUrl.searchParams.get('v') || '';
+            }
+            if (videoId) {
+              const vrData = await fetchYoutubeVrPlayer(videoId);
+              if (vrData?.streamingData) {
+                const merged = {
+                  ...parsed,
+                  playabilityStatus: vrData.playabilityStatus || { status: 'OK', playableInEmbed: true },
+                  streamingData: vrData.streamingData,
+                  videoDetails: parsed.videoDetails || vrData.videoDetails,
+                  captions: parsed.captions || vrData.captions,
+                  storyboards: parsed.storyboards || vrData.storyboards,
+                };
+                rawBodyBuf = Buffer.from(JSON.stringify(merged), 'utf8');
+                for (let i = outHeaders.length - 1; i >= 0; i--) {
+                  if (outHeaders[i][0].toLowerCase() === 'set-cookie') outHeaders.splice(i, 1);
+                }
+              }
+            }
+          }
+        } catch {}
+      } else if (isWatchPage) {
+        try {
+          const html = rawBodyBuf.toString('utf8');
+          if (html.includes('LOGIN_REQUIRED') || html.includes('not a bot')) {
+            const videoId = targetUrl.searchParams.get('v') || '';
+            if (videoId) {
+              const vrData = await fetchYoutubeVrPlayer(videoId);
+              if (vrData?.streamingData) {
+                const patchedHtml = patchYtInitialPlayerResponseHtml(html, vrData);
+                if (patchedHtml) {
+                  rawBodyBuf = Buffer.from(patchedHtml, 'utf8');
+                  for (let i = outHeaders.length - 1; i >= 0; i--) {
+                    if (outHeaders[i][0].toLowerCase() === 'set-cookie') outHeaders.splice(i, 1);
+                  }
+                }
+              }
+            }
+          }
+        } catch {}
+      }
+    }
 
     const bodyBuf = isNullBodyStatus ? Buffer.alloc(0) : rawBodyBuf;
     if (!isNullBodyStatus) {
