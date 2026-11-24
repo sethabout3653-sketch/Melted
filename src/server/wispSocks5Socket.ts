@@ -1,4 +1,6 @@
 import net from 'net';
+import { resolveUnfilteredIp } from './dohResolver';
+import { mapSafeSearchRestrictedHost } from '../utils/safeSearchOff';
 
 export const HIGH_SECURITY_DOMAINS = [
   'google.com',
@@ -285,18 +287,19 @@ export function createSplitRoutingWispTCPSocket(clientKey = 'default') {
     public data_queue: AsyncDataQueue;
 
     constructor(hostname: string, port: number) {
-      this.hostname = hostname;
+      this.hostname = mapSafeSearchRestrictedHost(hostname);
       this.port = port;
       this.data_queue = new AsyncDataQueue(this.recv_buffer_size);
     }
 
     async connect(ipOverride: string | null = null): Promise<void> {
-      const useSocks5 = isHighSecurityDomain(this.hostname) && socks5Pool.length > 0;
+      const targetHostname = mapSafeSearchRestrictedHost(this.hostname);
+      const useSocks5 = isHighSecurityDomain(targetHostname) && socks5Pool.length > 0;
 
       if (useSocks5) {
         for (let i = 0; i < Math.min(socks5Pool.length, 2); i++) {
           try {
-            const { socket, leftover } = await connectViaSocks5(socks5Pool[i], this.hostname, this.port);
+            const { socket, leftover } = await connectViaSocks5(socks5Pool[i], targetHostname, this.port);
             this.socket = socket;
             this.connected = true;
             if (leftover && leftover.length > 0) {
@@ -310,7 +313,8 @@ export function createSplitRoutingWispTCPSocket(clientKey = 'default') {
         }
       }
 
-      const host = ipOverride || this.hostname;
+      const dohIp = !ipOverride ? await resolveUnfilteredIp(targetHostname).catch(() => null) : null;
+      const host = ipOverride || dohIp || targetHostname;
       await new Promise<void>((resolve, reject) => {
         const sock = new net.Socket();
         sock.setNoDelay(true);

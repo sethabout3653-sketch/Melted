@@ -1,15 +1,82 @@
 import type { ProxyTransport } from '@mercuryworkshop/proxy-transports';
 import type { Controller, Frame } from '@mercuryworkshop/scramjet-controller';
 import { getClientDeviceProfile } from './browserStorageService';
+import {
+  enforceSafeSearchOffUrl,
+  enforceSafeSearchOffCookieString,
+  sanitizeSafeSearchSetCookie,
+  sanitizeSafeSearchLocation,
+} from '../utils/safeSearchOff';
+import {
+  isGoogleSearchDomain,
+  isGoogleBotChallenge,
+  isYoutubeBotGateText,
+} from '../utils/botBypassHelper';
+import { installWasmWebSocketGuard } from '../utils/wasmWsGuard';
+
+installWasmWebSocketGuard();
 
 function getProfileUserAgent(profile: string): string {
   if (profile === 'android_vr') {
-    return 'Mozilla/5.0 (Linux; Android 12L; Quest 3 Build/SQ3A.220605.009.A1; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/131.0.6778.135 Mobile Safari/537.36';
+    return 'Mozilla/5.0 (Linux; Android 12L; Quest 3 Build/SQ3A.220605.009.A1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.135 Mobile Safari/537.36';
   }
   if (profile === 'android_mobile') {
     return 'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.135 Mobile Safari/537.36';
   }
   return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+}
+
+function getProfileClientHints(profile: string) {
+  const isAndroid = profile === 'android_vr' || profile === 'android_mobile';
+  if (isAndroid) {
+    const isVr = profile === 'android_vr';
+    return {
+      isMobile: true,
+      platform: 'Android',
+      platformVersion: isVr ? '12.0.0' : '14.0.0',
+      model: isVr ? 'Quest 3' : 'SM-S928B',
+      architecture: 'arm',
+      bitness: '64',
+      wow64: false,
+      uaFullVersion: '131.0.6778.135',
+      secChUa: '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+      secChUaFullVersionList:
+        '"Google Chrome";v="131.0.6778.135", "Chromium";v="131.0.6778.135", "Not_A Brand";v="24.0.0.0"',
+      brands: [
+        { brand: 'Google Chrome', version: '131' },
+        { brand: 'Chromium', version: '131' },
+        { brand: 'Not_A Brand', version: '24' },
+      ],
+      fullVersionList: [
+        { brand: 'Google Chrome', version: '131.0.6778.135' },
+        { brand: 'Chromium', version: '131.0.6778.135' },
+        { brand: 'Not_A Brand', version: '24.0.0.0' },
+      ],
+    };
+  }
+  return {
+    isMobile: false,
+    platform: 'Windows',
+    platformVersion: '15.0.0',
+    model: '',
+    architecture: 'x86',
+    bitness: '64',
+    wow64: false,
+    uaFullVersion: '131.0.0.0',
+    secChUa: '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
+    secChUaFullVersionList:
+      '"Google Chrome";v="131.0.0.0", "Chromium";v="131.0.0.0", "Not_A Brand";v="24.0.0.0"',
+    brands: [
+      { brand: 'Google Chrome', version: '131' },
+      { brand: 'Chromium', version: '131' },
+      { brand: 'Not_A Brand', version: '24' },
+    ],
+    fullVersionList: [
+      { brand: 'Google Chrome', version: '131.0.0.0' },
+      { brand: 'Chromium', version: '131.0.0.0' },
+      { brand: 'Not_A Brand', version: '24.0.0.0' },
+    ],
+  };
 }
 
 const COOKIE_STORAGE_KEY = 'sj_saved_cookies_v1';
@@ -293,6 +360,10 @@ export function deepMergeCookies(...sources: Array<Record<string, any> | undefin
     }
 
     if (bestVal && bestVal.name && bestVal.value !== undefined) {
+      const upperCookieName = String(bestVal.name).trim().toUpperCase();
+      if (upperCookieName === 'GOOGLE_ABUSE_EXEMPTION') {
+        continue;
+      }
       if (typeof bestVal.maxAge === 'number' && bestVal.maxAge <= 0) {
         delete bestVal.maxAge;
       }
@@ -1040,13 +1111,14 @@ function sanitizeTransportHeaders(
     const key = String(pair[0] ?? '')
       .replace(/[\r\n\0:\s]+/g, '')
       .toLowerCase();
-    if (!key || FORBIDDEN_H2_HEADERS.has(key) || key === 'youtube-restrict') continue;
+    if (!key || FORBIDDEN_H2_HEADERS.has(key) || key === 'youtube-restrict' || key === 'x-youtube-restrict') continue;
     if (isBodylessMethod && key === 'content-length') continue;
     // Browsers never send Origin on no-cors / navigate GETs (<link rel="stylesheet">, <script>, <img>);
     // Scramjet injects it unconditionally, which triggers Cloudflare gzip/Vary corruption on some CDNs.
     if (isBodylessMethod && key === 'origin' && secFetchMode !== 'cors') continue;
 
     let val = String(pair[1] ?? '').replace(/[\r\n\0]+/g, ' ').trim();
+    if (key === 'prefer' && val.toLowerCase().includes('safe')) continue;
     if (key === 'te' && val.toLowerCase() !== 'trailers') continue;
     if (key === 'accept-encoding') {
       const cleaned = val
@@ -1075,58 +1147,23 @@ function sanitizeTransportHeaders(
   // Force US-English language preference unconditionally so any website renders in English, not Japanese or Chinese
   map.set('accept-language', 'en-US,en;q=0.9');
 
-  // Enforce Android VR / Android Mobile / Desktop client profile for bot verification bypass
+  // Enforce Desktop / configured client profile with standard low-entropy Client Hints
+  // (avoid sending unrequested high-entropy sec-ch-ua-* hints on every request, which flags bot detectors)
   const profile = getClientDeviceProfile();
   const profileUa = getProfileUserAgent(profile);
+  const hints = getProfileClientHints(profile);
   map.set('user-agent', profileUa);
-  if (profile === 'android_vr' || profile === 'android_mobile') {
-    map.set('sec-ch-ua-platform', '"Android"');
-    map.set('sec-ch-ua-mobile', '?1');
-  }
-
-  // Preserve real browser fingerprint hints if Scramjet omitted them
-  if (typeof navigator !== 'undefined') {
-    if (!map.has('user-agent') && navigator.userAgent) {
-      map.set('user-agent', navigator.userAgent);
-    }
-    const uaData = (navigator as any).userAgentData;
-    if (uaData) {
-      if (!map.has('sec-ch-ua') && Array.isArray(uaData.brands) && uaData.brands.length > 0) {
-        const brandStr = uaData.brands
-          .map((b: any) => `"${String(b.brand || '').replace(/"/g, '')}";v="${String(b.version || '')}"`)
-          .join(', ');
-        if (brandStr) map.set('sec-ch-ua', brandStr);
-      }
-      if (!map.has('sec-ch-ua-mobile') && typeof uaData.mobile === 'boolean') {
-        map.set('sec-ch-ua-mobile', uaData.mobile ? '?1' : '?0');
-      }
-      if (!map.has('sec-ch-ua-platform') && uaData.platform) {
-        map.set('sec-ch-ua-platform', `"${String(uaData.platform).replace(/"/g, '')}"`);
-      }
-    } else {
-      const uaLower = (map.get('user-agent') || '').toLowerCase();
-      let detectedPlatform = 'Windows';
-      let isMobile = false;
-      if (uaLower.includes('macintosh') || uaLower.includes('mac os')) detectedPlatform = 'macOS';
-      else if (uaLower.includes('cros')) detectedPlatform = 'Chrome OS';
-      else if (uaLower.includes('android')) {
-        detectedPlatform = 'Android';
-        isMobile = true;
-      } else if (uaLower.includes('iphone') || uaLower.includes('ipad')) {
-        detectedPlatform = 'iOS';
-        isMobile = true;
-      } else if (uaLower.includes('linux')) detectedPlatform = 'Linux';
-
-      if (!map.has('sec-ch-ua')) {
-        map.set('sec-ch-ua', '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"');
-      }
-      if (!map.has('sec-ch-ua-mobile')) {
-        map.set('sec-ch-ua-mobile', isMobile ? '?1' : '?0');
-      }
-      if (!map.has('sec-ch-ua-platform')) {
-        map.set('sec-ch-ua-platform', `"${detectedPlatform}"`);
-      }
-    }
+  map.set('sec-ch-ua', hints.secChUa);
+  map.set('sec-ch-ua-mobile', hints.isMobile ? '?1' : '?0');
+  map.set('sec-ch-ua-platform', `"${hints.platform}"`);
+  if (!hints.isMobile) {
+    map.delete('sec-ch-ua-model');
+    map.delete('sec-ch-ua-platform-version');
+    map.delete('sec-ch-ua-arch');
+    map.delete('sec-ch-ua-bitness');
+    map.delete('sec-ch-ua-wow64');
+    map.delete('sec-ch-ua-full-version');
+    map.delete('sec-ch-ua-full-version-list');
   }
 
   for (const [k, v] of map.entries()) {
@@ -1609,76 +1646,7 @@ async function readTransportBodyBytes(body: any): Promise<Uint8Array | null> {
 }
 
 function normalizeGoogleRemoteUrl(remoteUrl: URL): URL {
-  try {
-    const host = remoteUrl.hostname.toLowerCase();
-    const pathLower = remoteUrl.pathname.toLowerCase();
-    const isGoogleSearchPage =
-      pathLower === '/' || pathLower === '/search' || pathLower === '/webhp';
-    // Normalize regional Google Search domains ONLY on search pages; never touch /sorry/*, /recaptcha/*, or signed URLs
-    if (
-      isGoogleSearchPage &&
-      /^(www\.)?google\.(com\.[a-z]{2}|co\.[a-z]{2}|[a-z]{2,3})$/.test(host) &&
-      host !== 'google.com' &&
-      host !== 'www.google.com'
-    ) {
-      remoteUrl.hostname = 'www.google.com';
-    }
-    const normHost = remoteUrl.hostname.toLowerCase();
-    if ((normHost === 'www.google.com' || normHost === 'google.com' || normHost === 'images.google.com') && isGoogleSearchPage) {
-      if (!remoteUrl.searchParams.has('hl')) remoteUrl.searchParams.set('hl', 'en');
-      if (!remoteUrl.searchParams.has('gl')) remoteUrl.searchParams.set('gl', 'us');
-      remoteUrl.searchParams.set('safe', 'off');
-    } else if (normHost === 'www.google.com' && (pathLower === '/images' || pathLower === '/imgres')) {
-      remoteUrl.searchParams.set('safe', 'off');
-    } else if (normHost === 'www.bing.com' || normHost === 'bing.com') {
-      if (
-        remoteUrl.pathname === '/search' ||
-        remoteUrl.pathname === '/' ||
-        remoteUrl.pathname === '/images/search' ||
-        remoteUrl.pathname === '/videos/search'
-      ) {
-        remoteUrl.searchParams.set('setlang', 'en-US');
-        remoteUrl.searchParams.set('cc', 'US');
-        remoteUrl.searchParams.set('adlt', 'off');
-      }
-    } else if (normHost === 'duckduckgo.com' || normHost === 'www.duckduckgo.com' || normHost === 'html.duckduckgo.com' || normHost === 'lite.duckduckgo.com') {
-      if (
-        remoteUrl.pathname === '/' ||
-        remoteUrl.pathname.startsWith('/html') ||
-        remoteUrl.pathname.startsWith('/lite')
-      ) {
-        if (!remoteUrl.searchParams.has('kl')) {
-          remoteUrl.searchParams.set('kl', 'us-en');
-        }
-        remoteUrl.searchParams.set('kp', '-2');
-      }
-    } else if (normHost === 'search.brave.com') {
-      if (
-        remoteUrl.pathname === '/' ||
-        remoteUrl.pathname === '/search' ||
-        remoteUrl.pathname === '/images' ||
-        remoteUrl.pathname === '/videos' ||
-        remoteUrl.pathname === '/news'
-      ) {
-        remoteUrl.searchParams.set('safesearch', 'off');
-      }
-    } else if (normHost === 'www.startpage.com' || normHost === 'startpage.com') {
-      if (remoteUrl.pathname === '/sp/search' || remoteUrl.pathname === '/do/search') {
-        remoteUrl.searchParams.set('ff', '0');
-      }
-    } else if (normHost === 'www.youtube.com' || normHost === 'm.youtube.com') {
-      if (
-        remoteUrl.pathname === '/' ||
-        remoteUrl.pathname === '/watch' ||
-        remoteUrl.pathname === '/results' ||
-        remoteUrl.pathname.startsWith('/shorts/')
-      ) {
-        remoteUrl.searchParams.set('hl', 'en');
-        remoteUrl.searchParams.set('gl', 'US');
-      }
-    }
-  } catch {}
-  return remoteUrl;
+  return enforceSafeSearchOffUrl(remoteUrl);
 }
 
 
@@ -1860,6 +1828,14 @@ async function createWispTransport(): Promise<ProxyTransport> {
   const libcurlClients = new Map<string, any>();
   const libcurlInitPromises = new Map<string, Promise<any>>();
 
+  const retireEpoxyClient = (wispUrl: string, target?: any) => {
+    const current = epoxyClients.get(wispUrl);
+    if (!target || current === target) {
+      epoxyClients.delete(wispUrl);
+      epoxyInitPromises.delete(wispUrl);
+    }
+  };
+
   const rotateToNextWisp = () => {
     if (workingWispUrls.length <= 1) return activeWispUrl;
     candidateIndex = (candidateIndex + 1) % workingWispUrls.length;
@@ -1873,12 +1849,13 @@ async function createWispTransport(): Promise<ProxyTransport> {
     let initP = epoxyInitPromises.get(wispUrl);
     if (!initP) {
       initP = (async () => {
+        installWasmWebSocketGuard();
         const { default: EpoxyTransport } = await import('@mercuryworkshop/epoxy-transport');
         const epoxy = new (EpoxyTransport as any)({
           wisp: wispUrl,
           wisp_v2: true,
         });
-        await withPromiseTimeout(epoxy.init(), 6000, `Epoxy init (${wispUrl})`);
+        await withPromiseTimeout(epoxy.init(), 10000, `Epoxy init (${wispUrl})`);
         const origReq = epoxy.request.bind(epoxy);
         epoxy.request = async (...reqArgs: any[]) => {
           try {
@@ -1889,10 +1866,15 @@ async function createWispTransport(): Promise<ProxyTransport> {
               msg.includes('goaway') ||
               msg.includes('http2') ||
               msg.includes('hyper client') ||
-              msg.includes('sendrequest')
+              msg.includes('sendrequest') ||
+              msg.includes('wisp') ||
+              msg.includes('websocket') ||
+              msg.includes('closure') ||
+              msg.includes('dropped') ||
+              msg.includes('eof') ||
+              msg.includes('closed')
             ) {
-              epoxyClients.delete(wispUrl);
-              epoxyInitPromises.delete(wispUrl);
+              retireEpoxyClient(wispUrl, epoxy);
             }
             throw err;
           }
@@ -1980,6 +1962,24 @@ async function createWispTransport(): Promise<ProxyTransport> {
           (k.toLowerCase() === 'accept' && v.includes('text/html'))
       );
 
+      // Immediately resolve search/social redirect wrappers (e.g. duckduckgo.com/l/?uddg=..., bing.com/ck/a)
+      // so navigations never stall on interstitial link pages that fail JS/meta redirects
+      if (isDocument) {
+        const unwrappedNav = unwrapRedirectWrapperUrl(targetRemote.href);
+        if (unwrappedNav) {
+          let cleanRedirectTarget = unwrappedNav;
+          try {
+            cleanRedirectTarget = enforceSafeSearchOffUrl(new URL(unwrappedNav)).href;
+          } catch {}
+          return {
+            body: null,
+            status: 302,
+            statusText: 'Found',
+            headers: [['location', cleanRedirectTarget]],
+          };
+        }
+      }
+
       // Inject stored cookies into outgoing request if not already present or partial
       if (cachedController?.cookieJar) {
         try {
@@ -2005,52 +2005,50 @@ async function createWispTransport(): Promise<ProxyTransport> {
         } catch {}
       }
 
-      // Enforce SafeSearch OFF cookies across major search engines (without wiping user preferences)
+      // Enforce SafeSearch OFF cookies across all search engines & sites, and strip poisoned abuse cookies
       {
         const cookieIdx = cleanHeaders.findIndex(([k]) => k.toLowerCase() === 'cookie');
-        const currentCookie = cookieIdx !== -1 ? cleanHeaders[cookieIdx][1] || '' : '';
-        if (targetHost.includes('duckduckgo.com')) {
-          const filtered = currentCookie
+        let currentCookie = cookieIdx !== -1 ? cleanHeaders[cookieIdx][1] || '' : '';
+        if ((isGoogle || targetPath.startsWith('/sorry')) && currentCookie.includes('GOOGLE_ABUSE_EXEMPTION')) {
+          currentCookie = currentCookie
             .split(';')
-            .map((s) => s.trim())
-            .filter((s) => s && !/^p=/i.test(s) && !/^kl=/i.test(s));
-          filtered.push('p=-2', 'kl=us-en');
-          const nextCookie = filtered.join('; ');
-          if (cookieIdx !== -1) cleanHeaders[cookieIdx] = ['cookie', nextCookie];
-          else cleanHeaders.push(['cookie', nextCookie]);
-        } else if (targetHost.includes('bing.com')) {
-          let nextCookie = currentCookie;
-          if (/ADLT=(STRICT|DEMOTE)/i.test(nextCookie)) {
-            nextCookie = nextCookie.replace(/ADLT=(STRICT|DEMOTE)/gi, 'ADLT=OFF');
-          } else if (!nextCookie.includes('ADLT=')) {
-            nextCookie = nextCookie ? `${nextCookie}; SRCHHPGUSR=ADLT=OFF` : 'SRCHHPGUSR=ADLT=OFF';
+            .map((p) => p.trim())
+            .filter((p) => p && !p.toUpperCase().startsWith('GOOGLE_ABUSE_EXEMPTION='))
+            .join('; ');
+        }
+        const nextCookie = enforceSafeSearchOffCookieString(targetHost, currentCookie);
+        if (nextCookie !== (cookieIdx !== -1 ? cleanHeaders[cookieIdx][1] || '' : '')) {
+          if (cookieIdx !== -1) {
+            if (nextCookie) cleanHeaders[cookieIdx] = ['cookie', nextCookie];
+            else cleanHeaders.splice(cookieIdx, 1);
+          } else if (nextCookie) {
+            cleanHeaders.push(['cookie', nextCookie]);
           }
-          if (cookieIdx !== -1) cleanHeaders[cookieIdx] = ['cookie', nextCookie];
-          else cleanHeaders.push(['cookie', nextCookie]);
-        } else if (targetHost.includes('search.brave.com')) {
-          const filtered = currentCookie
-            .split(';')
-            .map((s) => s.trim())
-            .filter((s) => s && !/^safesearch=/i.test(s));
-          filtered.push('safesearch=off');
-          const nextCookie = filtered.join('; ');
-          if (cookieIdx !== -1) cleanHeaders[cookieIdx] = ['cookie', nextCookie];
-          else cleanHeaders.push(['cookie', nextCookie]);
-        } else if (targetHost.includes('youtube.com') && currentCookie.includes('f2=8000000')) {
-          const nextCookie = currentCookie.replace(/(&?)f2=8000000(&?)/g, (_m, a, b) => (a && b ? '&' : ''));
-          if (cookieIdx !== -1) cleanHeaders[cookieIdx] = ['cookie', nextCookie];
         }
       }
 
       const captureResponseCookies = (resp: { headers?: RawHeaderPair[] } | null | undefined) => {
-        if (!resp || !Array.isArray(resp.headers) || !cachedController?.cookieJar) return;
+        if (!resp || !Array.isArray(resp.headers)) return;
         let hasSetCookie = false;
-        for (const [k, v] of resp.headers) {
-          if (k.toLowerCase() === 'set-cookie' && v) {
-            try {
-              cachedController.cookieJar.setCookies(v, targetRemote);
-              hasSetCookie = true;
-            } catch {}
+        const jar = cachedController?.cookieJar;
+        for (let i = resp.headers.length - 1; i >= 0; i--) {
+          const [k, v] = resp.headers[i];
+          const lowerK = k.toLowerCase();
+          if (lowerK === 'location' && v) {
+            resp.headers[i] = [k, sanitizeSafeSearchLocation(v, targetRemote.origin)];
+          } else if (lowerK === 'set-cookie' && v) {
+            if (/^\s*GOOGLE_ABUSE_EXEMPTION=/i.test(v)) {
+              resp.headers.splice(i, 1);
+              continue;
+            }
+            const cleanSc = sanitizeSafeSearchSetCookie(targetHost, v);
+            resp.headers[i] = [k, cleanSc];
+            if (jar) {
+              try {
+                jar.setCookies(cleanSc, targetRemote);
+                hasSetCookie = true;
+              } catch {}
+            }
           }
         }
         if (hasSetCookie) {
@@ -2072,6 +2070,7 @@ async function createWispTransport(): Promise<ProxyTransport> {
         targetHost === 'startpage.com' ||
         targetHost.endsWith('.startpage.com') ||
         targetHost === 'search.brave.com';
+      const isGoogleSearchOrSorry = isGoogleSearchDomain(targetHost) || targetPath.startsWith('/sorry');
       const reqDest = getHeaderValue(cleanHeaders, 'sec-fetch-dest').toLowerCase();
       const isCriticalSubresource =
         reqDest === 'script' ||
@@ -2085,15 +2084,121 @@ async function createWispTransport(): Promise<ProxyTransport> {
 
       const hasBackendOrigin = resolveBackendOrigins().length > 0;
 
+      const inspectChallengeResponse = async (
+        rawRes: any
+      ): Promise<{ isChallenge: boolean; kind: 'google' | 'youtube' | 'search' | 'cloudflare' | 'none' }> => {
+        if (!rawRes) return { isChallenge: false, kind: 'none' };
+        const status = Number(rawRes.status || 0);
+        const resHeaders: RawHeaderPair[] = Array.isArray(rawRes.headers) ? rawRes.headers : [];
+        const locHeader = getHeaderValue(resHeaders, 'location');
+        const finalUrlHeader = getHeaderValue(resHeaders, 'x-final-url');
+        const cfMitigated = getHeaderValue(resHeaders, 'cf-mitigated').toLowerCase();
+        const ct = getHeaderValue(resHeaders, 'content-type').toLowerCase();
+
+        if (isGoogleSearchOrSorry) {
+          if (
+            locHeader.toLowerCase().includes('/sorry') ||
+            finalUrlHeader.toLowerCase().includes('/sorry') ||
+            status === 429 ||
+            status === 403 ||
+            status === 503
+          ) {
+            return { isChallenge: true, kind: 'google' };
+          }
+        }
+
+        if (isSearchChallengeHost && (status === 202 || status === 403 || status === 429)) {
+          return { isChallenge: true, kind: 'search' };
+        }
+
+        if (cfMitigated === 'challenge') {
+          return { isChallenge: true, kind: 'cloudflare' };
+        }
+
+        const isTextLike =
+          !ct ||
+          ct.includes('text/html') ||
+          ct.includes('application/xhtml+xml') ||
+          ct.includes('application/json') ||
+          ct.includes('text/plain');
+        const shouldInspectBody =
+          isTextLike &&
+          (isGoogleSearchOrSorry ||
+            isSearchChallengeHost ||
+            isYoutubeWatchOrPlayer ||
+            (isDocument && (status === 403 || status === 429 || status === 503)));
+
+        if (!shouldInspectBody || !rawRes.body) {
+          return { isChallenge: false, kind: 'none' };
+        }
+
+        const bytes = await readTransportBodyBytes(rawRes.body);
+        if (!bytes) return { isChallenge: false, kind: 'none' };
+        // Preserve body intact for formatResponse if we end up returning this response
+        rawRes.body = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+
+        const maxSlice = isYoutubeWatchOrPlayer ? Math.min(bytes.byteLength, 512000) : Math.min(bytes.byteLength, 48000);
+        const probeText = new TextDecoder().decode(bytes.subarray(0, maxSlice));
+
+        if (isGoogleSearchOrSorry && isGoogleBotChallenge(targetRemote, status, locHeader, probeText)) {
+          return { isChallenge: true, kind: 'google' };
+        }
+
+        if (isSearchChallengeHost && probeText.includes('anomalyDetectionBlock')) {
+          return { isChallenge: true, kind: 'search' };
+        }
+
+        if (
+          isYoutubeWatchOrPlayer &&
+          (isYoutubeBotGateText(probeText) ||
+            (targetPath.startsWith('/youtubei/v1/player') && !probeText.includes('"streamingData"')))
+        ) {
+          return { isChallenge: true, kind: 'youtube' };
+        }
+
+        if (isDocument && (status === 403 || status === 429 || status === 503)) {
+          const lower = probeText.toLowerCase();
+          if (
+            lower.includes('just a moment...') ||
+            lower.includes('cf-turnstile') ||
+            lower.includes('_cf_chl_opt') ||
+            lower.includes('challenge-platform') ||
+            lower.includes('attention required! | cloudflare') ||
+            lower.includes('enable javascript and cookies to continue') ||
+            (lower.includes('captcha') && lower.includes('cloudflare'))
+          ) {
+            return { isChallenge: true, kind: 'cloudflare' };
+          }
+        }
+
+        return { isChallenge: false, kind: 'none' };
+      };
+
       // 1. Try EpoxyTransport across available Wisp servers (primary high-concurrency engine)
       const wispsToTry = workingWispUrls.length > 0 ? workingWispUrls : getWispCandidates();
+      const startWispIdx = activeWispUrl ? Math.max(0, wispsToTry.indexOf(activeWispUrl)) : candidateIndex;
       let lastTransportError: any = null;
+      let lastChallengeResponse: any = null;
+      let fastFailToServerBypass = false;
+      const challengedWispUrls = new Set<string>();
+      const challengedWispHosts = new Set<string>();
+      const getWispHost = (u: string) => {
+        try {
+          return new URL(u).hostname.toLowerCase();
+        } catch {
+          return u;
+        }
+      };
       const preferLibcurl = isKnownHttp2Incompatible(targetHost) || isLibcurlPreferredHost(targetHost);
-      const epoxyAttempts = preferLibcurl ? 0 : Math.min(wispsToTry.length, 3);
+      const epoxyAttempts = preferLibcurl ? 0 : Math.min(wispsToTry.length, 5);
 
       for (let i = 0; i < epoxyAttempts; i++) {
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-        const wispUrl = activeWispUrl || wispsToTry[(candidateIndex + i) % wispsToTry.length];
+        const wispUrl = wispsToTry[(startWispIdx + i) % wispsToTry.length];
+        const wispHost = getWispHost(wispUrl);
+        if (challengedWispHosts.has(wispHost)) {
+          continue;
+        }
         for (let h2Retry = 0; h2Retry < 2; h2Retry++) {
           try {
             const client = await getEpoxy(wispUrl);
@@ -2105,11 +2210,21 @@ async function createWispTransport(): Promise<ProxyTransport> {
                 cleanHeaders,
                 signal
               ),
-              20000,
+              i === 0 ? 20000 : 9000,
               `Epoxy fetch (${wispUrl})`
             );
-            if (isSearchChallengeHost && rawRes?.status === 202 && hasBackendOrigin) {
-              throw new Error('Search engine returned 202 JSA challenge over Wisp; rotating to clean proxy slot');
+            const challenge = await inspectChallengeResponse(rawRes);
+            if (challenge.isChallenge) {
+              lastChallengeResponse = rawRes;
+              challengedWispUrls.add(wispUrl);
+              challengedWispHosts.add(wispHost);
+              // Fast-fail YouTube bot gates directly to /api/scramjet-fetch (ANDROID_VR/IOS Innertube bypass);
+              // for Google/Cloudflare/search challenges, rotate across distinct Wisp exit IPs first
+              if (challenge.kind === 'youtube' && hasBackendOrigin) {
+                fastFailToServerBypass = true;
+                break;
+              }
+              throw new Error(`Bot challenge (${challenge.kind}) via ${wispUrl}; rotating transport`);
             }
             return await formatResponse(rawRes);
           } catch (err: any) {
@@ -2124,65 +2239,83 @@ async function createWispTransport(): Promise<ProxyTransport> {
             const isTransientGoAway =
               errMsg.includes('goaway') ||
               errMsg.includes('http2') ||
-              errMsg.includes('sendrequest');
+              errMsg.includes('sendrequest') ||
+              errMsg.includes('closure') ||
+              errMsg.includes('dropped') ||
+              errMsg.includes('wisp') ||
+              errMsg.includes('websocket');
 
             if (isPermanentH2Error) {
               KNOWN_HTTP2_INCOMPATIBLE_HOSTS.add(targetHost);
               LIBCURL_PREFERRED_HOSTS.add(targetHost);
-              epoxyClients.delete(wispUrl);
-              epoxyInitPromises.delete(wispUrl);
+              retireEpoxyClient(wispUrl);
               break;
             }
             if (isTransientGoAway) {
-              epoxyClients.delete(wispUrl);
-              epoxyInitPromises.delete(wispUrl);
+              retireEpoxyClient(wispUrl);
               if (h2Retry === 0) {
                 continue;
               }
               break;
             }
-            if (isDocument) {
+            if (isDocument && !fastFailToServerBypass) {
               rotateToNextWisp();
             }
             break;
           }
         }
-        if (KNOWN_HTTP2_INCOMPATIBLE_HOSTS.has(targetHost)) {
+        if (fastFailToServerBypass || KNOWN_HTTP2_INCOMPATIBLE_HOSTS.has(targetHost)) {
           break;
         }
       }
 
-      // 2. Try LibcurlClient as secondary Wisp fallback
-      for (let i = 0; i < Math.min(wispsToTry.length, 2); i++) {
-        if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
-        const wispUrl = activeWispUrl || wispsToTry[(candidateIndex + i) % wispsToTry.length];
-        try {
-          const client = await getLibcurl(wispUrl);
-          const rawRes = await withPromiseTimeout<any>(
-            client.request(
-              targetRemote,
-              method,
-              safeBody === null ? undefined : safeBody,
-              cleanHeaders,
-              signal
-            ),
-            20000,
-            `Libcurl fetch (${wispUrl})`
-          );
-          if (isSearchChallengeHost && rawRes?.status === 202 && hasBackendOrigin) {
-            throw new Error('Search engine returned 202 JSA challenge over Libcurl; falling back to multi-slot server proxy');
+      // 2. Try LibcurlClient as secondary Wisp fallback across non-challenged Wisp endpoints
+      if (!fastFailToServerBypass) {
+        const libcurlAttempts = Math.min(wispsToTry.length, 4);
+        for (let i = 0; i < libcurlAttempts; i++) {
+          if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+          const wispUrl = wispsToTry[(startWispIdx + i) % wispsToTry.length];
+          const wispHost = getWispHost(wispUrl);
+          if ((challengedWispUrls.has(wispUrl) || challengedWispHosts.has(wispHost)) && !preferLibcurl) {
+            continue;
           }
-          return await formatResponse(rawRes);
-        } catch (err: any) {
-          if (signal?.aborted) throw err;
-          lastTransportError = err;
-          if (isDocument) {
-            rotateToNextWisp();
+          try {
+            const client = await getLibcurl(wispUrl);
+            const rawRes = await withPromiseTimeout<any>(
+              client.request(
+                targetRemote,
+                method,
+                safeBody === null ? undefined : safeBody,
+                cleanHeaders,
+                signal
+              ),
+              i === 0 ? 20000 : 9000,
+              `Libcurl fetch (${wispUrl})`
+            );
+            const challenge = await inspectChallengeResponse(rawRes);
+            if (challenge.isChallenge) {
+              lastChallengeResponse = rawRes;
+              challengedWispUrls.add(wispUrl);
+              challengedWispHosts.add(wispHost);
+              if (challenge.kind === 'youtube' && hasBackendOrigin) {
+                fastFailToServerBypass = true;
+                break;
+              }
+              throw new Error(`Bot challenge (${challenge.kind}) over Libcurl via ${wispUrl}`);
+            }
+            return await formatResponse(rawRes);
+          } catch (err: any) {
+            if (signal?.aborted) throw err;
+            lastTransportError = err;
+            if (isDocument) {
+              rotateToNextWisp();
+            }
           }
         }
       }
 
       // 3. Fall back to server /api/scramjet-fetch when backend origin is present
+      // (/api/scramjet-fetch includes dedicated Google SERP recovery & YouTube ANDROID_VR/IOS bypass)
       if (hasBackendOrigin) {
         try {
           const res = await serverFallbackFetch(targetRemote, method, safeBody, cleanHeaders, signal);
@@ -2190,6 +2323,11 @@ async function createWispTransport(): Promise<ProxyTransport> {
         } catch (err) {
           lastTransportError = err;
         }
+      }
+
+      // If every transport returned a challenge (e.g. a site-specific Turnstile prompt), surface it instead of an empty error
+      if (lastChallengeResponse) {
+        return await formatResponse(lastChallengeResponse);
       }
 
       // Never silence critical script/search-API requests as empty 204 (triggers false "No results found")
@@ -2538,6 +2676,57 @@ export async function initScramjetProxy(): Promise<Controller> {
   return initPromise;
 }
 
+function unwrapRedirectWrapperUrl(rawUrl: string): string | null {
+  if (!rawUrl) return null;
+  try {
+    const parsed = new URL(rawUrl);
+    const host = parsed.hostname.toLowerCase();
+    const pathLower = parsed.pathname.toLowerCase();
+
+    if (
+      (host === 'duckduckgo.com' ||
+        host.endsWith('.duckduckgo.com')) &&
+      (pathLower === '/l' || pathLower.startsWith('/l/'))
+    ) {
+      const uddg = parsed.searchParams.get('uddg');
+      if (uddg && /^https?:\/\//i.test(uddg)) return uddg;
+    }
+
+    if (isGoogleSearchDomain(host) && pathLower === '/url') {
+      const dest = parsed.searchParams.get('url') || parsed.searchParams.get('q');
+      if (dest && /^https?:\/\//i.test(dest)) return dest;
+    }
+
+    if ((host === 'youtube.com' || host.endsWith('.youtube.com')) && pathLower === '/redirect') {
+      const dest = parsed.searchParams.get('q');
+      if (dest && /^https?:\/\//i.test(dest)) return dest;
+    }
+
+    if ((host === 'l.facebook.com' || host === 'lm.facebook.com') && pathLower === '/l.php') {
+      const dest = parsed.searchParams.get('u');
+      if (dest && /^https?:\/\//i.test(dest)) return dest;
+    }
+
+    if (host === 'out.reddit.com') {
+      const dest = parsed.searchParams.get('url');
+      if (dest && /^https?:\/\//i.test(dest)) return dest;
+    }
+
+    if ((host === 'bing.com' || host.endsWith('.bing.com')) && pathLower.startsWith('/ck/a')) {
+      const uParam = parsed.searchParams.get('u') || '';
+      if (uParam.startsWith('a1') && uParam.length > 6) {
+        try {
+          const b64 = uParam.slice(2).replace(/-/g, '+').replace(/_/g, '/');
+          const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+          const decoded = atob(padded);
+          if (/^https?:\/\//i.test(decoded)) return decoded;
+        } catch {}
+      }
+    }
+  } catch {}
+  return null;
+}
+
 function resolveRealTargetUrl(rawUrl: string, baseRealUrl?: string): string | null {
   if (!rawUrl) return null;
   const unrewritten = extractUrlFromScramjetSrc(rawUrl);
@@ -2659,59 +2848,152 @@ export async function launchInScramjetFrame(
             }
           } catch {}
 
-          // Enforce Android VR / Android Mobile / Desktop navigator fingerprint for Google bot verification bypass
+          // Enforce Android VR / Android Mobile / Desktop navigator + userAgentData + touch fingerprint
           try {
             const nav = win.navigator;
             if (nav) {
               const profile = getClientDeviceProfile();
               const profileUa = getProfileUserAgent(profile);
-              const isMobile = profile === 'android_vr' || profile === 'android_mobile';
-              const platformStr = profile === 'android_vr' ? 'Linux armv8l' : profile === 'android_mobile' ? 'Linux armv7l' : 'Win32';
+              const hints = getProfileClientHints(profile);
+              const isMobile = hints.isMobile;
+              const platformStr = profile === 'android_vr' ? 'Linux armv8l' : profile === 'android_mobile' ? 'Linux armv8l' : 'Win32';
+              const appVersionStr = profileUa.replace(/^Mozilla\//, '');
               const touchPoints = isMobile ? 5 : 0;
 
-              Object.defineProperty(nav, 'userAgent', {
-                get: () => profileUa,
-                configurable: true,
-              });
-              Object.defineProperty(nav, 'platform', {
-                get: () => platformStr,
-                configurable: true,
-              });
-              Object.defineProperty(nav, 'vendor', {
-                get: () => 'Google Inc.',
-                configurable: true,
-              });
-              Object.defineProperty(nav, 'webdriver', {
-                get: () => false,
-                configurable: true,
-              });
-              Object.defineProperty(nav, 'language', {
-                get: () => 'en-US',
-                configurable: true,
-              });
-              Object.defineProperty(nav, 'languages', {
-                get: () => ['en-US', 'en'],
-                configurable: true,
-              });
-              Object.defineProperty(nav, 'maxTouchPoints', {
-                get: () => touchPoints,
-                configurable: true,
-              });
-              Object.defineProperty(nav, 'hardwareConcurrency', {
-                get: () => 8,
-                configurable: true,
-              });
-              Object.defineProperty(nav, 'deviceMemory', {
-                get: () => 8,
-                configurable: true,
-              });
+              const spoofedUaData = {
+                brands: hints.brands.map((b) => ({ ...b })),
+                mobile: hints.isMobile,
+                platform: hints.platform,
+                toJSON() {
+                  return {
+                    brands: hints.brands.map((b) => ({ ...b })),
+                    mobile: hints.isMobile,
+                    platform: hints.platform,
+                  };
+                },
+                async getHighEntropyValues(requestedHints: string[] = []) {
+                  const full: Record<string, any> = {
+                    brands: hints.brands.map((b) => ({ ...b })),
+                    mobile: hints.isMobile,
+                    platform: hints.platform,
+                    architecture: hints.architecture,
+                    bitness: hints.bitness,
+                    model: hints.model,
+                    platformVersion: hints.platformVersion,
+                    uaFullVersion: hints.uaFullVersion,
+                    fullVersionList: hints.fullVersionList.map((b) => ({ ...b })),
+                    wow64: hints.wow64,
+                  };
+                  const out: Record<string, any> = {
+                    brands: full.brands,
+                    mobile: full.mobile,
+                    platform: full.platform,
+                  };
+                  if (Array.isArray(requestedHints)) {
+                    for (const h of requestedHints) {
+                      if (h in full) out[h] = full[h];
+                    }
+                  }
+                  return out;
+                },
+              };
+
+              const defineOnNavAndProto = (prop: string, getter: () => any) => {
+                try {
+                  Object.defineProperty(nav, prop, { get: getter, configurable: true });
+                } catch {}
+                try {
+                  const navProto = win.Navigator?.prototype;
+                  if (navProto) {
+                    const desc = Object.getOwnPropertyDescriptor(navProto, prop);
+                    if (!desc || desc.configurable) {
+                      Object.defineProperty(navProto, prop, { get: getter, configurable: true });
+                    }
+                  }
+                } catch {}
+              };
+
+              defineOnNavAndProto('userAgent', () => profileUa);
+              defineOnNavAndProto('appVersion', () => appVersionStr);
+              defineOnNavAndProto('platform', () => platformStr);
+              defineOnNavAndProto('vendor', () => 'Google Inc.');
+              defineOnNavAndProto('webdriver', () => false);
+              defineOnNavAndProto('language', () => 'en-US');
+              defineOnNavAndProto('languages', () => ['en-US', 'en']);
+              defineOnNavAndProto('maxTouchPoints', () => touchPoints);
+              defineOnNavAndProto('hardwareConcurrency', () => 8);
+              defineOnNavAndProto('deviceMemory', () => 8);
+              defineOnNavAndProto('userAgentData', () => spoofedUaData);
+
+              if (isMobile) {
+                try {
+                  if (!('ontouchstart' in win)) {
+                    Object.defineProperty(win, 'ontouchstart', { value: null, writable: true, configurable: true });
+                  }
+                  if (win.Document?.prototype && !('ontouchstart' in win.Document.prototype)) {
+                    Object.defineProperty(win.Document.prototype, 'ontouchstart', { value: null, writable: true, configurable: true });
+                  }
+                  if (win.HTMLElement?.prototype && !('ontouchstart' in win.HTMLElement.prototype)) {
+                    Object.defineProperty(win.HTMLElement.prototype, 'ontouchstart', { value: null, writable: true, configurable: true });
+                  }
+                } catch {}
+
+                try {
+                  if (typeof win.matchMedia === 'function') {
+                    const origMatchMedia = win.matchMedia.bind(win);
+                    win.matchMedia = (query: string) => {
+                      const res = origMatchMedia(query);
+                      const q = String(query || '').toLowerCase().replace(/\s+/g, '');
+                      const forceTrue =
+                        q === '(pointer:coarse)' ||
+                        q === '(any-pointer:coarse)' ||
+                        q === '(hover:none)' ||
+                        q === '(any-hover:none)';
+                      const forceFalse =
+                        q === '(pointer:fine)' ||
+                        q === '(any-pointer:fine)' ||
+                        q === '(hover:hover)' ||
+                        q === '(any-hover:hover)';
+                      if (forceTrue || forceFalse) {
+                        const forced = forceTrue;
+                        try {
+                          return new Proxy(res, {
+                            get(target, prop) {
+                              if (prop === 'matches') return forced;
+                              const val = Reflect.get(target, prop);
+                              return typeof val === 'function' ? val.bind(target) : val;
+                            },
+                          });
+                        } catch {
+                          return res;
+                        }
+                      }
+                      return res;
+                    };
+                  }
+                } catch {}
+
+                // Spoof Android Adreno GPU renderer in WebGL so Google/BotGuard sees mobile Snapdragon/Quest hardware
+                try {
+                  const patchWebgl = (proto: any) => {
+                    if (!proto || typeof proto.getParameter !== 'function') return;
+                    const origGetParam = proto.getParameter;
+                    proto.getParameter = function (param: number) {
+                      if (param === 37445) return 'Qualcomm';
+                      if (param === 37446) return profile === 'android_vr' ? 'Adreno (TM) 740' : 'Adreno (TM) 750';
+                      return origGetParam.apply(this, arguments);
+                    };
+                  };
+                  patchWebgl(win.WebGLRenderingContext?.prototype);
+                  patchWebgl(win.WebGL2RenderingContext?.prototype);
+                } catch {}
+              }
             }
             if (!win.chrome) {
               win.chrome = {
-                runtime: {},
                 loadTimes: function() {},
                 csi: function() {},
-                app: {},
+                app: { isInstalled: false },
               };
             }
           } catch {}
@@ -2758,6 +3040,103 @@ export async function launchInScramjetFrame(
                   createScript: (s: string) => s,
                   createScriptURL: (s: string) => s,
                 });
+              }
+            }
+          } catch {}
+
+          // Force SafeSearch OFF on ANY page's forms, links, and client-side cookies/storage
+          try {
+            const doc = win.document;
+            const currentHost = String(client?.url?.hostname || '').toLowerCase();
+            const scrubSafeSearchForm = (form: HTMLFormElement | null | undefined) => {
+              if (!form) return;
+              try {
+                const actionAttr = form.getAttribute('action') || '';
+                const formHost = (() => {
+                  try {
+                    return new URL(actionAttr || client?.url?.href || 'https://example.com').hostname.toLowerCase();
+                  } catch {
+                    return currentHost;
+                  }
+                })();
+                const setOrUpdateInput = (name: string, val: string) => {
+                  const existing = form.querySelector(`input[name="${name}"]`) as HTMLInputElement | null;
+                  if (existing) {
+                    existing.value = val;
+                  } else if (doc) {
+                    const created = doc.createElement('input');
+                    created.type = 'hidden';
+                    created.name = name;
+                    created.value = val;
+                    form.appendChild(created);
+                  }
+                };
+                form.querySelectorAll('input[name="ssui"]').forEach((el: any) => el.remove?.());
+                const existingSafe = form.querySelector('input[name="safe"]') as HTMLInputElement | null;
+                if (existingSafe) existingSafe.value = 'off';
+                const existingSafeSearch = form.querySelector('input[name="safesearch"]') as HTMLInputElement | null;
+                if (existingSafeSearch) {
+                  existingSafeSearch.value = formHost.includes('ecosia') || formHost.includes('qwant') ? '0' : 'off';
+                }
+                const existingAdlt = form.querySelector('input[name="adlt"]') as HTMLInputElement | null;
+                if (existingAdlt) existingAdlt.value = 'off';
+
+                if (formHost.includes('google.')) {
+                  setOrUpdateInput('safe', 'off');
+                } else if (formHost.includes('duckduckgo.com')) {
+                  setOrUpdateInput('kp', '-2');
+                } else if (formHost.includes('bing.com')) {
+                  setOrUpdateInput('adlt', 'off');
+                } else if (formHost.includes('search.brave.com')) {
+                  setOrUpdateInput('safesearch', 'off');
+                } else if (formHost.includes('startpage.com')) {
+                  setOrUpdateInput('ff', '0');
+                } else if (formHost.includes('search.yahoo.com')) {
+                  setOrUpdateInput('vm', 'p');
+                }
+              } catch {}
+            };
+
+            if (doc) {
+              doc.addEventListener(
+                'submit',
+                (ev: Event) => {
+                  scrubSafeSearchForm(ev.target as HTMLFormElement);
+                },
+                true
+              );
+              const scanAllForms = () => {
+                try {
+                  doc.querySelectorAll?.('form')?.forEach((f: any) => scrubSafeSearchForm(f));
+                } catch {}
+              };
+              if (doc.readyState === 'loading') {
+                win.addEventListener?.('DOMContentLoaded', scanAllForms, { once: true });
+              } else {
+                scanAllForms();
+              }
+
+              // Intercept document.cookie writes inside the proxied window so SafeSearch cannot be re-enabled by page JS
+              const cookieDesc =
+                Object.getOwnPropertyDescriptor(win.Document?.prototype || {}, 'cookie') ||
+                Object.getOwnPropertyDescriptor(doc, 'cookie');
+              if (cookieDesc?.set && cookieDesc.configurable) {
+                Object.defineProperty(doc, 'cookie', {
+                  configurable: true,
+                  enumerable: cookieDesc.enumerable,
+                  get: cookieDesc.get ? () => cookieDesc.get!.call(doc) : undefined,
+                  set(val: string) {
+                    const cleanVal = sanitizeSafeSearchSetCookie(currentHost, String(val || ''));
+                    return cookieDesc.set!.call(doc, cleanVal);
+                  },
+                });
+              }
+
+              // Clear YouTube restricted mode localStorage flag if present
+              if (currentHost.includes('youtube.com')) {
+                try {
+                  win.localStorage?.removeItem?.('yt-player-restricted-mode');
+                } catch {}
               }
             }
           } catch {}
@@ -3270,72 +3649,180 @@ export async function launchInScramjetFrame(
           } catch {}
 
           let lastUserInteractionTime = 0;
+          const activeFrame = frame;
+          const navigateInsideFrame = (destUrl: string) => {
+            let safeDest = destUrl;
+            try {
+              safeDest = enforceSafeSearchOffUrl(new URL(destUrl)).href;
+            } catch {}
+            try {
+              if (activeFrame && typeof activeFrame.go === 'function') {
+                activeFrame.go(safeDest);
+                return;
+              }
+            } catch {}
+            try {
+              win.location.assign(safeDest);
+            } catch {}
+          };
 
-          // 2. Intercept window.open so popup ads don't steal user's view while watching videos
+          const markInteraction = (ev: Event) => {
+            if (ev.isTrusted) {
+              lastUserInteractionTime = Date.now();
+            }
+          };
           try {
-            const origOpen = typeof win.open === 'function' ? win.open.bind(win) : null;
-            win.open = (url?: string | URL, target?: string, features?: string) => {
+            win.document?.addEventListener('pointerdown', markInteraction, true);
+            win.document?.addEventListener('mousedown', markInteraction, true);
+            win.document?.addEventListener('keydown', markInteraction, true);
+          } catch {}
+
+          // 2. Intercept window.open so links navigate inside the current tab or Scramjet frame instead of failing as blocked popups
+          try {
+            win.open = (url?: string | URL, target?: string) => {
               const strUrl = url ? String(url) : '';
               if (!strUrl) return null;
               const baseHref = client?.url?.href || targetUrl;
               const realUrl = resolveRealTargetUrl(strUrl, baseHref);
               if (!realUrl) return null;
+              const finalUrl = unwrapRedirectWrapperUrl(realUrl) || realUrl;
 
               // Block popup ad / tracking domains
-              if (isAdOrTrackingUrl(realUrl)) {
+              if (isAdOrTrackingUrl(finalUrl)) {
                 return null;
               }
 
-              // Only allow window.open to create a new tab if user recently clicked (< 1500ms)
-              const wasUserInitiated = Date.now() - lastUserInteractionTime < 1500;
+              const wasUserInitiated = Date.now() - lastUserInteractionTime < 2000;
               const cb = frameCallbackMap.get(iframe);
-              if (wasUserInitiated && cb?.onOpenNewTab && (target === '_blank' || !target)) {
-                cb.onOpenNewTab(realUrl);
-                return null;
-              }
-              if (origOpen && wasUserInitiated) {
-                return origOpen(url, target, features);
+              if (wasUserInitiated) {
+                if (cb?.onOpenNewTab && (target === '_blank' || !target)) {
+                  cb.onOpenNewTab(finalUrl);
+                  return win;
+                }
+                navigateInsideFrame(finalUrl);
+                return win;
               }
               return null;
             };
           } catch {}
 
-          // 3. Intercept genuine user clicks on <a target="_blank"> to open inside BrowserTab tabs without stealing focus
+          // 3. Intercept redirect wrapper links, _blank/_top/_parent links, and unrewritten external links
+          // so clicking a website on DuckDuckGo or any site ALWAYS navigates cleanly instead of showing a dead link
           try {
+            const resolveClickLink = (ev: MouseEvent) => {
+              const el = (ev.target as HTMLElement | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
+              if (!el) return null;
+              if (el.hasAttribute('download')) return null;
+              const attrHref = (el.getAttribute('href') || '').trim();
+              const propHref = (el.href || '').trim();
+              const candidateHref = attrHref || propHref;
+              if (
+                !candidateHref ||
+                candidateHref.startsWith('#') ||
+                /^javascript:/i.test(candidateHref) ||
+                /^mailto:/i.test(candidateHref) ||
+                /^tel:/i.test(candidateHref) ||
+                /^data:/i.test(candidateHref) ||
+                /^blob:/i.test(candidateHref)
+              ) {
+                return null;
+              }
+              const baseHref = client?.url?.href || targetUrl;
+              const resolved = resolveRealTargetUrl(candidateHref, baseHref);
+              if (!resolved) return null;
+              const unwrapped = unwrapRedirectWrapperUrl(resolved);
+              const finalUrl = unwrapped || resolved;
+              return { el, propHref, unwrapped, finalUrl };
+            };
+
             win.document?.addEventListener(
               'click',
               (ev: MouseEvent) => {
                 if (ev.isTrusted) {
                   lastUserInteractionTime = Date.now();
                 }
-                const el = (ev.target as HTMLElement | null)?.closest?.('a[href]') as HTMLAnchorElement | null;
-                if (!el) return;
-                const linkTarget = (el.getAttribute('target') || '').toLowerCase();
-                const isNewTabTarget = linkTarget === '_blank' || ev.ctrlKey || ev.metaKey;
-                if (!isNewTabTarget) return;
+                const info = resolveClickLink(ev);
+                if (!info) return;
+                const { el, unwrapped, finalUrl } = info;
 
-                const cb = frameCallbackMap.get(iframe);
-                if (!cb?.onOpenNewTab) return;
-                const rawHref = el.getAttribute('href') || el.href;
-                const baseHref = client?.url?.href || targetUrl;
-                const realUrl = resolveRealTargetUrl(rawHref, baseHref);
-                if (!realUrl) return;
-
-                // Block popup ad / tracking domains
-                if (isAdOrTrackingUrl(realUrl)) {
+                if (isAdOrTrackingUrl(finalUrl)) {
                   ev.preventDefault();
                   ev.stopPropagation();
                   return;
                 }
 
-                if (ev.isTrusted) {
+                const linkTarget = (el.getAttribute('target') || '').trim().toLowerCase();
+                let isNamedExternalFrame = false;
+                if (linkTarget && linkTarget !== '_self') {
+                  if (linkTarget === '_blank' || linkTarget === '_top' || linkTarget === '_parent') {
+                    isNamedExternalFrame = true;
+                  } else {
+                    try {
+                      isNamedExternalFrame = !win.document.querySelector(`iframe[name="${linkTarget.replace(/"/g, '\\"')}"]`);
+                    } catch {
+                      isNamedExternalFrame = true;
+                    }
+                  }
+                }
+                const wantsNewWindow = isNamedExternalFrame || ev.ctrlKey || ev.metaKey;
+                if (!ev.isTrusted) return;
+
+                if (unwrapped || wantsNewWindow) {
                   ev.preventDefault();
                   ev.stopPropagation();
-                  cb.onOpenNewTab(realUrl);
+                  const cb = frameCallbackMap.get(iframe);
+                  if (cb?.onOpenNewTab && (linkTarget === '_blank' || ev.ctrlKey || ev.metaKey)) {
+                    cb.onOpenNewTab(finalUrl);
+                  } else {
+                    navigateInsideFrame(finalUrl);
+                  }
                 }
               },
               true
             );
+
+            // Bubble-phase safety net: if no SPA handler cancelled the click, catch unrewritten external <a> links
+            // so dynamically hydrated links never navigate outside Scramjet or stall on an unproxied iframe block
+            win.document?.addEventListener(
+              'click',
+              (ev: MouseEvent) => {
+                if (!ev.isTrusted || ev.defaultPrevented) return;
+                const info = resolveClickLink(ev);
+                if (!info) return;
+                const { propHref, finalUrl } = info;
+                const isProxiedContext = String(win.location?.pathname || '').startsWith('/~/sj/');
+                if (isProxiedContext && /^https?:\/\//i.test(propHref) && !propHref.includes('/~/sj/')) {
+                  ev.preventDefault();
+                  navigateInsideFrame(finalUrl);
+                }
+              },
+              false
+            );
+          } catch {}
+
+          // 3b. Auto-follow <meta http-equiv="refresh"> interstitials inside Scramjet
+          try {
+            const checkMetaRefresh = () => {
+              try {
+                const meta = win.document?.querySelector?.('meta[http-equiv="refresh" i]') as HTMLMetaElement | null;
+                const content = meta?.getAttribute('content') || '';
+                const m = content.match(/^\s*(\d+(?:\.\d+)?)\s*;\s*url\s*=\s*['"]?([^'">\s]+)['"]?/i);
+                if (m && m[2]) {
+                  const delaySec = Math.min(5, Math.max(0, Number(m[1]) || 0));
+                  const baseHref = client?.url?.href || targetUrl;
+                  const resolved = resolveRealTargetUrl(m[2], baseHref);
+                  const dest = resolved ? unwrapRedirectWrapperUrl(resolved) || resolved : null;
+                  if (dest && !isAdOrTrackingUrl(dest) && dest !== baseHref) {
+                    window.setTimeout(() => navigateInsideFrame(dest), Math.round(delaySec * 1000) + 150);
+                  }
+                }
+              } catch {}
+            };
+            if (win.document?.readyState === 'loading') {
+              win.addEventListener?.('DOMContentLoaded', checkMetaRefresh, { once: true });
+            } else {
+              window.setTimeout(checkMetaRefresh, 150);
+            }
           } catch {}
 
           // 4. Sync SPA navigations (YouTube watch/shorts, TikTok feeds, etc.) with BrowserTab omnibox/history
@@ -3425,7 +3912,12 @@ export async function launchInScramjetFrame(
     }
   } catch {}
 
-  frame.go(targetUrl);
+  let finalTargetUrl = targetUrl;
+  try {
+    finalTargetUrl = enforceSafeSearchOffUrl(new URL(targetUrl)).href;
+  } catch {}
+
+  frame.go(finalTargetUrl);
 
   return {
     frame,

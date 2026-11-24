@@ -12,6 +12,58 @@
             document.documentElement.classList.add('dark');
           }
         } catch(e){}
+        try {
+          if (typeof WebSocket !== 'undefined' && !window.__frostWasmWsGuardInstalled) {
+            window.__frostWasmWsGuardInstalled = true;
+            var proto = WebSocket.prototype;
+            var map = new WeakMap();
+            ['onopen', 'onclose', 'onerror', 'onmessage'].forEach(function(prop) {
+              try {
+                var desc = Object.getOwnPropertyDescriptor(proto, prop);
+                if (!desc || !desc.configurable || typeof desc.set !== 'function') return;
+                var origGet = desc.get, origSet = desc.set;
+                Object.defineProperty(proto, prop, {
+                  configurable: true,
+                  enumerable: desc.enumerable !== false,
+                  get: function() {
+                    var m = map.get(this);
+                    if (m && prop in m) return m[prop];
+                    return origGet ? origGet.call(this) : null;
+                  },
+                  set: function(val) {
+                    var m = map.get(this);
+                    if (!m) { m = {}; map.set(this, m); }
+                    if (val == null) { delete m[prop]; origSet.call(this, null); return; }
+                    var orig = typeof val === 'function' ? val.original : null;
+                    if (!orig || typeof orig !== 'object' || !('a' in orig) || !('cnt' in orig) || !('dtor' in orig)) {
+                      delete m[prop]; origSet.call(this, val); return;
+                    }
+                    if (orig.a === 0) { delete m[prop]; origSet.call(this, null); return; }
+                    m[prop] = val;
+                    origSet.call(this, function() {
+                      if (!orig || orig.a === 0) {
+                        var cm = map.get(this); if (cm) delete cm[prop];
+                        try { origSet.call(this, null); } catch(e) {}
+                        return;
+                      }
+                      try {
+                        return val.apply(this, arguments);
+                      } catch (err) {
+                        var msg = String((err && err.message) || err || '');
+                        if (msg.indexOf('closure invoked after being dropped') !== -1) {
+                          var cm2 = map.get(this); if (cm2) delete cm2[prop];
+                          try { origSet.call(this, null); } catch(e) {}
+                          return;
+                        }
+                        throw err;
+                      }
+                    });
+                  }
+                });
+              } catch(e) {}
+            });
+          }
+        } catch(e) {}
       })();
     </script>
     <meta charset="UTF-8" />

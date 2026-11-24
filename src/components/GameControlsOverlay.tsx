@@ -18,8 +18,21 @@ export const GameControlsOverlay: React.FC<GameControlsOverlayProps> = ({
 
   useEffect(() => {
     const checkTouch = () => {
-      // Strictly detect mobile/touch devices. Desktop returns false.
-      const isTouch = 'ontouchstart' in window || (navigator.maxTouchPoints > 0 && window.innerWidth <= 900);
+      const ua = navigator.userAgent || '';
+      const isMobileOs = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+      const isDesktopOs =
+        /Windows NT|Macintosh|Mac OS X|CrOS|Linux x86_64|Linux i686/i.test(ua) && !isMobileOs;
+      if (isDesktopOs) {
+        setIsTouchDevice(false);
+        return;
+      }
+      const hasFinePointer =
+        typeof window.matchMedia === 'function' && window.matchMedia('(any-pointer: fine)').matches;
+      const isCoarseOnly =
+        typeof window.matchMedia === 'function' &&
+        window.matchMedia('(pointer: coarse)').matches &&
+        !hasFinePointer;
+      const isTouch = isMobileOs || isCoarseOnly;
       setIsTouchDevice(isTouch);
     };
     checkTouch();

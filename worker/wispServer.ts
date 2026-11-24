@@ -426,7 +426,17 @@ export async function handleWispRequest(request: Request, env?: any): Promise<Re
 
         const streamType = rawBytes[5]; // 0x01 = TCP, 0x02 = UDP
         const port = rawBytes[6] | (rawBytes[7] << 8);
-        const targetHost = new TextDecoder().decode(rawBytes.subarray(8)).trim();
+        const rawTargetHost = new TextDecoder().decode(rawBytes.subarray(8)).trim();
+        const safeSearchHostMap: Record<string, string> = {
+          'forcesafesearch.google.com': 'www.google.com',
+          'safe.duckduckgo.com': 'duckduckgo.com',
+          'strict.bing.com': 'www.bing.com',
+          'forcesafesearch.bing.com': 'www.bing.com',
+          'restrict.youtube.com': 'www.youtube.com',
+          'restrictmoderate.youtube.com': 'www.youtube.com',
+          'safesearch.pixabay.com': 'pixabay.com',
+        };
+        const targetHost = safeSearchHostMap[rawTargetHost.toLowerCase()] || rawTargetHost;
 
         if (!targetHost || port <= 0 || port > 65535) {
           sendClose(streamId, CLOSE_REASON_NETWORK_ERROR);

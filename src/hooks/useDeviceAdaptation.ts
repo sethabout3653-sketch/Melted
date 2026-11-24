@@ -29,14 +29,25 @@ export function useDeviceAdaptation(): DeviceAdaptationInfo {
     }
 
     const ua = navigator.userAgent || '';
+    const isMobileOs = /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+    const isDesktopOs =
+      /Windows NT|Macintosh|Mac OS X|CrOS|Linux x86_64|Linux i686/i.test(ua) && !isMobileOs;
+    const hasFinePointer =
+      typeof window.matchMedia === 'function' && window.matchMedia('(any-pointer: fine)').matches;
+    const isCoarseOnly =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(pointer: coarse)').matches &&
+      !hasFinePointer;
     const width = window.innerWidth;
-    const isTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const isTouch = !isDesktopOs && (isMobileOs || isCoarseOnly || 'ontouchstart' in window || navigator.maxTouchPoints > 0);
     const orientation = window.innerHeight > window.innerWidth ? 'portrait' : 'landscape';
 
     let deviceType: DeviceType = 'desktop';
-    if (width < 768 || (/Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) && width < 1024)) {
+    if (!isDesktopOs && (width < 768 || ((isMobileOs || isCoarseOnly) && width < 1024))) {
       deviceType = 'mobile';
-    } else if (width >= 768 && width < 1024) {
+    } else if (!isDesktopOs && width >= 768 && width < 1024) {
+      deviceType = 'tablet';
+    } else if (isDesktopOs && width < 640) {
       deviceType = 'tablet';
     } else {
       deviceType = 'desktop';

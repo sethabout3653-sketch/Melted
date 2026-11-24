@@ -1,3 +1,5 @@
+import { enforceSafeSearchOffUrl } from '../utils/safeSearchOff';
+
 export type SearchEngineId = 'google' | 'duckduckgo' | 'bing' | 'brave' | 'startpage' | 'wikipedia';
 
 export interface SearchEngineConfig {
@@ -195,13 +197,21 @@ export function resolveOmniboxInput(rawInput: string, engineId: SearchEngineId):
     return 'about:newtab';
   }
   if (/^https?:\/\//i.test(trimmed)) {
-    return trimmed;
+    try {
+      return enforceSafeSearchOffUrl(new URL(trimmed)).href;
+    } catch {
+      return trimmed;
+    }
   }
   // Treat domain-like inputs without spaces as URLs (e.g., "discord.com", "en.wikipedia.org/wiki/Cat")
   const hasSpaces = /\s/.test(trimmed);
   const looksLikeDomain = /^([a-z0-9-]+\.)+[a-z]{2,}(:\d+)?(\/.*)?$/i.test(trimmed) || /^localhost(:\d+)?(\/.*)?$/i.test(trimmed);
   if (!hasSpaces && looksLikeDomain) {
-    return `https://${trimmed}`;
+    try {
+      return enforceSafeSearchOffUrl(new URL(`https://${trimmed}`)).href;
+    } catch {
+      return `https://${trimmed}`;
+    }
   }
 
   const engine = SEARCH_ENGINES.find((e) => e.id === engineId) || SEARCH_ENGINES[0];
@@ -224,9 +234,9 @@ const CLIENT_PROFILE_KEY = 'frosthub_client_profile_v1';
 export function getClientDeviceProfile(): ClientDeviceProfile {
   try {
     const raw = localStorage.getItem(CLIENT_PROFILE_KEY) as ClientDeviceProfile | null;
-    if (raw === 'android_vr' || raw === 'android_mobile' || raw === 'desktop') return raw;
+    if (raw === 'desktop' || raw === 'android_vr' || raw === 'android_mobile') return raw;
   } catch {}
-  return 'android_vr';
+  return 'desktop';
 }
 
 export function setClientDeviceProfile(profile: ClientDeviceProfile): void {

@@ -12,6 +12,18 @@ import { Readable } from 'stream';
 import { initWebSocketDatabase, globalWsDb, broadcastTable, broadcastWss, sendToUserSockets } from './src/server/wsDatabase';
 import { server as wispServer } from '@mercuryworkshop/wisp-js/server';
 import { createSplitRoutingWispTCPSocket, dialSocks5Tunnel } from './src/server/wispSocks5Socket';
+import { unfilteredLookup } from './src/server/dohResolver';
+import {
+  enforceSafeSearchOffUrl,
+  enforceSafeSearchOffCookieString,
+  sanitizeSafeSearchSetCookie,
+  sanitizeSafeSearchLocation,
+} from './src/utils/safeSearchOff';
+import {
+  isGoogleSearchDomain,
+  isGoogleBotChallenge,
+  getGoogleBypassProfiles,
+} from './src/utils/botBypassHelper';
 import { Ytdl, Client as YtdlClient } from '@distube/ytdl-core';
 import { processGameHtml, getScaffoldingBuffer } from './src/server/scaffoldingLoader';
 import { FALLBACK_OPENROUTER_MODELS, OPENROUTER_CHAT_URL, OPENROUTER_MODEL } from './src/utils/openRouterEdgeHelper';
@@ -113,14 +125,10 @@ interface ResolvedYoutubeStream {
 
 const ytStreamCache = new Map<string, ResolvedYoutubeStream>();
 const ytStreamPending = new Map<string, Promise<ResolvedYoutubeStream | null>>();
-const YT_STICKY_PROXY_SLOTS: Array<string | null> = [
-  'socks5h://vncwbxva:d65j8vqe2th9@45.38.107.97:6014',
-  'http://vncwbxva-3:d65j8vqe2th9@p.webshare.io:80/',
-  'http://vncwbxva-4:d65j8vqe2th9@p.webshare.io:80/',
-  'http://vncwbxva-6:d65j8vqe2th9@p.webshare.io:80/',
-  'http://vncwbxva-1:d65j8vqe2th9@p.webshare.io:80/',
-  null,
-];
+function getYtStickyProxySlots(): Array<string | null> {
+  const configured = getProxyPoolList();
+  return [...configured, null];
+}
 
 function openProxyHttpStream(
   rawUrl: string,
@@ -477,7 +485,7 @@ async function resolvePlayableYoutubeStream(videoId: string, forceRefresh = fals
   if (inflight) return inflight;
 
   const task = (async (): Promise<ResolvedYoutubeStream | null> => {
-    for (const proxyUrlStr of YT_STICKY_PROXY_SLOTS) {
+    for (const proxyUrlStr of getYtStickyProxySlots()) {
       const tunnelFetch = createTunnelFetch(proxyUrlStr);
 
       // Strategy 1: ANDROID_VR client over this sticky slot (excels on music & Vevo videos without PO token)
@@ -681,12 +689,14 @@ const stickyHttpAgent = new http.Agent({
   keepAlive: true,
   keepAliveMsecs: 30000,
   maxSockets: 64,
+  lookup: unfilteredLookup as any,
 });
 const stickyHttpsAgent = new https.Agent({
   keepAlive: true,
   keepAliveMsecs: 30000,
   maxSockets: 64,
   rejectUnauthorized: false,
+  lookup: unfilteredLookup as any,
 });
 
 function getProxyPoolList(): string[] {
@@ -714,7 +724,6 @@ function resolveStickyProxyUrl(sessionId: string, slotOffset = 0): URL | null {
   if (pool.length === 1) {
     idx = 0;
   } else if (slotOffset === 0) {
-    // Slot 0 uses the primary user-configured Webshare SOCKS5H proxy
     idx = 0;
   } else {
     idx = 1 + ((hashSessionIndex(sessionId || 'default', pool.length - 1) + slotOffset - 1) % (pool.length - 1));
@@ -1164,7 +1173,7 @@ app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), as
 
     let targetUrl: URL;
     try {
-      targetUrl = new URL(rawUrl);
+      targetUrl = enforceSafeSearchOffUrl(new URL(rawUrl));
     } catch {
       return res.status(400).json({ error: 'Invalid target URL' });
     }
@@ -1276,33 +1285,34 @@ app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), as
     if (!forwardMap.has('sec-ch-ua-platform')) {
       forwardMap.set('sec-ch-ua-platform', inferredPlatform);
     }
+    if (effectiveUaLower.includes('android')) {
+      const isQuestVr = effectiveUaLower.includes('quest');
+      forwardMap.set('sec-ch-ua-mobile', '?1');
+      forwardMap.set('sec-ch-ua-platform', '"Android"');
+      if (!forwardMap.has('sec-ch-ua-platform-version')) {
+        forwardMap.set('sec-ch-ua-platform-version', isQuestVr ? '"12.0.0"' : '"14.0.0"');
+      }
+      if (!forwardMap.has('sec-ch-ua-model')) {
+        forwardMap.set('sec-ch-ua-model', isQuestVr ? '"Quest 3"' : '"SM-S928B"');
+      }
+      forwardMap.set('sec-ch-ua-arch', '"arm"');
+      forwardMap.set('sec-ch-ua-bitness', '"64"');
+      forwardMap.set('sec-ch-ua-wow64', '?0');
+    }
     // Force US English unconditionally so regional IPs never switch websites to Japanese/Chinese
     forwardMap.set('accept-language', 'en-US,en;q=0.9');
     forwardMap.set('accept-encoding', 'gzip, deflate, br');
     forwardMap.delete('youtube-restrict');
+    forwardMap.delete('x-youtube-restrict');
+    const preferHeader = (forwardMap.get('prefer') || '').toLowerCase();
+    if (preferHeader.includes('safe')) {
+      forwardMap.delete('prefer');
+    }
 
-    // Disable SafeSearch at header/cookie/URL level for search engines
-    if (host.includes('duckduckgo.com')) {
-      const filteredCookies = (forwardMap.get('cookie') || '')
-        .split(';')
-        .map((c) => c.trim())
-        .filter((c) => c && !/^p=/i.test(c) && !/^kl=/i.test(c));
-      filteredCookies.push('p=-2', 'kl=us-en');
-      forwardMap.set('cookie', filteredCookies.join('; '));
-    } else if (host.includes('bing.com')) {
-      const rawCookie = forwardMap.get('cookie') || '';
-      if (/ADLT=(STRICT|DEMOTE)/i.test(rawCookie)) {
-        forwardMap.set('cookie', rawCookie.replace(/ADLT=(STRICT|DEMOTE)/gi, 'ADLT=OFF'));
-      } else if (!rawCookie.includes('ADLT=')) {
-        forwardMap.set('cookie', rawCookie ? `${rawCookie}; SRCHHPGUSR=ADLT=OFF` : 'SRCHHPGUSR=ADLT=OFF');
-      }
-    } else if (host.includes('search.brave.com')) {
-      const filteredCookies = (forwardMap.get('cookie') || '')
-        .split(';')
-        .map((c) => c.trim())
-        .filter((c) => c && !/^safesearch=/i.test(c));
-      filteredCookies.push('safesearch=off');
-      forwardMap.set('cookie', filteredCookies.join('; '));
+    // Disable SafeSearch at header/cookie/URL level for any search engine or site
+    const updatedCookie = enforceSafeSearchOffCookieString(host, forwardMap.get('cookie') || '');
+    if (updatedCookie) {
+      forwardMap.set('cookie', updatedCookie);
     }
 
     // Sanitize Origin/Referer if they accidentally leaked the Cloud Run / Pages / localhost proxy host
@@ -1420,16 +1430,19 @@ app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), as
 
     for (let i = 0; i + 1 < upstreamRes.rawHeaders.length; i += 2) {
       const k = upstreamRes.rawHeaders[i];
-      const v = upstreamRes.rawHeaders[i + 1];
+      let v = upstreamRes.rawHeaders[i + 1];
       const lower = k.toLowerCase().trim();
       if (strippedUpstreamHeaders.has(lower)) {
         continue;
+      }
+      if (lower === 'location') {
+        v = sanitizeSafeSearchLocation(v, targetUrl.origin);
       }
       outHeaders.push([k, v]);
     }
     for (let i = 0; i + 1 < upstreamRes.rawHeaders.length; i += 2) {
       if (upstreamRes.rawHeaders[i].toLowerCase().trim() === 'set-cookie') {
-        outHeaders.push(['set-cookie', upstreamRes.rawHeaders[i + 1]]);
+        outHeaders.push(['set-cookie', sanitizeSafeSearchSetCookie(host, upstreamRes.rawHeaders[i + 1])]);
       }
     }
 
@@ -1444,7 +1457,82 @@ app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), as
       finalStatus === 304 ||
       method === 'HEAD';
 
+    // Real Google /sorry/ or 429 bot verification bypass (proxy pool rotation + Android VR Quest 3 / Android / clean cookie-less retry — never fake HTML)
+    if (!isNullBodyStatus && (isGoogleSearchDomain(host) || targetUrl.pathname.toLowerCase().startsWith('/sorry'))) {
+      const locPair = outHeaders.find(([k]) => k.toLowerCase() === 'location');
+      const locVal = locPair ? locPair[1] : '';
+      const probeText = rawBodyBuf.subarray(0, 24000).toString('utf8');
+      if (isGoogleBotChallenge(targetUrl, finalStatus, locVal, probeText)) {
+        let retryTarget = targetUrl;
+        if (targetUrl.pathname.toLowerCase().startsWith('/sorry')) {
+          const cont = targetUrl.searchParams.get('continue');
+          if (cont) {
+            try {
+              retryTarget = enforceSafeSearchOffUrl(new URL(cont));
+            } catch {}
+          }
+        }
+        const poolLen = Math.max(1, getProxyPoolList().length);
+        const profiles = getGoogleBypassProfiles();
+        let recovered = false;
 
+        for (let slotOffset = 0; slotOffset < Math.min(poolLen + 1, 4) && !recovered; slotOffset++) {
+          for (const profile of profiles) {
+            try {
+              const cleanUrl = new URL(retryTarget.href);
+              if (cleanUrl.pathname === '/search') {
+                cleanUrl.searchParams.set('safe', 'off');
+                cleanUrl.searchParams.set('hl', 'en');
+                cleanUrl.searchParams.set('gl', 'US');
+                if (profile.useGbv) {
+                  cleanUrl.searchParams.set('gbv', '1');
+                }
+              }
+              const retryHeaders: Record<string, string> = { ...upstreamHeadersObj };
+              delete retryHeaders['cookie'];
+              retryHeaders['user-agent'] = profile.userAgent;
+              if (profile.secChUa) retryHeaders['sec-ch-ua'] = profile.secChUa;
+              if (profile.secChUaMobile) retryHeaders['sec-ch-ua-mobile'] = profile.secChUaMobile;
+              if (profile.secChUaPlatform) retryHeaders['sec-ch-ua-platform'] = profile.secChUaPlatform;
+              if (profile.secChUaModel) retryHeaders['sec-ch-ua-model'] = profile.secChUaModel;
+              else delete retryHeaders['sec-ch-ua-model'];
+              if (profile.secChUaPlatformVersion) retryHeaders['sec-ch-ua-platform-version'] = profile.secChUaPlatformVersion;
+              else delete retryHeaders['sec-ch-ua-platform-version'];
+
+              const cleanRes = await performRawUpstreamRequest(
+                cleanUrl,
+                'GET',
+                retryHeaders,
+                null,
+                15000,
+                stickySessionId,
+                slotOffset
+              );
+              const cleanProbe = cleanRes.body.subarray(0, 24000).toString('utf8');
+              const cleanLoc = (() => {
+                for (let i = 0; i + 1 < cleanRes.rawHeaders.length; i += 2) {
+                  if (cleanRes.rawHeaders[i].toLowerCase() === 'location') return cleanRes.rawHeaders[i + 1];
+                }
+                return '';
+              })();
+              if (cleanRes.status === 200 && !isGoogleBotChallenge(cleanUrl, cleanRes.status, cleanLoc, cleanProbe)) {
+                rawBodyBuf = cleanRes.body;
+                finalStatus = 200;
+                finalStatusText = 'OK';
+                for (let i = outHeaders.length - 1; i >= 0; i--) {
+                  const hk = outHeaders[i][0].toLowerCase();
+                  if (hk === 'location' || hk === 'set-cookie' || hk === 'content-length') {
+                    outHeaders.splice(i, 1);
+                  }
+                }
+                recovered = true;
+                break;
+              }
+            } catch {}
+          }
+        }
+      }
+    }
 
     // Bypass YouTube bot-gate ("Sign in to confirm you're not a bot" / LOGIN_REQUIRED) cleanly via resolved stream fallback
     if (!isNullBodyStatus && finalStatus === 200 && (host === 'youtube.com' || host.endsWith('.youtube.com'))) {

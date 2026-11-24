@@ -1,4 +1,18 @@
 // Cloudflare Pages Function: Proxy fetch fallback for Scramjet (/api/scramjet-fetch)
+import {
+  enforceSafeSearchOffUrl,
+  enforceSafeSearchOffCookieString,
+  sanitizeSafeSearchSetCookie,
+  sanitizeSafeSearchLocation,
+} from '../../src/utils/safeSearchOff';
+import {
+  isGoogleSearchDomain,
+  isGoogleBotChallenge,
+  isYoutubeBotGateText,
+  getGoogleBypassProfiles,
+  fetchYoutubePlayerBypassEdge,
+  patchYtWatchPlayerHtml,
+} from '../../src/utils/botBypassHelper';
 
 interface CFContext {
   request: Request;
@@ -169,7 +183,7 @@ export async function onRequest(context: CFContext): Promise<Response> {
 
     let targetUrl: URL;
     try {
-      targetUrl = new URL(rawUrl);
+      targetUrl = enforceSafeSearchOffUrl(new URL(rawUrl));
     } catch {
       return new Response(JSON.stringify({ error: 'Invalid target URL' }), {
         status: 400,
@@ -214,20 +228,23 @@ export async function onRequest(context: CFContext): Promise<Response> {
     for (const [k, v] of parsedHeaders) {
       const lower = k.toLowerCase().trim();
       if (!lower || lower.startsWith(':') || FORBIDDEN_FORWARD_HEADERS.has(lower)) continue;
+      if (lower === 'youtube-restrict' || lower === 'x-youtube-restrict') continue;
       const cleanVal = v.replace(/[\r\n\0]+/g, ' ').trim();
+      if (lower === 'prefer' && cleanVal.toLowerCase().includes('safe')) continue;
       if (lower === 'cookie') {
         if (cleanVal) cookieParts.push(cleanVal);
       } else {
         forwardMap.set(lower, cleanVal);
       }
     }
-    if (cookieParts.length > 0) {
-      forwardMap.set('cookie', cookieParts.join('; '));
+    const updatedCookie = enforceSafeSearchOffCookieString(host, cookieParts.join('; '));
+    if (updatedCookie) {
+      forwardMap.set('cookie', updatedCookie);
     }
 
     const incomingUa = (request.headers.get('user-agent') || '').trim();
     const ua = forwardMap.get('user-agent') || '';
-    if (!ua || ua.includes('HeadlessChrome')) {
+    if (!ua || ua.includes('HeadlessChrome') || ua.includes('Scramjet')) {
       const safeUa =
         incomingUa && !incomingUa.includes('HeadlessChrome')
           ? incomingUa
@@ -235,19 +252,42 @@ export async function onRequest(context: CFContext): Promise<Response> {
       forwardMap.set('user-agent', safeUa);
     }
 
-    const clientHintKeys = [
-      'sec-ch-ua',
-      'sec-ch-ua-mobile',
-      'sec-ch-ua-platform',
-      'sec-ch-ua-full-version-list',
-      'sec-ch-ua-arch',
-      'sec-ch-ua-model',
-    ];
-    for (const chKey of clientHintKeys) {
-      if (!forwardMap.has(chKey)) {
-        const chVal = request.headers.get(chKey);
-        if (chVal && chVal.trim()) {
-          forwardMap.set(chKey, chVal.trim());
+    const effectiveUaLower = (forwardMap.get('user-agent') || '').toLowerCase();
+    if (effectiveUaLower.includes('android')) {
+      const isQuestVr = effectiveUaLower.includes('quest');
+      forwardMap.set('sec-ch-ua', '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"');
+      forwardMap.set('sec-ch-ua-mobile', '?1');
+      forwardMap.set('sec-ch-ua-platform', '"Android"');
+      if (!forwardMap.has('sec-ch-ua-platform-version')) {
+        forwardMap.set('sec-ch-ua-platform-version', isQuestVr ? '"12.0.0"' : '"14.0.0"');
+      }
+      if (!forwardMap.has('sec-ch-ua-model')) {
+        forwardMap.set('sec-ch-ua-model', isQuestVr ? '"Quest 3"' : '"SM-S928B"');
+      }
+      forwardMap.set('sec-ch-ua-arch', '"arm"');
+      forwardMap.set('sec-ch-ua-bitness', '"64"');
+      forwardMap.set('sec-ch-ua-wow64', '?0');
+      if (!forwardMap.has('sec-ch-ua-full-version-list')) {
+        forwardMap.set(
+          'sec-ch-ua-full-version-list',
+          '"Google Chrome";v="131.0.6778.135", "Chromium";v="131.0.6778.135", "Not_A Brand";v="24.0.0.0"'
+        );
+      }
+    } else {
+      const clientHintKeys = [
+        'sec-ch-ua',
+        'sec-ch-ua-mobile',
+        'sec-ch-ua-platform',
+        'sec-ch-ua-full-version-list',
+        'sec-ch-ua-arch',
+        'sec-ch-ua-model',
+      ];
+      for (const chKey of clientHintKeys) {
+        if (!forwardMap.has(chKey)) {
+          const chVal = request.headers.get(chKey);
+          if (chVal && chVal.trim()) {
+            forwardMap.set(chKey, chVal.trim());
+          }
         }
       }
     }
@@ -296,24 +336,40 @@ export async function onRequest(context: CFContext): Promise<Response> {
     const hasBody = method !== 'GET' && method !== 'HEAD';
     const bodyBuf = hasBody ? await request.arrayBuffer() : null;
 
-    // Follow redirects at edge so opaqueredirect (status 0) never breaks Scramjet
-    const upstreamRes = await fetch(targetUrl.href, {
+    // Preserve HTTP redirects (301/302/303/307/308) with Location header so Scramjet updates client.url
+    // on cross-domain redirects (e.g. DuckDuckGo /l/, shortlinks) instead of rendering under the old origin
+    let upstreamRes = await fetch(targetUrl.href, {
       method,
       headers: forwardHeaders,
       body: hasBody && bodyBuf && bodyBuf.byteLength > 0 ? bodyBuf : undefined,
-      redirect: 'follow',
+      redirect: 'manual',
     });
+    if (upstreamRes.status === 0 || upstreamRes.type === 'opaqueredirect') {
+      upstreamRes = await fetch(targetUrl.href, {
+        method,
+        headers: forwardHeaders,
+        body: hasBody && bodyBuf && bodyBuf.byteLength > 0 ? bodyBuf : undefined,
+        redirect: 'follow',
+      });
+    }
 
     const outHeaders: [string, string][] = [];
     for (const [k, v] of upstreamRes.headers.entries()) {
       const lower = k.toLowerCase().trim();
       if (STRIPPED_UPSTREAM_HEADERS.has(lower)) continue;
       if (lower.startsWith('x-goog-') || lower.startsWith('x-fb-')) continue;
-      outHeaders.push([k, v]);
+      let nextVal = v;
+      if (lower === 'location' && v) {
+        try {
+          nextVal = new URL(v, targetUrl.href).href;
+        } catch {}
+        nextVal = sanitizeSafeSearchLocation(nextVal, targetUrl.origin);
+      }
+      outHeaders.push([k, nextVal]);
     }
 
     if (upstreamRes.url && upstreamRes.url !== targetUrl.href) {
-      outHeaders.push(['x-final-url', upstreamRes.url]);
+      outHeaders.push(['x-final-url', sanitizeSafeSearchLocation(upstreamRes.url, targetUrl.origin)]);
     }
 
     const setCookies =
@@ -322,12 +378,12 @@ export async function onRequest(context: CFContext): Promise<Response> {
         : [];
     if (setCookies.length > 0) {
       for (const sc of setCookies) {
-        outHeaders.push(['set-cookie', sc]);
+        outHeaders.push(['set-cookie', sanitizeSafeSearchSetCookie(host, sc)]);
       }
     } else {
       const singleCookie = upstreamRes.headers.get('set-cookie');
       if (singleCookie) {
-        outHeaders.push(['set-cookie', singleCookie]);
+        outHeaders.push(['set-cookie', sanitizeSafeSearchSetCookie(host, singleCookie)]);
       }
     }
 
@@ -349,14 +405,141 @@ export async function onRequest(context: CFContext): Promise<Response> {
       finalStatus === 304 ||
       method === 'HEAD';
 
-    const rawBodyBytes = isNullBodyStatus ? new Uint8Array(0) : new Uint8Array(await upstreamRes.arrayBuffer());
+    let rawBodyBytes = isNullBodyStatus ? new Uint8Array(0) : new Uint8Array(await upstreamRes.arrayBuffer());
+    let finalOutStatus = finalStatus;
+    let finalOutStatusText = finalStatusText;
+
+    // 1. Real Google Search /sorry/ or 429 bot verification bypass (Android VR Quest 3 / Android / clean cookie-less retry — never fake HTML)
+    if (!isNullBodyStatus && (isGoogleSearchDomain(host) || targetUrl.pathname.toLowerCase().startsWith('/sorry'))) {
+      const probeText = new TextDecoder().decode(rawBodyBytes.subarray(0, 24000));
+      const locHeader = upstreamRes.headers.get('location') || '';
+      const finalResUrl = upstreamRes.url || '';
+      if (
+        finalResUrl.toLowerCase().includes('/sorry/') ||
+        isGoogleBotChallenge(targetUrl, finalOutStatus, locHeader, probeText)
+      ) {
+        let retryTarget = targetUrl;
+        if (targetUrl.pathname.toLowerCase().startsWith('/sorry')) {
+          const cont = targetUrl.searchParams.get('continue');
+          if (cont) {
+            try {
+              retryTarget = enforceSafeSearchOffUrl(new URL(cont));
+            } catch {}
+          }
+        }
+
+        for (const profile of getGoogleBypassProfiles()) {
+          try {
+            const cleanUrl = new URL(retryTarget.href);
+            if (cleanUrl.pathname === '/search') {
+              cleanUrl.searchParams.set('safe', 'off');
+              cleanUrl.searchParams.set('hl', 'en');
+              cleanUrl.searchParams.set('gl', 'US');
+              if (profile.useGbv) {
+                cleanUrl.searchParams.set('gbv', '1');
+              }
+            }
+            const retryHeaders = new Headers(forwardHeaders);
+            retryHeaders.delete('cookie');
+            retryHeaders.set('user-agent', profile.userAgent);
+            if (profile.secChUa) retryHeaders.set('sec-ch-ua', profile.secChUa);
+            if (profile.secChUaMobile) retryHeaders.set('sec-ch-ua-mobile', profile.secChUaMobile);
+            if (profile.secChUaPlatform) retryHeaders.set('sec-ch-ua-platform', profile.secChUaPlatform);
+            if (profile.secChUaModel) retryHeaders.set('sec-ch-ua-model', profile.secChUaModel);
+            else retryHeaders.delete('sec-ch-ua-model');
+            if (profile.secChUaPlatformVersion) retryHeaders.set('sec-ch-ua-platform-version', profile.secChUaPlatformVersion);
+            else retryHeaders.delete('sec-ch-ua-platform-version');
+
+            const cleanRes = await fetch(cleanUrl.href, {
+              method: 'GET',
+              headers: retryHeaders,
+              redirect: 'manual',
+            });
+            const cleanLoc = cleanRes.headers.get('location') || '';
+            const cleanBytes = new Uint8Array(await cleanRes.arrayBuffer());
+            const cleanProbe = new TextDecoder().decode(cleanBytes.subarray(0, 24000));
+            if (
+              cleanRes.status === 200 &&
+              !(cleanRes.url || '').toLowerCase().includes('/sorry/') &&
+              !isGoogleBotChallenge(cleanUrl, cleanRes.status, cleanLoc, cleanProbe)
+            ) {
+              rawBodyBytes = cleanBytes;
+              finalOutStatus = 200;
+              finalOutStatusText = cleanRes.statusText || 'OK';
+              for (let i = outHeaders.length - 1; i >= 0; i--) {
+                const hk = outHeaders[i][0].toLowerCase();
+                if (hk === 'location' || hk === 'set-cookie' || hk === 'content-type' || hk === 'content-length') {
+                  outHeaders.splice(i, 1);
+                }
+              }
+              const ct = cleanRes.headers.get('content-type');
+              outHeaders.push(['content-type', ct || 'text/html; charset=utf-8']);
+              break;
+            }
+          } catch {}
+        }
+      }
+    }
+
+    // 2. YouTube bot-gate ("Sign in to confirm you're not a bot") bypass on Cloudflare Workers
+    if (!isNullBodyStatus && finalOutStatus === 200 && (host === 'youtube.com' || host.endsWith('.youtube.com'))) {
+      const isPlayerEndpoint = targetUrl.pathname.startsWith('/youtubei/v1/player');
+      const isWatchPage = targetUrl.pathname === '/watch';
+      if (isPlayerEndpoint || isWatchPage) {
+        const ytText = new TextDecoder().decode(rawBodyBytes);
+        if (isYoutubeBotGateText(ytText) || (isPlayerEndpoint && !ytText.includes('streamingData'))) {
+          let videoId = targetUrl.searchParams.get('v') || '';
+          if (!videoId && isPlayerEndpoint) {
+            try {
+              const parsed = JSON.parse(ytText);
+              videoId = String(parsed?.videoDetails?.videoId || '');
+            } catch {}
+            if (!videoId && bodyBuf && bodyBuf.byteLength > 0) {
+              try {
+                const reqJson = JSON.parse(new TextDecoder().decode(bodyBuf));
+                videoId = String(reqJson?.videoId || '');
+              } catch {}
+            }
+          }
+          if (videoId) {
+            const bypassData = await fetchYoutubePlayerBypassEdge(videoId);
+            if (bypassData?.streamingData) {
+              if (isPlayerEndpoint) {
+                let parsed: any = {};
+                try {
+                  parsed = JSON.parse(ytText);
+                } catch {}
+                const merged = {
+                  ...parsed,
+                  playabilityStatus: bypassData.playabilityStatus || { status: 'OK', playableInEmbed: true },
+                  streamingData: bypassData.streamingData,
+                  videoDetails: parsed.videoDetails || bypassData.videoDetails,
+                  captions: parsed.captions || bypassData.captions,
+                  storyboards: parsed.storyboards || bypassData.storyboards,
+                };
+                rawBodyBytes = new TextEncoder().encode(JSON.stringify(merged));
+              } else {
+                const patchedHtml = patchYtWatchPlayerHtml(ytText, bypassData);
+                if (patchedHtml) {
+                  rawBodyBytes = new TextEncoder().encode(patchedHtml);
+                }
+              }
+              for (let i = outHeaders.length - 1; i >= 0; i--) {
+                if (outHeaders[i][0].toLowerCase() === 'set-cookie') outHeaders.splice(i, 1);
+              }
+            }
+          }
+        }
+      }
+    }
+
     if (!isNullBodyStatus) {
       outHeaders.push(['content-length', String(rawBodyBytes.byteLength)]);
     }
 
     let metaJson = JSON.stringify({
-      status: finalStatus,
-      statusText: finalStatusText,
+      status: finalOutStatus,
+      statusText: finalOutStatusText,
       headers: outHeaders,
     });
     let metaB64 = toBase64Utf8(metaJson);
