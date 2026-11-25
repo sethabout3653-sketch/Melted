@@ -9,51 +9,22 @@ import {
 } from '../utils/safeSearchOff';
 import {
   isGoogleSearchDomain,
-  isGoogleBotChallenge,
-  isYoutubeBotGateText,
 } from '../utils/botBypassHelper';
 import { installWasmWebSocketGuard } from '../utils/wasmWsGuard';
 
 installWasmWebSocketGuard();
 
-function getProfileUserAgent(profile: string): string {
-  if (profile === 'android_vr') {
-    return 'Mozilla/5.0 (Linux; Android 12L; Quest 3 Build/SQ3A.220605.009.A1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.135 Mobile Safari/537.36';
-  }
-  if (profile === 'android_mobile') {
-    return 'Mozilla/5.0 (Linux; Android 14; SM-S928B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.6778.135 Mobile Safari/537.36';
+function getProfileUserAgent(_profile?: string): string {
+  if (typeof window !== 'undefined' && window.navigator?.userAgent) {
+    const raw = window.navigator.userAgent;
+    if (!raw.includes('Mobile') && !raw.includes('Android') && !raw.includes('Quest')) {
+      return raw;
+    }
   }
   return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 }
 
-function getProfileClientHints(profile: string) {
-  const isAndroid = profile === 'android_vr' || profile === 'android_mobile';
-  if (isAndroid) {
-    const isVr = profile === 'android_vr';
-    return {
-      isMobile: true,
-      platform: 'Android',
-      platformVersion: isVr ? '12.0.0' : '14.0.0',
-      model: isVr ? 'Quest 3' : 'SM-S928B',
-      architecture: 'arm',
-      bitness: '64',
-      wow64: false,
-      uaFullVersion: '131.0.6778.135',
-      secChUa: '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"',
-      secChUaFullVersionList:
-        '"Google Chrome";v="131.0.6778.135", "Chromium";v="131.0.6778.135", "Not_A Brand";v="24.0.0.0"',
-      brands: [
-        { brand: 'Google Chrome', version: '131' },
-        { brand: 'Chromium', version: '131' },
-        { brand: 'Not_A Brand', version: '24' },
-      ],
-      fullVersionList: [
-        { brand: 'Google Chrome', version: '131.0.6778.135' },
-        { brand: 'Chromium', version: '131.0.6778.135' },
-        { brand: 'Not_A Brand', version: '24.0.0.0' },
-      ],
-    };
-  }
+function getProfileClientHints(_profile?: string) {
   return {
     isMobile: false,
     platform: 'Windows',
@@ -280,6 +251,12 @@ function getWispCandidates(): string[] {
     }
 
     // 4. Fallback public Wisp servers if local/worker host cannot be reached
+    pushWisp('wss://themannastore.com/wisp/', false);
+    pushWisp('wss://turningthepagenow.com/wisp/', false);
+    pushWisp('wss://21baseballacademy.com/wisp/', false);
+    pushWisp('wss://theavancehotel.com/wisp/', false);
+    pushWisp('wss://diamondstudsbaseball.com/wisp/', false);
+    pushWisp('wss://broughton-hotel.com/wisp/', false);
     pushWisp('wss://anura.pro/wisp/', false);
     pushWisp('wss://anura.pro/', false);
     pushWisp('wss://wisp.mercurywork.shop/wisp/', false);
@@ -360,10 +337,6 @@ export function deepMergeCookies(...sources: Array<Record<string, any> | undefin
     }
 
     if (bestVal && bestVal.name && bestVal.value !== undefined) {
-      const upperCookieName = String(bestVal.name).trim().toUpperCase();
-      if (upperCookieName === 'GOOGLE_ABUSE_EXEMPTION') {
-        continue;
-      }
       if (typeof bestVal.maxAge === 'number' && bestVal.maxAge <= 0) {
         delete bestVal.maxAge;
       }
@@ -1111,14 +1084,23 @@ function sanitizeTransportHeaders(
     const key = String(pair[0] ?? '')
       .replace(/[\r\n\0:\s]+/g, '')
       .toLowerCase();
-    if (!key || FORBIDDEN_H2_HEADERS.has(key) || key === 'youtube-restrict' || key === 'x-youtube-restrict') continue;
+    if (
+      !key ||
+      FORBIDDEN_H2_HEADERS.has(key) ||
+      key === 'youtube-restrict' ||
+      key === 'x-youtube-restrict' ||
+      key === 'x-safesearch' ||
+      key === 'x-safe-search' ||
+      key === 'x-googapps-allowed-domains' ||
+      key === 'x-prefer'
+    ) continue;
     if (isBodylessMethod && key === 'content-length') continue;
     // Browsers never send Origin on no-cors / navigate GETs (<link rel="stylesheet">, <script>, <img>);
     // Scramjet injects it unconditionally, which triggers Cloudflare gzip/Vary corruption on some CDNs.
     if (isBodylessMethod && key === 'origin' && secFetchMode !== 'cors') continue;
 
     let val = String(pair[1] ?? '').replace(/[\r\n\0]+/g, ' ').trim();
-    if (key === 'prefer' && val.toLowerCase().includes('safe')) continue;
+    if ((key === 'prefer' || key === 'x-prefer') && val.toLowerCase().includes('safe')) continue;
     if (key === 'te' && val.toLowerCase() !== 'trailers') continue;
     if (key === 'accept-encoding') {
       const cleaned = val
@@ -1950,12 +1932,6 @@ async function createWispTransport(): Promise<ProxyTransport> {
         targetHost === 'google.com' ||
         targetHost.endsWith('.google.com') ||
         /^(www\.)?google\.(com|co\.[a-z]{2}|com\.[a-z]{2}|[a-z]{2,3})$/.test(targetHost);
-      const isYoutubeWatchOrPlayer =
-        (targetHost === 'youtube.com' || targetHost.endsWith('.youtube.com')) &&
-        (targetPath === '/watch' ||
-          targetPath.startsWith('/shorts') ||
-          targetPath.startsWith('/youtubei/v1/player') ||
-          targetPath.startsWith('/youtubei/v1/reel'));
       const isDocument = cleanHeaders.some(
         ([k, v]) =>
           (k.toLowerCase() === 'sec-fetch-dest' && v.toLowerCase() === 'document') ||
@@ -2005,17 +1981,10 @@ async function createWispTransport(): Promise<ProxyTransport> {
         } catch {}
       }
 
-      // Enforce SafeSearch OFF cookies across all search engines & sites, and strip poisoned abuse cookies
+      // Enforce SafeSearch OFF cookies across all search engines & sites
       {
         const cookieIdx = cleanHeaders.findIndex(([k]) => k.toLowerCase() === 'cookie');
-        let currentCookie = cookieIdx !== -1 ? cleanHeaders[cookieIdx][1] || '' : '';
-        if ((isGoogle || targetPath.startsWith('/sorry')) && currentCookie.includes('GOOGLE_ABUSE_EXEMPTION')) {
-          currentCookie = currentCookie
-            .split(';')
-            .map((p) => p.trim())
-            .filter((p) => p && !p.toUpperCase().startsWith('GOOGLE_ABUSE_EXEMPTION='))
-            .join('; ');
-        }
+        const currentCookie = cookieIdx !== -1 ? cleanHeaders[cookieIdx][1] || '' : '';
         const nextCookie = enforceSafeSearchOffCookieString(targetHost, currentCookie);
         if (nextCookie !== (cookieIdx !== -1 ? cleanHeaders[cookieIdx][1] || '' : '')) {
           if (cookieIdx !== -1) {
@@ -2037,10 +2006,6 @@ async function createWispTransport(): Promise<ProxyTransport> {
           if (lowerK === 'location' && v) {
             resp.headers[i] = [k, sanitizeSafeSearchLocation(v, targetRemote.origin)];
           } else if (lowerK === 'set-cookie' && v) {
-            if (/^\s*GOOGLE_ABUSE_EXEMPTION=/i.test(v)) {
-              resp.headers.splice(i, 1);
-              continue;
-            }
             const cleanSc = sanitizeSafeSearchSetCookie(targetHost, v);
             resp.headers[i] = [k, cleanSc];
             if (jar) {
@@ -2070,7 +2035,6 @@ async function createWispTransport(): Promise<ProxyTransport> {
         targetHost === 'startpage.com' ||
         targetHost.endsWith('.startpage.com') ||
         targetHost === 'search.brave.com';
-      const isGoogleSearchOrSorry = isGoogleSearchDomain(targetHost) || targetPath.startsWith('/sorry');
       const reqDest = getHeaderValue(cleanHeaders, 'sec-fetch-dest').toLowerCase();
       const isCriticalSubresource =
         reqDest === 'script' ||
@@ -2086,26 +2050,13 @@ async function createWispTransport(): Promise<ProxyTransport> {
 
       const inspectChallengeResponse = async (
         rawRes: any
-      ): Promise<{ isChallenge: boolean; kind: 'google' | 'youtube' | 'search' | 'cloudflare' | 'none' }> => {
+      ): Promise<{ isChallenge: boolean; kind: 'search' | 'cloudflare' | 'none' }> => {
         if (!rawRes) return { isChallenge: false, kind: 'none' };
         const status = Number(rawRes.status || 0);
         const resHeaders: RawHeaderPair[] = Array.isArray(rawRes.headers) ? rawRes.headers : [];
         const locHeader = getHeaderValue(resHeaders, 'location');
-        const finalUrlHeader = getHeaderValue(resHeaders, 'x-final-url');
         const cfMitigated = getHeaderValue(resHeaders, 'cf-mitigated').toLowerCase();
         const ct = getHeaderValue(resHeaders, 'content-type').toLowerCase();
-
-        if (isGoogleSearchOrSorry) {
-          if (
-            locHeader.toLowerCase().includes('/sorry') ||
-            finalUrlHeader.toLowerCase().includes('/sorry') ||
-            status === 429 ||
-            status === 403 ||
-            status === 503
-          ) {
-            return { isChallenge: true, kind: 'google' };
-          }
-        }
 
         if (isSearchChallengeHost && (status === 202 || status === 403 || status === 429)) {
           return { isChallenge: true, kind: 'search' };
@@ -2123,9 +2074,7 @@ async function createWispTransport(): Promise<ProxyTransport> {
           ct.includes('text/plain');
         const shouldInspectBody =
           isTextLike &&
-          (isGoogleSearchOrSorry ||
-            isSearchChallengeHost ||
-            isYoutubeWatchOrPlayer ||
+          (isSearchChallengeHost ||
             (isDocument && (status === 403 || status === 429 || status === 503)));
 
         if (!shouldInspectBody || !rawRes.body) {
@@ -2137,23 +2086,11 @@ async function createWispTransport(): Promise<ProxyTransport> {
         // Preserve body intact for formatResponse if we end up returning this response
         rawRes.body = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
 
-        const maxSlice = isYoutubeWatchOrPlayer ? Math.min(bytes.byteLength, 512000) : Math.min(bytes.byteLength, 48000);
+        const maxSlice = Math.min(bytes.byteLength, 48000);
         const probeText = new TextDecoder().decode(bytes.subarray(0, maxSlice));
-
-        if (isGoogleSearchOrSorry && isGoogleBotChallenge(targetRemote, status, locHeader, probeText)) {
-          return { isChallenge: true, kind: 'google' };
-        }
 
         if (isSearchChallengeHost && probeText.includes('anomalyDetectionBlock')) {
           return { isChallenge: true, kind: 'search' };
-        }
-
-        if (
-          isYoutubeWatchOrPlayer &&
-          (isYoutubeBotGateText(probeText) ||
-            (targetPath.startsWith('/youtubei/v1/player') && !probeText.includes('"streamingData"')))
-        ) {
-          return { isChallenge: true, kind: 'youtube' };
         }
 
         if (isDocument && (status === 403 || status === 429 || status === 503)) {
@@ -3083,6 +3020,7 @@ export async function launchInScramjetFrame(
 
                 if (formHost.includes('google.')) {
                   setOrUpdateInput('safe', 'off');
+                  setOrUpdateInput('safeui', 'off');
                 } else if (formHost.includes('duckduckgo.com')) {
                   setOrUpdateInput('kp', '-2');
                 } else if (formHost.includes('bing.com')) {

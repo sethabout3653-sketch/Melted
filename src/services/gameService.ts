@@ -354,8 +354,14 @@ export function transformUgsEntry(
 
   const id = 10000 + index;
   const category = detectCategory({ name: trimmedName, special: [] } as any);
-  const isCkv = entry.url.startsWith('/ckv/');
-  const resolvedUrl = resolveUgsUrl(entry.url);
+  const isUndertale = trimmedName.toLowerCase() === 'undertale';
+  const effectiveUrl = isUndertale
+    ? 'https://sethabout3653-sketch.github.io/undertale-webportforfrosthub/'
+    : entry.url;
+  const isCkv = effectiveUrl.startsWith('/ckv/');
+  const resolvedUrl = isUndertale
+    ? 'https://sethabout3653-sketch.github.io/undertale-webportforfrosthub/'
+    : resolveUgsUrl(effectiveUrl);
   
   let resolvedCover = '';
   if (coverLookupByName.has(normalized)) {
@@ -372,7 +378,7 @@ export function transformUgsEntry(
     id,
     name: trimmedName,
     cover: resolvedCover,
-    url: entry.url,
+    url: effectiveUrl,
     category,
     resolvedCover,
     fallbackCover: resolvedCover,
@@ -462,6 +468,10 @@ export function mergeUgsGames(
 
 export function getPlayableGameUrl(game: GameItem): string {
   if (!game) return '';
+  const name = (game.name || '').toLowerCase().trim();
+  if (name === 'undertale') {
+    return 'https://sethabout3653-sketch.github.io/undertale-webportforfrosthub/';
+  }
   // Native GN-Math games are fine and use standard resolution
   if (game.source === 'native') {
     return game.resolvedUrl || resolveGameUrl(game.url, game.id);
@@ -492,14 +502,17 @@ export function getPlayableGameUrl(game: GameItem): string {
 
 /**
  * GN-Math native games run directly by default ("except gn-math games they are fine").
- * External URLs (e.g. Undertale & Deltarune workers.dev), UGS, and CKV games run via Scramjet v2.
+ * External URLs, UGS, and CKV games run via Scramjet v2 by default unless explicitly configured otherwise.
+ * Undertale runs directly via the official webport without Scramjet.
  */
 export function shouldUseScramjetByDefault(game: GameItem): boolean {
   if (!game) return false;
-  if (game.source === 'scramjet') return true;
   const name = (game.name || '').toLowerCase().trim();
+  if (name === 'undertale' || game.url?.includes('undertale-webportforfrosthub')) {
+    return false;
+  }
+  if (game.source === 'scramjet') return true;
   const scramjetAllowed = new Set([
-    'undertale',
     'gemini',
     'soundboard 2',
     'soundboard 2 ',
@@ -515,6 +528,10 @@ export function shouldUseScramjetByDefault(game: GameItem): boolean {
  */
 export function getScramjetTargetUrl(game: GameItem): string {
   if (!game) return '';
+  const name = (game.name || '').toLowerCase().trim();
+  if (name === 'undertale') {
+    return 'https://sethabout3653-sketch.github.io/undertale-webportforfrosthub/';
+  }
   if (game.url && (game.url.startsWith('http://') || game.url.startsWith('https://'))) {
     return game.url;
   }
