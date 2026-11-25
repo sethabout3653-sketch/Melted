@@ -7,39 +7,91 @@ const customTurnUrls: string[] = String(env.VITE_TURN_URLS || '')
   .map((s: string) => s.trim())
   .filter(Boolean);
 
-const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun.cloudflare.com:3478' },
-    { urls: 'stun:openrelay.metered.ca:80' },
-    ...(customTurnUrls.length
-      ? [{
+const DEFAULT_ICE_SERVERS: RTCIceServer[] = [
+  {
+    urls: [
+      'stun:stun.cloudflare.com:3478',
+      'stun:stun.l.google.com:19302',
+      'stun:stun1.l.google.com:19302',
+      'stun:stun2.l.google.com:19302',
+      'stun:stun.relay.metered.ca:80',
+    ],
+  },
+  ...(customTurnUrls.length
+    ? [
+        {
           urls: customTurnUrls,
           username: env.VITE_TURN_USERNAME || '',
           credential: env.VITE_TURN_CREDENTIAL || '',
-        }]
-      : []),
-    {
-      urls: [
-        'turn:openrelay.metered.ca:80',
-        'turn:openrelay.metered.ca:80?transport=tcp',
-        'turn:openrelay.metered.ca:443',
-        'turn:openrelay.metered.ca:443?transport=tcp',
-        'turns:openrelay.metered.ca:443?transport=tcp',
-      ],
-      username: 'openrelayproject',
-      credential: 'openrelayproject',
-    },
-  ],
+        },
+      ]
+    : []),
+  {
+    urls: [
+      'turn:global.relay.metered.ca:80',
+      'turn:global.relay.metered.ca:80?transport=tcp',
+      'turn:global.relay.metered.ca:443',
+      'turn:global.relay.metered.ca:443?transport=tcp',
+      'turns:global.relay.metered.ca:443?transport=tcp',
+      'turn:standard.relay.metered.ca:80',
+      'turn:standard.relay.metered.ca:80?transport=tcp',
+      'turn:standard.relay.metered.ca:443',
+      'turn:standard.relay.metered.ca:443?transport=tcp',
+      'turns:standard.relay.metered.ca:443?transport=tcp',
+      'turn:a.relay.metered.ca:80?transport=tcp',
+      'turn:a.relay.metered.ca:443?transport=tcp',
+    ],
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
+];
+
+const DEFAULT_RTC_CONFIG: RTCConfiguration = {
+  iceServers: DEFAULT_ICE_SERVERS,
   iceTransportPolicy: 'all',
   bundlePolicy: 'max-bundle',
   rtcpMuxPolicy: 'require',
-  iceCandidatePoolSize: 4,
+  iceCandidatePoolSize: 8,
 };
 
-// Optimizes Opus SDP to completely disable DTX (discontinuous transmission)
-// which causes browser silence suppression to mute quiet parts, pauses, or syllables of speech.
+let cachedDynamicIceServers: RTCIceServer[] | null = null;
+let lastIceFetchAt = 0;
+let inflightIcePromise: Promise<RTCIceServer[]> | null = null;
+
+async function fetchDynamicIceServers(force = false): Promise<RTCIceServer[]> {
+  const now = Date.now();
+  if (!force && cachedDynamicIceServers && now - lastIceFetchAt < 8 * 60 * 1000) {
+    return cachedDynamicIceServers;
+  }
+  if (inflightIcePromise) return inflightIcePromise;
+
+  inflightIcePromise = (async () => {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3500);
+      const res = await fetch('/api/webrtc/ice-servers', {
+        signal: controller.signal,
+        cache: 'no-store',
+      });
+      clearTimeout(timeout);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data?.iceServers) && data.iceServers.length > 0) {
+          cachedDynamicIceServers = data.iceServers;
+          lastIceFetchAt = Date.now();
+          return data.iceServers as RTCIceServer[];
+        }
+      }
+    } catch {}
+    return cachedDynamicIceServers || DEFAULT_ICE_SERVERS;
+  })().finally(() => {
+    inflightIcePromise = null;
+  });
+
+  return inflightIcePromise;
+}
+
+// Optimizes Opus SDP for ultra-low-latency VBR stereo music/screen audio + FEC without starving weak WiFi
 function optimizeAudioSdp(sdp: string): string {
   if (!sdp) return sdp;
   const opusMatch = sdp.match(/a=rtpmap:(\d+)\s+opus\/48000/i);
@@ -48,26 +100,24 @@ function optimizeAudioSdp(sdp: string): string {
   const lines = sdp.split('\r\n');
   let foundFmtp = false;
 
+  const upsertFmtpParam = (line: string, key: string, value: string): string => {
+    const regex = new RegExp(`([ ;])${key}=[^;\\s]+`, 'g');
+    if (regex.test(line)) {
+      return line.replace(regex, `$1${key}=${value}`);
+    }
+    return `${line};${key}=${value}`;
+  };
+
   const modifiedLines = lines.map((line) => {
     if (opusPt && line.startsWith(`a=fmtp:${opusPt}`)) {
       foundFmtp = true;
-      let params = line;
-      if (params.includes('usedtx=')) {
-        params = params.replace(/usedtx=\d+/g, 'usedtx=0');
-      } else {
-        params += ';usedtx=0';
-      }
-      if (params.includes('useinbandfec=')) {
-        params = params.replace(/useinbandfec=\d+/g, 'useinbandfec=1');
-      } else {
-        params += ';useinbandfec=1';
-      }
-      if (!params.includes('cbr=')) {
-        params += ';cbr=1';
-      }
-      if (!params.includes('maxaveragebitrate=')) {
-        params += ';maxaveragebitrate=510000';
-      }
+      let params = line.replace(/([ ;])cbr=[^;\s]+/g, '');
+      params = upsertFmtpParam(params, 'minptime', '10');
+      params = upsertFmtpParam(params, 'useinbandfec', '1');
+      params = upsertFmtpParam(params, 'usedtx', '0');
+      params = upsertFmtpParam(params, 'stereo', '1');
+      params = upsertFmtpParam(params, 'sprop-stereo', '1');
+      params = upsertFmtpParam(params, 'maxaveragebitrate', '256000');
       return params;
     }
     return line;
@@ -79,7 +129,7 @@ function optimizeAudioSdp(sdp: string): string {
       modifiedLines.splice(
         rtpmapIdx + 1,
         0,
-        `a=fmtp:${opusPt} minptime=10;useinbandfec=1;usedtx=0;cbr=1;maxaveragebitrate=510000`
+        `a=fmtp:${opusPt} minptime=10;useinbandfec=1;usedtx=0;stereo=1;sprop-stereo=1;maxaveragebitrate=256000`
       );
     }
   }
@@ -105,10 +155,13 @@ interface PeerTrackMeta {
 interface PeerConnectionBundle {
   pc: RTCPeerConnection;
   createdAt: number;
+  iceTransportPolicy: RTCIceTransportPolicy;
   audioSender: RTCRtpSender | null;       // Microphone audio (kept apart)
   screenAudioSender: RTCRtpSender | null; // Screen share system audio (kept apart)
   camSender: RTCRtpSender | null;         // Camera video
   screenSender: RTCRtpSender | null;      // Screen share video
+  camBitrate: number;
+  screenBitrate: number;
 }
 
 interface RemoteTrackEntry {
@@ -135,18 +188,95 @@ interface UseWebRTCProps {
   ) => void;
 }
 
-function configureScreenSenderParams(sender: RTCRtpSender) {
+function configureCameraSenderParams(sender: RTCRtpSender, maxBitrate = 3_500_000) {
   try {
     const params = sender.getParameters();
-    if (!params.encodings) params.encodings = [{}];
+    if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
     params.encodings.forEach((enc) => {
-      enc.maxFramerate = 30;
-      enc.maxBitrate = 2500000;
+      enc.maxFramerate = 60;
+      enc.maxBitrate = maxBitrate;
+      enc.scaleResolutionDownBy = 1.0;
+      (enc as any).priority = 'high';
+      (enc as any).networkPriority = 'high';
     });
     if ('degradationPreference' in params) {
       (params as any).degradationPreference = 'maintain-framerate';
     }
     sender.setParameters(params).catch(() => {});
+  } catch {}
+}
+
+function configureScreenSenderParams(sender: RTCRtpSender, maxBitrate = 5_000_000) {
+  try {
+    const params = sender.getParameters();
+    if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
+    params.encodings.forEach((enc) => {
+      enc.maxFramerate = 60;
+      enc.maxBitrate = maxBitrate;
+      enc.scaleResolutionDownBy = 1.0;
+      (enc as any).priority = 'high';
+      (enc as any).networkPriority = 'high';
+    });
+    if ('degradationPreference' in params) {
+      (params as any).degradationPreference = 'maintain-framerate';
+    }
+    sender.setParameters(params).catch(() => {});
+  } catch {}
+}
+
+function configureAudioSenderParams(sender: RTCRtpSender, isScreenAudio: boolean) {
+  try {
+    const params = sender.getParameters();
+    if (!params.encodings || params.encodings.length === 0) params.encodings = [{}];
+    params.encodings.forEach((enc) => {
+      enc.maxBitrate = isScreenAudio ? 256_000 : 96_000;
+      (enc as any).priority = 'high';
+      (enc as any).networkPriority = 'high';
+    });
+    sender.setParameters(params).catch(() => {});
+  } catch {}
+}
+
+function preferLowLatencyVideoCodecs(pc: RTCPeerConnection, sender: RTCRtpSender | null) {
+  if (!sender) return;
+  try {
+    const transceiver = pc.getTransceivers().find((t) => t.sender === sender);
+    if (!transceiver || typeof transceiver.setCodecPreferences !== 'function') return;
+    const senderCaps =
+      typeof RTCRtpSender !== 'undefined' && typeof RTCRtpSender.getCapabilities === 'function'
+        ? RTCRtpSender.getCapabilities('video')
+        : null;
+    const receiverCaps =
+      typeof RTCRtpReceiver !== 'undefined' && typeof RTCRtpReceiver.getCapabilities === 'function'
+        ? RTCRtpReceiver.getCapabilities('video')
+        : null;
+    const caps = senderCaps || receiverCaps;
+    if (!caps?.codecs?.length) return;
+
+    const scoreCodec = (mime: string) => {
+      const m = mime.toLowerCase();
+      if (m === 'video/h264') return 0;
+      if (m === 'video/vp8') return 1;
+      if (m === 'video/vp9') return 2;
+      if (m === 'video/av1') return 4;
+      if (m === 'video/rtx' || m === 'video/red' || m === 'video/ulpfec') return 5;
+      return 3;
+    };
+
+    const sorted = [...caps.codecs].sort((a, b) => scoreCodec(a.mimeType) - scoreCodec(b.mimeType));
+    transceiver.setCodecPreferences(sorted);
+  } catch {}
+}
+
+function applyLowLatencyReceiverParams(receiver: RTCRtpReceiver | undefined) {
+  if (!receiver) return;
+  try {
+    if ('playoutDelayHint' in receiver) {
+      (receiver as any).playoutDelayHint = 0;
+    }
+    if ('jitterBufferTarget' in receiver) {
+      (receiver as any).jitterBufferTarget = 0;
+    }
   } catch {}
 }
 
@@ -204,6 +334,9 @@ export function useWebRTC({
   const fallbackTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const earlySignalsRef = useRef<{ fromUserId: string; signal: any; receivedAt: number }[]>([]);
   const signalQueuesRef = useRef<Map<string, Promise<void>>>(new Map());
+  const iceFailureCountRef = useRef<Map<string, number>>(new Map());
+  const forcedRelayPeersRef = useRef<Set<string>>(new Set());
+  const dynamicIceServersRef = useRef<RTCIceServer[]>(cachedDynamicIceServers || DEFAULT_ICE_SERVERS);
   const renegotiateRef = useRef<(peerId: string) => void>(() => {});
   const processSignalRef = useRef<(fromUserId: string, signal: any) => Promise<void>>(async () => {});
 
@@ -273,6 +406,8 @@ export function useWebRTC({
     makingOfferRef.current.delete(peerId);
     isNegotiatingRef.current.delete(peerId);
     signalQueuesRef.current.delete(peerId);
+    iceFailureCountRef.current.delete(peerId);
+    forcedRelayPeersRef.current.delete(peerId);
 
     setRemoteStreams((prev) => {
       if (!prev[peerId]) return prev;
@@ -592,12 +727,40 @@ export function useWebRTC({
       makingOfferRef.current.clear();
       isNegotiatingRef.current.clear();
       signalQueuesRef.current.clear();
+      iceFailureCountRef.current.clear();
+      forcedRelayPeersRef.current.clear();
       setRemoteStreams({});
       setRemoteScreenAudioStreams({});
       setRemoteCameraStreams({});
       setRemoteScreenStreams({});
       setRemoteSpeaking({});
     }
+  }, [isMediaActive]);
+
+  // Pre-fetch dynamic ephemeral TURN/STUN credentials from backend and refresh active peers
+  useEffect(() => {
+    let cancelled = false;
+    fetchDynamicIceServers().then((servers) => {
+      if (cancelled || !servers?.length) return;
+      dynamicIceServersRef.current = servers;
+      peerBundles.current.forEach((bundle) => {
+        if (
+          bundle.pc.connectionState !== 'closed' &&
+          bundle.pc.connectionState !== 'connected'
+        ) {
+          try {
+            bundle.pc.setConfiguration({
+              ...DEFAULT_RTC_CONFIG,
+              iceServers: servers,
+              iceTransportPolicy: bundle.iceTransportPolicy,
+            });
+          } catch {}
+        }
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [isMediaActive]);
 
   // Helper to attach/sync current local tracks onto a PeerConnectionBundle
@@ -627,10 +790,12 @@ export function useWebRTC({
         if (bundle.audioSender.track !== micTrack) {
           bundle.audioSender.replaceTrack(micTrack).catch(() => {});
           ensureSenderSendable(bundle.audioSender);
+          configureAudioSenderParams(bundle.audioSender, false);
         }
       } else {
         try {
           bundle.audioSender = pc.addTrack(micTrack, localAudioRef.current);
+          configureAudioSenderParams(bundle.audioSender, false);
           needsRenegotiation = true;
         } catch {}
       }
@@ -644,10 +809,12 @@ export function useWebRTC({
         if (bundle.screenAudioSender.track !== screenAudioTrack) {
           bundle.screenAudioSender.replaceTrack(screenAudioTrack).catch(() => {});
           ensureSenderSendable(bundle.screenAudioSender);
+          configureAudioSenderParams(bundle.screenAudioSender, true);
         }
       } else {
         try {
           bundle.screenAudioSender = pc.addTrack(screenAudioTrack, screenStreamRef.current);
+          configureAudioSenderParams(bundle.screenAudioSender, true);
           needsRenegotiation = true;
         } catch {}
       }
@@ -657,14 +824,22 @@ export function useWebRTC({
 
     // 3. Camera video track
     if (camTrack && cameraStreamRef.current) {
+      try {
+        if ('contentHint' in camTrack && !camTrack.contentHint) camTrack.contentHint = 'motion';
+      } catch {}
       if (bundle.camSender) {
         if (bundle.camSender.track !== camTrack) {
           bundle.camSender.replaceTrack(camTrack).catch(() => {});
           ensureSenderSendable(bundle.camSender);
+          configureCameraSenderParams(bundle.camSender, bundle.camBitrate);
+          preferLowLatencyVideoCodecs(pc, bundle.camSender);
         }
       } else {
         try {
-          bundle.camSender = pc.addTrack(camTrack, cameraStreamRef.current);
+          const sender = pc.addTrack(camTrack, cameraStreamRef.current);
+          bundle.camSender = sender;
+          configureCameraSenderParams(sender, bundle.camBitrate);
+          preferLowLatencyVideoCodecs(pc, sender);
           needsRenegotiation = true;
         } catch {}
       }
@@ -674,17 +849,22 @@ export function useWebRTC({
 
     // 4. Screen share video track
     if (screenTrack && screenStreamRef.current) {
+      try {
+        if ('contentHint' in screenTrack && !screenTrack.contentHint) screenTrack.contentHint = 'motion';
+      } catch {}
       if (bundle.screenSender) {
         if (bundle.screenSender.track !== screenTrack) {
           bundle.screenSender.replaceTrack(screenTrack).catch(() => {});
           ensureSenderSendable(bundle.screenSender);
-          configureScreenSenderParams(bundle.screenSender);
+          configureScreenSenderParams(bundle.screenSender, bundle.screenBitrate);
+          preferLowLatencyVideoCodecs(pc, bundle.screenSender);
         }
       } else {
         try {
           const sender = pc.addTrack(screenTrack, screenStreamRef.current);
           bundle.screenSender = sender;
-          configureScreenSenderParams(sender);
+          configureScreenSenderParams(sender, bundle.screenBitrate);
+          preferLowLatencyVideoCodecs(pc, sender);
           needsRenegotiation = true;
         } catch {}
       }
@@ -712,14 +892,22 @@ export function useWebRTC({
 
     lastSentMetaRef.current.delete(peerId);
 
-    const pc = new RTCPeerConnection(RTC_CONFIG);
+    const transportPolicy: RTCIceTransportPolicy = forcedRelayPeersRef.current.has(peerId) ? 'relay' : 'all';
+    const pc = new RTCPeerConnection({
+      ...DEFAULT_RTC_CONFIG,
+      iceServers: dynamicIceServersRef.current,
+      iceTransportPolicy: transportPolicy,
+    });
     const newBundle: PeerConnectionBundle = {
       pc,
       createdAt: Date.now(),
+      iceTransportPolicy: transportPolicy,
       audioSender: null,
       screenAudioSender: null,
       camSender: null,
       screenSender: null,
+      camBitrate: 3_500_000,
+      screenBitrate: 5_000_000,
     };
     peerBundles.current.set(peerId, newBundle);
 
@@ -728,6 +916,7 @@ export function useWebRTC({
     if (micTrack && localAudioRef.current) {
       try {
         newBundle.audioSender = pc.addTrack(micTrack, localAudioRef.current);
+        configureAudioSenderParams(newBundle.audioSender, false);
       } catch {}
     }
 
@@ -736,6 +925,7 @@ export function useWebRTC({
     if (screenAudioTrack && screenStreamRef.current) {
       try {
         newBundle.screenAudioSender = pc.addTrack(screenAudioTrack, screenStreamRef.current);
+        configureAudioSenderParams(newBundle.screenAudioSender, true);
       } catch {}
     }
 
@@ -743,7 +933,11 @@ export function useWebRTC({
     const camTrack = cameraStreamRef.current?.getVideoTracks()[0];
     if (camTrack && cameraStreamRef.current) {
       try {
-        newBundle.camSender = pc.addTrack(camTrack, cameraStreamRef.current);
+        if ('contentHint' in camTrack && !camTrack.contentHint) camTrack.contentHint = 'motion';
+        const sender = pc.addTrack(camTrack, cameraStreamRef.current);
+        newBundle.camSender = sender;
+        configureCameraSenderParams(sender, newBundle.camBitrate);
+        preferLowLatencyVideoCodecs(pc, sender);
       } catch {}
     }
 
@@ -751,9 +945,11 @@ export function useWebRTC({
     const screenTrack = screenStreamRef.current?.getVideoTracks()[0];
     if (screenTrack && screenStreamRef.current) {
       try {
+        if ('contentHint' in screenTrack && !screenTrack.contentHint) screenTrack.contentHint = 'motion';
         const sender = pc.addTrack(screenTrack, screenStreamRef.current);
         newBundle.screenSender = sender;
-        configureScreenSenderParams(sender);
+        configureScreenSenderParams(sender, newBundle.screenBitrate);
+        preferLowLatencyVideoCodecs(pc, sender);
       } catch {}
     }
 
@@ -776,6 +972,7 @@ export function useWebRTC({
     }
     if (!newBundle.camSender && videoTransceiver && !videoTransceiver.sender.track) {
       newBundle.camSender = videoTransceiver.sender;
+      preferLowLatencyVideoCodecs(pc, videoTransceiver.sender);
     }
 
     pc.onicecandidate = (event) => {
@@ -785,6 +982,41 @@ export function useWebRTC({
     };
 
     let recoveryTimer: ReturnType<typeof setTimeout> | null = null;
+    let checkingWatchdogTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const escalateOrRestartIce = () => {
+      if (peerBundles.current.get(peerId) !== newBundle) return;
+      const isAlreadyConnected =
+        pc.connectionState === 'connected' ||
+        pc.iceConnectionState === 'connected' ||
+        pc.iceConnectionState === 'completed';
+      if (isAlreadyConnected) return;
+
+      const nextFailures = (iceFailureCountRef.current.get(peerId) || 0) + 1;
+      iceFailureCountRef.current.set(peerId, nextFailures);
+
+      // Strict WiFi firewall fallback: if P2P ICE stalls/fails twice, switch this peer to forced TURN relay over 443 TCP/TLS
+      if (nextFailures >= 2 && newBundle.iceTransportPolicy !== 'relay') {
+        forcedRelayPeersRef.current.add(peerId);
+        try { pc.close(); } catch {}
+        if (peerBundles.current.get(peerId) === newBundle) {
+          peerBundles.current.delete(peerId);
+        }
+        pendingCandidates.current.delete(peerId);
+        makingOfferRef.current.delete(peerId);
+        isNegotiatingRef.current.delete(peerId);
+        renegotiateRef.current(peerId);
+        return;
+      }
+
+      try {
+        pc.restartIce();
+        renegotiateRef.current(peerId);
+      } catch (error) {
+        console.warn('[useWebRTC] ICE restart failed:', error);
+      }
+    };
+
     const scheduleIceRestart = (delay: number) => {
       if (recoveryTimer) return;
       recoveryTimer = setTimeout(() => {
@@ -796,22 +1028,32 @@ export function useWebRTC({
           pc.iceConnectionState === 'failed' ||
           pc.iceConnectionState === 'disconnected';
         if (!connectionNeedsRecovery) return;
-        try {
-          pc.restartIce();
-          renegotiateRef.current(peerId);
-        } catch (error) {
-          console.warn('[useWebRTC] ICE restart failed:', error);
-        }
+        escalateOrRestartIce();
       }, delay);
     };
-    const clearRecoveryTimer = () => {
+
+    const startCheckingWatchdog = () => {
+      if (checkingWatchdogTimer) return;
+      checkingWatchdogTimer = setTimeout(() => {
+        checkingWatchdogTimer = null;
+        if (peerBundles.current.get(peerId) !== newBundle) return;
+        if (pc.iceConnectionState === 'checking' || pc.iceConnectionState === 'new') {
+          escalateOrRestartIce();
+        }
+      }, 4000);
+    };
+
+    const clearRecoveryTimers = () => {
       if (recoveryTimer) clearTimeout(recoveryTimer);
       recoveryTimer = null;
+      if (checkingWatchdogTimer) clearTimeout(checkingWatchdogTimer);
+      checkingWatchdogTimer = null;
     };
 
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === 'connected') {
-        clearRecoveryTimer();
+        clearRecoveryTimers();
+        iceFailureCountRef.current.set(peerId, 0);
         // Send authoritative track-meta once connected so peer always has accurate mids/trackIds
         const metaPayload = { type: 'track-meta' as const, ...buildLocalMetaFields(newBundle) };
         lastSentMetaRef.current.set(peerId, JSON.stringify(metaPayload));
@@ -821,17 +1063,22 @@ export function useWebRTC({
       } else if (pc.connectionState === 'disconnected') {
         scheduleIceRestart(1500);
       } else if (pc.connectionState === 'closed') {
-        clearRecoveryTimer();
+        clearRecoveryTimers();
       }
     };
 
     pc.oniceconnectionstatechange = () => {
       if (pc.iceConnectionState === 'connected' || pc.iceConnectionState === 'completed') {
-        clearRecoveryTimer();
+        clearRecoveryTimers();
+        iceFailureCountRef.current.set(peerId, 0);
+      } else if (pc.iceConnectionState === 'checking') {
+        startCheckingWatchdog();
       } else if (pc.iceConnectionState === 'failed') {
         scheduleIceRestart(0);
       } else if (pc.iceConnectionState === 'disconnected') {
         scheduleIceRestart(1500);
+      } else if (pc.iceConnectionState === 'closed') {
+        clearRecoveryTimers();
       }
     };
 
@@ -840,6 +1087,7 @@ export function useWebRTC({
       const [stream] = event.streams;
       const streamToUse = stream || new MediaStream([track]);
       const mid = event.transceiver?.mid ?? null;
+      applyLowLatencyReceiverParams(event.receiver);
 
       if (track.kind === 'audio') {
         let peerMap = remoteAudioTracks.current.get(peerId);
@@ -854,6 +1102,7 @@ export function useWebRTC({
           if (entry && event.transceiver?.mid) {
             entry.mid = event.transceiver.mid;
           }
+          applyLowLatencyReceiverParams(event.receiver);
           routeAudioTracksForPeer(peerId);
         };
 
@@ -881,6 +1130,7 @@ export function useWebRTC({
           if (entry && event.transceiver?.mid) {
             entry.mid = event.transceiver.mid;
           }
+          applyLowLatencyReceiverParams(event.receiver);
           routeVideoTracksForPeer(peerId);
         };
 
@@ -1024,7 +1274,7 @@ export function useWebRTC({
     syncLocalTracks();
   }, [isMediaActive, localAudioStream, cameraStream, screenStream, isMuted, peers, syncLocalTracks]);
 
-  // Periodic health check for deferred renegotiations / track sync / stalled connections
+  // Periodic health check + adaptive WiFi bitrate controller (keeps 60fps smooth on weak WiFi)
   useEffect(() => {
     if (!isMediaActive) return;
     const interval = setInterval(() => {
@@ -1041,7 +1291,85 @@ export function useWebRTC({
         }
       });
     }, 1000);
-    return () => clearInterval(interval);
+
+    const adaptiveStatsInterval = setInterval(async () => {
+      for (const bundle of peerBundles.current.values()) {
+        const pc = bundle.pc;
+        if (pc.connectionState !== 'connected') continue;
+        const hasCam = Boolean(bundle.camSender?.track && bundle.camSender.track.readyState === 'live');
+        const hasScreen = Boolean(bundle.screenSender?.track && bundle.screenSender.track.readyState === 'live');
+        if (!hasCam && !hasScreen) continue;
+
+        try {
+          const stats = await pc.getStats();
+          let maxFractionLost = 0;
+          let maxRttSec = 0;
+          let availableOutgoingBps = 0;
+
+          stats.forEach((report: any) => {
+            if (report.type === 'remote-inbound-rtp') {
+              if (typeof report.fractionLost === 'number') {
+                maxFractionLost = Math.max(maxFractionLost, report.fractionLost);
+              }
+              if (typeof report.roundTripTime === 'number') {
+                maxRttSec = Math.max(maxRttSec, report.roundTripTime);
+              }
+            } else if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+              if (typeof report.currentRoundTripTime === 'number') {
+                maxRttSec = Math.max(maxRttSec, report.currentRoundTripTime);
+              }
+              if (typeof report.availableOutgoingBitrate === 'number' && report.availableOutgoingBitrate > 0) {
+                availableOutgoingBps = report.availableOutgoingBitrate;
+              }
+            }
+          });
+
+          const congested = maxFractionLost > 0.04 || maxRttSec > 0.35;
+          const healthy = maxFractionLost < 0.01 && maxRttSec < 0.18;
+
+          if (hasCam && bundle.camSender) {
+            const prev = bundle.camBitrate;
+            let next = prev;
+            if (congested) {
+              next = Math.max(350_000, Math.round(prev * 0.72));
+            } else if (healthy) {
+              next = Math.min(3_500_000, Math.round(prev * 1.25));
+            }
+            if (availableOutgoingBps > 0) {
+              const budget = hasScreen ? availableOutgoingBps * 0.35 : availableOutgoingBps * 0.8;
+              if (budget < next) next = Math.max(350_000, Math.round(budget));
+            }
+            if (Math.abs(next - prev) / prev > 0.08) {
+              bundle.camBitrate = next;
+              configureCameraSenderParams(bundle.camSender, next);
+            }
+          }
+
+          if (hasScreen && bundle.screenSender) {
+            const prev = bundle.screenBitrate;
+            let next = prev;
+            if (congested) {
+              next = Math.max(650_000, Math.round(prev * 0.72));
+            } else if (healthy) {
+              next = Math.min(5_500_000, Math.round(prev * 1.25));
+            }
+            if (availableOutgoingBps > 0) {
+              const budget = hasCam ? availableOutgoingBps * 0.6 : availableOutgoingBps * 0.85;
+              if (budget < next) next = Math.max(650_000, Math.round(budget));
+            }
+            if (Math.abs(next - prev) / prev > 0.08) {
+              bundle.screenBitrate = next;
+              configureScreenSenderParams(bundle.screenSender, next);
+            }
+          }
+        } catch {}
+      }
+    }, 1500);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(adaptiveStatsInterval);
+    };
   }, [isMediaActive, syncLocalTracks, renegotiateWithPeer]);
 
   // Handle USER_JOINED_MEDIA / USER_LEFT_MEDIA events (e.g., peer refreshed tab with same userId)

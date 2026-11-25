@@ -13,6 +13,7 @@ import { onRequest as aiAssistant } from '../functions/api/ai/assistant';
 import { onRequest as aiAssistantStream } from '../functions/api/ai/assistant/stream';
 import { onRequest as esrbImage } from '../functions/api/esrb/image';
 import { onRequest as esrbRatings } from '../functions/api/esrb/ratings';
+import { onRequest as webrtcIceServers } from '../functions/api/webrtc/ice-servers';
 import { SignalingHub } from './signalingHub';
 import { handleWispRequest } from './wispServer';
 
@@ -31,6 +32,16 @@ interface Env {
   OPENROUTER_API_KEY?: string;
   VITE_OPENROUTER_API_KEY?: string;
   OPENROUTER_KEY?: string;
+  CLOUDFLARE_TURN_TOKEN_ID?: string;
+  CLOUDFLARE_TURN_API_TOKEN?: string;
+  METERED_TURN_DOMAIN?: string;
+  METERED_TURN_API_KEY?: string;
+  TURN_URLS?: string;
+  VITE_TURN_URLS?: string;
+  TURN_USERNAME?: string;
+  VITE_TURN_USERNAME?: string;
+  TURN_CREDENTIAL?: string;
+  VITE_TURN_CREDENTIAL?: string;
 }
 
 type Handler = (context: { request: Request; env: Env; params: Record<string, string> }) => Promise<Response>;
@@ -47,6 +58,7 @@ const routes: Array<{ pattern: RegExp; handler: Handler }> = [
   { pattern: /^\/api\/proxy-image\/?$/, handler: proxyImage },
   { pattern: /^\/api\/esrb\/image\/?$/, handler: ({ request }) => esrbImage({ request }) },
   { pattern: /^\/api\/esrb\/ratings\/?$/, handler: ({ request, env }) => esrbRatings({ request, env }) },
+  { pattern: /^\/api\/webrtc\/ice-servers\/?$/, handler: ({ request, env }) => webrtcIceServers({ request, env }) },
   { pattern: /^\/api\/epg\/now-next\/?$/, handler: epgNowNext },
   { pattern: /^\/api\/ai\/models\/?$/, handler: ({ request, env }) => aiModels({ request, env }) },
   { pattern: /^\/api\/ai\/assistant\/stream\/?$/, handler: ({ request, env }) => aiAssistantStream({ request, env }) },

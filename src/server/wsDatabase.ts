@@ -1,5 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
-import type { Server } from 'http';
+import { WebSocketServer, WebSocket as RawWebSocket } from 'ws';
+import type { Server, IncomingMessage } from 'http';
+import type { Duplex } from 'stream';
 
 export interface DbUser {
   id: string;
@@ -124,16 +126,38 @@ export class WebSocketDatabase {
 export const globalWsDb = new WebSocketDatabase();
 
 let activeIo: SocketIOServer | null = null;
-const userSocketsMap = new Map<string, Set<Socket>>();
+let rawWss: WebSocketServer | null = null;
+type ClientTransport =
+  | { kind: 'io'; socket: Socket }
+  | { kind: 'ws'; socket: RawWebSocket };
+const userTransportsMap = new Map<string, Set<ClientTransport>>();
+
+function sendOverTransport(t: ClientTransport, payload: any): boolean {
+  try {
+    if (t.kind === 'io') {
+      if (t.socket.connected) {
+        t.socket.emit('message', payload);
+        return true;
+      }
+      return false;
+    }
+    if (t.socket.readyState === RawWebSocket.OPEN) {
+      t.socket.send(typeof payload === 'string' ? payload : JSON.stringify(payload));
+      return true;
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
 
 export function sendToUserSockets(targetUserId: string, payload: any): boolean {
   if (!targetUserId) return false;
-  const sockets = userSocketsMap.get(targetUserId);
-  if (!sockets || sockets.size === 0) return false;
+  const transports = userTransportsMap.get(targetUserId);
+  if (!transports || transports.size === 0) return false;
   let delivered = false;
-  sockets.forEach((s) => {
-    if (s.connected) {
-      s.emit('message', payload);
+  transports.forEach((t) => {
+    if (sendOverTransport(t, payload)) {
       delivered = true;
     }
   });
@@ -142,6 +166,16 @@ export function sendToUserSockets(targetUserId: string, payload: any): boolean {
 
 export function broadcastWss(payload: any) {
   activeIo?.emit('message', payload);
+  if (rawWss) {
+    const serialized = typeof payload === 'string' ? payload : JSON.stringify(payload);
+    rawWss.clients.forEach((client) => {
+      if (client.readyState === RawWebSocket.OPEN) {
+        try {
+          client.send(serialized);
+        } catch {}
+      }
+    });
+  }
 }
 
 export function broadcastTable(tableName: string, data: any) {
@@ -150,6 +184,291 @@ export function broadcastTable(tableName: string, data: any) {
     table: tableName,
     data: Array.isArray(data) ? data : [],
     timestamp: Date.now(),
+  });
+}
+
+const disconnectTimers = new Map<string, NodeJS.Timeout>();
+
+function broadcastMediaPresence(type: 'USER_JOINED_MEDIA' | 'USER_LEFT_MEDIA' | 'USER_MEDIA_UPDATE', userId: string, channel: string) {
+  broadcastWss({
+    type,
+    userId,
+    channel,
+    timestamp: Date.now(),
+  });
+}
+
+function attachSharedConnection(transport: ClientTransport, registerClose: (cb: () => void) => void, registerMessage: (cb: (msg: any) => void) => void): void {
+  let boundUserId: string | null = null;
+
+  sendOverTransport(transport, {
+    type: 'DB_INIT',
+    tables: {
+      users: globalWsDb.getUsers(),
+      channels: globalWsDb.channels,
+      deletedIds: Array.from(globalWsDb.deletedMessageIds).slice(-200),
+    },
+  });
+
+  registerMessage((msg: any) => {
+    try {
+      if (boundUserId) {
+        const u = globalWsDb.getUser(boundUserId);
+        if (u) {
+          u.updated_at = Date.now();
+        }
+      }
+
+      switch (msg?.type) {
+        case 'REGISTER_USER': {
+          if (msg.user && msg.user.id) {
+            const uId: string = msg.user.id;
+            boundUserId = uId;
+
+            if (disconnectTimers.has(uId)) {
+              clearTimeout(disconnectTimers.get(uId)!);
+              disconnectTimers.delete(uId);
+            }
+
+            if (!userTransportsMap.has(uId)) {
+              userTransportsMap.set(uId, new Set());
+            }
+            userTransportsMap.get(uId)!.add(transport);
+
+            const existingUser = globalWsDb.getUser(uId);
+            const userObj: DbUser = {
+              id: uId,
+              username: msg.user.username || existingUser?.username || 'Player',
+              avatar_color: msg.user.avatar_color || existingUser?.avatar_color || '#0066ff',
+              avatar_url: msg.user.avatar_url ?? existingUser?.avatar_url ?? '',
+              current_channel: msg.user.current_channel || existingUser?.current_channel || 'text-general',
+              is_speaking: msg.user.is_speaking !== undefined ? Boolean(msg.user.is_speaking) : Boolean(existingUser?.is_speaking),
+              is_muted: msg.user.is_muted !== undefined ? Boolean(msg.user.is_muted) : Boolean(existingUser?.is_muted),
+              is_deafened: msg.user.is_deafened !== undefined ? Boolean(msg.user.is_deafened) : Boolean(existingUser?.is_deafened),
+              has_video: msg.user.has_video !== undefined ? Boolean(msg.user.has_video) : Boolean(existingUser?.has_video),
+              is_screen_sharing: msg.user.is_screen_sharing !== undefined ? Boolean(msg.user.is_screen_sharing) : Boolean(existingUser?.is_screen_sharing),
+              activity: msg.user.activity ?? existingUser?.activity ?? '',
+              typing_channel: msg.user.typing_channel ?? existingUser?.typing_channel ?? undefined,
+              typing_at: msg.user.typing_at ?? existingUser?.typing_at ?? undefined,
+              updated_at: Date.now(),
+            };
+
+            globalWsDb.upsertUser(userObj);
+            broadcastTable('users', globalWsDb.getUsers());
+
+            if (userObj.current_channel === 'voice-general' || userObj.current_channel === 'video-general') {
+              broadcastMediaPresence('USER_JOINED_MEDIA', uId, userObj.current_channel);
+            }
+
+            const queued = globalWsDb.popPendingSignals(uId);
+            queued.forEach((s) => sendOverTransport(transport, s));
+          }
+          break;
+        }
+
+        case 'SQL_UPDATE': {
+          if (msg.table === 'users' && msg.id) {
+            const existing = globalWsDb.getUser(msg.id);
+            const oldChannel = existing?.current_channel || 'text-general';
+            const updated: DbUser = {
+              id: msg.id,
+              username: existing?.username || 'Player',
+              avatar_color: existing?.avatar_color || '#0066ff',
+              avatar_url: existing?.avatar_url || '',
+              current_channel: existing?.current_channel || 'text-general',
+              is_speaking: existing?.is_speaking || false,
+              is_muted: existing?.is_muted || false,
+              is_deafened: existing?.is_deafened || false,
+              has_video: existing?.has_video || false,
+              is_screen_sharing: existing?.is_screen_sharing || false,
+              activity: existing?.activity || '',
+              ...existing,
+              ...msg.set,
+              updated_at: Date.now(),
+            };
+
+            if (updated.current_channel === 'text-general' || updated.current_channel === 'offline') {
+              updated.has_video = false;
+              updated.is_screen_sharing = false;
+              updated.is_speaking = false;
+            }
+
+            if (msg.set?.is_screen_sharing) {
+              globalWsDb.users.forEach((u, uid) => {
+                if (uid !== msg.id && u.is_screen_sharing) {
+                  u.is_screen_sharing = false;
+                }
+              });
+            }
+
+            globalWsDb.upsertUser(updated);
+            broadcastTable('users', globalWsDb.getUsers());
+
+            if (msg.set?.current_channel !== undefined && msg.set.current_channel !== oldChannel) {
+              if (msg.set.current_channel === 'voice-general' || msg.set.current_channel === 'video-general') {
+                broadcastMediaPresence('USER_JOINED_MEDIA', msg.id, msg.set.current_channel);
+              }
+              if (oldChannel === 'voice-general' || oldChannel === 'video-general') {
+                broadcastMediaPresence('USER_LEFT_MEDIA', msg.id, oldChannel);
+              }
+            }
+
+            if (
+              msg.set?.has_video !== undefined ||
+              msg.set?.is_muted !== undefined ||
+              msg.set?.is_screen_sharing !== undefined
+            ) {
+              broadcastMediaPresence('USER_MEDIA_UPDATE', msg.id, updated.current_channel);
+            }
+          }
+          break;
+        }
+
+        case 'GET_USERS': {
+          broadcastTable('users', globalWsDb.getUsers());
+          break;
+        }
+
+        case 'SQL_INSERT': {
+          if (msg.table === 'messages' && msg.row) {
+            const row = msg.row;
+            const msgId = row.id || ('msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6));
+            if (globalWsDb.deletedMessageIds.has(msgId)) {
+              break;
+            }
+            const newMsg: DbMessage = {
+              id: msgId,
+              channel_id: row.channel_id || 'text-general',
+              sender_id: row.sender_id || boundUserId || 'anon',
+              sender_name: row.sender_name || 'Player',
+              avatar_color: row.avatar_color || '#0066ff',
+              sender_avatar_url: row.sender_avatar_url || '',
+              content: row.content || '',
+              attachment_url: row.attachment_url,
+              attachment_type: row.attachment_type,
+              attachment_name: row.attachment_name,
+              timestamp: row.timestamp || ('Today at ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
+              created_at: Number(row.created_at) || Date.now(),
+            };
+            broadcastTable('messages', [newMsg]);
+          }
+          break;
+        }
+
+        case 'SQL_DELETE': {
+          if (msg.table === 'messages' && msg.id) {
+            globalWsDb.markMessageDeleted(msg.id);
+            broadcastWss({ type: 'SQL_DELETE', table: 'messages', id: msg.id });
+          }
+          break;
+        }
+
+        case 'SQL_DELETE_CHANNEL': {
+          if (msg.channel_id) {
+            broadcastWss({ type: 'SQL_DELETE_CHANNEL', table: 'messages', channel_id: msg.channel_id });
+          }
+          break;
+        }
+
+        case 'SQL_DELETE_ALL': {
+          globalWsDb.deletedMessageIds.clear();
+          broadcastWss({ type: 'DB_CLEAR_MESSAGES' });
+          break;
+        }
+
+        case 'RTC_SIGNAL': {
+          if (msg.targetUserId && msg.targetUserId !== boundUserId) {
+            const signalPayload = {
+              type: 'RTC_SIGNAL',
+              fromUserId: msg.fromUserId || boundUserId,
+              targetUserId: msg.targetUserId,
+              signal: msg.signal,
+              sigId: msg.sigId,
+            };
+
+            const delivered = sendToUserSockets(msg.targetUserId, signalPayload);
+
+            if (!delivered) {
+              globalWsDb.addPendingSignal({
+                id: `sig-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                fromUserId: msg.fromUserId || boundUserId || 'anon',
+                targetUserId: msg.targetUserId,
+                type: 'RTC_SIGNAL',
+                signal: msg.signal,
+                sigId: msg.sigId,
+                timestamp: Date.now(),
+              });
+            }
+          }
+          break;
+        }
+
+        case 'USER_OFFLINE':
+        case 'USER_DISCONNECT': {
+          const uId = msg.userId || boundUserId;
+          if (uId) {
+            const transports = userTransportsMap.get(uId);
+            if (transports) {
+              transports.delete(transport);
+              if (transports.size === 0) {
+                userTransportsMap.delete(uId);
+              }
+            }
+            const user = globalWsDb.getUser(uId);
+            const oldChannel = user?.current_channel;
+            globalWsDb.deleteUser(uId);
+            broadcastTable('users', globalWsDb.getUsers());
+            if (oldChannel === 'video-general' || oldChannel === 'voice-general') {
+              broadcastMediaPresence('USER_LEFT_MEDIA', uId, oldChannel);
+            }
+          }
+          break;
+        }
+
+        case 'PING': {
+          sendOverTransport(transport, { type: 'PONG', timestamp: Date.now() });
+          break;
+        }
+
+        default:
+          break;
+      }
+    } catch (err) {
+      console.warn('[WS DB] Message handling warning:', err);
+    }
+  });
+
+  registerClose(() => {
+    if (!boundUserId) return;
+    const uId = boundUserId;
+    const transports = userTransportsMap.get(uId);
+    if (!transports) return;
+    transports.delete(transport);
+    if (transports.size === 0) {
+      userTransportsMap.delete(uId);
+      const timer = setTimeout(() => {
+        disconnectTimers.delete(uId);
+        if (userTransportsMap.has(uId)) return;
+        const user = globalWsDb.getUser(uId);
+        const oldChannel = user?.current_channel;
+        globalWsDb.deleteUser(uId);
+        broadcastTable('users', globalWsDb.getUsers());
+        if (oldChannel === 'video-general' || oldChannel === 'voice-general') {
+          broadcastMediaPresence('USER_LEFT_MEDIA', uId, oldChannel);
+        }
+      }, DISCONNECT_GRACE_MS);
+      disconnectTimers.set(uId, timer);
+    }
+  });
+}
+
+export function handleRawWsDbUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): void {
+  if (!rawWss) {
+    socket.destroy();
+    return;
+  }
+  rawWss.handleUpgrade(req, socket, head, (wsClient) => {
+    rawWss!.emit('connection', wsClient, req);
   });
 }
 
@@ -162,281 +481,32 @@ export function initWebSocketDatabase(server: Server): void {
   });
   activeIo = io;
 
-  const disconnectTimers = new Map<string, NodeJS.Timeout>();
-
-  function broadcastMediaPresence(type: 'USER_JOINED_MEDIA' | 'USER_LEFT_MEDIA' | 'USER_MEDIA_UPDATE', userId: string, channel: string) {
-    broadcastWss({
-      type,
-      userId,
-      channel,
-      timestamp: Date.now(),
-    });
-  }
-
-  io.on('connection', (socket) => {
-    let boundUserId: string | null = null;
-
-    socket.emit('message', {
-      type: 'DB_INIT',
-      tables: {
-        users: globalWsDb.getUsers(),
-        channels: globalWsDb.channels,
-        deletedIds: Array.from(globalWsDb.deletedMessageIds).slice(-200),
-      },
-    });
-
-    socket.on('message', (msg: any) => {
-      try {
-        if (boundUserId) {
-          const u = globalWsDb.getUser(boundUserId);
-          if (u) {
-            u.updated_at = Date.now();
-          }
-        }
-
-        switch (msg?.type) {
-          case 'REGISTER_USER': {
-            if (msg.user && msg.user.id) {
-              const uId: string = msg.user.id;
-              boundUserId = uId;
-
-              if (disconnectTimers.has(uId)) {
-                clearTimeout(disconnectTimers.get(uId)!);
-                disconnectTimers.delete(uId);
-              }
-
-              if (!userSocketsMap.has(uId)) {
-                userSocketsMap.set(uId, new Set());
-              }
-              userSocketsMap.get(uId)!.add(socket);
-
-              const existingUser = globalWsDb.getUser(uId);
-              const userObj: DbUser = {
-                id: uId,
-                username: msg.user.username || existingUser?.username || 'Player',
-                avatar_color: msg.user.avatar_color || existingUser?.avatar_color || '#0066ff',
-                avatar_url: msg.user.avatar_url ?? existingUser?.avatar_url ?? '',
-                current_channel: msg.user.current_channel || existingUser?.current_channel || 'text-general',
-                is_speaking: msg.user.is_speaking !== undefined ? Boolean(msg.user.is_speaking) : Boolean(existingUser?.is_speaking),
-                is_muted: msg.user.is_muted !== undefined ? Boolean(msg.user.is_muted) : Boolean(existingUser?.is_muted),
-                is_deafened: msg.user.is_deafened !== undefined ? Boolean(msg.user.is_deafened) : Boolean(existingUser?.is_deafened),
-                has_video: msg.user.has_video !== undefined ? Boolean(msg.user.has_video) : Boolean(existingUser?.has_video),
-                is_screen_sharing: msg.user.is_screen_sharing !== undefined ? Boolean(msg.user.is_screen_sharing) : Boolean(existingUser?.is_screen_sharing),
-                activity: msg.user.activity ?? existingUser?.activity ?? '',
-                typing_channel: msg.user.typing_channel ?? existingUser?.typing_channel ?? undefined,
-                typing_at: msg.user.typing_at ?? existingUser?.typing_at ?? undefined,
-                updated_at: Date.now(),
-              };
-
-              globalWsDb.upsertUser(userObj);
-              broadcastTable('users', globalWsDb.getUsers());
-
-              if (userObj.current_channel === 'voice-general' || userObj.current_channel === 'video-general') {
-                broadcastMediaPresence('USER_JOINED_MEDIA', uId, userObj.current_channel);
-              }
-
-              const queued = globalWsDb.popPendingSignals(uId);
-              queued.forEach((s) => socket.emit('message', s));
-            }
-            break;
-          }
-
-          case 'SQL_UPDATE': {
-            if (msg.table === 'users' && msg.id) {
-              const existing = globalWsDb.getUser(msg.id);
-              const oldChannel = existing?.current_channel || 'text-general';
-              const updated: DbUser = {
-                id: msg.id,
-                username: existing?.username || 'Player',
-                avatar_color: existing?.avatar_color || '#0066ff',
-                avatar_url: existing?.avatar_url || '',
-                current_channel: existing?.current_channel || 'text-general',
-                is_speaking: existing?.is_speaking || false,
-                is_muted: existing?.is_muted || false,
-                is_deafened: existing?.is_deafened || false,
-                has_video: existing?.has_video || false,
-                is_screen_sharing: existing?.is_screen_sharing || false,
-                activity: existing?.activity || '',
-                ...existing,
-                ...msg.set,
-                updated_at: Date.now(),
-              };
-
-              if (updated.current_channel === 'text-general' || updated.current_channel === 'offline') {
-                updated.has_video = false;
-                updated.is_screen_sharing = false;
-                updated.is_speaking = false;
-              }
-
-              if (msg.set?.is_screen_sharing) {
-                globalWsDb.users.forEach((u, uid) => {
-                  if (uid !== msg.id && u.is_screen_sharing) {
-                    u.is_screen_sharing = false;
-                  }
-                });
-              }
-
-              globalWsDb.upsertUser(updated);
-              broadcastTable('users', globalWsDb.getUsers());
-
-              if (msg.set?.current_channel !== undefined && msg.set.current_channel !== oldChannel) {
-                if (msg.set.current_channel === 'voice-general' || msg.set.current_channel === 'video-general') {
-                  broadcastMediaPresence('USER_JOINED_MEDIA', msg.id, msg.set.current_channel);
-                }
-                if (oldChannel === 'voice-general' || oldChannel === 'video-general') {
-                  broadcastMediaPresence('USER_LEFT_MEDIA', msg.id, oldChannel);
-                }
-              }
-
-              if (
-                msg.set?.has_video !== undefined ||
-                msg.set?.is_muted !== undefined ||
-                msg.set?.is_screen_sharing !== undefined
-              ) {
-                broadcastMediaPresence('USER_MEDIA_UPDATE', msg.id, updated.current_channel);
-              }
-            }
-            break;
-          }
-
-          case 'GET_USERS': {
-            broadcastTable('users', globalWsDb.getUsers());
-            break;
-          }
-
-          case 'SQL_INSERT': {
-            if (msg.table === 'messages' && msg.row) {
-              const row = msg.row;
-              const msgId = row.id || ('msg-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6));
-              if (globalWsDb.deletedMessageIds.has(msgId)) {
-                break;
-              }
-              const newMsg: DbMessage = {
-                id: msgId,
-                channel_id: row.channel_id || 'text-general',
-                sender_id: row.sender_id || boundUserId || 'anon',
-                sender_name: row.sender_name || 'Player',
-                avatar_color: row.avatar_color || '#0066ff',
-                sender_avatar_url: row.sender_avatar_url || '',
-                content: row.content || '',
-                attachment_url: row.attachment_url,
-                attachment_type: row.attachment_type,
-                attachment_name: row.attachment_name,
-                timestamp: row.timestamp || ('Today at ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
-                created_at: Number(row.created_at) || Date.now(),
-              };
-              // Real-time relay only (Firebase persists chat history)
-              broadcastTable('messages', [newMsg]);
-            }
-            break;
-          }
-
-          case 'SQL_DELETE': {
-            if (msg.table === 'messages' && msg.id) {
-              globalWsDb.markMessageDeleted(msg.id);
-              broadcastWss({ type: 'SQL_DELETE', table: 'messages', id: msg.id });
-            }
-            break;
-          }
-
-          case 'SQL_DELETE_CHANNEL': {
-            if (msg.channel_id) {
-              broadcastWss({ type: 'SQL_DELETE_CHANNEL', table: 'messages', channel_id: msg.channel_id });
-            }
-            break;
-          }
-
-          case 'SQL_DELETE_ALL': {
-            globalWsDb.deletedMessageIds.clear();
-            broadcastWss({ type: 'DB_CLEAR_MESSAGES' });
-            break;
-          }
-
-          case 'RTC_SIGNAL': {
-            if (msg.targetUserId && msg.targetUserId !== boundUserId) {
-              const signalPayload = {
-                type: 'RTC_SIGNAL',
-                fromUserId: msg.fromUserId || boundUserId,
-                targetUserId: msg.targetUserId,
-                signal: msg.signal,
-                sigId: msg.sigId,
-              };
-
-              const delivered = sendToUserSockets(msg.targetUserId, signalPayload);
-
-              if (!delivered) {
-                globalWsDb.addPendingSignal({
-                  id: `sig-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-                  fromUserId: msg.fromUserId || boundUserId || 'anon',
-                  targetUserId: msg.targetUserId,
-                  type: 'RTC_SIGNAL',
-                  signal: msg.signal,
-                  sigId: msg.sigId,
-                  timestamp: Date.now(),
-                });
-              }
-            }
-            break;
-          }
-
-          case 'USER_OFFLINE':
-          case 'USER_DISCONNECT': {
-            const uId = msg.userId || boundUserId;
-            if (uId) {
-              const sockets = userSocketsMap.get(uId);
-              if (sockets) {
-                sockets.delete(socket);
-                if (sockets.size === 0) {
-                  userSocketsMap.delete(uId);
-                }
-              }
-              const user = globalWsDb.getUser(uId);
-              const oldChannel = user?.current_channel;
-              globalWsDb.deleteUser(uId);
-              broadcastTable('users', globalWsDb.getUsers());
-              if (oldChannel === 'video-general' || oldChannel === 'voice-general') {
-                broadcastMediaPresence('USER_LEFT_MEDIA', uId, oldChannel);
-              }
-            }
-            break;
-          }
-
-          case 'PING': {
-            socket.emit('message', { type: 'PONG', timestamp: Date.now() });
-            break;
-          }
-
-          default:
-            break;
-        }
-      } catch (err) {
-        console.warn('[Socket.IO DB] Message handling warning:', err);
-      }
-    });
-
-    socket.on('disconnect', () => {
-      if (!boundUserId) return;
-      const uId = boundUserId;
-      const sockets = userSocketsMap.get(uId);
-      if (!sockets) return;
-      sockets.delete(socket);
-      if (sockets.size === 0) {
-        userSocketsMap.delete(uId);
-        const timer = setTimeout(() => {
-          disconnectTimers.delete(uId);
-          if (userSocketsMap.has(uId)) return;
-          const user = globalWsDb.getUser(uId);
-          const oldChannel = user?.current_channel;
-          globalWsDb.deleteUser(uId);
-          broadcastTable('users', globalWsDb.getUsers());
-          if (oldChannel === 'video-general' || oldChannel === 'voice-general') {
-            broadcastMediaPresence('USER_LEFT_MEDIA', uId, oldChannel);
-          }
-        }, DISCONNECT_GRACE_MS);
-        disconnectTimers.set(uId, timer);
-      }
-    });
+  rawWss = new WebSocketServer({ noServer: true });
+  rawWss.on('connection', (wsClient) => {
+    const transport: ClientTransport = { kind: 'ws', socket: wsClient };
+    attachSharedConnection(
+      transport,
+      (cb) => wsClient.on('close', cb),
+      (cb) =>
+        wsClient.on('message', (data) => {
+          try {
+            const parsed = JSON.parse(typeof data === 'string' ? data : data.toString('utf8'));
+            cb(parsed);
+          } catch {}
+        })
+    );
   });
 
-  console.log('🔌 Socket.IO database hub mounted at /socket.io');
+  io.on('connection', (socket) => {
+    const transport: ClientTransport = { kind: 'io', socket };
+    attachSharedConnection(
+      transport,
+      (cb) => socket.on('disconnect', cb),
+      (cb) => socket.on('message', cb)
+    );
+  });
+
+  console.log('🔌 Socket.IO (/socket.io) & Native WebSocket (/ws-db) hub mounted');
 }
+
+

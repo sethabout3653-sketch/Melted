@@ -11,6 +11,11 @@ const SingleAudioTrackPlayer: React.FC<{ track: MediaStreamTrack; isDeafened: bo
 
     const stream = new MediaStream([track]);
     el.srcObject = stream;
+    try {
+      (el as any).preservesPitch = false;
+      (el as any).mozPreservesPitch = false;
+      (el as any).webkitPreservesPitch = false;
+    } catch {}
 
     const tryPlay = () => {
       if (el && el.srcObject) {
@@ -29,6 +34,7 @@ const SingleAudioTrackPlayer: React.FC<{ track: MediaStreamTrack; isDeafened: bo
     };
 
     track.addEventListener('unmute', onUnmute);
+    el.addEventListener('canplay', tryPlay);
 
     const onUserGesture = () => {
       tryPlay();
@@ -36,16 +42,17 @@ const SingleAudioTrackPlayer: React.FC<{ track: MediaStreamTrack; isDeafened: bo
     const events = ['click', 'touchstart', 'keydown', 'mousedown', 'touchend'];
     events.forEach((ev) => window.addEventListener(ev, onUserGesture, { once: true }));
 
-    // Watchdog to ensure audio stays playing
+    // Watchdog to ensure audio stays playing without building playback lag
     const watchdog = setInterval(() => {
       if (el && el.paused && el.srcObject && track.readyState === 'live' && track.enabled) {
         tryPlay();
       }
-    }, 2000);
+    }, 1000);
 
     return () => {
       clearInterval(watchdog);
       track.removeEventListener('unmute', onUnmute);
+      el.removeEventListener('canplay', tryPlay);
       events.forEach((ev) => window.removeEventListener(ev, onUserGesture));
       if (el) {
         el.srcObject = null;

@@ -9,7 +9,8 @@ import tls from 'tls';
 import zlib from 'zlib';
 import { promisify } from 'util';
 import { Readable } from 'stream';
-import { initWebSocketDatabase, globalWsDb, broadcastTable, broadcastWss, sendToUserSockets } from './src/server/wsDatabase';
+import { initWebSocketDatabase, globalWsDb, broadcastTable, broadcastWss, sendToUserSockets, handleRawWsDbUpgrade } from './src/server/wsDatabase';
+import { resolveDynamicIceServers } from './functions/api/webrtc/ice-servers';
 import { server as wispServer } from '@mercuryworkshop/wisp-js/server';
 import { createSplitRoutingWispTCPSocket, dialSocks5Tunnel } from './src/server/wispSocks5Socket';
 import { unfilteredLookup } from './src/server/dohResolver';
@@ -2389,6 +2390,16 @@ app.get('/api/ws-db/signals/:userId', (req, res) => {
   }
 });
 
+app.get('/api/webrtc/ice-servers', async (_req, res) => {
+  try {
+    const iceServers = await resolveDynamicIceServers(process.env as any);
+    res.setHeader('Cache-Control', 'no-store');
+    res.json({ iceServers, ttl: 600 });
+  } catch (err: any) {
+    res.status(500).json({ error: 'ICE server resolution failed', message: err?.message });
+  }
+});
+
 // Giphy Search & Trending API Proxy
 app.get('/api/giphy/search', async (req, res) => {
   const query = (req.query.q as string) || '';
@@ -3266,6 +3277,11 @@ async function startServer() {
     const pathname = reqUrl.split('?')[0];
 
     if (pathname.startsWith('/socket.io/')) {
+      return;
+    }
+
+    if (pathname === '/ws-db' || pathname === '/ws-db/') {
+      handleRawWsDbUpgrade(req, socket, head);
       return;
     }
 

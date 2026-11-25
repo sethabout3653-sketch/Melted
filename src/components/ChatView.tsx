@@ -327,6 +327,8 @@ const RemoteVideoPlayer: React.FC<{
     video.muted = true;
     video.defaultMuted = true;
 
+    let confirmedLiveNonBlack = false;
+
     const checkFrame = () => {
       const vid = videoRef.current;
       if (!vid || !stream) return;
@@ -334,6 +336,7 @@ const RemoteVideoPlayer: React.FC<{
       const currentTracks = stream.getVideoTracks();
       const hasLiveEnabledTrack = currentTracks.some((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled);
       if (!hasLiveEnabledTrack) {
+        confirmedLiveNonBlack = false;
         setHasVideoFrame(false);
         reportBlackState(true);
         return;
@@ -342,11 +345,13 @@ const RemoteVideoPlayer: React.FC<{
       if (isScreen) {
         const hasUnmutedScreenTrack = currentTracks.some((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled && !t.muted);
         if (!hasUnmutedScreenTrack) {
+          confirmedLiveNonBlack = false;
           setHasVideoFrame(false);
           reportBlackState(true);
           return;
         }
         if (vid.videoWidth > 0 && vid.videoHeight > 0) {
+          confirmedLiveNonBlack = true;
           setHasVideoFrame(true);
           reportBlackState(false);
           checkOrientationRef.current();
@@ -355,13 +360,20 @@ const RemoteVideoPlayer: React.FC<{
       }
 
       if (vid.videoWidth > 0 && vid.videoHeight > 0 && vid.readyState >= 2 && !vid.paused && !vid.ended) {
+        if (confirmedLiveNonBlack) {
+          reportBlackState(false);
+          setHasVideoFrame(true);
+          return;
+        }
         const frameIsBlack = checkIsVideoFrameBlack(vid);
         reportBlackState(frameIsBlack);
         if (!frameIsBlack) {
+          confirmedLiveNonBlack = true;
           setHasVideoFrame(true);
           checkOrientationRef.current();
         }
       } else {
+        confirmedLiveNonBlack = false;
         reportBlackState(true);
       }
     };
@@ -379,11 +391,13 @@ const RemoteVideoPlayer: React.FC<{
     tryPlay();
 
     const handleUnmute = () => {
+      confirmedLiveNonBlack = false;
       allVideoTracks.forEach((t: MediaStreamTrack) => { t.enabled = true; });
       tryPlay();
     };
 
     const handleMuteOrEnd = () => {
+      confirmedLiveNonBlack = false;
       setHasVideoFrame(false);
       reportBlackState(true);
     };
@@ -396,6 +410,7 @@ const RemoteVideoPlayer: React.FC<{
 
     const handleAddTrack = (e: MediaStreamTrackEvent) => {
       if (e.track.kind === 'video') {
+        confirmedLiveNonBlack = false;
         e.track.enabled = true;
         e.track.addEventListener('unmute', handleUnmute);
         e.track.addEventListener('mute', handleMuteOrEnd);
@@ -417,9 +432,11 @@ const RemoteVideoPlayer: React.FC<{
         if (video.paused && video.srcObject) {
           video.play().catch(() => {});
         }
-        checkFrame();
+        if (!confirmedLiveNonBlack) {
+          checkFrame();
+        }
       }
-    }, 1000);
+    }, 1500);
 
     const onUserGesture = () => {
       tryPlay();
@@ -633,12 +650,15 @@ const LocalVideoPlayer: React.FC<{
     video.muted = true;
     video.defaultMuted = true;
 
+    let confirmedLiveNonBlack = false;
+
     const checkFrame = () => {
       const vid = videoRef.current;
       if (!vid || !stream) return;
 
       const hasLiveEnabledTrack = stream.getVideoTracks().some((t: MediaStreamTrack) => t.readyState === 'live' && t.enabled);
       if (!hasLiveEnabledTrack) {
+        confirmedLiveNonBlack = false;
         setHasFrame(false);
         reportBlackState(true);
         return;
@@ -646,6 +666,7 @@ const LocalVideoPlayer: React.FC<{
 
       if (isScreen) {
         if (vid.videoWidth > 0 && vid.videoHeight > 0) {
+          confirmedLiveNonBlack = true;
           setHasFrame(true);
           reportBlackState(false);
           checkOrientationRef.current();
@@ -654,13 +675,20 @@ const LocalVideoPlayer: React.FC<{
       }
 
       if (vid.videoWidth > 0 && vid.videoHeight > 0 && vid.readyState >= 2 && !vid.paused && !vid.ended) {
+        if (confirmedLiveNonBlack) {
+          reportBlackState(false);
+          setHasFrame(true);
+          return;
+        }
         const frameIsBlack = checkIsVideoFrameBlack(vid);
         reportBlackState(frameIsBlack);
         if (!frameIsBlack) {
+          confirmedLiveNonBlack = true;
           setHasFrame(true);
           checkOrientationRef.current();
         }
       } else {
+        confirmedLiveNonBlack = false;
         reportBlackState(true);
       }
     };
@@ -670,12 +698,18 @@ const LocalVideoPlayer: React.FC<{
     }).catch(() => {});
 
     const handleMuteOrEnd = () => {
+      confirmedLiveNonBlack = false;
       setHasFrame(false);
       reportBlackState(true);
     };
 
+    const handleUnmute = () => {
+      confirmedLiveNonBlack = false;
+      checkFrame();
+    };
+
     allVideoTracks.forEach((t: MediaStreamTrack) => {
-      t.addEventListener('unmute', checkFrame);
+      t.addEventListener('unmute', handleUnmute);
       t.addEventListener('mute', handleMuteOrEnd);
       t.addEventListener('ended', handleMuteOrEnd);
     });
@@ -692,14 +726,16 @@ const LocalVideoPlayer: React.FC<{
         if (video.paused && video.srcObject) {
           video.play().catch(() => {});
         }
-        checkFrame();
+        if (!confirmedLiveNonBlack) {
+          checkFrame();
+        }
       }
-    }, 1000);
+    }, 1500);
 
     return () => {
       clearInterval(freezeWatchdog);
       allVideoTracks.forEach((t: MediaStreamTrack) => {
-        t.removeEventListener('unmute', checkFrame);
+        t.removeEventListener('unmute', handleUnmute);
         t.removeEventListener('mute', handleMuteOrEnd);
         t.removeEventListener('ended', handleMuteOrEnd);
       });
@@ -816,14 +852,18 @@ const FullscreenStageOverlay: React.FC<{
     el.muted = true;
     el.defaultMuted = true;
 
+    let confirmedLiveNonBlack = false;
+
     const checkFrame = () => {
       const vid = videoRef.current;
       if (!vid || !media.stream) return;
       if (vid.videoWidth > 0 && vid.videoHeight > 0) {
         if (media.isScreen) {
+          confirmedLiveNonBlack = true;
           setIsBlackFrame(false);
-        } else {
+        } else if (!confirmedLiveNonBlack) {
           const black = checkIsVideoFrameBlack(vid);
+          if (!black) confirmedLiveNonBlack = true;
           setIsBlackFrame(black);
         }
       }
@@ -835,7 +875,14 @@ const FullscreenStageOverlay: React.FC<{
     el.addEventListener('canplay', checkFrame);
     el.addEventListener('playing', checkFrame);
 
-    const interval = setInterval(checkFrame, 1000);
+    const interval = setInterval(() => {
+      if (el.paused && el.srcObject) {
+        el.play().catch(() => {});
+      }
+      if (!confirmedLiveNonBlack) {
+        checkFrame();
+      }
+    }, 1500);
 
     return () => {
       clearInterval(interval);

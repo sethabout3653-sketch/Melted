@@ -250,9 +250,55 @@ export function useGlobalChat({
     }
   }, []);
 
+  const acquireCameraStream = useCallback(async (): Promise<MediaStream> => {
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'user',
+          width: { ideal: 1280, min: 640 },
+          height: { ideal: 720, min: 360 },
+          frameRate: { ideal: 60, min: 30, max: 60 },
+        },
+        audio: false,
+      });
+    } catch {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user', frameRate: { ideal: 60, max: 60 } },
+          audio: false,
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      }
+    }
+    const track = stream.getVideoTracks()[0];
+    if (track) {
+      try {
+        if ('contentHint' in track) track.contentHint = 'motion';
+      } catch {}
+      track.applyConstraints({ frameRate: { ideal: 60, max: 60 } }).catch(() => {});
+    }
+    return stream;
+  }, []);
+
   const requestMicrophonePermission = useCallback(async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      let stream: MediaStream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1,
+            sampleRate: 48000,
+          },
+          video: false,
+        });
+      } catch {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      }
       micStreamRef.current?.getTracks().forEach((track) => track.stop());
       micStreamRef.current = stream;
       setLocalAudioStream(stream);
@@ -447,7 +493,13 @@ export function useGlobalChat({
         let micGranted = false;
         try {
           audioStream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true,
+              channelCount: 1,
+              sampleRate: 48000,
+            },
             video: false,
           });
           micGranted = true;
@@ -489,10 +541,7 @@ export function useGlobalChat({
       const camPromise = withVideo
         ? (async () => {
             try {
-              const videoStream = await navigator.mediaDevices.getUserMedia({
-                video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60, max: 60 } },
-                audio: false,
-              });
+              const videoStream = await acquireCameraStream();
               if (!isInVideoRef.current) {
                 videoStream.getTracks().forEach((t) => t.stop());
                 return;
@@ -529,7 +578,7 @@ export function useGlobalChat({
     } finally {
       isJoiningVoiceRef.current = false;
     }
-  }, []);
+  }, [acquireCameraStream]);
 
   const stopVoiceChannel = useCallback(() => {
     [micStreamRef, cameraStreamRef, screenStreamRef].forEach(ref => {
@@ -620,10 +669,7 @@ export function useGlobalChat({
     } else {
       setCameraError(null);
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user', width: { ideal: 1280 }, height: { ideal: 720 }, frameRate: { ideal: 60, max: 60 } },
-          audio: false,
-        });
+        const stream = await acquireCameraStream();
         cameraStreamRef.current = stream;
         setCameraStream(stream);
         setIsVideoEnabled(true);
@@ -649,7 +695,7 @@ export function useGlobalChat({
         console.error('Failed to toggle camera:', err);
       }
     }
-  }, [isVideoEnabled, cameraStream]);
+  }, [isVideoEnabled, cameraStream, acquireCameraStream]);
 
   const isSharingRef = useRef(false);
 
@@ -685,21 +731,71 @@ export function useGlobalChat({
           if (!navigator.mediaDevices?.getDisplayMedia) {
             throw new Error('Screen sharing is not supported by this browser.');
           }
-          const stream = await navigator.mediaDevices.getDisplayMedia({
-            video: {
-              width: { ideal: 1920, max: 1920 },
-              height: { ideal: 1080, max: 1080 },
-              frameRate: { ideal: 30, max: 60 },
-            },
-            audio: true,
-            systemAudio: 'include',
-          } as DisplayMediaStreamOptions & { systemAudio: 'include' });
+          let stream: MediaStream;
+          try {
+            stream = await navigator.mediaDevices.getDisplayMedia({
+              video: {
+                width: { ideal: 1920, max: 1920 },
+                height: { ideal: 1080, max: 1080 },
+                frameRate: { ideal: 60, min: 30, max: 60 },
+              },
+              audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+                channelCount: 2,
+                sampleRate: 48000,
+              } as any,
+              systemAudio: 'include',
+              surfaceSwitching: 'include',
+              selfBrowserSurface: 'exclude',
+            } as DisplayMediaStreamOptions & {
+              systemAudio?: 'include' | 'exclude';
+              surfaceSwitching?: 'include' | 'exclude';
+              selfBrowserSurface?: 'include' | 'exclude';
+            });
+          } catch (primaryErr: any) {
+            if (primaryErr?.name === 'NotAllowedError' || primaryErr?.name === 'AbortError') {
+              throw primaryErr;
+            }
+            stream = await navigator.mediaDevices.getDisplayMedia({
+              video: { frameRate: { ideal: 60 } },
+              audio: {
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+              } as any,
+              systemAudio: 'include',
+            } as DisplayMediaStreamOptions & { systemAudio?: 'include' });
+          }
+
           screenStreamRef.current = stream;
+          const screenVideoTrack = stream.getVideoTracks()[0];
+          if (screenVideoTrack) {
+            try {
+              if ('contentHint' in screenVideoTrack) screenVideoTrack.contentHint = 'motion';
+            } catch {}
+            screenVideoTrack.applyConstraints({ frameRate: { ideal: 60, max: 60 } }).catch(() => {});
+          }
+          stream.getAudioTracks().forEach((audioTrack) => {
+            try {
+              if ('contentHint' in audioTrack) audioTrack.contentHint = 'music';
+            } catch {}
+            audioTrack
+              .applyConstraints({
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+                channelCount: 2,
+                sampleRate: 48000,
+              })
+              .catch(() => {});
+          });
+
           setScreenStream(stream);
           setIsScreenSharing(true);
           setCurrentUser(prev => ({ ...prev, is_screen_sharing: true }));
           updateUserRef.current({ is_screen_sharing: true });
-          const screenVideoTrack = stream.getVideoTracks()[0];
           if (screenVideoTrack) {
             screenVideoTrack.onended = () => {
               screenStreamRef.current?.getTracks().forEach(track => {
