@@ -7,8 +7,6 @@ interface FrostHubLogoProps {
   onClick?: () => void;
 }
 
-const LOGO_FONT = "'Google Sans', 'Google Sans Text', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
-
 export const FrostHubLogo: React.FC<FrostHubLogoProps> = ({
   variant = 'standard',
   size = 'md',
@@ -42,12 +40,12 @@ export const FrostHubLogo: React.FC<FrostHubLogoProps> = ({
     <div 
       onClick={onClick}
       className={`frosthub-logo inline-flex flex-col items-center justify-center select-none leading-none ${onClick ? 'cursor-pointer' : ''} ${className}`}
-      style={{ fontFamily: LOGO_FONT }}
+      style={{ fontFamily: 'var(--app-font-family)' }}
     >
-      <div className={`flex items-center tracking-tight leading-none ${sizeClasses.text}`} style={{ fontFamily: LOGO_FONT }}>
+      <div className={`flex items-center tracking-tight leading-none ${sizeClasses.text}`} style={{ fontFamily: 'var(--app-font-heading)' }}>
         <span 
           className="frosthub-logo-text text-slate-900 dark:text-white tracking-tight transition-colors font-black"
-          style={{ fontFamily: LOGO_FONT, fontWeight: 900 }}
+          style={{ fontFamily: 'var(--app-font-heading)', fontWeight: 900 }}
         >
           Frost
         </span>
@@ -55,7 +53,7 @@ export const FrostHubLogo: React.FC<FrostHubLogoProps> = ({
           className={`frosthub-logo-badge bg-[var(--brand-blue)] text-[#090d16] flex items-center justify-center transition-all duration-200 font-black ${sizeClasses.badge}`}
           style={{ 
             boxShadow: '0 0 14px var(--brand-blue-glow)', 
-            fontFamily: LOGO_FONT,
+            fontFamily: 'var(--app-font-heading)',
             fontWeight: 900 
           }}
         >
@@ -66,7 +64,7 @@ export const FrostHubLogo: React.FC<FrostHubLogoProps> = ({
         <span 
           className={`frosthub-logo-community text-slate-600 dark:text-slate-100 tracking-widest lowercase opacity-95 font-semibold ${sizeClasses.community}`}
           style={{ 
-            fontFamily: LOGO_FONT,
+            fontFamily: 'var(--app-font-family)',
             fontWeight: 600 
           }}
         >

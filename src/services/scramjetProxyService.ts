@@ -2157,7 +2157,7 @@ async function createWispTransport(): Promise<ProxyTransport> {
               challengedWispHosts.add(wispHost);
               // Fast-fail YouTube bot gates directly to /api/scramjet-fetch (ANDROID_VR/IOS Innertube bypass);
               // for Google/Cloudflare/search challenges, rotate across distinct Wisp exit IPs first
-              if (challenge.kind === 'youtube' && hasBackendOrigin) {
+              if ((challenge.kind as any) === 'youtube' && hasBackendOrigin) {
                 fastFailToServerBypass = true;
                 break;
               }
@@ -2234,7 +2234,7 @@ async function createWispTransport(): Promise<ProxyTransport> {
               lastChallengeResponse = rawRes;
               challengedWispUrls.add(wispUrl);
               challengedWispHosts.add(wispHost);
-              if (challenge.kind === 'youtube' && hasBackendOrigin) {
+              if ((challenge.kind as any) === 'youtube' && hasBackendOrigin) {
                 fastFailToServerBypass = true;
                 break;
               }
@@ -2793,7 +2793,7 @@ export async function launchInScramjetFrame(
               const profileUa = getProfileUserAgent(profile);
               const hints = getProfileClientHints(profile);
               const isMobile = hints.isMobile;
-              const platformStr = profile === 'android_vr' ? 'Linux armv8l' : profile === 'android_mobile' ? 'Linux armv8l' : 'Win32';
+              const platformStr = (profile as any) === 'android_vr' ? 'Linux armv8l' : (profile as any) === 'android_mobile' ? 'Linux armv8l' : 'Win32';
               const appVersionStr = profileUa.replace(/^Mozilla\//, '');
               const touchPoints = isMobile ? 5 : 0;
 
@@ -2917,7 +2917,7 @@ export async function launchInScramjetFrame(
                     const origGetParam = proto.getParameter;
                     proto.getParameter = function (param: number) {
                       if (param === 37445) return 'Qualcomm';
-                      if (param === 37446) return profile === 'android_vr' ? 'Adreno (TM) 740' : 'Adreno (TM) 750';
+                      if (param === 37446) return (profile as any) === 'android_vr' ? 'Adreno (TM) 740' : 'Adreno (TM) 750';
                       return origGetParam.apply(this, arguments);
                     };
                   };

@@ -46,11 +46,11 @@ export const BG_SOLID_PRESETS = [
 ];
 
 export const BG_GRADIENT_PRESETS = [
-  { id: 'aurora', name: 'Aurora Borealis', css: 'radial-gradient(ellipse at top left, #0f172a, #090d16 60%), radial-gradient(at bottom right, rgba(16, 185, 129, 0.2), transparent 70%)' },
-  { id: 'cosmic', name: 'Cosmic Nebula', css: 'radial-gradient(circle at 50% 20%, #1e1b4b, #090d16 70%), radial-gradient(at 80% 80%, rgba(236, 72, 153, 0.25), transparent 50%)' },
-  { id: 'glacier', name: 'FrostHub Glacier', css: 'radial-gradient(ellipse at 50% 0%, #1e293b, #090d16 75%), radial-gradient(at 10% 90%, rgba(56, 189, 248, 0.25), transparent 50%)' },
-  { id: 'sunset', name: 'Cyber Sunset', css: 'radial-gradient(ellipse at 80% 10%, #31121d, #090d16 70%), radial-gradient(at 20% 90%, rgba(245, 158, 11, 0.2), transparent 50%)' },
-  { id: 'matrix', name: 'Midnight Matrix', css: 'radial-gradient(circle at 30% 20%, #064e3b, #090d16 75%), radial-gradient(at 90% 80%, rgba(16, 185, 129, 0.15), transparent 50%)' },
+  { id: 'aurora', name: 'Aurora Borealis', css: 'radial-gradient(ellipse at top left, color-mix(in srgb, var(--brand-blue) 30%, #0f172a), var(--brand-navy-bg) 60%), radial-gradient(at bottom right, color-mix(in srgb, var(--brand-blue) 45%, transparent), transparent 70%)' },
+  { id: 'cosmic', name: 'Cosmic Nebula', css: 'radial-gradient(circle at 50% 20%, color-mix(in srgb, var(--brand-blue) 35%, #1e1b4b), var(--brand-navy-bg) 70%), radial-gradient(at 80% 80%, color-mix(in srgb, var(--brand-blue) 45%, transparent), transparent 50%)' },
+  { id: 'glacier', name: 'FrostHub Glacier', css: 'radial-gradient(ellipse at 50% 0%, color-mix(in srgb, var(--brand-blue) 35%, #1e293b), var(--brand-navy-bg) 75%), radial-gradient(at 10% 90%, color-mix(in srgb, var(--brand-blue) 45%, transparent), transparent 50%)' },
+  { id: 'sunset', name: 'Cyber Sunset', css: 'radial-gradient(ellipse at 80% 10%, color-mix(in srgb, var(--brand-blue) 35%, #31121d), var(--brand-navy-bg) 70%), radial-gradient(at 20% 90%, color-mix(in srgb, var(--brand-blue) 45%, transparent), transparent 50%)' },
+  { id: 'matrix', name: 'Midnight Matrix', css: 'radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--brand-blue) 35%, #064e3b), var(--brand-navy-bg) 75%), radial-gradient(at 90% 80%, color-mix(in srgb, var(--brand-blue) 45%, transparent), transparent 50%)' },
 ] as const;
 
 export const BG_IMAGE_PRESETS = [

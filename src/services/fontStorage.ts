@@ -154,7 +154,7 @@ export async function applyFontConfig(config: FontConfig): Promise<void> {
     const headingWeight = config.modernCleanWeight === '900' ? '900' : '700';
 
     root.style.setProperty('--app-font-family', bodyFont);
-    root.style.setProperty('--app-font-heading', "'Google Sans', 'Outfit', sans-serif");
+    root.style.setProperty('--app-font-heading', bodyFont);
     root.style.setProperty('--app-font-heading-weight', headingWeight);
 
     document.body.classList.remove('font-custom');
