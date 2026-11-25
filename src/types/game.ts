@@ -1,8 +1,12 @@
+export type GameLibraryId = 'gn-math' | 'ugs' | 'ckv';
+export type GameLibrarySelection = GameLibraryId | 'all';
+
 export interface RawGame {
   id: number;
   name: string;
   cover: string;
   url: string;
+  category?: GameCategory;
   author?: string;
   authorLink?: string;
   fallbackCover?: string;
@@ -10,6 +14,7 @@ export interface RawGame {
   special?: string[];
   featured?: boolean;
   source?: 'native' | 'ugs' | 'CKV' | 'scramjet';
+  library?: GameLibraryId;
 }
 
 export type GameCategory = 
@@ -49,6 +54,7 @@ export interface GameRatingInfo {
 
 export interface GameItem extends RawGame {
   category: GameCategory;
+  library: GameLibraryId;
   resolvedCover: string;
   fallbackCover: string;
   localCover: string;

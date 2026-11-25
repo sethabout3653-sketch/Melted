@@ -436,15 +436,15 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                 <div className="space-y-1.5">
                   <div className="text-[11px] font-black uppercase tracking-wider text-amber-600 dark:text-amber-400">
                     {ratingInfo.gateMinAge === '18+'
-                      ? 'ESRB 18+ Adults Only Rating'
-                      : 'ESRB 17+ Mature Content Rating'}
+                      ? '18+ Adults Only Content Warning'
+                      : '17+ Mature Content Warning'}
                   </div>
                   <h4 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white font-heading">
                     {game.name}
                   </h4>
                   <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed line-clamp-4">
                     {ratingInfo.warningMessage ||
-                      `Rated ${ratingInfo.code} (${ratingInfo.label}) by the ESRB${ratingInfo.descriptors ? `: ${ratingInfo.descriptors}` : ''}.`}
+                      `Rated ${ratingInfo.code} (${ratingInfo.label})${ratingInfo.descriptors ? `: ${ratingInfo.descriptors}` : ''}.`}
                   </p>
                 </div>
 

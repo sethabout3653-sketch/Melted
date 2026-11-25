@@ -10,7 +10,8 @@ import {
   Puzzle, 
   Cpu, 
   Heart,
-  ArrowUpDown
+  ArrowUpDown,
+  Shuffle
 } from 'lucide-react';
 import { GameCategory } from '../types/game';
 
@@ -19,6 +20,7 @@ interface CategoryFilterProps {
   onSelectCategory: (category: GameCategory) => void;
   sortBy: 'popular' | 'alpha-asc' | 'alpha-desc' | 'random';
   onSortChange: (sort: 'popular' | 'alpha-asc' | 'alpha-desc' | 'random') => void;
+  onReshuffle?: () => void;
   categoryCounts: Record<GameCategory, number>;
 }
 
@@ -41,6 +43,7 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = React.memo(({
   onSelectCategory,
   sortBy,
   onSortChange,
+  onReshuffle,
   categoryCounts,
 }) => {
   const handleWheel = (e: React.WheelEvent<HTMLDivElement>) => {
@@ -87,19 +90,32 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = React.memo(({
       {/* Sort Selector Right Side */}
       <div className="flex items-center justify-between sm:justify-end gap-2 shrink-0">
         <span className="text-sm text-slate-500 dark:text-slate-400">Sort by</span>
-        <div className="relative group">
-          <select
-            value={sortBy}
-            onChange={(e) => onSortChange(e.target.value as any)}
-            aria-label="Sort games"
-            className="appearance-none bg-white hover:bg-slate-50 dark:bg-[#181822] dark:hover:bg-[#20202e] text-slate-900 dark:text-white font-medium px-4 py-1.5 pr-9 rounded-full border border-slate-200 dark:border-[#262638] focus:border-[var(--brand-blue)] focus:outline-none cursor-pointer text-sm shadow-sm transition-colors duration-150 min-h-[38px] sm:min-h-[34px]"
-          >
-            <option value="popular" className="bg-white dark:bg-[#181822] text-slate-900 dark:text-white">Popularity</option>
-            <option value="alpha-asc" className="bg-white dark:bg-[#181822] text-slate-900 dark:text-white">A to Z</option>
-            <option value="alpha-desc" className="bg-white dark:bg-[#181822] text-slate-900 dark:text-white">Z to A</option>
-            <option value="random" className="bg-white dark:bg-[#181822] text-slate-900 dark:text-white">Random</option>
-          </select>
-          <ArrowUpDown className="w-3.5 h-3.5 text-[var(--brand-blue)] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+        <div className="flex items-center gap-1.5">
+          <div className="relative group">
+            <select
+              value={sortBy}
+              onChange={(e) => onSortChange(e.target.value as any)}
+              aria-label="Sort games"
+              className="appearance-none bg-white hover:bg-slate-50 dark:bg-[#181822] dark:hover:bg-[#20202e] text-slate-900 dark:text-white font-medium px-4 py-1.5 pr-9 rounded-full border border-slate-200 dark:border-[#262638] focus:border-[var(--brand-blue)] focus:outline-none cursor-pointer text-sm shadow-sm transition-colors duration-150 min-h-[38px] sm:min-h-[34px]"
+            >
+              <option value="random" className="bg-white dark:bg-[#181822] text-slate-900 dark:text-white">Random</option>
+              <option value="popular" className="bg-white dark:bg-[#181822] text-slate-900 dark:text-white">Popularity</option>
+              <option value="alpha-asc" className="bg-white dark:bg-[#181822] text-slate-900 dark:text-white">A to Z</option>
+              <option value="alpha-desc" className="bg-white dark:bg-[#181822] text-slate-900 dark:text-white">Z to A</option>
+            </select>
+            <ArrowUpDown className="w-3.5 h-3.5 text-[var(--brand-blue)] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+          </div>
+          {sortBy === 'random' && onReshuffle && (
+            <button
+              type="button"
+              onClick={onReshuffle}
+              title="Shuffle game order"
+              aria-label="Shuffle game order"
+              className="press flex items-center justify-center min-w-[38px] min-h-[38px] sm:min-w-[34px] sm:min-h-[34px] rounded-full border border-slate-200 dark:border-[#262638] bg-white hover:bg-slate-50 dark:bg-[#181822] dark:hover:bg-[#20202e] text-[var(--brand-blue)] dark:text-[var(--brand-accent-tint)] cursor-pointer shadow-sm transition-colors"
+            >
+              <Shuffle className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
     </div>

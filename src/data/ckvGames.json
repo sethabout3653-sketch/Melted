@@ -2,1227 +2,1273 @@
   {
     "name": "The Binding of Isaac: Wrath of the Lamb",
     "url": "/ckv/gamefiles/bindingofisaac.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/bindingofisaac.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/bindingofisaac.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Revelations: Persona",
     "url": "/ckv/gamefiles/revelationspersona.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/persona1.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/persona1.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Celeste Pico-8",
     "url": "/ckv/gamefiles/celestepico.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/celestepico.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/celestepico.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Drive Mad",
     "url": "/ckv/gamefiles/drivemad.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/drivemad.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/drivemad.png",
+    "category": "Driving & Racing"
   },
   {
     "name": "Tom Clancy's Rainbow Six",
     "url": "/ckv/gamefiles/tomclancysrainbowsix.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/tomclancysrainbowsix.jpg"
-  },
-  {
-    "name": "BTD1",
-    "url": "/ckv/gamefiles/btd1.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/btd1.jpg"
-  },
-  {
-    "name": "BTD2",
-    "url": "/ckv/gamefiles/btd2.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/btd2.jpg"
-  },
-  {
-    "name": "BTD3",
-    "url": "/ckv/gamefiles/btd3.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/btd3.jpg"
-  },
-  {
-    "name": "BTD4",
-    "url": "/ckv/gamefiles/btd4.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/btd4.jpg"
-  },
-  {
-    "name": "BTD5",
-    "url": "/ckv/gamefiles/btd5.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/btd5.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/tomclancysrainbowsix.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Pokemon Sword and Shield Ultimate Plus",
     "url": "/ckv/gamefiles/pokemonswordandshieldultimateplus.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pokemonswordandshieldultimateplus.jpg"
-  },
-  {
-    "name": "Stealth Masters",
-    "url": "/ckv/gamefiles/stealthmasters.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/stealthmasters.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pokemonswordandshieldultimateplus.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "99 Nights in the Forest",
     "url": "/ckv/gamefiles/99nights.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/99nights.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/99nights.png",
+    "category": "Horror & Mystery"
   },
   {
     "name": "Getting Over It",
     "url": "/ckv/gamefiles/gettingoverit.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/gettingoverit.jpg"
-  },
-  {
-    "name": "That's Not My Neighbour",
-    "url": "/ckv/gamefiles/thatsnotmyneighbour.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/thatsnotmyneighbour.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/gettingoverit.jpg",
+    "category": "Skill & Platformer"
   },
   {
     "name": "Sandbox City",
     "url": "/ckv/gamefiles/icedodo.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/sandboxcity.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/sandboxcity.jpg",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "Five Nights at Freddy's 4: Halloween Edition",
     "url": "/ckv/gamefiles/fnaf4halloween.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnaf4halloween.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnaf4halloween.png",
+    "category": "Horror & Mystery"
   },
   {
     "name": "Pokemon Soul Silver",
     "url": "/ckv/gamefiles/pokemonsoulsilver.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pokemonsoulsilver.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pokemonsoulsilver.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "The Legend of Zelda: Oracle of Seasons",
     "url": "/ckv/gamefiles/thelegendofzeldaoracleofseasons.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/thelegendofzeldaoracleofseasons.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/thelegendofzeldaoracleofseasons.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "The Legend of Zelda: Links Awakening",
     "url": "/ckv/gamefiles/thelegendofzeldalinksawakening.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/thelegendofzeldalinksawakening.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/thelegendofzeldalinksawakening.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Balatro",
     "url": "/ckv/gamefiles/balatrogame.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/balatro.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/balatro.jpg",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "Little Alchemy",
     "url": "/ckv/gamefiles/littlealchemy.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/littlealchemy.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/littlealchemy.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "Subway Surfers",
     "url": "/ckv/gamefiles/subwaysurfers.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/subwaysurfers.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/subwaysurfers.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "Google Dino",
     "url": "/ckv/gamefiles/googledino.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/googledino.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/googledino.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "Baldur's Gate II",
     "url": "/ckv/gamefiles/baldursgate2.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/baldursgate2.webp"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/baldursgate2.webp",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Dead Tapes",
     "url": "/ckv/gamefiles/deadtapes.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/deadtapes.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/deadtapes.jpg",
+    "category": "Horror & Mystery"
   },
   {
     "name": "Pokemon Dreamstone Mysteries",
     "url": "/ckv/gamefiles/pokemondreamstonemysteries.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pokemondreamstonemysteries.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pokemondreamstonemysteries.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Pokemon Flora Sky",
     "url": "/ckv/gamefiles/pokemonflorasky.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pokemonflorasky.webp"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pokemonflorasky.webp",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Pokemon Mega Moemon",
     "url": "/ckv/gamefiles/pokemonmegamoemon.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pokemonmegamoemon.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pokemonmegamoemon.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Pokemon Shiny Gold Sigma",
     "url": "/ckv/gamefiles/pokemonshinygoldsigma.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pokemonshinygoldsigma.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pokemonshinygoldsigma.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Slender: The Eight Pages",
     "url": "/ckv/gamefiles/slender.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/slender.webp"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/slender.webp",
+    "category": "Horror & Mystery"
   },
   {
     "name": "Pokemon Ultra Violet",
     "url": "/ckv/gamefiles/pokemonultraviolet.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pokemonultraviolet.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pokemonultraviolet.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Minecraft 1.7.3 Beta",
     "url": "/ckv/gamefiles/minecraft1.7.3.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/minecraft.webp"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/minecraft.webp",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Mini Crosswords",
     "url": "/ckv/gamefiles/minicrosswords.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/minicrosswords.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/minicrosswords.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "Agar.io",
     "url": "/ckv/gamefiles/agario.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/agario.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/agario.jpg",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "Kour.io",
     "url": "/ckv/gamefiles/kourio.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/kourio.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/kourio.jpg",
+    "category": "Action & Shooters"
   },
   {
     "name": "1 on 1 Tennis",
     "url": "/ckv/gamefiles/1on1tennis.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/1on1tennis.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/1on1tennis.jpg",
+    "category": "Sports & Physics"
   },
   {
     "name": "60 Second Burger Run",
     "url": "/ckv/gamefiles/60secondburgerrun.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/60secondburgerrun.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/60secondburgerrun.jpg",
+    "category": "Skill & Platformer"
   },
   {
     "name": "500 Caliber Contractz",
     "url": "/ckv/gamefiles/500calibercontractz.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/500calibercontractz.webp"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/500calibercontractz.webp",
+    "category": "Retro & Arcade"
   },
   {
     "name": "Twin Shot",
     "url": "/ckv/gamefiles/twinshot.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/twinshot.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/twinshot.jpg",
+    "category": "Action & Shooters"
   },
   {
     "name": "Fireboy and Watergirl",
     "url": "/ckv/gamefiles/fireboyandwatergirl.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fireboyandwatergirl.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fireboyandwatergirl.jpg",
+    "category": "Skill & Platformer"
   },
   {
     "name": "Adventure Capitalist",
     "url": "/ckv/gamefiles/adventurecapitalist.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/adventurecapitalist.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/adventurecapitalist.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "Duck Life 1",
     "url": "/ckv/gamefiles/ducklife1.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/ducklife1.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/ducklife1.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "Henry Stickmin: Stealing the Diamond",
     "url": "/ckv/gamefiles/stealingthediamond.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/stealingthediamond.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/stealingthediamond.jpg",
+    "category": "Skill & Platformer"
   },
   {
     "name": "The Man From the Window",
     "url": "/ckv/gamefiles/themanfromthewindow.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/themanfromthewindow.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/themanfromthewindow.png",
+    "category": "Horror & Mystery"
   },
   {
     "name": "Resident Evil 3",
     "url": "/ckv/gamefiles/residentevil3.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/residentevil3.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/residentevil3.jpg",
+    "category": "Horror & Mystery"
   },
   {
     "name": "Nut Simulator",
     "url": "/ckv/gamefiles/nutsimulator.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/nutsimulator.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/nutsimulator.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "Blumgi Slime",
     "url": "/ckv/gamefiles/blumgislime.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/blumgislime.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/blumgislime.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "BERGENTRUCK",
     "url": "/ckv/gamefiles/bergentruckgame.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/bergentruck.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/bergentruck.png",
+    "category": "Driving & Racing"
   },
   {
     "name": "Gacha Verse",
     "url": "/ckv/gamefiles/gachaverse.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/gachaverse.webp"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/gachaverse.webp",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "Gacha Life",
     "url": "/ckv/gamefiles/gachalife.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/gachalife.webp"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/gachalife.webp",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "OneShot",
     "url": "/ckv/gamefiles/oneshotgame.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/oneshot.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/oneshot.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Doom 1",
     "url": "/ckv/gamefiles/doom1.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/doom1.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/doom1.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "2Doom",
     "url": "/ckv/gamefiles/2doomgame.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/2doom.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/2doom.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Mob Control",
     "url": "/ckv/gamefiles/mobcontrol.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/mobcontrol.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/mobcontrol.png",
+    "category": "Action & Shooters"
   },
   {
     "name": "Amazing Strange Rope Police",
     "url": "/ckv/gamefiles/amazingstrangeropepolice.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/amazingstrangeropepolice.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/amazingstrangeropepolice.jpg",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "Triple Match 3D",
     "url": "/ckv/gamefiles/triplematch3d.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/triplematch3d.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/triplematch3d.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "The Legend of Zelda",
     "url": "/ckv/gamefiles/thelegendofzelda.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/thelegendofzelda.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/thelegendofzelda.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "The Legend of Zelda: The Minish Cap",
     "url": "/ckv/gamefiles/thelegendofzeldatheminishcap.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/thelegendofzeldatheminishcap.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/thelegendofzeldatheminishcap.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "The Legend of Zelda: Spirit Tracks",
     "url": "/ckv/gamefiles/thelegendofzeldaspirittracks.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/thelegendofzeldaspirittracks.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/thelegendofzeldaspirittracks.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Call of Duty 4: Modern Warfare",
     "url": "/ckv/gamefiles/cod4modernwarfare.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/cod4modernwarfare.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/cod4modernwarfare.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Grand Theft Auto: Chinatown Wars",
     "url": "/ckv/gamefiles/gtachinatownwars.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/gtachinatownwars.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/gtachinatownwars.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "The Elder Scrolls 2: Daggerfall",
     "url": "/ckv/gamefiles/theelderscrolls2.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/theelderscrolls2.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/theelderscrolls2.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "The Elder Scrolls: Arena",
     "url": "/ckv/gamefiles/theelderscrolls1.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/theelderscrolls1.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/theelderscrolls1.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Grand Theft Auto: Advance",
     "url": "/ckv/gamefiles/gtaadvance.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/gtaadvance.webp"
-  },
-  {
-    "name": "Castlevania: The Adventure",
-    "url": "/ckv/gamefiles/castlevaniaadventure.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/castlevaniatheadventure.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/gtaadvance.webp",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Nickelodeon Super Brawl 2",
     "url": "/ckv/gamefiles/nickelodeonsuperbrawl2.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/nickelodeonsuperbrawl2.webp"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/nickelodeonsuperbrawl2.webp",
+    "category": "Action & Shooters"
   },
   {
     "name": "Customer Support",
     "url": "/ckv/gamefiles/customersupport.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/customersupport.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/customersupport.jpg",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "Pretend Its Not There",
     "url": "/ckv/gamefiles/pretenditsnotthere.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pretenditsnotthere.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pretenditsnotthere.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "To The Core",
     "url": "/ckv/gamefiles/tothecore.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/tothecore.webp"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/tothecore.webp",
+    "category": "Skill & Platformer"
   },
   {
     "name": "Sonic Erazor",
     "url": "/ckv/gamefiles/sonicerazor.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/sonicerazor.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/sonicerazor.png",
+    "category": "Retro & Arcade"
   },
   {
     "name": "Duck Life 6: Space",
     "url": "/ckv/gamefiles/ducklife6space.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/ducklife6space.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/ducklife6space.jpg",
+    "category": "Skill & Platformer"
   },
   {
     "name": "Duck Life 7: Battle",
     "url": "/ckv/gamefiles/ducklife7battle.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/ducklife7battle.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/ducklife7battle.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "Shark Game",
     "url": "/ckv/gamefiles/sharkgame.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/sharkgame.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/sharkgame.jpg",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "Grand Theft Auto: Vice City",
     "url": "/ckv/gamefiles/gtavicecity.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/gtavicecity.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/gtavicecity.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Geometry Dash World",
     "url": "/ckv/gamefiles/geometrydashworld.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/geometrydashworld.webp"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/geometrydashworld.webp",
+    "category": "Skill & Platformer"
   },
   {
     "name": "Geometry Dash Subzero",
     "url": "/ckv/gamefiles/geometrydashsubzero.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/geometrydashsubzero.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/geometrydashsubzero.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "Touhou 1 Reiiden",
     "url": "/ckv/gamefiles/touhou1.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/touhou1.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/touhou1.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Touhou 2 Fuumaroku",
     "url": "/ckv/gamefiles/touhou2.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/touhou2.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/touhou2.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Touhou 3 Yumejikuu",
     "url": "/ckv/gamefiles/touhou3.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/touhou3.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/touhou3.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Touhou 4 Gensokyou",
     "url": "/ckv/gamefiles/touhou4.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/touhou4.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/touhou4.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Touhou 5 Kaikidan",
     "url": "/ckv/gamefiles/touhou5.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/touhou5.png"
-  },
-  {
-    "name": "Bullet Force",
-    "url": "/ckv/gamefiles/bulletforce.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/bulletforce.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/touhou5.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Little Alchemy 2",
     "url": "/ckv/gamefiles/littlealchemy2.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/littlealchemy2.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/littlealchemy2.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "Puppet Master",
     "url": "/ckv/gamefiles/puppetmaster.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/puppetmaster.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/puppetmaster.jpg",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "Jojo's Bizarre Adventure",
     "url": "/ckv/gamefiles/jjba.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/jjba.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/jjba.jpg",
+    "category": "Skill & Platformer"
   },
   {
     "name": "Age of Empires",
     "url": "/ckv/gamefiles/ageofempires.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/ageofempires.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/ageofempires.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "The Binding of Isaac: Rebirth",
     "url": "/ckv/gamefiles/thebindingofisaacrebirth.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/thebindingofisaacrebirth1.webp"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/thebindingofisaacrebirth1.webp",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Little Big Planet",
     "url": "/ckv/gamefiles/littlebigplanet.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/littlebigplanet.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/littlebigplanet.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Danganronpa 1",
     "url": "/ckv/gamefiles/danganronpa1.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/danganronpa.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/danganronpa.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Counter Strike 0.8",
     "url": "/ckv/gamefiles/counterstrike08.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/counterstrike0.8.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/counterstrike0.8.png",
+    "category": "Action & Shooters"
   },
   {
     "name": "Max Payne",
     "url": "/ckv/gamefiles/maxpayne.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/maxpayne.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/maxpayne.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Fallout 2",
     "url": "/ckv/gamefiles/fallout2.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fallout2.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fallout2.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Grand Theft Auto IV",
     "url": "/ckv/gamefiles/grandtheftautoiv.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/grandtheftautoiv.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/grandtheftautoiv.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Grand Theft Auto III",
     "url": "/ckv/gamefiles/grandtheftautoiii.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/grandtheftautoiii.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/grandtheftautoiii.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Grand Theft Auto San Andreas",
     "url": "/ckv/gamefiles/grandtheftautosanandreas.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/grandtheftautosanandreas.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/grandtheftautosanandreas.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "The Binding of Isaac",
     "url": "/ckv/gamefiles/thebindingofisaac.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/thebindingofisaacrebirth.webp"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/thebindingofisaacrebirth.webp",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Class of 09 The Flipside",
     "url": "/ckv/gamefiles/classof09theflipside.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/classof09theflipside.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/classof09theflipside.jpg",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "Class of 09 The Re-Up",
     "url": "/ckv/gamefiles/classof09there-up.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/classof09there-up.webp"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/classof09there-up.webp",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "Angry Birds Online",
     "url": "/ckv/gamefiles/angrybirdsonline.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/angrybirdsonline.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/angrybirdsonline.png",
+    "category": "Sports & Physics"
   },
   {
     "name": "Angry Birds Epic",
     "url": "/ckv/gamefiles/angrybirdsepic.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/angrybirdsepic.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/angrybirdsepic.png",
+    "category": "Sports & Physics"
   },
   {
     "name": "Academytale",
     "url": "/ckv/gamefiles/academytalegame.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/academytale.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/academytale.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "Call of Duty Black Ops",
     "url": "/ckv/gamefiles/callofdutyblackops.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/callofdutyblackops.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/callofdutyblackops.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "ZDoom",
     "url": "/ckv/gamefiles/zdoomgame.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/zdoom.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/zdoom.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Super Mario Galaxy DS",
     "url": "/ckv/gamefiles/supermariogalaxyds.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/supermariogalaxyds.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/supermariogalaxyds.jpg",
+    "category": "Retro & Arcade"
   },
   {
     "name": "Lego Batman The Video Game",
     "url": "/ckv/gamefiles/legobatmanthevideogame.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/legobatmanthevideogame.webp"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/legobatmanthevideogame.webp",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Lego Batman 2 DC Superheroes",
     "url": "/ckv/gamefiles/legobatman2dcsuperheroes.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/legobatman2dcsuperheroes.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/legobatman2dcsuperheroes.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "The Legend of Zelda: Phantom Hourglass",
     "url": "/ckv/gamefiles/thelegendofzeldaphantomhourglass.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/thelegendofzeldaphantomhourglass.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/thelegendofzeldaphantomhourglass.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Crash Bandicoot 3",
     "url": "/ckv/gamefiles/crashbandicoot3.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/crashbandicoot3.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/crashbandicoot3.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Tung Sahur Horror",
     "url": "/ckv/gamefiles/tungsahurhorror.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/tungsahurhorror.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/tungsahurhorror.jpg",
+    "category": "Horror & Mystery"
   },
   {
     "name": "Pokemon Stadium 2",
     "url": "/ckv/gamefiles/pokemonstadium2.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pokemonstadium2.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pokemonstadium2.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Bomberman World",
     "url": "/ckv/gamefiles/bombermanworld.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/bombermanworld.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/bombermanworld.jpg",
+    "category": "Retro & Arcade"
   },
   {
     "name": "Brawl Stars",
     "url": "/ckv/gamefiles/brawlstars.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/brawlstars.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/brawlstars.png",
+    "category": "Action & Shooters"
   },
   {
     "name": "Totally Accurate Battle Simulator",
     "url": "/ckv/gamefiles/totallyaccuratebattlesimulator.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/totallyaccuratebattlesimulator.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/totallyaccuratebattlesimulator.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "Animal Crossing",
     "url": "/ckv/gamefiles/animalcrossing.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/animalcrossing.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/animalcrossing.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "1game",
     "url": "/ckv/gamefiles/1game.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/1game.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/1game.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "2048game",
     "url": "/ckv/gamefiles/2048game.html",
-    "img": "/img/placeholder.png"
-  },
-  {
-    "name": "AI",
-    "url": "/ckv/gamefiles/AI.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/ai.png"
-  },
-  {
-    "name": "Baldurs Gate 2",
-    "url": "/ckv/gamefiles/Baldurs Gate 2.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/baldursgate2.webp"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "Bloons Tower Defense 1",
     "url": "/ckv/gamefiles/Bloons Tower Defense 1.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "Bloons Tower Defense 2",
     "url": "/ckv/gamefiles/Bloons Tower Defense 2.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "Bloons Tower Defense 3",
     "url": "/ckv/gamefiles/Bloons Tower Defense 3.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "Bloons Tower Defense 4",
     "url": "/ckv/gamefiles/Bloons Tower Defense 4.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "Bloons Tower Defense 5",
     "url": "/ckv/gamefiles/Bloons Tower Defense 5.html",
-    "img": "/img/placeholder.png"
-  },
-  {
-    "name": "Chat",
-    "url": "/ckv/gamefiles/Chat.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "Cut the Rope 1",
     "url": "/ckv/gamefiles/Cut the Rope 1.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/cuttherope1.png"
-  },
-  {
-    "name": "Danganronpa",
-    "url": "/ckv/gamefiles/Danganronpa.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/danganronpa.jpg"
-  },
-  {
-    "name": "Helios Browser",
-    "url": "/ckv/gamefiles/Helios Browser.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/heliosbrowser.png"
-  },
-  {
-    "name": "Legend of Zelda Links Awakening",
-    "url": "/ckv/gamefiles/Legend of Zelda Links Awakening.html",
-    "img": "/img/placeholder.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/cuttherope1.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "Legends of Zelda Ocarina of Time",
     "url": "/ckv/gamefiles/Legends of Zelda Ocarina of Time.html",
-    "img": "/img/placeholder.png"
-  },
-  {
-    "name": "Nautilis OS",
-    "url": "/ckv/gamefiles/Nautilis OS.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/Nautilis OS.png"
+    "img": "/img/placeholder.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "Plants VS Zombies 2",
     "url": "/ckv/gamefiles/Plants VS Zombies 2.html",
-    "img": "/img/placeholder.png"
-  },
-  {
-    "name": "Play!.js",
-    "url": "/ckv/gamefiles/Play!.js.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/playjs.png"
-  },
-  {
-    "name": "Sandstone Proxy",
-    "url": "/ckv/gamefiles/Sandstone Proxy.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Horror & Mystery"
   },
   {
     "name": "Slope 1",
     "url": "/ckv/gamefiles/Slope 1.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/slope1.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/slope1.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "Tony Hawk Pro Skater 4",
     "url": "/ckv/gamefiles/Tony Hawk Pro Skater 4.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Sports & Physics"
   },
   {
     "name": "abandonedgame",
     "url": "/ckv/gamefiles/abandonedgame.html",
-    "img": "/img/placeholder.png"
-  },
-  {
-    "name": "aichatbot",
-    "url": "/ckv/gamefiles/aichatbot.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Horror & Mystery"
   },
   {
     "name": "amazegame",
     "url": "/ckv/gamefiles/amazegame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "antonblastgame",
     "url": "/ckv/gamefiles/antonblastgame.html",
-    "img": "/img/placeholder.png"
-  },
-  {
-    "name": "apps",
-    "url": "/ckv/gamefiles/apps.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "asteroidsgame",
     "url": "/ckv/gamefiles/asteroidsgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Retro & Arcade"
   },
   {
     "name": "backroomsgame",
     "url": "/ckv/gamefiles/backroomsgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Horror & Mystery"
   },
   {
     "name": "bigneontowertinysqaure",
     "url": "/ckv/gamefiles/bigneontowertinysqaure.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "bitplanesgame",
     "url": "/ckv/gamefiles/bitplanesgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Driving & Racing"
   },
   {
     "name": "blackjackgame",
     "url": "/ckv/gamefiles/blackjackgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "blockpostgame",
     "url": "/ckv/gamefiles/blockpostgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Action & Shooters"
   },
   {
     "name": "bloxorzgame",
     "url": "/ckv/gamefiles/bloxorzgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "breakingthebank",
     "url": "/ckv/gamefiles/breakingthebank.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/breakingthebank.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/breakingthebank.jpg",
+    "category": "Skill & Platformer"
   },
   {
     "name": "brotatogame",
     "url": "/ckv/gamefiles/brotatogame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "catgunner",
     "url": "/ckv/gamefiles/catgunner.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/catgunner.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/catgunner.png",
+    "category": "Action & Shooters"
   },
   {
     "name": "celestegame",
     "url": "/ckv/gamefiles/celestegame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "chessgame",
     "url": "/ckv/gamefiles/chessgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "circloo1",
     "url": "/ckv/gamefiles/circloo1.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "coreballgame",
     "url": "/ckv/gamefiles/coreballgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Sports & Physics"
   },
   {
     "name": "cubefieldgame",
     "url": "/ckv/gamefiles/cubefieldgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Retro & Arcade"
   },
   {
     "name": "cupheadgame",
     "url": "/ckv/gamefiles/cupheadgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "cuttheropeholiday",
     "url": "/ckv/gamefiles/cuttheropeholiday.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/cuttheropeholiday.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/cuttheropeholiday.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "dadish1",
     "url": "/ckv/gamefiles/dadish1.html",
-    "img": "/img/placeholder.png"
-  },
-  {
-    "name": "ddlc",
-    "url": "/ckv/gamefiles/ddlc.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/ddlc.webp"
+    "img": "/img/placeholder.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "diablo1",
     "url": "/ckv/gamefiles/diablo1.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "endoparasiticgame",
     "url": "/ckv/gamefiles/endoparasiticgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Horror & Mystery"
   },
   {
     "name": "endrollgame",
     "url": "/ckv/gamefiles/endrollgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Horror & Mystery"
   },
   {
     "name": "escapingtheprison",
     "url": "/ckv/gamefiles/escapingtheprison.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/escapingtheprison.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/escapingtheprison.jpg",
+    "category": "Skill & Platformer"
   },
   {
     "name": "fallout1",
     "url": "/ckv/gamefiles/fallout1.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fallout1.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fallout1.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "fearstofathom",
     "url": "/ckv/gamefiles/fearstofathom.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fearstofathom.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fearstofathom.png",
+    "category": "Horror & Mystery"
   },
   {
     "name": "fishgame",
     "url": "/ckv/gamefiles/fishgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "fleeingthecomplex",
     "url": "/ckv/gamefiles/fleeingthecomplex.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fleeingthecomplex.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fleeingthecomplex.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "fnaf",
     "url": "/ckv/gamefiles/fnaf.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnaf.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnaf.jpg",
+    "category": "Horror & Mystery"
   },
   {
     "name": "fnaf2",
     "url": "/ckv/gamefiles/fnaf2.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnaf2.webp"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnaf2.webp",
+    "category": "Horror & Mystery"
   },
   {
     "name": "fnaf3",
     "url": "/ckv/gamefiles/fnaf3.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnaf3.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnaf3.jpg",
+    "category": "Horror & Mystery"
   },
   {
     "name": "fnaf4",
     "url": "/ckv/gamefiles/fnaf4.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnaf4.webp"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnaf4.webp",
+    "category": "Horror & Mystery"
   },
   {
     "name": "fnafpizzasim",
     "url": "/ckv/gamefiles/fnafpizzasim.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnafpizzasim.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnafpizzasim.png",
+    "category": "Horror & Mystery"
   },
   {
     "name": "fnafucn",
     "url": "/ckv/gamefiles/fnafucn.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnafucn.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnafucn.png",
+    "category": "Horror & Mystery"
   },
   {
     "name": "fnafworld",
     "url": "/ckv/gamefiles/fnafworld.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnafworld.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnafworld.jpg",
+    "category": "Horror & Mystery"
   },
   {
     "name": "fnf",
     "url": "/ckv/gamefiles/fnf.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnf.webp"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnf.webp",
+    "category": "Retro & Arcade"
   },
   {
     "name": "fnfvshatsunemiku",
     "url": "/ckv/gamefiles/fnfvshatsunemiku.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnfvshatsunemiku.png"
-  },
-  {
-    "name": "gamepage",
-    "url": "/ckv/gamefiles/gamepage.html",
-    "img": "/img/placeholder.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/fnfvshatsunemiku.png",
+    "category": "Retro & Arcade"
   },
   {
     "name": "gladihoppersgame",
     "url": "/ckv/gamefiles/gladihoppersgame.html",
-    "img": "/img/placeholder.png"
-  },
-  {
-    "name": "globalchat",
-    "url": "/ckv/gamefiles/globalchat.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Sports & Physics"
   },
   {
     "name": "gobblegame",
     "url": "/ckv/gamefiles/gobblegame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "grannygame",
     "url": "/ckv/gamefiles/grannygame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Horror & Mystery"
   },
   {
     "name": "gta1",
     "url": "/ckv/gamefiles/gta1.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/gta1.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/gta1.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "gta2",
     "url": "/ckv/gamefiles/gta2.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/gta2.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/gta2.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "gunspingame",
     "url": "/ckv/gamefiles/gunspingame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Action & Shooters"
   },
   {
     "name": "helltakergame",
     "url": "/ckv/gamefiles/helltakergame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Horror & Mystery"
   },
   {
     "name": "hillclimbracing",
     "url": "/ckv/gamefiles/hillclimbracing.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/hillclimbracing.jpg"
-  },
-  {
-    "name": "idle shark/index",
-    "url": "/ckv/gamefiles/idle-shark/index.html",
-    "img": "/img/placeholder.png"
-  },
-  {
-    "name": "index",
-    "url": "/ckv/gamefiles/index.html",
-    "img": "/img/placeholder.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/hillclimbracing.jpg",
+    "category": "Driving & Racing"
   },
   {
     "name": "infiltratingtheairship",
     "url": "/ckv/gamefiles/infiltratingtheairship.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/infiltratingtheairship.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/infiltratingtheairship.jpg",
+    "category": "Skill & Platformer"
   },
   {
     "name": "infinimoesgame",
     "url": "/ckv/gamefiles/infinimoesgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "karlsongame",
     "url": "/ckv/gamefiles/karlsongame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Action & Shooters"
   },
   {
     "name": "kindergarten1",
     "url": "/ckv/gamefiles/kindergarten1.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/kindergarten1.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/kindergarten1.jpg",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "kirbysoftandwet",
     "url": "/ckv/gamefiles/kirbysoftandwet.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/kirbysoftandwet.png"
-  },
-  {
-    "name": "madnesscombatprojectnexus",
-    "url": "/ckv/gamefiles/madnesscombatprojectnexus.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/madnesscombatprojectnexus.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/kirbysoftandwet.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "meatboygame",
     "url": "/ckv/gamefiles/meatboygame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "milkinsideabagofmilk",
     "url": "/ckv/gamefiles/milkinsideabagofmilk.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/milkinsideabagofmilk.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/milkinsideabagofmilk.png",
+    "category": "Horror & Mystery"
   },
   {
     "name": "milkoutsideabagofmilk",
     "url": "/ckv/gamefiles/milkoutsideabagofmilk.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/milkoutsideabagofmilk.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/milkoutsideabagofmilk.png",
+    "category": "Horror & Mystery"
   },
   {
     "name": "mindwavegame",
     "url": "/ckv/gamefiles/mindwavegame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "misidegame",
     "url": "/ckv/gamefiles/misidegame.html",
-    "img": "/img/placeholder.png"
-  },
-  {
-    "name": "mobile",
-    "url": "/ckv/gamefiles/mobile.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Horror & Mystery"
   },
   {
     "name": "myteardropgame",
     "url": "/ckv/gamefiles/myteardropgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "nzp",
     "url": "/ckv/gamefiles/nzp.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/nzp.jpg"
-  },
-  {
-    "name": "ocarinaoftime",
-    "url": "/ckv/gamefiles/ocarinaoftime.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/ocarinaoftime.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/nzp.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "offgame",
     "url": "/ckv/gamefiles/offgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Horror & Mystery"
   },
   {
     "name": "omorigame",
     "url": "/ckv/gamefiles/omorigame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Horror & Mystery"
   },
   {
     "name": "outholdgame",
     "url": "/ckv/gamefiles/outholdgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "overburdengame",
     "url": "/ckv/gamefiles/overburdengame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "ovo1",
     "url": "/ckv/gamefiles/ovo1.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/ovo1.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/ovo1.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "pegglegame",
     "url": "/ckv/gamefiles/pegglegame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "plinkogame",
     "url": "/ckv/gamefiles/plinkogame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "portalgame",
     "url": "/ckv/gamefiles/portalgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "postalgame",
     "url": "/ckv/gamefiles/postalgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "pougame",
     "url": "/ckv/gamefiles/pougame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "protektorgame",
     "url": "/ckv/gamefiles/protektorgame.html",
-    "img": "/img/placeholder.png"
-  },
-  {
-    "name": "proxy",
-    "url": "/ckv/gamefiles/proxy.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/proxy.png"
+    "img": "/img/placeholder.png",
+    "category": "Action & Shooters"
   },
   {
     "name": "pvz",
     "url": "/ckv/gamefiles/pvz.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pvz.jpg"
-  },
-  {
-    "name": "pvz2",
-    "url": "/ckv/gamefiles/pvz2.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pvz2.webp"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/pvz.jpg",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "quake3arena",
     "url": "/ckv/gamefiles/quake3arena.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/quake3arena.jpg"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/quake3arena.jpg",
+    "category": "Emulators & Ports"
   },
   {
     "name": "raftgame",
     "url": "/ckv/gamefiles/raftgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Action & Shooters"
   },
   {
     "name": "recoilgame",
     "url": "/ckv/gamefiles/recoilgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Action & Shooters"
   },
   {
     "name": "rigbmxgame",
     "url": "/ckv/gamefiles/rigbmxgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Driving & Racing"
   },
   {
     "name": "royaltowermedievaltd",
     "url": "/ckv/gamefiles/royaltowermedievaltd.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/royaltowermedievaltd.png"
-  },
-  {
-    "name": "ruffleemu",
-    "url": "/ckv/gamefiles/ruffleemu.html",
-    "img": "/img/placeholder.png"
+    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/royaltowermedievaltd.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "sandspielgame",
     "url": "/ckv/gamefiles/sandspielgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "sandtrisgame",
     "url": "/ckv/gamefiles/sandtrisgame.html",
-    "img": "/img/placeholder.png"
-  },
-  {
-    "name": "silkapp",
-    "url": "/ckv/gamefiles/silkapp.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "solitairegame",
     "url": "/ckv/gamefiles/solitairegame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
-
   {
     "name": "spiderdollgame",
     "url": "/ckv/gamefiles/spiderdollgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Skill & Platformer"
   },
   {
     "name": "sprunkigame",
     "url": "/ckv/gamefiles/sprunkigame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Retro & Arcade"
   },
   {
     "name": "stacktrisgame",
     "url": "/ckv/gamefiles/stacktrisgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "superhotgame",
     "url": "/ckv/gamefiles/superhotgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Action & Shooters"
   },
   {
     "name": "taggame",
     "url": "/ckv/gamefiles/taggame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Sports & Physics"
   },
   {
     "name": "tattletailgame",
     "url": "/ckv/gamefiles/tattletailgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Horror & Mystery"
   },
   {
     "name": "telekinesisgame",
     "url": "/ckv/gamefiles/telekinesisgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Action & Shooters"
   },
   {
     "name": "terrariagame",
     "url": "/ckv/gamefiles/terrariagame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "tetrisgame",
     "url": "/ckv/gamefiles/tetrisgame.html",
-    "img": "/img/placeholder.png"
-  },
-  {
-    "name": "thebindingofisaacwrathofthelambeternal",
-    "url": "/ckv/gamefiles/thebindingofisaacwrathofthelambeternal.html",
-    "img": "https://wanocapy.github.io/ChickenKingsVault/gameimages/thebindingofisaacwrathofthelambeternal.png"
+    "img": "/img/placeholder.png",
+    "category": "Retro & Arcade"
   },
   {
     "name": "tiletopiagame",
     "url": "/ckv/gamefiles/tiletopiagame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "ultrakillgame",
     "url": "/ckv/gamefiles/ultrakillgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Emulators & Ports"
   },
   {
     "name": "underwheelsgame",
     "url": "/ckv/gamefiles/underwheelsgame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Driving & Racing"
   },
   {
     "name": "unogame",
     "url": "/ckv/gamefiles/unogame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "webfishinggame",
     "url": "/ckv/gamefiles/webfishinggame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "wordlegame",
     "url": "/ckv/gamefiles/wordlegame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Puzzle & Casual"
   },
   {
     "name": "yumenikkigame",
     "url": "/ckv/gamefiles/yumenikkigame.html",
-    "img": "/img/placeholder.png"
+    "img": "/img/placeholder.png",
+    "category": "Horror & Mystery"
   }
 ]

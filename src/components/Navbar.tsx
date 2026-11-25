@@ -3,12 +3,16 @@ import { Film, Gamepad2, Menu, MessageSquare, Search, Sparkles, Tv, X } from 'lu
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
 import { FrostHubLogo } from './FrostHubLogo';
 import { AppTab } from './AppSidebar';
+import { LibrarySelector } from './LibrarySelector';
+import { GameLibrarySelection } from '../types/game';
 
 interface NavbarProps {
   currentTab: AppTab;
   onTabChange: (tab: AppTab) => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
+  selectedLibrary: GameLibrarySelection;
+  onSelectLibrary: (lib: GameLibrarySelection) => void;
   onGoHome: () => void;
   onOpenMenu: () => void;
 }
@@ -84,6 +88,8 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
   onTabChange,
   searchQuery,
   onSearchChange,
+  selectedLibrary,
+  onSelectLibrary,
   onGoHome,
   onOpenMenu,
 }) => {
@@ -128,9 +134,15 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 4 }}
                 transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                className="flex-1 min-w-0 max-w-3xl"
+                className="flex-1 min-w-0 max-w-4xl flex items-center gap-2 sm:gap-2.5"
               >
-                <NavSearchInput searchQuery={searchQuery} onSearchChange={onSearchChange} />
+                <div className="flex-1 min-w-0">
+                  <NavSearchInput searchQuery={searchQuery} onSearchChange={onSearchChange} />
+                </div>
+                <LibrarySelector
+                  selectedLibrary={selectedLibrary}
+                  onSelectLibrary={onSelectLibrary}
+                />
               </motion.div>
             ) : (
               <motion.nav

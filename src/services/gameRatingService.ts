@@ -47,7 +47,7 @@ function hydrateFromLocalStorage() {
     }
     if (parsed.ratings) {
       for (const [k, v] of Object.entries(parsed.ratings)) {
-        if (v && v.source === 'esrb' && v.badgeUrl) {
+        if (v && v.source === 'esrb' && v.code) {
           ratingsMap.set(k, v);
         }
       }
@@ -87,7 +87,7 @@ export function initEsrbRatingsCache(): Promise<void> {
       let changed = false;
       if (data?.ratings && typeof data.ratings === 'object') {
         for (const [k, v] of Object.entries(data.ratings)) {
-          if (v && v.source === 'esrb' && v.badgeUrl) {
+          if (v && v.source === 'esrb' && v.code) {
             if (!ratingsMap.has(k)) changed = true;
             ratingsMap.set(k, v);
             unratedSet.delete(k);
@@ -153,7 +153,7 @@ async function flushBatch() {
       for (const [key] of batch) {
         if (unavailableSet.has(key)) continue;
         const result = data?.ratings?.[key];
-        if (result && result.source === 'esrb' && result.badgeUrl) {
+        if (result && result.source === 'esrb' && result.code) {
           ratingsMap.set(key, result);
           unratedSet.delete(key);
           changed = true;
@@ -270,7 +270,7 @@ export async function fetchSingleEsrbRating(name: string): Promise<GameRatingInf
     if (!res.ok) return null;
     const data = (await res.json()) as { rating?: GameRatingInfo | null; unavailable?: boolean };
     if (data?.unavailable) return null;
-    if (data?.rating && data.rating.source === 'esrb' && data.rating.badgeUrl) {
+    if (data?.rating && data.rating.source === 'esrb' && data.rating.code) {
       ratingsMap.set(key, data.rating);
       persistLiveCache();
       notifyListeners();

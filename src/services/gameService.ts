@@ -1,12 +1,34 @@
 import rawGamesData from '../data/gnMathGames.json';
 import rawUgsData from '../data/ugsGames.json';
 import rawCkvData from '../data/ckvGames.json';
-import { RawGame, GameItem, GameCategory } from '../types/game';
+import luminBuiltinData from '../data/luminBuiltinGames.json';
+import { RawGame, GameItem, GameCategory, GameLibraryId } from '../types/game';
 import { resolveGameRating } from './gameRatingService';
 
 import fileMapData from '../data/gnMathFileMap.json';
 
 const fileMap = fileMapData as Record<string, string>;
+
+const VALID_GAME_CATEGORIES = new Set<GameCategory>([
+  'Action & Shooters',
+  'Driving & Racing',
+  'Skill & Platformer',
+  'Retro & Arcade',
+  'Horror & Mystery',
+  'Sports & Physics',
+  'Puzzle & Casual',
+  'Emulators & Ports',
+]);
+
+const LUMIN_CATEGORY_MAP = new Map<string, GameCategory>();
+for (const entry of luminBuiltinData as Array<{ name?: string; category?: string }>) {
+  if (entry?.name && entry?.category && VALID_GAME_CATEGORIES.has(entry.category as GameCategory)) {
+    const norm = entry.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (norm && !LUMIN_CATEGORY_MAP.has(norm)) {
+      LUMIN_CATEGORY_MAP.set(norm, entry.category as GameCategory);
+    }
+  }
+}
 
 export const UGS_INDEX_URL = 'https://cdn.jsdelivr.net/gh/gmshelf/ugs@main/ugs.json';
 export const UGS_BASE_URL = 'https://cdn.jsdelivr.net/gh/gmshelf/ugs@main';
@@ -131,140 +153,143 @@ const FEATURED_NAMES = new Set([
   'Smash Karts',
   'Duck Life 4',
   'Undertale',
+  'Deltarune',
   'Vex 7',
   'Geometry Dash',
   'FNAF 2',
 ]);
 
 export function detectCategory(game: RawGame): GameCategory {
-  const name = game.name.toLowerCase();
+  if (game.category && VALID_GAME_CATEGORIES.has(game.category)) {
+    return game.category;
+  }
+
+  const rawName = (game.name || '').trim();
+  const name = rawName.toLowerCase();
+  const compact = name.replace(/[^a-z0-9]/g, '');
+
+  const luminCat = LUMIN_CATEGORY_MAP.get(compact);
+  if (luminCat) {
+    return luminCat;
+  }
+
   const special = (game.special || []).map((s) => s.toLowerCase());
 
+  // 1. Explicit Emulator / Console / Port tags
   if (
     special.some((s) =>
-      ['n64', 'gba', 'nds', 'nes', 'psx', 'dos', 'emulator', 'port'].includes(s)
+      ['n64', 'gba', 'nds', 'nes', 'snes', 'psx', 'ps1', 'dos', 'emulator', 'port'].includes(s)
     )
   ) {
     return 'Emulators & Ports';
   }
 
+  // 2. Rhythm & FNF -> Retro & Arcade (checked early so FNF mods don't match unrelated substrings)
   if (
-    name.includes('freddy') ||
-    name.includes('fnaf') ||
-    name.includes('granny') ||
-    name.includes('horror') ||
-    name.includes('slender') ||
-    name.includes('bendy') ||
-    name.includes('neighbor') ||
-    name.includes('backrooms') ||
-    name.includes('baldi') ||
-    name.includes('zombie')
-  ) {
-    return 'Horror & Mystery';
-  }
-
-  if (
-    name.includes('drive') ||
-    name.includes('moto') ||
-    name.includes('car') ||
-    name.includes('racer') ||
-    name.includes('racing') ||
-    name.includes('drift') ||
-    name.includes('kart') ||
-    name.includes('truck') ||
-    name.includes('bike') ||
-    name.includes('speed')
-  ) {
-    return 'Driving & Racing';
-  }
-
-  if (
-    name.includes('1v1') ||
-    name.includes('gun') ||
-    name.includes('shoot') ||
-    name.includes('doom') ||
-    name.includes('quake') ||
-    name.includes('bowmaster') ||
-    name.includes('combat') ||
-    name.includes('strike') ||
-    name.includes('tank') ||
-    name.includes('war') ||
-    name.includes('sniper') ||
-    name.includes('gladihopper') ||
-    name.includes('smash') ||
-    name.includes('bullet')
-  ) {
-    return 'Action & Shooters';
-  }
-
-  if (
-    name.includes('bowl') ||
-    name.includes('basketball') ||
-    name.includes('soccer') ||
-    name.includes('football') ||
-    name.includes('tennis') ||
-    name.includes('golf') ||
-    name.includes('hockey') ||
-    name.includes('physics') ||
-    name.includes('pool') ||
-    name.includes('baseball')
-  ) {
-    return 'Sports & Physics';
-  }
-
-  if (
-    name.includes('ovo') ||
-    name.includes('slope') ||
-    name.includes('run ') ||
-    name.includes('run 2') ||
-    name.includes('run 3') ||
-    name.includes('vex') ||
-    name.includes('jump') ||
-    name.includes('fall') ||
-    name.includes('geometry') ||
-    name.includes('parkour') ||
-    name.includes('flappy') ||
-    name.includes('tower') ||
-    name.includes('subway') ||
-    name.includes('climb')
-  ) {
-    return 'Skill & Platformer';
-  }
-
-  if (
-    name.includes('pac') ||
-    name.includes('mario') ||
-    name.includes('sonic') ||
-    name.includes('tetris') ||
-    name.includes('arcade') ||
-    name.includes('retro') ||
-    name.includes('galaga') ||
-    name.includes('asteroids') ||
-    name.includes('pinball') ||
-    name.includes('snake') ||
-    name.includes('pong') ||
-    name.includes('space') ||
-    special.includes('flash')
+    special.includes('fnf') ||
+    name.includes('friday night funkin') ||
+    /\bfnf/.test(name) ||
+    compact.startsWith('fnf') ||
+    name.includes('sprunki') ||
+    name.includes('sprunked') ||
+    /\bosu\b/.test(name) ||
+    name.includes('dance of fire and ice') ||
+    name.includes('magic tiles') ||
+    name.includes('rhythm heaven') ||
+    name.includes('parappa') ||
+    name.includes('taiko no tatsujin') ||
+    name.includes('bolly beat') ||
+    name.includes('pico night funkin') ||
+    name.includes('hit single real')
   ) {
     return 'Retro & Arcade';
   }
 
+  // 3. Horror & Mystery
   if (
-    name.includes('clicker') ||
-    name.includes('2048') ||
-    name.includes('chess') ||
-    name.includes('sudoku') ||
-    name.includes('candy') ||
-    name.includes('cut the rope') ||
-    name.includes('block') ||
-    name.includes('word') ||
-    name.includes('puzzle') ||
-    name.includes('crossword') ||
-    name.includes('match')
+    /(fnaf|freddy|granny|horror|slender|bendy|backrooms|baldi|zombie|zombopaclypse|zombotron|siren head|huggy|poppy|banban|phasmophobia|phasmaphobia|amnesia|outlast|silent hill|resident evil|bio evil|doki doki|ddlc|yume nikki|yumenikki|omori|endoparasitic|fearstofathom|fears to fathom|hungry lamu|tattletail|miside|milk inside|milkinside|milk outside|milkoutside|dead estate|dead zed|last stand|boxhead|deep sleep|deeper sleep|deepest sleep|don't escape|dont escape|haunt|nightmare|creepy|spooky|shrek's hotel|shreks hotel|my neighbor|my neighbour|man from the window|dark deception|bad parenting|buckshot roulette|dementium|dead tapes|99 nights in the forest|endroll|endacopia|serial experiments|helltaker|road of the dead|thermomorph|make sure it's closed|lock the door|ancient sins|dying dreams|slide in the woods|five nights|bite at|among us|barry has a secret|abandoned|god's flesh|station 141|station saturn|dimension incident|scary shawarma|weresquirrel|sizzlin' scare|cellar door|arcanum|fear assessment|\bscp\b|\bghost\b|\bdevil\b|\bdemon\b|\bcursed\b|\bundead\b|\bterror\b|\bscream\b|\binsanity\b|\basylum\b|\bvampire\b|\bblood\b|\bfear\b|\bmimic\b|\boffgame\b|\bvena\b)/i.test(
+      name
+    ) ||
+    compact === 'off' ||
+    compact === 'offgame'
+  ) {
+    return 'Horror & Mystery';
+  }
+
+  // 4. Driving & Racing
+  if (
+    !name.includes('wheely') &&
+    (/(moto|motor|drift|racing|racer|kart|parking|snow rider|snowroad|snow road|slowroads|slow roads|poly track|polytrack|excitebike|tanuki sunset|escap[ea] road|underwheels|monster tracks|survival race|bridge race|hula hoop race|aquapark|rigbmx|bitplanes|scrap metal|driven wild|aviamasters|f-zero|wipeout|gran turismo|need for speed|mountain|downhill|hill climb|rocket league|highway traffic|traffic jam|traffic rider|sky riders|toy rider|free rider|snowboard|bergentruck)/i.test(
+      name
+    ) ||
+      /\b(drive|driver|driving|car|cars|race|rally|taxi|truck|trucks|bike|bikes|bmx|nfs|turbo|speed|flight|plane|planes|superboat|boat|enduro|burnout|coaster|rider|riders|swerve|vapor trails)\b/i.test(
+        name
+      ))
+  ) {
+    return 'Driving & Racing';
+  }
+
+  // 5. Sports & Physics
+  if (
+    /(basketball|basket|soccer|football|tennis|golf|hockey|physics|baseball|volleyball|volley|bowling|boxing|wrestl|karate|archery|gladiator|gladihoppers|ragdoll|angry birds|bad piggies|bouncemasters|flip master|bottle flip|fifa|madden|nfl|nba|nhl|mlb|world cup|punch-out|punch out|tony hawk|skater|shredsauce|shred mill|unicycle|kickball|get on top|house of hazards|happy wheels|short life|get yoked|mutilate|interactive buddy|elastic|toss the turtle|kitten cannon|burrito bison|learn to fly|learn to die|fork n sausage|99 balls|going balls|coreball|core ball|12 minibattles|12 mini battles|fc 25|mini battles|oshi oshi|blade ball|curve ball|toasterball|tube jumpers|waterpool|stack ball|two ball|crunchball|roller baller|rockerpult|rocketpult|bart bash|pokey ball|silo showdown|return man|penalty kicks|triple play|side pocket|hajime no ippo|btts|bntts|push your luck|wavedash|knife hit|fluidism|gravity mod|handulum|bottle cracks|civiballs|crazy cattle|gimme the airpod|ice age baby)/i.test(
+      name
+    ) ||
+    /\b(bowl|pool|8 ball|9 ball|batter|cricket|duel|duelist|sling|slingers|dunk|goal|skate|pogo|cannon|sports|olympic|rugby|ping pong|tag|taggame|gym stack|throw a potato|qwop)\b/i.test(
+      name
+    )
+  ) {
+    return 'Sports & Physics';
+  }
+
+  // 6. Emulators & Ports (console ROMs, hacks, PC/indie ports)
+  if (
+    /(pokemon|zelda|ocarina|link's awakening|links awakening|minish cap|oracle of seasons|spirit tracks|phantom hourglass|majora's mask|final fantasy|chrono trigger|earthbound|mother 2|mother 3|secret of mana|golden sun|fire emblem|advance wars|etrian odyssey|kingdom hearts|persona|mega man|megaman|metroid|castlevania|kirby|donkey kong|star fox|banjo|conker|goldeneye|perfect dark|turok|animal crossing|harvest moon|tomodachi|nintendogs|phoenix wright|scribblenauts|style savvy|grand theft auto|gta1|gta2|gta advance|max payne|call of duty|rainbow six|half-life|codename: gordon|portal|duke nukem|wolfenstein|diablo|baldur's gate|baldurs gate|elder scrolls|terraria|minecraft|undertale|deltarune|hollow knight|celeste|cuphead|ultrakill|binding of isaac|thebindingofisaac|brotato|oneshot|danganronpa|touhou|cave story|spelunky|meat boy|antonblast|postal|little big planet|super monkey ball|lego batman|lego indiana|lego ninjago|crash bandicoot|rayman|street fighter|mortal kombat|killer instinct|bushido blade|twisted metal|oregon trail|ruffle|pico-8|javascriptps1|portaboy|fallout|quake|doom|zdoom|2doom|wario|waluigi|yoshi|metal gear|james bond|medal of honor|star raiders|pepsiman|super noah|commander keen|apotris|another world|super smash|dbz|dragon ball|bleach vs naruto|fairy tale vs one piece|one piece|ben 10|nicktoons|spongebob|famidash|micro mages|scrapyard dog|switchblade|steel empire|jet force gemini|glover|puyo puyo|shw ultimate|smash remix|super tilt bros|nzp|sandstone)/i.test(
+      name
+    ) ||
+    /\b(smt|gta|nes|snes|gba|nds|n64|psx|ps1|atari|emulator|game & watch)\b/i.test(name) ||
+    /\((gba|nds|n64|nes|snes|psx|atari|classic|legacy|alt)\)/i.test(name)
+  ) {
+    return 'Emulators & Ports';
+  }
+
+  // 7. Skill & Platformer
+  if (
+    /(ovo|slope|vex|geometry|parkour|flappy|subway|obby|only up|getting over it|dadish|ice dodo|stickman hook|cluster rush|tunnel rush|rolly vortex|rolling sky|circloo|blumgi|fireboy|watergirl|red ball|fancy pants|chibi knight|choppy orc|rogue soul|henry stickmin|breakingthebank|breaking the bank|escapingtheprison|escaping the prison|stealing the diamond|infiltratingtheairship|infiltrating the airship|fleeingthecomplex|fleeing the complex|duck life|world's hardest game|worlds hardest game|impossible game|vvvvvv|level devil|this is the only level|achievement unlocked|bob the robber|tall man|stacky dash|spiral roll|tomb of the mask|crossy road|google dino|down the mountain|eagle ride|avalanche|slime laboratory|papa louie|wall crawler|light it up|jet rush|wave run|zrist|super oliver|potatoman|rodha|handshakes|makeover|high heels|jetpack joyride|justfall|3dash|little runmo|speedrun|stickman boost|baby kaizo|spiderdoll|dan the man|bigneontower|big neon tower|quickie world|advent neon|klifur|hanger 2|reach the core|red tie runner|flood runner|last horizon|get to the top|into ruins|icy purple head|cats love cake|baby chicco|diamond hollow|amorphous|blastronaut|dusk child|goodboy galaxy|pitfall|pull frog|n\+|shift|super house of dead ninjas|to the core|overburden|meatboygame|pico driller|pico hot|fire blob|iq ball|amidst the sky)/i.test(
+      name
+    ) ||
+    /\b(run|runner|running|jump|jumper|jumpers|jumping|fall|falling|tower|climb|climber|adventure|platform|platformer|ninja|dash|dodge|balance|hop|bounce|swing|dino|kaji|layers roll|land ho|the pit|n|ascent|ray 2)\b/i.test(
+      name
+    )
+  ) {
+    return 'Skill & Platformer';
+  }
+
+  // 8. Puzzle & Casual
+  if (
+    /(clicker|idle|tycoon|simulator|2048|chess|checkers|sudoku|mahjong|solitaire|blackjack|balatro|poker|roulette|plinko|cut the rope|cuttherope|bloxorz|wordle|crossword|water sort|infinite craft|grindcraft|sandspiel|sandbox|sandboxels|melon playground|squid playground|tiny fishing|webfishing|papa's|papas|papapizza|cooking mama|penguin diner|monkey mart|mini mart|supermarket|clothing shop|restaurant|hotel|resort|pottery|bitlife|pou|gacha|tamagotchi|impossible quiz|trivia|google feud|there is no game|please dont touch|we become what we behold|a dark room|bloons|btd|pvz|plants vs|tower defense|royaltowermedievaltd|age of war|age of empires|ages of conflict|state\.io|territorial|shapez|cell machine|waterworks|factory balls|snail bob|wheely|amigo pancho|sugar sugar|suika|peggle|zuma|hextris|sandtris|stacktris|tiletopia|breaklock|amaze|a-maze|seat jam|kitty toy|gobble|steal a brainrot|steal brainrot|skibidi|doge miner|motherload|jacksmith|orb of creation|fisquarium|fishgame|hole\.io|attack hole|paper\.io|slither\.io|agar\.io|growden|cheese chompers|hide n seek|crazy chicken|crazychicken|crazy kitty|build a queen|kitchen bazar|final earth|fitness empire|money rush|shovel 3d|outhold|scratch inc|myteardrop|love letters|three goblets|apple worm|3 slices|dumb ways to die|feeding a black hole|date danger|day in the office|allocation|side effects|pastry party|krabby katch|sandy's sponge|class of '09|class of 09|academytale|kindergarten|douchebag life|innkeeper|blacksmith lab|coffee maker|elastic face|fatty genius|gold digger|greed|grey box|harold's bad day|jefflings|multitask|not your pawn|obey the game|opposite day|penguin pass|pieces of cake|pikwip|plangman|pre-bronze|pre-civilization|resizer|rotate|slipways|slot or not|spewer|sundaes|sushi cat|sushi unroll|telephone trouble|telocation|the classroom|theme park|toastarling|too many types|trace|trap the cat|troll face|upgrade complete|villager|windows doors|you are lucky|code editor|chat bot|aichatbot|ai chatbot|helios|nautilis|play!\.js|silkapp|proxy|comments|apps|gamepage|globalchat|index|mobile|1game|\bai\b|\bchat\b|silk|mindwave|puppet master|customer support|pretend its not there|cheshire in a chatroom|focus|free gemas|clean up|cleanup|dig deep|dig to china|infinimoes|nijika|woke up next to you|groon groon|game inside a game|stone grass|happy sheepies|diamond seeker|chips challenge|dire decks|shark game|unogame|high stakes|no more games|nuts and bolts|bunnyland|big time butter baron|de blob 2|sun and moon|mindscape|underneath|ufo swamp odyssey|don't you lecture me)/i.test(
+      name
+    ) ||
+    /\b(sim|uno|slot|candy|block|blocks|word|puzzle|match|sort|merge|alchemy|craft|quiz|feud|guess|riddle|escape|room|td|mine|miner|mining|upgrade|evol|evolution|fishing|farm|harvest|diner|cafe|bakery|pizza|burger|cake|sushi|cat|pet|dog|fish|card|cards|dice|minesweeper|tap|taps|brain|logic|memory|connect|color|colour|paint|art|clean|draw|slice|bolt|rope|fashion|money|tiny|chill|life|story|land|primary|porter)\b/i.test(
+      name
+    )
   ) {
     return 'Puzzle & Casual';
   }
 
+  // 9. Retro & Arcade
+  if (
+    special.includes('flash') ||
+    /(pacman|pac-man|dig dug|q\*bert|qbert|bomberman|metal slug|xevious|centipede|missile command|missle command|battlezone|duck hunt|lode runner|bubsy|earthworm jim|alien hominid|fruit ninja|bad ice cream|bad icecream|miami shark|new york shark|los angeles shark|sydney shark|medieval shark|prehistoric shark|tasty planet|happy room|ball blast|cubefield|blocky snakes|shipo|slime\.io|tall\.io|snowball\.io|paper\.io|galaga|asteroids|tetris|pinball|tempest|tapper|lemmings|contra|time warriors|star raiders|retro|arcade|flash|8-bit|8bit|gunblood|whack|feed us|effing|defend your|storm the house|stick rpg|sonny|creeper|breakout|pong|snake|pac|mario|sonic|hobo|dubstep|edelweiss|arsonate|mobius revolution|temp overdose)/i.test(
+      name
+    ) ||
+    /\b(space|brick|bricks|atari|commodore|pixel|classic|swords|knight|castle|e\.t\.|grimace's birthday|opposum|scuba bear|vanguard|woodworm|you vs 100|duck)\b/i.test(
+      name
+    )
+  ) {
+    return 'Retro & Arcade';
+  }
+
+  // 10. Action & Shooters
   return 'Action & Shooters';
 }
 
@@ -337,32 +362,102 @@ export function generateGameSvgCover(title: string, category: string): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
+const GN_MATH_EXCLUSIVE_NORMS = new Set<string>([
+  'undertale',
+  'dokidokiliteratureclub',
+  'ddlc',
+  'soundboard',
+  'soundboard2',
+  'gemini',
+  'duckduckgo',
+  'myinstants',
+]);
+
+const EXCLUDED_CKV_PATHS = new Set<string>([
+  '/ckv/gamefiles/castlevaniaadventure.html',
+  '/ckv/gamefiles/stealthmasters.html',
+  '/ckv/gamefiles/thatsnotmyneighbour.html',
+  '/ckv/gamefiles/bulletforce.html',
+  '/ckv/gamefiles/madnesscombatprojectnexus.html',
+  '/ckv/gamefiles/thebindingofisaacwrathofthelambeternal.html',
+  '/ckv/gamefiles/index.html',
+  '/ckv/gamefiles/apps.html',
+  '/ckv/gamefiles/gamepage.html',
+  '/ckv/gamefiles/mobile.html',
+  '/ckv/gamefiles/ai.html',
+  '/ckv/gamefiles/aichatbot.html',
+  '/ckv/gamefiles/chat.html',
+  '/ckv/gamefiles/globalchat.html',
+  '/ckv/gamefiles/helios browser.html',
+  '/ckv/gamefiles/nautilis os.html',
+  '/ckv/gamefiles/play!.js.html',
+  '/ckv/gamefiles/sandstone proxy.html',
+  '/ckv/gamefiles/proxy.html',
+  '/ckv/gamefiles/silkapp.html',
+  '/ckv/gamefiles/ruffleemu.html',
+  '/ckv/gamefiles/btd1.html',
+  '/ckv/gamefiles/btd2.html',
+  '/ckv/gamefiles/btd3.html',
+  '/ckv/gamefiles/btd4.html',
+  '/ckv/gamefiles/btd5.html',
+  '/ckv/gamefiles/legend of zelda links awakening.html',
+  '/ckv/gamefiles/ocarinaoftime.html',
+  '/ckv/gamefiles/baldurs gate 2.html',
+  '/ckv/gamefiles/idle-shark/index.html',
+  '/ckv/gamefiles/danganronpa.html',
+  '/ckv/gamefiles/pvz2.html',
+  '/ckv/gamefiles/ddlc.html',
+]);
+
+function normalizeGameKey(name: string): string {
+  const lower = name.trim().toLowerCase();
+  if (lower === 'n+') return 'nplus';
+  return lower.replace(/[^a-z0-9]/g, '');
+}
+
 export function transformUgsEntry(
-  entry: { name: string; url: string; img?: string },
-  index: number,
+  entry: { name: string; url: string; img?: string; category?: GameCategory },
+  idSeed: number,
   existingNames: Set<string>,
-  coverLookupByName: Map<string, string>
+  coverLookupByName: Map<string, string>,
+  targetLibrary?: 'ugs' | 'ckv'
 ): GameItem | null {
   if (!entry || !entry.name || !entry.url) return null;
   const trimmedName = entry.name.trim();
   if (!trimmedName || trimmedName.includes('.gg/')) return null;
 
-  const normalized = trimmedName.toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (existingNames.has(normalized)) return null;
+  const lowerUrl = entry.url.trim().toLowerCase();
+  const isCkv = lowerUrl.startsWith('/ckv/') || targetLibrary === 'ckv';
+  if (isCkv && EXCLUDED_CKV_PATHS.has(lowerUrl)) {
+    return null;
+  }
+
+  const normalized = normalizeGameKey(trimmedName);
+  const isDeltarune = normalized === 'deltarune';
+  if (!isDeltarune && GN_MATH_EXCLUSIVE_NORMS.has(normalized)) {
+    return null;
+  }
+  if (!isDeltarune && existingNames.has(normalized)) {
+    return null;
+  }
+
+  // Skip redundant (Alt)/(Clean)/(Best)/(Legacy)/(Raw)/(Old) variants when base already exists
+  const variantMatch = trimmedName.match(/^(.*?)\s*\((alt|clean|best|legacy|raw|old)\)$/i);
+  if (!isDeltarune && variantMatch) {
+    const baseKey = normalizeGameKey(variantMatch[1]);
+    if (existingNames.has(baseKey)) {
+      return null;
+    }
+  }
 
   existingNames.add(normalized);
 
-  const id = 10000 + index;
-  const category = detectCategory({ name: trimmedName, special: [] } as any);
-  const isUndertale = trimmedName.toLowerCase() === 'undertale';
-  const effectiveUrl = isUndertale
-    ? 'https://sethabout3653-sketch.github.io/undertale-webportforfrosthub/'
-    : entry.url;
-  const isCkv = effectiveUrl.startsWith('/ckv/');
-  const resolvedUrl = isUndertale
-    ? 'https://sethabout3653-sketch.github.io/undertale-webportforfrosthub/'
-    : resolveUgsUrl(effectiveUrl);
-  
+  const id = 10000 + idSeed;
+  const category = detectCategory({ name: trimmedName, url: entry.url, special: [], category: entry.category } as any);
+  const resolvedUrl = resolveUgsUrl(entry.url);
+  const library: GameLibraryId = isCkv ? 'ckv' : 'ugs';
+  const isFeatured = FEATURED_NAMES.has(trimmedName);
+
   let resolvedCover = '';
   if (coverLookupByName.has(normalized)) {
     resolvedCover = coverLookupByName.get(normalized)!;
@@ -378,14 +473,15 @@ export function transformUgsEntry(
     id,
     name: trimmedName,
     cover: resolvedCover,
-    url: effectiveUrl,
+    url: entry.url,
     category,
+    library,
     resolvedCover,
     fallbackCover: resolvedCover,
     localCover: resolvedCover,
     resolvedUrl,
-    featured: false,
-    source: (isCkv ? 'CKV' : 'ugs'),
+    featured: isFeatured,
+    source: isCkv ? 'CKV' : 'ugs',
     rating: resolveGameRating(trimmedName),
   };
 }
@@ -441,24 +537,35 @@ export async function getCKVGames(): Promise<Array<{ name: string; url: string; 
 
 export function mergeUgsGames(
   baseGames: GameItem[],
-  dynamicList: Array<{ name: string; url: string; img?: string }>
+  dynamicList: Array<{ name: string; url: string; img?: string }>,
+  targetLibrary: 'ugs' | 'ckv' = 'ugs'
 ): GameItem[] {
   const existingNames = new Set<string>();
   const coverLookupByName = new Map<string, string>();
+  const usedIds = new Set<number>();
 
   for (const g of baseGames) {
-    const norm = g.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-    existingNames.add(norm);
-    if (g.resolvedCover && !g.resolvedCover.startsWith('data:image/svg+xml')) {
+    usedIds.add(g.id);
+    const norm = normalizeGameKey(g.name);
+    if (g.library === targetLibrary) {
+      existingNames.add(norm);
+    }
+    if (g.resolvedCover && !g.resolvedCover.startsWith('data:image/svg+xml') && !coverLookupByName.has(norm)) {
       coverLookupByName.set(norm, g.resolvedCover);
     }
   }
 
+  let nextIdSeed = targetLibrary === 'ckv' ? 20000 : 0;
   const newGames: GameItem[] = [];
   for (let i = 0; i < dynamicList.length; i++) {
-    const transformed = transformUgsEntry(dynamicList[i], i, existingNames, coverLookupByName);
+    while (usedIds.has(10000 + nextIdSeed)) {
+      nextIdSeed++;
+    }
+    const transformed = transformUgsEntry(dynamicList[i], nextIdSeed, existingNames, coverLookupByName, targetLibrary);
     if (transformed) {
+      usedIds.add(transformed.id);
       newGames.push(transformed);
+      nextIdSeed++;
     }
   }
 
@@ -621,6 +728,12 @@ export const FEATURED_APP_CONFIG = {
     coverUrl: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRMamlkw5KBVusv5915HUGcPYcq7bVp4q1bvP60VydMhw&s=10',
     author: 'By Steam',
   },
+  undertale: {
+    name: 'Undertale',
+    url: 'https://sethabout3653-sketch.github.io/undertale-webportforfrosthub/',
+    coverUrl: 'https://raw.githubusercontent.com/WanoCapy/ChickenKingsVault/main/gameimages/undertale.png',
+    author: 'Toby Fox',
+  },
 };
 
 const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
@@ -633,6 +746,7 @@ const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
     special: ['tiktok', 'video', 'videos', 'short videos', 'scramjet'],
     featured: true,
     source: 'scramjet',
+    library: 'gn-math',
     category: 'Featured',
     resolvedCover: FEATURED_APP_CONFIG.tiktok.coverUrl,
     fallbackCover: FEATURED_APP_CONFIG.tiktok.coverUrl,
@@ -648,6 +762,7 @@ const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
     special: ['soundboard', 'myinstants', 'audio', 'sound effects', 'buttons', 'scramjet'],
     featured: true,
     source: 'scramjet',
+    library: 'gn-math',
     category: 'Featured',
     resolvedCover: FEATURED_APP_CONFIG.soundboard.coverUrl,
     fallbackCover: generateSoundboardSvgCover(),
@@ -663,6 +778,7 @@ const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
     special: ['google', 'search', 'scramjet'],
     featured: true,
     source: 'scramjet',
+    library: 'gn-math',
     category: 'Featured',
     resolvedCover: FEATURED_APP_CONFIG.google.coverUrl,
     fallbackCover: FEATURED_APP_CONFIG.google.coverUrl,
@@ -678,6 +794,7 @@ const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
     special: ['duckduckgo', 'duck duck go', 'search', 'privacy', 'browser', 'scramjet'],
     featured: true,
     source: 'scramjet',
+    library: 'gn-math',
     category: 'Featured',
     resolvedCover: FEATURED_APP_CONFIG.duckduckgo.coverUrl,
     fallbackCover: '/assets/duckduckgo.png',
@@ -693,16 +810,33 @@ const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
     special: ['doki doki', 'literature club', 'ddlc', 'steam', 'horror'],
     featured: true,
     source: 'native',
+    library: 'gn-math',
     category: 'Horror & Mystery',
     resolvedCover: FEATURED_APP_CONFIG.ddlc.coverUrl,
     fallbackCover: FEATURED_APP_CONFIG.ddlc.coverUrl,
     localCover: FEATURED_APP_CONFIG.ddlc.coverUrl,
     resolvedUrl: FEATURED_APP_CONFIG.ddlc.url,
   },
+  {
+    id: 900006,
+    name: FEATURED_APP_CONFIG.undertale.name,
+    cover: FEATURED_APP_CONFIG.undertale.coverUrl,
+    url: FEATURED_APP_CONFIG.undertale.url,
+    author: FEATURED_APP_CONFIG.undertale.author,
+    special: ['undertale', 'rpg', 'port', 'toby fox'],
+    featured: true,
+    source: 'native',
+    library: 'gn-math',
+    category: 'Emulators & Ports',
+    resolvedCover: FEATURED_APP_CONFIG.undertale.coverUrl,
+    fallbackCover: generateGameSvgCover('Undertale', 'Emulators & Ports'),
+    localCover: generateGameSvgCover('Undertale', 'Emulators & Ports'),
+    resolvedUrl: FEATURED_APP_CONFIG.undertale.url,
+  },
 ];
 
 export function getAllGames(): GameItem[] {
-  // 1. ALL EXISTING GN-MATH GAMES PRESERVED (EXCEPT deleted native soundboard id: 179)
+  // 1. ALL VALID GN-MATH GAMES (EXCEPT deleted native soundboard id: 179)
   const validGames = (rawGamesData as RawGame[]).filter(
     (g) =>
       g.id >= 0 &&
@@ -722,6 +856,7 @@ export function getAllGames(): GameItem[] {
     return {
       ...game,
       source: 'native',
+      library: 'gn-math',
       featured: isFeatured,
       category,
       resolvedCover,
@@ -732,36 +867,32 @@ export function getAllGames(): GameItem[] {
     };
   });
 
-  // 2. Track existing names and high-quality covers to avoid duplicate entries
-  const existingNames = new Set<string>(['soundboard', 'myinstants']);
+  // 2. Shared cover lookup so UGS and CKV entries inherit high-res GN-Math covers when available
   const coverLookupByName = new Map<string, string>();
   for (const g of gnGames) {
-    const norm = g.name.toLowerCase().replace(/[^a-z0-9]/g, '');
-    existingNames.add(norm);
-    const baseWord = norm.replace(/(game|play|online|free|unblocked)/g, '');
-    if (baseWord.length >= 3) {
-      existingNames.add(baseWord);
-    }
+    const norm = normalizeGameKey(g.name);
     if (g.resolvedCover) {
       coverLookupByName.set(norm, g.resolvedCover);
     }
   }
 
-  // 3. Append UGS games from the bundled mirror repository
+  // 3. UGS library (cleanly scoped & internally deduplicated, keeping Deltarune, moving Undertale/DDLC to GN-Math)
+  const ugsExistingNames = new Set<string>();
   const ugsGames: GameItem[] = [];
-  const ugsList = rawUgsData as Array<{ name: string; url: string; img?: string }>;
+  const ugsList = rawUgsData as Array<{ name: string; url: string; img?: string; category?: GameCategory }>;
   for (let i = 0; i < ugsList.length; i++) {
-    const transformed = transformUgsEntry(ugsList[i], i, existingNames, coverLookupByName);
+    const transformed = transformUgsEntry(ugsList[i], i, ugsExistingNames, coverLookupByName, 'ugs');
     if (transformed) {
       ugsGames.push(transformed);
     }
   }
 
-  // 4. Append CKV games from ChickenKingsVault (all of them, deduplicated)
+  // 4. CKV library (cleanly scoped & internally deduplicated)
+  const ckvExistingNames = new Set<string>();
   const ckvGames: GameItem[] = [];
-  const ckvList = rawCkvData as Array<{ name: string; url: string; img?: string }>;
+  const ckvList = rawCkvData as Array<{ name: string; url: string; img?: string; category?: GameCategory }>;
   for (let i = 0; i < ckvList.length; i++) {
-    const transformed = transformUgsEntry(ckvList[i], i + 20000, existingNames, coverLookupByName);
+    const transformed = transformUgsEntry(ckvList[i], i + 20000, ckvExistingNames, coverLookupByName, 'ckv');
     if (transformed) {
       ckvGames.push(transformed);
     }
@@ -769,10 +900,45 @@ export function getAllGames(): GameItem[] {
 
   const builtInsWithRatings = BUILTIN_SCRAMJET_GAMES.map((g) => ({
     ...g,
+    library: 'gn-math' as GameLibraryId,
     rating: g.rating || resolveGameRating(g.name),
   }));
 
   return [...builtInsWithRatings, ...gnGames, ...ugsGames, ...ckvGames];
+}
+
+export function deduplicateAcrossLibraries(games: GameItem[]): GameItem[] {
+  const priority: Record<GameLibraryId, number> = {
+    'gn-math': 0,
+    'ugs': 1,
+    'ckv': 2,
+  };
+  const ordered = [...games].sort((a, b) => priority[a.library] - priority[b.library]);
+  const seenKeys = new Set<string>();
+  const result: GameItem[] = [];
+
+  for (const g of ordered) {
+    const key = normalizeGameKey(g.name);
+    const isProtected = key === 'undertale' || key === 'deltarune';
+    if (isProtected) {
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        result.push(g);
+      }
+      continue;
+    }
+
+    const baseKey = key.replace(/(game|play|online|free|unblocked|1)$/g, '');
+    if (seenKeys.has(key) || (baseKey.length >= 3 && seenKeys.has(baseKey))) {
+      continue;
+    }
+    seenKeys.add(key);
+    if (baseKey.length >= 3) {
+      seenKeys.add(baseKey);
+    }
+    result.push(g);
+  }
+  return result;
 }
 
 export async function fetchGames(): Promise<GameItem[]> {

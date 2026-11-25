@@ -13,7 +13,7 @@ import { FrostHubLogo } from './components/FrostHubLogo';
 import { InAppNotificationToast } from './components/InAppNotificationToast';
 import { VoiceAudioEngine } from './components/VoiceAudioEngine';
 import { PersistentVoiceDock } from './components/PersistentVoiceDock';
-import { getAllGames, resolveGameUrl, getUGSGames, getCKVGames, mergeUgsGames } from './services/gameService';
+import { getAllGames, getUGSGames, getCKVGames, mergeUgsGames, deduplicateAcrossLibraries } from './services/gameService';
 import { initEsrbRatingsCache, getCachedGameRating, subscribeToGameRatings } from './services/gameRatingService';
 import { tabTransition } from './utils/animations';
 import { useCloak } from './hooks/useCloak';
@@ -31,7 +31,7 @@ import {
   subscribeToFavorites,
   toggleGameFavorite,
 } from './services/favoritesService';
-import { GameItem, GameCategory } from './types/game';
+import { GameItem, GameCategory, GameLibrarySelection } from './types/game';
 import { Search, ArrowRight, Gamepad2 } from 'lucide-react';
 
 const PAGE_SIZE = 72;
@@ -41,8 +41,10 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
   const deferredQuery = useDeferredValue(searchQuery);
 
+  const [selectedLibrary, setSelectedLibrary] = useState<GameLibrarySelection>('all');
   const [selectedCategory, setSelectedCategory] = useState<GameCategory>('All');
-  const [sortBy, setSortBy] = useState<'popular' | 'alpha-asc' | 'alpha-desc' | 'random'>('popular');
+  const [sortBy, setSortBy] = useState<'popular' | 'alpha-asc' | 'alpha-desc' | 'random'>('random');
+  const [shuffleSeed, setShuffleSeed] = useState<number>(() => Math.floor(Math.random() * 1_000_000_000));
   const [favorites, setFavorites] = useState<number[]>(() => getStoredGameFavorites());
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -112,10 +114,10 @@ export default function App() {
         setAllGames((prev) => {
           let current = prev;
           if (ugsResult.status === 'fulfilled' && Array.isArray(ugsResult.value)) {
-            current = mergeUgsGames(current, ugsResult.value);
+            current = mergeUgsGames(current, ugsResult.value, 'ugs');
           }
           if (ckvResult.status === 'fulfilled' && Array.isArray(ckvResult.value)) {
-            current = mergeUgsGames(current, ckvResult.value);
+            current = mergeUgsGames(current, ckvResult.value, 'ckv');
           }
           return current;
         });
@@ -267,6 +269,40 @@ export default function App() {
     return () => window.clearTimeout(timer);
   }, [currentTab, activeGame, activeMedia, searchQuery, selectedCategory, showFavoritesOnly, allGames.length, globalChat.isInVideo, globalChat.activeChannel]);
 
+  const libraryBuckets = useMemo(() => {
+    const gnMath = allGames.filter((g) => g.library === 'gn-math');
+    const ugs = allGames.filter((g) => g.library === 'ugs');
+    const ckv = allGames.filter((g) => g.library === 'ckv');
+    const all = deduplicateAcrossLibraries(allGames);
+    return { 'gn-math': gnMath, ugs, ckv, all };
+  }, [allGames]);
+
+  const libraryGames = libraryBuckets[selectedLibrary];
+
+  // Stable Fisher-Yates random order per session / reshuffle so games appear randomized without flickering on filter/favorite changes
+  const randomRankMap = useMemo(() => {
+    const ids = allGames.map((g) => g.id);
+    // Mulberry32 PRNG seeded with shuffleSeed
+    let seed = (shuffleSeed ^ ids.length) >>> 0 || 1;
+    const nextRand = () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    for (let i = ids.length - 1; i > 0; i--) {
+      const j = Math.floor(nextRand() * (i + 1));
+      const tmp = ids[i];
+      ids[i] = ids[j];
+      ids[j] = tmp;
+    }
+    const map = new Map<number, number>();
+    for (let i = 0; i < ids.length; i++) {
+      map.set(ids[i], i);
+    }
+    return map;
+  }, [allGames, shuffleSeed]);
+
   const handleGoHome = useCallback(() => {
     setSelectedCategory('All');
     setSearchQuery('');
@@ -276,9 +312,17 @@ export default function App() {
   }, []);
 
   const handleRandomGame = useCallback(() => {
-    const game = allGames[Math.floor(Math.random() * allGames.length)];
+    const pool = libraryGames.length > 0 ? libraryGames : allGames;
+    const game = pool[Math.floor(Math.random() * pool.length)];
     if (game) handlePlayGame(game);
-  }, [allGames, handlePlayGame]);
+  }, [libraryGames, allGames, handlePlayGame]);
+
+  const handleSelectLibrary = useCallback((lib: GameLibrarySelection) => {
+    setSelectedLibrary(lib);
+    setSelectedCategory('All');
+    setShowFavoritesOnly(false);
+    setCurrentTab('games');
+  }, []);
 
   const handleSelectCategory = useCallback((cat: GameCategory) => {
     setSelectedCategory(cat);
@@ -292,6 +336,13 @@ export default function App() {
 
   const handleSortChange = useCallback((sort: 'popular' | 'alpha-asc' | 'alpha-desc' | 'random') => {
     setSortBy(sort);
+    if (sort === 'random') {
+      setShuffleSeed((s) => (s + 1) | 0);
+    }
+  }, []);
+
+  const handleReshuffle = useCallback(() => {
+    setShuffleSeed((s) => (s + 1) | 0);
   }, []);
 
   const handleToggleFavoritesOnly = useCallback(() => {
@@ -311,7 +362,7 @@ export default function App() {
     const queryTokens = deferredQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const compactQuery = deferredQuery.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-    const applyQuery = (list: typeof allGames) => {
+    const applyQuery = (list: GameItem[]) => {
       if (queryTokens.length === 0) return list;
       return list.filter((game) => {
         const realRating = game.rating || getCachedGameRating(game.name);
@@ -341,7 +392,7 @@ export default function App() {
       });
     };
 
-    let result = [...allGames];
+    let result = [...libraryGames];
 
     if (showFavoritesOnly) {
       result = result.filter((g) => favorites.includes(g.id));
@@ -353,21 +404,26 @@ export default function App() {
 
     if (queryTokens.length > 0) {
       const categoryMatched = applyQuery(result);
-      // If active category or favorites filter hid valid matches for the user's search query, search across the full catalog
-      result = categoryMatched.length > 0 ? categoryMatched : applyQuery(allGames);
+      // If active category or favorites filter hid valid matches within this library, search across the active library
+      result = categoryMatched.length > 0 ? categoryMatched : applyQuery(libraryGames);
     }
 
     // Sorting
-    if (sortBy === 'alpha-asc') result.sort((a, b) => a.name.localeCompare(b.name));
-    if (sortBy === 'alpha-desc') result.sort((a, b) => b.name.localeCompare(a.name));
-    if (sortBy === 'random') result.sort(() => Math.random() - 0.5);
+    if (sortBy === 'alpha-asc') {
+      result.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortBy === 'alpha-desc') {
+      result.sort((a, b) => b.name.localeCompare(a.name));
+    } else if (sortBy === 'random') {
+      result.sort((a, b) => (randomRankMap.get(a.id) ?? 0) - (randomRankMap.get(b.id) ?? 0));
+    }
 
     return result;
-  }, [allGames, selectedCategory, deferredQuery, favorites, showFavoritesOnly, sortBy, esrbVersion]);
+  }, [libraryGames, selectedCategory, deferredQuery, favorites, showFavoritesOnly, sortBy, esrbVersion, randomRankMap]);
 
   const categoryCounts = useMemo(() => {
+    const libraryFavCount = libraryGames.filter((g) => favorites.includes(g.id)).length;
     const counts: Record<GameCategory, number> = {
-      'All': allGames.length,
+      'All': libraryGames.length,
       'Featured': 0,
       'Action & Shooters': 0,
       'Driving & Racing': 0,
@@ -377,24 +433,23 @@ export default function App() {
       'Sports & Physics': 0,
       'Puzzle & Casual': 0,
       'Emulators & Ports': 0,
-      'Favorites': favorites.length,
+      'Favorites': libraryFavCount,
     };
-    for (const g of allGames) {
+    for (const g of libraryGames) {
       if (g.featured) counts['Featured']++;
       if (g.category && counts[g.category] !== undefined && g.category !== 'All' && g.category !== 'Featured' && g.category !== 'Favorites') {
         counts[g.category]++;
       }
     }
     return counts;
-  }, [allGames, favorites]);
+  }, [libraryGames, favorites]);
 
-  const featuredGames = useMemo(() => allGames.filter((g) => g.featured), [allGames]);
   const visibleGames = useMemo(() => filteredGames.slice(0, visibleCount), [filteredGames, visibleCount]);
   const hasMore = visibleCount < filteredGames.length;
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [deferredQuery, selectedCategory, showFavoritesOnly]);
+  }, [deferredQuery, selectedLibrary, selectedCategory, showFavoritesOnly]);
 
   // Smooth infinite scroll: automatically load more games as the user scrolls
   useEffect(() => {
@@ -475,6 +530,8 @@ export default function App() {
           onTabChange={setCurrentTab}
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
+          selectedLibrary={selectedLibrary}
+          onSelectLibrary={handleSelectLibrary}
           onGoHome={handleGoHome}
           onOpenMenu={() => setIsMenuOpen(true)}
         />
@@ -543,6 +600,7 @@ export default function App() {
                 onSelectCategory={handleSelectCategory}
                 sortBy={sortBy}
                 onSortChange={handleSortChange}
+                onReshuffle={handleReshuffle}
                 categoryCounts={categoryCounts}
               />
             </div>
@@ -576,19 +634,33 @@ export default function App() {
                 </h3>
                 <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
                   {showFavoritesOnly
-                    ? 'Tap the heart on any game to keep it here for quick access.'
-                    : searchQuery ? `Nothing turned up for "${searchQuery}". Try a shorter word or browse a category.` : 'Try another category or change the sort order.'}
+                    ? 'Tap the heart on any game in this library to keep it here for quick access.'
+                    : searchQuery ? `Nothing turned up for "${searchQuery}" in this library. Try searching all libraries or clearing your filter.` : 'Try another category or switch libraries.'}
                 </p>
-                <button
-                  onClick={() => {
-                    setSearchQuery('');
-                    setSelectedCategory('All');
-                    setShowFavoritesOnly(false);
-                  }}
-                  className="px-6 py-3 bg-[var(--brand-blue)] hover:opacity-90 active:scale-95 text-white text-sm font-semibold rounded-full shadow-md shadow-[var(--brand-blue-glow)] transition duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer"
-                >
-                  Show all {allGames.length} games
-                </button>
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  {searchQuery && selectedLibrary !== 'all' && (
+                    <button
+                      onClick={() => setSelectedLibrary('all')}
+                      className="px-6 py-3 bg-[var(--brand-blue)] hover:opacity-90 active:scale-95 text-white text-sm font-semibold rounded-full shadow-md shadow-[var(--brand-blue-glow)] transition duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer"
+                    >
+                      Search all libraries
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setSearchQuery('');
+                      setSelectedCategory('All');
+                      setShowFavoritesOnly(false);
+                    }}
+                    className={`px-6 py-3 active:scale-95 text-sm font-semibold rounded-full transition duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer ${
+                      searchQuery && selectedLibrary !== 'all'
+                        ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-white/10 dark:hover:bg-white/15 dark:text-white'
+                        : 'bg-[var(--brand-blue)] hover:opacity-90 text-white shadow-md shadow-[var(--brand-blue-glow)]'
+                    }`}
+                  >
+                    Show all {libraryGames.length} games
+                  </button>
+                </div>
               </div>
             ) : (
               /* Game Grid - Animated Container */
