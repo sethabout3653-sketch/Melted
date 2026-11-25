@@ -2,6 +2,8 @@ import { onRequest as health } from '../functions/api/health';
 import { onRequest as scramjetCookies } from '../functions/api/scramjet-cookies';
 import { onRequest as scramjetFetch } from '../functions/api/scramjet-fetch';
 import { onRequest as raw } from '../functions/api/raw/[filename]';
+import { onRequest as ugs } from '../functions/api/ugs/[[path]]';
+import { onRequest as ckv } from '../functions/api/ckv/[[path]]';
 import { onRequest as cover } from '../functions/api/cover/[[path]]';
 import { onRequest as proxyStream } from '../functions/api/proxy-stream';
 import { onRequest as proxyImage } from '../functions/api/proxy-image';
@@ -38,6 +40,8 @@ const routes: Array<{ pattern: RegExp; handler: Handler }> = [
   { pattern: /^\/api\/scramjet-cookies\/?$/, handler: ({ request, env }) => scramjetCookies({ request, env }) },
   { pattern: /^\/api\/scramjet-fetch\/?$/, handler: scramjetFetch },
   { pattern: /^\/api\/raw\/(.+)\/?$/, handler: ({ params }) => raw({ params: { filename: params.filename } }) },
+  { pattern: /^\/api\/ugs\/(.+)\/?$/, handler: ({ request, params }) => ugs({ request, params: { path: params.filename } }) },
+  { pattern: /^\/api\/ckv\/(.+)\/?$/, handler: ({ request, params }) => ckv({ request, params: { path: params.filename } }) },
   { pattern: /^\/api\/cover\/(.+)\/?$/, handler: ({ request, params }) => cover({ request, params: { path: params.filename } }) },
   { pattern: /^\/api\/proxy-stream\/?$/, handler: proxyStream },
   { pattern: /^\/api\/proxy-image\/?$/, handler: proxyImage },
@@ -92,6 +96,16 @@ export default {
       headers.set('Access-Control-Allow-Origin', '*');
       headers.set('X-Frame-Options', 'ALLOWALL');
       return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+    }
+
+    if (url.pathname.startsWith('/api/')) {
+      return new Response(JSON.stringify({ error: `API route ${request.method} ${url.pathname} not found` }), {
+        status: 404,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+      });
     }
 
     return env.ASSETS.fetch(request);

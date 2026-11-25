@@ -409,10 +409,113 @@ const EXCLUDED_CKV_PATHS = new Set<string>([
   '/ckv/gamefiles/ddlc.html',
 ]);
 
+const SLUG_CANONICAL_OVERRIDES: Record<string, string> = {
+  '1game': '1',
+  '2doomgame': 'doom 2',
+  'zdoomgame': 'doom',
+  'icedodo': 'ice dodo',
+  'royaltowermedievaltd': 'royal towers medieval td',
+  'bigneontowertinysqaure': 'big neon tower tiny square',
+  'cuttheropeholiday': 'cut the rope holiday gift',
+  'milkinsideabagofmilk': 'milk inside a bag of milk inside a bag of milk',
+  'milkoutsideabagofmilk': 'milk outside a bag of milk outside a bag of milk',
+  'fearstofathom': 'fears to fathom home alone',
+  'hilclimbracing': 'hill climb racing',
+  'hillclimbracing': 'hill climb racing',
+  'kirbysoftandwet': 'kirby soft and wet',
+  'nzp': 'nazi zombies portable',
+  'quake3arena': 'quake iii arena',
+  'pvz': 'plants vs zombies',
+  'catgunner': 'cat gunner super zombie shoot',
+  'chessgame': 'chess classic',
+  'fnaf': 'five nights at freddys',
+  'fnaf2': 'five nights at freddys 2',
+  'fnaf3': 'five nights at freddys 3',
+  'fnaf4': 'five nights at freddys 4',
+  'fnafpizzasim': 'five nights at freddys pizza simulator',
+  'fnafucn': 'five nights at freddys ultimate custom night',
+  'fnafworld': 'five nights at freddys world',
+  'fnf': 'friday night funkin',
+  'fnfvshatsunemiku': 'friday night funkin vs hatsune miku',
+  'telekinesisgame': 'telekinesis attack',
+  'breakingthebank': 'henry stickmin breaking the bank',
+  'escapingtheprison': 'henry stickmin escaping the prison',
+  'infiltratingtheairship': 'henry stickmin infiltrating the airship',
+  'fleeingthecomplex': 'henry stickmin fleeing the complex',
+  'stealingthediamond': 'henry stickmin stealing the diamond',
+  'revelationspersona': 'persona',
+  'minecraft173': 'minecraft beta 1.7.3',
+  'minecraft1.7.3': 'minecraft beta 1.7.3',
+  'cod4modernwarfare': 'call of duty 4',
+  'googledino': 'google dino run',
+  'legobatmanthevideogame': 'lego batman',
+  'legobatman2dcsuperheroes': 'lego batman 2',
+  'celestepico': 'celeste pico',
+  'celestegame': 'celeste',
+};
+
 function normalizeGameKey(name: string): string {
   const lower = name.trim().toLowerCase();
   if (lower === 'n+') return 'nplus';
   return lower.replace(/[^a-z0-9]/g, '');
+}
+
+function getCanonicalGameKeys(name: string, url?: string): string[] {
+  let s = name.trim().toLowerCase();
+  if (s === 'n+') return ['nplus'];
+
+  if (url && url.toLowerCase().startsWith('/ckv/')) {
+    const slug = url.split('/').pop()?.replace(/\.html$/i, '').toLowerCase() || '';
+    if (SLUG_CANONICAL_OVERRIDES[slug]) {
+      s = SLUG_CANONICAL_OVERRIDES[slug];
+    }
+  }
+
+  s = s.replace(/\s*\([^)]*\)\s*$/g, (m) =>
+    /\((alt|clean|best|legacy|raw|old|classic|remake|flash|decomp|goober|psx|psx alt|gba|nes|snes|n64|ds|gamecube|tabs|1999|sans|multiplayer|unblocked|hd|game)\)/i.test(m)
+      ? ''
+      : m
+  );
+
+  s = s
+    .replace(/['’]s\b/g, '')
+    .replace(/['’]/g, '')
+    .replace(/&/g, ' and ')
+    .replace(/\bvs\.?\b/g, ' vs ')
+    .replace(/\btower defense\b/g, ' td ')
+    .replace(/\bissac\b/g, 'isaac')
+    .replace(/\bsqaure\b/g, 'square')
+    .replace(/\bpico[\s-]*8\b/g, 'pico')
+    .replace(/\b(the video game|dc super heroes|dc superheroes|edition|with bennett foddy)\b/g, ' ')
+    .replace(/\bhill climb racing lite\b/g, 'hill climb racing')
+    .replace(/\btouhou\s*(\d+)\s*touhou[\s-]*/g, 'touhou $1 ')
+    .replace(/\bslender:\s*the eight pages\b/g, 'slender the 8 pages')
+    .replace(/\bfnaf\b/g, 'five nights at freddy')
+    .replace(/\bgrand theft auto\b/g, 'gta')
+    .replace(/\b(the )?legends? of zelda\b/g, 'zelda')
+    .replace(/\b(henry stickmin|stickman)\b/g, 'stickman')
+    .replace(/\bthe\s+/g, '')
+    .replace(/\biii\b/g, '3')
+    .replace(/\bii\b/g, '2')
+    .replace(/\biv\b/g, '4')
+    .replace(/\s+(game|play|online|free|unblocked)$/g, '');
+
+  let compact = s.replace(/[^a-z0-9]/g, '');
+  if (compact.length > 5 && compact.endsWith('game')) {
+    compact = compact.slice(0, -4);
+  }
+
+  const keys = new Set<string>();
+  const rawCompact = normalizeGameKey(name);
+  if (rawCompact) keys.add(rawCompact);
+  if (compact) keys.add(compact);
+  if (compact.endsWith('1') && compact.length >= 4 && !/^\d+$/.test(compact)) {
+    keys.add(compact.slice(0, -1));
+  }
+  if (compact === 'plantsvszombies2') {
+    keys.add('plantsvszombies2gardenless');
+  }
+  return Array.from(keys);
 }
 
 export function transformUgsEntry(
@@ -433,12 +536,20 @@ export function transformUgsEntry(
   }
 
   const normalized = normalizeGameKey(trimmedName);
+  const canonicalKeys = getCanonicalGameKeys(trimmedName, entry.url);
   const isDeltarune = normalized === 'deltarune';
-  if (!isDeltarune && GN_MATH_EXCLUSIVE_NORMS.has(normalized)) {
-    return null;
-  }
-  if (!isDeltarune && existingNames.has(normalized)) {
-    return null;
+  if (isDeltarune) {
+    if (isCkv || existingNames.has('ugs:deltarune')) {
+      return null;
+    }
+    existingNames.add('ugs:deltarune');
+  } else {
+    if (GN_MATH_EXCLUSIVE_NORMS.has(normalized)) {
+      return null;
+    }
+    if (canonicalKeys.some((k) => existingNames.has(k))) {
+      return null;
+    }
   }
 
   // Skip redundant (Alt)/(Clean)/(Best)/(Legacy)/(Raw)/(Old) variants when base already exists
@@ -450,7 +561,9 @@ export function transformUgsEntry(
     }
   }
 
-  existingNames.add(normalized);
+  for (const k of canonicalKeys) {
+    existingNames.add(k);
+  }
 
   const id = 10000 + idSeed;
   const category = detectCategory({ name: trimmedName, url: entry.url, special: [], category: entry.category } as any);
@@ -540,15 +653,25 @@ export function mergeUgsGames(
   dynamicList: Array<{ name: string; url: string; img?: string }>,
   targetLibrary: 'ugs' | 'ckv' = 'ugs'
 ): GameItem[] {
-  const existingNames = new Set<string>();
+  const existingNames = new Set<string>(GN_MATH_EXCLUSIVE_NORMS);
   const coverLookupByName = new Map<string, string>();
   const usedIds = new Set<number>();
 
   for (const g of baseGames) {
     usedIds.add(g.id);
     const norm = normalizeGameKey(g.name);
-    if (g.library === targetLibrary) {
-      existingNames.add(norm);
+    // Strict hierarchy: UGS skips anything in GN-Math or UGS; CKV skips anything in GN-Math, UGS, or CKV
+    const shouldBlock =
+      g.library === 'gn-math' ||
+      g.library === 'ugs' ||
+      (targetLibrary === 'ckv' && g.library === 'ckv');
+    if (shouldBlock) {
+      if (norm === 'deltarune' && g.library === 'ugs') {
+        existingNames.add('ugs:deltarune');
+      }
+      for (const k of getCanonicalGameKeys(g.name, g.url)) {
+        existingNames.add(k);
+      }
     }
     if (g.resolvedCover && !g.resolvedCover.startsWith('data:image/svg+xml') && !coverLookupByName.has(norm)) {
       coverLookupByName.set(norm, g.resolvedCover);
@@ -867,42 +990,45 @@ export function getAllGames(): GameItem[] {
     };
   });
 
-  // 2. Shared cover lookup so UGS and CKV entries inherit high-res GN-Math covers when available
+  // 2. Shared cover lookup & cumulative canonical key set (GN-Math -> UGS -> CKV)
   const coverLookupByName = new Map<string, string>();
-  for (const g of gnGames) {
-    const norm = normalizeGameKey(g.name);
-    if (g.resolvedCover) {
-      coverLookupByName.set(norm, g.resolvedCover);
-    }
-  }
-
-  // 3. UGS library (cleanly scoped & internally deduplicated, keeping Deltarune, moving Undertale/DDLC to GN-Math)
-  const ugsExistingNames = new Set<string>();
-  const ugsGames: GameItem[] = [];
-  const ugsList = rawUgsData as Array<{ name: string; url: string; img?: string; category?: GameCategory }>;
-  for (let i = 0; i < ugsList.length; i++) {
-    const transformed = transformUgsEntry(ugsList[i], i, ugsExistingNames, coverLookupByName, 'ugs');
-    if (transformed) {
-      ugsGames.push(transformed);
-    }
-  }
-
-  // 4. CKV library (cleanly scoped & internally deduplicated)
-  const ckvExistingNames = new Set<string>();
-  const ckvGames: GameItem[] = [];
-  const ckvList = rawCkvData as Array<{ name: string; url: string; img?: string; category?: GameCategory }>;
-  for (let i = 0; i < ckvList.length; i++) {
-    const transformed = transformUgsEntry(ckvList[i], i + 20000, ckvExistingNames, coverLookupByName, 'ckv');
-    if (transformed) {
-      ckvGames.push(transformed);
-    }
-  }
+  const sharedExistingNames = new Set<string>(GN_MATH_EXCLUSIVE_NORMS);
 
   const builtInsWithRatings = BUILTIN_SCRAMJET_GAMES.map((g) => ({
     ...g,
     library: 'gn-math' as GameLibraryId,
     rating: g.rating || resolveGameRating(g.name),
   }));
+
+  for (const g of [...builtInsWithRatings, ...gnGames]) {
+    const norm = normalizeGameKey(g.name);
+    if (g.resolvedCover) {
+      coverLookupByName.set(norm, g.resolvedCover);
+    }
+    for (const k of getCanonicalGameKeys(g.name, g.url)) {
+      sharedExistingNames.add(k);
+    }
+  }
+
+  // 3. UGS library (excludes everything in GN-Math, keeping Deltarune)
+  const ugsGames: GameItem[] = [];
+  const ugsList = rawUgsData as Array<{ name: string; url: string; img?: string; category?: GameCategory }>;
+  for (let i = 0; i < ugsList.length; i++) {
+    const transformed = transformUgsEntry(ugsList[i], i, sharedExistingNames, coverLookupByName, 'ugs');
+    if (transformed) {
+      ugsGames.push(transformed);
+    }
+  }
+
+  // 4. CKV library (excludes everything in GN-Math and UGS)
+  const ckvGames: GameItem[] = [];
+  const ckvList = rawCkvData as Array<{ name: string; url: string; img?: string; category?: GameCategory }>;
+  for (let i = 0; i < ckvList.length; i++) {
+    const transformed = transformUgsEntry(ckvList[i], i + 20000, sharedExistingNames, coverLookupByName, 'ckv');
+    if (transformed) {
+      ckvGames.push(transformed);
+    }
+  }
 
   return [...builtInsWithRatings, ...gnGames, ...ugsGames, ...ckvGames];
 }
@@ -914,27 +1040,35 @@ export function deduplicateAcrossLibraries(games: GameItem[]): GameItem[] {
     'ckv': 2,
   };
   const ordered = [...games].sort((a, b) => priority[a.library] - priority[b.library]);
-  const seenKeys = new Set<string>();
+  const seenKeys = new Set<string>(GN_MATH_EXCLUSIVE_NORMS);
   const result: GameItem[] = [];
 
   for (const g of ordered) {
     const key = normalizeGameKey(g.name);
-    const isProtected = key === 'undertale' || key === 'deltarune';
-    if (isProtected) {
-      if (!seenKeys.has(key)) {
+    const keys = getCanonicalGameKeys(g.name, g.url);
+
+    if (g.library === 'gn-math') {
+      for (const k of keys) {
+        seenKeys.add(k);
+      }
+      result.push(g);
+      continue;
+    }
+
+    if (key === 'deltarune') {
+      if (g.library === 'ugs' && !seenKeys.has('ugs:deltarune')) {
+        seenKeys.add('ugs:deltarune');
         seenKeys.add(key);
         result.push(g);
       }
       continue;
     }
 
-    const baseKey = key.replace(/(game|play|online|free|unblocked|1)$/g, '');
-    if (seenKeys.has(key) || (baseKey.length >= 3 && seenKeys.has(baseKey))) {
+    if (keys.some((k) => seenKeys.has(k))) {
       continue;
     }
-    seenKeys.add(key);
-    if (baseKey.length >= 3) {
-      seenKeys.add(baseKey);
+    for (const k of keys) {
+      seenKeys.add(k);
     }
     result.push(g);
   }

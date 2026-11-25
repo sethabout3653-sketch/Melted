@@ -12,6 +12,7 @@ import { GameItem, GameRatingInfo } from '../types/game';
 import {
   getPlayableGameUrl,
   getScramjetTargetUrl,
+  resolveUgsUrl,
   shouldUseScramjetByDefault,
 } from '../services/gameService';
 import {
@@ -521,6 +522,24 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                       try {
                         const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
                         if (doc) {
+                          const isSpaClone =
+                            Boolean(doc.getElementById('root')) &&
+                            ((doc.title || '').toLowerCase().includes('frosthub') ||
+                              Boolean(doc.querySelector('script[src*="/assets/index-"], script[src*="/src/main.tsx"]')));
+                          if (isSpaClone) {
+                            const upstreamFallback = resolveUgsUrl(game.url);
+                            if (
+                              (game.source === 'ugs' || game.source === 'CKV' || game.url.startsWith('/ugs/') || game.url.startsWith('/ckv/')) &&
+                              upstreamFallback &&
+                              upstreamFallback !== directUrl
+                            ) {
+                              setDirectUrl(upstreamFallback);
+                              return;
+                            }
+                            setHasError(true);
+                            setErrorDetail('Game proxy endpoint returned the app shell instead of game files.');
+                            return;
+                          }
                           import('../utils/scaffolding-loader').then(({ injectScaffolding }) => {
                             injectScaffolding(doc);
                           });
