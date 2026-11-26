@@ -1,6 +1,23 @@
 /*
   Access-Control-Allow-Origin: *
+  Cross-Origin-Resource-Policy: cross-origin
   X-Frame-Options: ALLOWALL
+
+/favicon.ico
+  Content-Type: image/x-icon
+  Access-Control-Allow-Origin: *
+  Cross-Origin-Resource-Policy: cross-origin
+  Cache-Control: public, max-age=3600
+
+/assets/cloaks/*
+  Access-Control-Allow-Origin: *
+  Cross-Origin-Resource-Policy: cross-origin
+  Cache-Control: public, max-age=3600
+
+/*.svg
+  Content-Type: image/svg+xml
+  Access-Control-Allow-Origin: *
+  Cross-Origin-Resource-Policy: cross-origin
 
 /sj-sw.js
   Content-Type: application/javascript; charset=utf-8

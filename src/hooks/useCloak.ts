@@ -72,66 +72,112 @@ function resolveFullUrl(url: string): string {
 }
 
 function getFaviconMimeType(url: string): string {
-  if (url.includes('.svg') || url.includes('image/svg+xml')) return 'image/svg+xml';
-  if (url.includes('.png') || url.includes('image/png')) return 'image/png';
-  return 'image/x-icon';
+  if (url.startsWith('data:')) {
+    const m = url.match(/^data:([^;]+);/i);
+    if (m && m[1]) return m[1];
+  }
+  const cleanUrl = url.split('?')[0].split('#')[0].toLowerCase();
+  if (cleanUrl.endsWith('.svg')) return 'image/svg+xml';
+  if (cleanUrl.endsWith('.png')) return 'image/png';
+  if (cleanUrl.endsWith('.ico')) return 'image/x-icon';
+  if (cleanUrl.endsWith('.webp')) return 'image/webp';
+  return '';
 }
 
-function updateDocumentFavicon(faviconUrl: string) {
+function setLinkElementIcon(link: HTMLLinkElement, href: string, explicitMime?: string) {
+  const mime = explicitMime || getFaviconMimeType(href);
+  if (mime) {
+    link.type = mime;
+  } else {
+    link.removeAttribute('type');
+  }
+  link.href = href;
+}
+
+function updateDocumentFavicon(faviconUrl: string, presetId?: string) {
   if (typeof document === 'undefined' || !faviconUrl) return;
 
-  const mimeType = getFaviconMimeType(faviconUrl);
-
-  // Remove all existing icon tags
-  document.querySelectorAll("link[rel*='icon']").forEach((el) => {
-    el.parentNode?.removeChild(el);
-  });
-
-  // Apply cache-buster for HTTP/HTTPS to force browser re-fetching
+  // Apply cache-buster for HTTP/HTTPS/relative URLs to force browser re-fetching
   let targetHref = faviconUrl;
   if (!faviconUrl.startsWith('data:') && !faviconUrl.startsWith('blob:')) {
     const sep = faviconUrl.includes('?') ? '&' : '?';
     targetHref = `${faviconUrl}${sep}_t=${Date.now()}`;
   }
 
+  // Remove old icon links cleanly
+  document.querySelectorAll("link[rel*='icon']").forEach((el) => {
+    el.parentNode?.removeChild(el);
+  });
+
   // Create fresh standard <link rel="icon">
   const link = document.createElement('link');
   link.id = 'dynamic-favicon';
   link.rel = 'icon';
-  link.type = mimeType;
-  link.href = targetHref;
+  setLinkElementIcon(link, targetHref);
   document.head.appendChild(link);
 
   // Create shortcut icon for legacy/Chromium compatibility
   const shortcut = document.createElement('link');
   shortcut.id = 'dynamic-shortcut-icon';
   shortcut.rel = 'shortcut icon';
-  shortcut.type = mimeType;
-  shortcut.href = targetHref;
+  setLinkElementIcon(shortcut, targetHref);
   document.head.appendChild(shortcut);
 
-  // For cross-origin icons (e.g. favicon.vemetric.com), also fetch as a base64 Data URI
-  // Data URIs bypass all browser HTTP caching and force immediate tab icon redraw
-  if (targetHref.startsWith('http://') || targetHref.startsWith('https://')) {
-    fetch(faviconUrl, { mode: 'cors' })
-      .then((res) => {
+  // Convert remote or local icons into Data URIs to bypass browser HTTP caching
+  // and guarantee instant cross-origin & Cloudflare compatibility
+  const fetchUrl = resolveFullUrl(faviconUrl);
+  const tryFetchToDataUrl = (urlToFetch: string) =>
+    fetch(urlToFetch, { mode: 'cors' })
+      .then(async (res) => {
         if (!res.ok) throw new Error('Favicon fetch failed');
-        return res.blob();
-      })
-      .then((blob) => {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          const dataUrl = reader.result as string;
-          if (dataUrl) {
-            link.href = dataUrl;
-            shortcut.href = dataUrl;
-            notifyParentMetadata(document.title, dataUrl);
+        const blob = await res.blob();
+        if (blob.type.includes('svg')) {
+          const text = await blob.text();
+          if (text.includes('icon-tabler-world-question')) {
+            throw new Error('Placeholder globe SVG');
           }
-        };
-        reader.readAsDataURL(blob);
+        }
+        return blob;
+      })
+      .then(
+        (blob) =>
+          new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const res = reader.result as string;
+              if (res) resolve(res);
+              else reject(new Error('Empty data URL'));
+            };
+            reader.onerror = () => reject(new Error('FileReader error'));
+            reader.readAsDataURL(blob);
+          })
+      );
+
+  if (fetchUrl.startsWith('http://') || fetchUrl.startsWith('https://')) {
+    tryFetchToDataUrl(fetchUrl)
+      .catch(() => {
+        // Retry through Cloudflare same-origin image proxy if direct CORS fails
+        if (!faviconUrl.startsWith('/')) {
+          return tryFetchToDataUrl(`/api/proxy-image?url=${encodeURIComponent(faviconUrl)}`);
+        }
+        throw new Error('Local fetch failed');
       })
       .catch(() => {
-        // Fallback already assigned to targetHref
+        // Final fallback to bundled local SVG if available
+        if (presetId && presetId !== 'custom') {
+          return tryFetchToDataUrl(resolveFullUrl(`/assets/cloaks/${presetId}.svg`));
+        }
+        return null;
+      })
+      .then((dataUrl) => {
+        if (dataUrl && link.isConnected) {
+          setLinkElementIcon(link, dataUrl);
+          setLinkElementIcon(shortcut, dataUrl);
+          notifyParentMetadata(document.title, dataUrl);
+        }
+      })
+      .catch(() => {
+        // Keep targetHref fallback
       });
   }
 
@@ -177,7 +223,7 @@ export function useCloak() {
   const applyPreset = useCallback((presetId: string) => {
     const preset = CLOAK_PRESETS.find((p) => p.id === presetId) || CLOAK_PRESETS[0];
     document.title = preset.title;
-    updateDocumentFavicon(preset.favicon);
+    updateDocumentFavicon(preset.favicon, preset.id);
 
     setActivePreset(presetId);
     localStorage.setItem(CLOAK_STORAGE_KEY, presetId);
@@ -192,13 +238,14 @@ export function useCloak() {
       localStorage.setItem('melted_cloak_custom_title', title);
     }
     if (favicon) {
-      updateDocumentFavicon(favicon);
+      updateDocumentFavicon(favicon, 'custom');
       localStorage.setItem('melted_cloak_custom_favicon', favicon);
     }
     setActivePreset('custom');
     localStorage.setItem(CLOAK_STORAGE_KEY, 'custom');
 
-    notifyParentMetadata(title || document.title, favicon);
+    const iconEl = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null;
+    notifyParentMetadata(title || document.title, favicon || (iconEl ? iconEl.href : ''));
   }, []);
 
   // Update panic key
@@ -275,12 +322,12 @@ export function useCloak() {
       const cTitle = localStorage.getItem('melted_cloak_custom_title') || '';
       const cFavicon = localStorage.getItem('melted_cloak_custom_favicon') || '';
       if (cTitle) document.title = cTitle;
-      if (cFavicon) updateDocumentFavicon(cFavicon);
+      if (cFavicon) updateDocumentFavicon(cFavicon, 'custom');
       notifyParentMetadata(cTitle || document.title, cFavicon);
     } else {
       const preset = CLOAK_PRESETS.find((p) => p.id === saved) || CLOAK_PRESETS[0];
       document.title = preset.title;
-      updateDocumentFavicon(preset.favicon);
+      updateDocumentFavicon(preset.favicon, preset.id);
       notifyParentMetadata(preset.title, preset.favicon);
     }
   }, []);

@@ -120,6 +120,19 @@ export default {
       });
     }
 
-    return env.ASSETS.fetch(request);
+    const assetRes = await env.ASSETS.fetch(request);
+    if (assetRes.status === 101) return assetRes;
+    const assetHeaders = new Headers(assetRes.headers);
+    if (!assetHeaders.has('Access-Control-Allow-Origin')) {
+      assetHeaders.set('Access-Control-Allow-Origin', '*');
+    }
+    if (!assetHeaders.has('Cross-Origin-Resource-Policy')) {
+      assetHeaders.set('Cross-Origin-Resource-Policy', 'cross-origin');
+    }
+    return new Response(assetRes.body, {
+      status: assetRes.status,
+      statusText: assetRes.statusText,
+      headers: assetHeaders,
+    });
   },
 };

@@ -89,6 +89,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link id="dynamic-favicon" rel="icon" type="image/svg+xml" href="/assets/cloaks/frosthub.svg" />
     <link id="dynamic-shortcut-icon" rel="shortcut icon" type="image/svg+xml" href="/assets/cloaks/frosthub.svg" />
+    <link id="dynamic-ico-fallback" rel="alternate icon" type="image/x-icon" href="/favicon.ico" />
     <script>
       (function() {
         try {
@@ -111,19 +112,25 @@
 
           if (targetTitle) document.title = targetTitle;
           if (targetFavicon) {
-            var isSvg = targetFavicon.indexOf('.svg') !== -1 || targetFavicon.indexOf('image/svg+xml') !== -1;
-            var isPng = targetFavicon.indexOf('.png') !== -1 || targetFavicon.indexOf('image/png') !== -1;
-            var mime = isSvg ? 'image/svg+xml' : (isPng ? 'image/png' : 'image/x-icon');
+            var cleanFav = targetFavicon.split('?')[0].split('#')[0].toLowerCase();
+            var isSvg = cleanFav.endsWith('.svg') || targetFavicon.indexOf('data:image/svg+xml') === 0;
+            var isPng = cleanFav.endsWith('.png') || targetFavicon.indexOf('data:image/png') === 0;
+            var isIco = cleanFav.endsWith('.ico') || targetFavicon.indexOf('data:image/x-icon') === 0;
+            var mime = isSvg ? 'image/svg+xml' : (isPng ? 'image/png' : (isIco ? 'image/x-icon' : ''));
 
             var link = document.getElementById('dynamic-favicon');
             if (link) {
-              link.type = mime;
+              if (mime) link.type = mime; else link.removeAttribute('type');
               link.href = targetFavicon;
             }
             var shortcut = document.getElementById('dynamic-shortcut-icon');
             if (shortcut) {
-              shortcut.type = mime;
+              if (mime) shortcut.type = mime; else shortcut.removeAttribute('type');
               shortcut.href = targetFavicon;
+            }
+            if (savedPreset !== 'default') {
+              var fallbackIco = document.getElementById('dynamic-ico-fallback');
+              if (fallbackIco && fallbackIco.parentNode) fallbackIco.parentNode.removeChild(fallbackIco);
             }
           }
         } catch(e) {}
@@ -143,7 +150,8 @@
 
         function sendTabMetadata() {
           var href = getFaviconHref();
-          if (href && !href.startsWith('data:') && !href.startsWith('blob:') && !href.startsWith('http')) {
+          if (!href) return;
+          if (!href.startsWith('data:') && !href.startsWith('blob:') && !href.startsWith('http')) {
             try {
               href = new URL(href, window.location.href).href;
             } catch (e) {}
