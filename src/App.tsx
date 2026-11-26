@@ -92,7 +92,7 @@ export default function App() {
   }, []);
 
   // Tab cloaking system
-  useCloak();
+  const cloak = useCloak();
 
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
@@ -782,6 +782,7 @@ export default function App() {
         onResetTheme={resetTheme}
         theme={theme}
         onToggleTheme={toggleTheme}
+        cloak={cloak}
       />
 
       </div>

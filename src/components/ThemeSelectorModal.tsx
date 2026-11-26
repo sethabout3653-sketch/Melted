@@ -15,7 +15,8 @@ import {
   Moon,
   Maximize2,
   Type,
-  Contrast
+  Contrast,
+  Globe
 } from 'lucide-react';
 import { 
   ThemeConfig, 
@@ -36,6 +37,7 @@ interface ThemeSelectorModalProps {
   onResetTheme: () => void;
   theme?: 'light' | 'dark';
   onToggleTheme?: () => void;
+  cloak?: any;
 }
 
 export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
@@ -46,8 +48,11 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
   onResetTheme,
   theme = 'dark',
   onToggleTheme,
+  cloak,
 }) => {
-  const [activeTab, setActiveTab] = useState<'accent' | 'radius' | 'background' | 'typography'>('accent');
+  const [activeTab, setActiveTab] = useState<'accent' | 'radius' | 'background' | 'typography' | 'tabSpoofing'>('accent');
+  const [customTitleInput, setCustomTitleInput] = useState('');
+  const [customFaviconInput, setCustomFaviconInput] = useState('');
   const [customHexInput, setCustomHexInput] = useState(config.accentColor);
   const [customBgHexInput, setCustomBgHexInput] = useState(config.bgSolidColor);
   const [customUrlInput, setCustomUrlInput] = useState(config.bgImageUrl);
@@ -199,6 +204,17 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
             >
               <Type className="w-4 h-4" />
               <span>Fonts</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('tabSpoofing')}
+              className={`px-3 sm:px-4 py-2.5 sm:py-3 text-xs font-bold whitespace-nowrap shrink-0 rounded-t-xl transition-all flex items-center gap-1.5 sm:gap-2 border-b-2 cursor-pointer ${
+                activeTab === 'tabSpoofing'
+                  ? 'border-cyan-500 text-cyan-500 dark:text-cyan-300 bg-white dark:bg-slate-900'
+                  : 'border-transparent text-slate-500 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <Globe className="w-4 h-4" />
+              <span>Tab Spoofing</span>
             </button>
           </div>
 
@@ -627,6 +643,97 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
             {activeTab === 'typography' && (
               <div className="space-y-6">
                 <FontSettingsSection />
+              </div>
+            )}
+
+            {/* TAB 5: TAB SPOOFING */}
+            {activeTab === 'tabSpoofing' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-sm font-extrabold text-slate-900 dark:text-white font-heading">
+                    Tab Spoofing Presets
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Disguise your browser tab title and favicon with high-quality authentic vector presets.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {cloak?.presets?.map((preset: any) => {
+                    const isActive = cloak.activePreset === preset.id;
+                    return (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => cloak.applyPreset(preset.id)}
+                        className={`flex items-center gap-3 p-3.5 rounded-2xl border transition-all text-left cursor-pointer group ${
+                          isActive
+                            ? 'border-cyan-500 bg-cyan-500/10 dark:bg-cyan-400/15 shadow-sm'
+                            : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 bg-white dark:bg-slate-900'
+                        }`}
+                      >
+                        <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 border border-slate-200/60 dark:border-slate-700/60 overflow-hidden">
+                          {preset.favicon.startsWith('data:image/svg+xml') ? (
+                            <img src={preset.favicon} alt="" className="w-5 h-5 object-contain" />
+                          ) : (
+                            <img src={preset.favicon} alt="" className="w-5 h-5 object-contain" onError={(e)=>{ (e.target as HTMLElement).style.display = 'none'; }} />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                            {preset.name}
+                          </p>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate font-mono">
+                            {preset.title}
+                          </p>
+                        </div>
+                        {isActive && (
+                          <div className="w-5 h-5 rounded-full bg-cyan-500 text-white flex items-center justify-center shrink-0">
+                            <Check className="w-3 h-3 stroke-[3]" />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Custom Tab Spoof Form */}
+                <div className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 space-y-3">
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-white">Custom Tab Spoofing</h4>
+                  <div className="space-y-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Custom Title</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. My Drive - Google Drive"
+                        value={customTitleInput}
+                        onChange={(e) => setCustomTitleInput(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-1">Custom Favicon URL or SVG Data URI</label>
+                      <input
+                        type="text"
+                        placeholder="https://... or data:image/svg+xml,..."
+                        value={customFaviconInput}
+                        onChange={(e) => setCustomFaviconInput(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs text-slate-900 dark:text-white focus:outline-none focus:border-cyan-500 font-mono"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (cloak && (customTitleInput || customFaviconInput)) {
+                          cloak.applyCustomCloak(customTitleInput, customFaviconInput);
+                        }
+                      }}
+                      className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-slate-800 dark:hover:bg-slate-700 text-white font-bold text-xs transition-colors cursor-pointer"
+                    >
+                      Apply Custom Tab Spoof
+                    </button>
+                  </div>
+                </div>
               </div>
             )}
           </div>
