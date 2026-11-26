@@ -15,49 +15,95 @@ export const CLOAK_PRESETS: CloakPreset[] = [
     id: 'default',
     name: 'FrostHub',
     title: 'FrostHub — Unblocked Games & Arcades',
-    favicon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='12' fill='%230f172a'/><text x='15' y='44' font-family='sans-serif' font-weight='900' font-size='28' fill='%23ffffff'>F</text><rect x='34' y='18' width='24' height='28' rx='6' fill='%230066FF'/><text x='46' y='40' font-family='sans-serif' font-weight='900' font-size='20' fill='%23ffffff' text-anchor='middle'>H</text></svg>",
+    favicon: '/assets/cloaks/frosthub.svg',
   },
   {
     id: 'google',
     name: 'Google',
     title: 'Google',
-    favicon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='%234285F4' d='M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.66-5.17 3.66-9.17z'/><path fill='%2334A853' d='M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.13 0-5.78-2.11-6.73-4.96H1.18v3.14C3.17 21.36 7.23 24 12 24z'/><path fill='%23FBBC05' d='M5.27 14.24c-.25-.72-.39-1.5-.39-2.24s.14-1.52.39-2.24V6.62H1.18C.43 8.13 0 9.82 0 12s.43 3.87 1.18 5.38l4.09-3.14z'/><path fill='%23EA4335' d='M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.23 0 3.17 2.64 1.18 6.62l4.09 3.14c.95-2.85 3.6-4.96 6.73-4.96z'/></svg>",
+    favicon: '/assets/cloaks/google.svg',
   },
   {
     id: 'classroom',
     name: 'Google Classroom',
     title: 'Home',
-    favicon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><path fill='%230f9d58' d='M448 32H64C28.65 32 0 60.65 0 96v320c0 35.35 28.65 64 64 64h384c35.35 0 64-28.65 64-64V96c0-35.35-28.65-64-64-64z'/><path fill='%23ffffff' d='M256 144c-44.18 0-80 35.82-80 80s35.82 80 80 80 80-35.82 80-80-35.82-80-80-80zm0 128c-26.47 0-48-21.53-48-48s21.53-48 48-48 48 21.53 48 48-21.53 48-48 48zm0 32c-53.02 0-160 26.51-160 79.5v32.5h320v-32.5c0-52.99-106.98-79.5-160-79.5zm128 79.5H128v-1.12c14.7-12.28 73.04-30.38 128-30.38s113.3 18.1 128 30.38v1.12z'/></svg>",
+    favicon: '/assets/cloaks/classroom.svg',
   },
   {
     id: 'drive',
     name: 'Google Drive',
     title: 'My Drive - Google Drive',
-    favicon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 87.3 78.2'><path fill='%230066da' d='M6.1 72.2l15.2-26.3h30.4l15.2 26.3H6.1z'/><path fill='%2300ac47' d='M43.7 4.7L21.3 43.7l15.2 26.3h30.4L58.9 43.7 43.7 4.7z'/><path fill='%23ea4335' d='M66.9 72.2L51.7 45.9 36.5 72.2h30.4z'/><path fill='%23fbbc05' d='M21.3 43.7L6.1 72.2h15.2l15.2-28.5-15.2z'/></svg>",
+    favicon: '/assets/cloaks/drive.svg',
   },
   {
     id: 'desmos',
     name: 'Desmos',
     title: 'Desmos | Graphing Calculator',
-    favicon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='96' fill='%230a3641'/><path fill='none' stroke='%23eb5757' stroke-width='48' stroke-linecap='round' stroke-linejoin='round' d='M96 256h80l64-128 64 256 64-128h80'/></svg>",
+    favicon: '/assets/cloaks/desmos.svg',
   },
   {
     id: 'canvas',
     name: 'Canvas',
     title: 'Dashboard',
-    favicon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><circle cx='256' cy='256' r='240' fill='%23e02424'/><path fill='%23ffffff' d='M256 112c-79.53 0-144 64.47-144 144s64.47 144 144 144 144-64.47 144-144-64.47-144-144-144zm0 240c-52.94 0-96-43.06-96-96s43.06-96 96-96 96 43.06 96 96-43.06 96-96 96z'/></svg>",
+    favicon: '/assets/cloaks/canvas.svg',
   },
   {
     id: 'clever',
     name: 'Clever',
     title: 'Clever | Portal',
-    favicon: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='112' fill='%232855D9'/><path fill='%23ffffff' d='M352 160H224c-52.94 0-96 43.06-96 96s43.06 96 96 96h128v-64H224c-17.67 0-32-14.33-32-32s14.33-32 32-32h128V160z'/></svg>",
+    favicon: '/assets/cloaks/clever.svg',
   },
 ];
 
 const CLOAK_STORAGE_KEY = 'melted_cloak_preset';
 const PANIC_KEY_STORAGE = 'melted_panic_key';
 const PANIC_URL_STORAGE = 'melted_panic_url';
+
+function resolveFullUrl(url: string): string {
+  if (!url) return '';
+  if (url.startsWith('data:') || url.startsWith('blob:') || url.startsWith('http://') || url.startsWith('https://')) {
+    return url;
+  }
+  try {
+    return new URL(url, window.location.href).href;
+  } catch {
+    return url;
+  }
+}
+
+function updateDocumentFavicon(faviconUrl: string) {
+  if (typeof document === 'undefined' || !faviconUrl) return;
+  const isSvg = faviconUrl.includes('.svg') || faviconUrl.includes('image/svg+xml');
+  const type = isSvg ? 'image/svg+xml' : 'image/png';
+
+  document.querySelectorAll("link[rel*='icon']").forEach((el) => el.remove());
+
+  const rels = ['icon', 'shortcut icon', 'apple-touch-icon'];
+  rels.forEach((rel) => {
+    const link = document.createElement('link');
+    link.rel = rel;
+    link.type = type;
+    link.href = faviconUrl;
+    document.head.appendChild(link);
+  });
+}
+
+function notifyParentMetadata(title: string, favicon: string) {
+  if (typeof window === 'undefined' || window.self === window.top) return;
+  try {
+    const fullFavicon = resolveFullUrl(favicon);
+    window.parent.postMessage(
+      {
+        type: 'TAB_METADATA_UPDATE',
+        title: title || document.title,
+        favicon: fullFavicon,
+      },
+      '*'
+    );
+  } catch (err) {
+    console.debug('Failed to send metadata to parent frame:', err);
+  }
+}
 
 export function useCloak() {
   const [activePreset, setActivePreset] = useState<string>(() => {
@@ -72,37 +118,28 @@ export function useCloak() {
     return localStorage.getItem(PANIC_URL_STORAGE) || 'https://classroom.google.com';
   });
 
-  // Apply tab cloak to document
+  // Apply tab cloak to document and notify parent frame
   const applyPreset = useCallback((presetId: string) => {
     const preset = CLOAK_PRESETS.find((p) => p.id === presetId) || CLOAK_PRESETS[0];
     document.title = preset.title;
-
-    let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
-    if (!link) {
-      link = document.createElement('link');
-      link.rel = 'icon';
-      document.head.appendChild(link);
-    }
-    link.href = preset.favicon;
+    updateDocumentFavicon(preset.favicon);
 
     setActivePreset(presetId);
     localStorage.setItem(CLOAK_STORAGE_KEY, presetId);
+
+    notifyParentMetadata(preset.title, preset.favicon);
   }, []);
 
   // Custom apply title & favicon
   const applyCustomCloak = useCallback((title: string, favicon: string) => {
     if (title) document.title = title;
     if (favicon) {
-      let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
-      if (!link) {
-        link = document.createElement('link');
-        link.rel = 'icon';
-        document.head.appendChild(link);
-      }
-      link.href = favicon;
+      updateDocumentFavicon(favicon);
     }
     setActivePreset('custom');
     localStorage.setItem(CLOAK_STORAGE_KEY, 'custom');
+
+    notifyParentMetadata(title || document.title, favicon);
   }, []);
 
   // Update panic key
@@ -138,22 +175,28 @@ export function useCloak() {
 
     const handleMessage = (event: MessageEvent) => {
       try {
-        if (event.data && event.data.type === 'TAB_METADATA_UPDATE') {
+        if (!event.data) return;
+
+        // Parent requests metadata update
+        if (event.data.type === 'REQUEST_TAB_METADATA') {
+          const currentPreset = CLOAK_PRESETS.find((p) => p.id === activePreset) || CLOAK_PRESETS[0];
+          const iconEl = document.querySelector("link[rel*='icon']") as HTMLLinkElement | null;
+          const currentFavicon = iconEl ? iconEl.href : currentPreset.favicon;
+          notifyParentMetadata(document.title, currentFavicon);
+          return;
+        }
+
+        // Child receives metadata from nested frame
+        if (event.data.type === 'TAB_METADATA_UPDATE') {
           const { title, favicon } = event.data;
           if (title && document.title !== title && activePreset !== 'default') {
             document.title = title;
           }
           if (favicon) {
-            let link = document.querySelector("link[rel~='icon']") as HTMLLinkElement | null;
-            if (!link) {
-              link = document.createElement('link');
-              link.rel = 'icon';
-              document.head.appendChild(link);
-            }
-            if (link.href !== favicon) {
-              link.href = favicon;
-            }
+            updateDocumentFavicon(favicon);
           }
+          // Propagate upward if embedded
+          notifyParentMetadata(title || document.title, favicon);
         }
       } catch {}
     };
@@ -166,13 +209,14 @@ export function useCloak() {
     };
   }, [panicKey, triggerPanic, activePreset]);
 
-  // Restore saved preset on mount
+  // Restore saved preset on mount and notify parent
   useEffect(() => {
-    const saved = localStorage.getItem(CLOAK_STORAGE_KEY);
-    if (saved && saved !== 'default') {
-      applyPreset(saved);
-    }
-  }, [applyPreset]);
+    const saved = localStorage.getItem(CLOAK_STORAGE_KEY) || 'default';
+    const preset = CLOAK_PRESETS.find((p) => p.id === saved) || CLOAK_PRESETS[0];
+    document.title = preset.title;
+    updateDocumentFavicon(preset.favicon);
+    notifyParentMetadata(preset.title, preset.favicon);
+  }, []);
 
   return {
     activePreset,
