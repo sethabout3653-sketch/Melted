@@ -21,37 +21,37 @@ export const CLOAK_PRESETS: CloakPreset[] = [
     id: 'google',
     name: 'Google',
     title: 'Google',
-    favicon: '/assets/cloaks/google.svg',
+    favicon: 'https://favicon.vemetric.com/google.com',
   },
   {
     id: 'classroom',
     name: 'Google Classroom',
-    title: 'Home',
-    favicon: '/assets/cloaks/classroom.svg',
+    title: 'Classes',
+    favicon: 'https://favicon.vemetric.com/classroom.google.com',
   },
   {
     id: 'drive',
     name: 'Google Drive',
     title: 'My Drive - Google Drive',
-    favicon: '/assets/cloaks/drive.svg',
+    favicon: 'https://favicon.vemetric.com/drive.google.com',
   },
   {
     id: 'desmos',
     name: 'Desmos',
     title: 'Desmos | Graphing Calculator',
-    favicon: '/assets/cloaks/desmos.svg',
+    favicon: 'https://favicon.vemetric.com/desmos.com',
   },
   {
     id: 'canvas',
     name: 'Canvas',
     title: 'Dashboard',
-    favicon: '/assets/cloaks/canvas.svg',
+    favicon: 'https://favicon.vemetric.com/canvas.instructure.com',
   },
   {
     id: 'clever',
     name: 'Clever',
     title: 'Clever | Portal',
-    favicon: '/assets/cloaks/clever.svg',
+    favicon: 'https://favicone.com/clever.com',
   },
 ];
 
@@ -71,21 +71,76 @@ function resolveFullUrl(url: string): string {
   }
 }
 
+function getFaviconMimeType(url: string): string {
+  if (url.includes('.svg') || url.includes('image/svg+xml')) return 'image/svg+xml';
+  if (url.includes('.png') || url.includes('image/png')) return 'image/png';
+  return 'image/x-icon';
+}
+
 function updateDocumentFavicon(faviconUrl: string) {
   if (typeof document === 'undefined' || !faviconUrl) return;
-  const isSvg = faviconUrl.includes('.svg') || faviconUrl.includes('image/svg+xml');
-  const type = isSvg ? 'image/svg+xml' : 'image/png';
 
-  document.querySelectorAll("link[rel*='icon']").forEach((el) => el.remove());
+  const mimeType = getFaviconMimeType(faviconUrl);
 
-  const rels = ['icon', 'shortcut icon', 'apple-touch-icon'];
-  rels.forEach((rel) => {
-    const link = document.createElement('link');
-    link.rel = rel;
-    link.type = type;
-    link.href = faviconUrl;
-    document.head.appendChild(link);
+  // Remove all existing icon tags
+  document.querySelectorAll("link[rel*='icon']").forEach((el) => {
+    el.parentNode?.removeChild(el);
   });
+
+  // Apply cache-buster for HTTP/HTTPS to force browser re-fetching
+  let targetHref = faviconUrl;
+  if (!faviconUrl.startsWith('data:') && !faviconUrl.startsWith('blob:')) {
+    const sep = faviconUrl.includes('?') ? '&' : '?';
+    targetHref = `${faviconUrl}${sep}_t=${Date.now()}`;
+  }
+
+  // Create fresh standard <link rel="icon">
+  const link = document.createElement('link');
+  link.id = 'dynamic-favicon';
+  link.rel = 'icon';
+  link.type = mimeType;
+  link.href = targetHref;
+  document.head.appendChild(link);
+
+  // Create shortcut icon for legacy/Chromium compatibility
+  const shortcut = document.createElement('link');
+  shortcut.id = 'dynamic-shortcut-icon';
+  shortcut.rel = 'shortcut icon';
+  shortcut.type = mimeType;
+  shortcut.href = targetHref;
+  document.head.appendChild(shortcut);
+
+  // For cross-origin icons (e.g. favicon.vemetric.com), also fetch as a base64 Data URI
+  // Data URIs bypass all browser HTTP caching and force immediate tab icon redraw
+  if (targetHref.startsWith('http://') || targetHref.startsWith('https://')) {
+    fetch(faviconUrl, { mode: 'cors' })
+      .then((res) => {
+        if (!res.ok) throw new Error('Favicon fetch failed');
+        return res.blob();
+      })
+      .then((blob) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const dataUrl = reader.result as string;
+          if (dataUrl) {
+            link.href = dataUrl;
+            shortcut.href = dataUrl;
+            notifyParentMetadata(document.title, dataUrl);
+          }
+        };
+        reader.readAsDataURL(blob);
+      })
+      .catch(() => {
+        // Fallback already assigned to targetHref
+      });
+  }
+
+  // Force Chrome/Chromium tab repaint by touching title
+  try {
+    const currentTitle = document.title;
+    document.title = currentTitle + ' ';
+    document.title = currentTitle;
+  } catch {}
 }
 
 function notifyParentMetadata(title: string, favicon: string) {
@@ -132,9 +187,13 @@ export function useCloak() {
 
   // Custom apply title & favicon
   const applyCustomCloak = useCallback((title: string, favicon: string) => {
-    if (title) document.title = title;
+    if (title) {
+      document.title = title;
+      localStorage.setItem('melted_cloak_custom_title', title);
+    }
     if (favicon) {
       updateDocumentFavicon(favicon);
+      localStorage.setItem('melted_cloak_custom_favicon', favicon);
     }
     setActivePreset('custom');
     localStorage.setItem(CLOAK_STORAGE_KEY, 'custom');
@@ -212,10 +271,18 @@ export function useCloak() {
   // Restore saved preset on mount and notify parent
   useEffect(() => {
     const saved = localStorage.getItem(CLOAK_STORAGE_KEY) || 'default';
-    const preset = CLOAK_PRESETS.find((p) => p.id === saved) || CLOAK_PRESETS[0];
-    document.title = preset.title;
-    updateDocumentFavicon(preset.favicon);
-    notifyParentMetadata(preset.title, preset.favicon);
+    if (saved === 'custom') {
+      const cTitle = localStorage.getItem('melted_cloak_custom_title') || '';
+      const cFavicon = localStorage.getItem('melted_cloak_custom_favicon') || '';
+      if (cTitle) document.title = cTitle;
+      if (cFavicon) updateDocumentFavicon(cFavicon);
+      notifyParentMetadata(cTitle || document.title, cFavicon);
+    } else {
+      const preset = CLOAK_PRESETS.find((p) => p.id === saved) || CLOAK_PRESETS[0];
+      document.title = preset.title;
+      updateDocumentFavicon(preset.favicon);
+      notifyParentMetadata(preset.title, preset.favicon);
+    }
   }, []);
 
   return {

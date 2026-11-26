@@ -252,11 +252,8 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                     />
                   </span>
                 </button>
-                {/* Interactive 360 Chromatic Color Wheel */}
+                {/* Interactive Color Wheel */}
                 <div>
-                  <label className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 block mb-3">
-                    360° Chromatic Color Wheel Palette
-                  </label>
                   <ColorWheelPicker
                     color={config.accentColor}
                     onChange={(hex) => {
@@ -673,11 +670,17 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
                         }`}
                       >
                         <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0 border border-slate-200/60 dark:border-slate-700/60 overflow-hidden">
-                          {preset.favicon.startsWith('data:image/svg+xml') ? (
-                            <img src={preset.favicon} alt="" className="w-5 h-5 object-contain" />
-                          ) : (
-                            <img src={preset.favicon} alt="" className="w-5 h-5 object-contain" onError={(e)=>{ (e.target as HTMLElement).style.display = 'none'; }} />
-                          )}
+                          <img
+                            src={preset.favicon}
+                            alt=""
+                            className="w-5 h-5 object-contain"
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              if (!target.src.includes('/assets/cloaks/')) {
+                                target.src = `/assets/cloaks/${preset.id}.svg`;
+                              }
+                            }}
+                          />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-bold text-slate-900 dark:text-white truncate">
@@ -742,15 +745,19 @@ export const ThemeSelectorModal: React.FC<ThemeSelectorModalProps> = ({
           <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0 bg-slate-50/50 dark:bg-slate-900/50">
             <button
               onClick={() => {
-                onResetTheme();
-                setCustomHexInput('#2563eb');
-                setCustomBgHexInput('#090d16');
-                setCustomUrlInput('');
+                if (activeTab === 'tabSpoofing') {
+                  cloak?.applyPreset('default');
+                } else {
+                  onResetTheme();
+                  setCustomHexInput('#2563eb');
+                  setCustomBgHexInput('#090d16');
+                  setCustomUrlInput('');
+                }
               }}
               className="px-4 py-2.5 rounded-xl text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white text-xs font-bold transition-colors flex items-center gap-2 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800"
             >
               <RotateCcw className="w-4 h-4" />
-              <span>Reset Defaults</span>
+              <span>{activeTab === 'tabSpoofing' ? 'Reset to FrostHub' : 'Reset Defaults'}</span>
             </button>
 
             <button

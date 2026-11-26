@@ -87,9 +87,48 @@
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Google+Sans:ital,opsz,wght@0,17..18,400..700;1,17..18,400..700&display=swap" rel="stylesheet">
     <link id="dynamic-favicon" rel="icon" type="image/svg+xml" href="/assets/cloaks/frosthub.svg" />
-    <link rel="shortcut icon" type="image/svg+xml" href="/assets/cloaks/frosthub.svg" />
+    <link id="dynamic-shortcut-icon" rel="shortcut icon" type="image/svg+xml" href="/assets/cloaks/frosthub.svg" />
+    <script>
+      (function() {
+        try {
+          var PRESETS = {
+            default: { title: 'FrostHub — Unblocked Games & Arcades', favicon: '/assets/cloaks/frosthub.svg' },
+            google: { title: 'Google', favicon: 'https://favicon.vemetric.com/google.com' },
+            classroom: { title: 'Classes', favicon: 'https://favicon.vemetric.com/classroom.google.com' },
+            drive: { title: 'My Drive - Google Drive', favicon: 'https://favicon.vemetric.com/drive.google.com' },
+            desmos: { title: 'Desmos | Graphing Calculator', favicon: 'https://favicon.vemetric.com/desmos.com' },
+            canvas: { title: 'Dashboard', favicon: 'https://favicon.vemetric.com/canvas.instructure.com' },
+            clever: { title: 'Clever | Portal', favicon: 'https://favicone.com/clever.com' }
+          };
+
+          var savedPreset = localStorage.getItem('melted_cloak_preset') || 'default';
+          var customTitle = localStorage.getItem('melted_cloak_custom_title');
+          var customFavicon = localStorage.getItem('melted_cloak_custom_favicon');
+
+          var targetTitle = (savedPreset === 'custom' && customTitle) ? customTitle : (PRESETS[savedPreset] ? PRESETS[savedPreset].title : PRESETS.default.title);
+          var targetFavicon = (savedPreset === 'custom' && customFavicon) ? customFavicon : (PRESETS[savedPreset] ? PRESETS[savedPreset].favicon : PRESETS.default.favicon);
+
+          if (targetTitle) document.title = targetTitle;
+          if (targetFavicon) {
+            var isSvg = targetFavicon.indexOf('.svg') !== -1 || targetFavicon.indexOf('image/svg+xml') !== -1;
+            var isPng = targetFavicon.indexOf('.png') !== -1 || targetFavicon.indexOf('image/png') !== -1;
+            var mime = isSvg ? 'image/svg+xml' : (isPng ? 'image/png' : 'image/x-icon');
+
+            var link = document.getElementById('dynamic-favicon');
+            if (link) {
+              link.type = mime;
+              link.href = targetFavicon;
+            }
+            var shortcut = document.getElementById('dynamic-shortcut-icon');
+            if (shortcut) {
+              shortcut.type = mime;
+              shortcut.href = targetFavicon;
+            }
+          }
+        } catch(e) {}
+      })();
+    </script>
     <script>
       (function () {
         if (window.self === window.top) return;

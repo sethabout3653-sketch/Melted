@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
-import { Sparkles, Check, RefreshCw } from 'lucide-react';
+import { Check } from 'lucide-react';
 
 interface ColorWheelPickerProps {
   color: string;
@@ -63,58 +63,34 @@ function hexToHsl(hex: string): { h: number; s: number; l: number } {
   };
 }
 
-export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onChange }) => {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-
-  // Deconstruct current HSL from color prop
-  const currentHsl = hexToHsl(color);
-  const [hue, setHue] = useState<number>(currentHsl.h);
-  const [saturation, setSaturation] = useState<number>(currentHsl.s);
-  const [lightness, setLightness] = useState<number>(currentHsl.l || 50);
-
-  // Sync state if color prop changes externally
-  useEffect(() => {
-    const parsed = hexToHsl(color);
-    setHue(parsed.h);
-    setSaturation(parsed.s);
-    setLightness(parsed.l);
-  }, [color]);
-
-  const wheelRadius = 110; // Canvas half size = 110px
-
-  // Draw 360 Degree Chromatic Wheel on Canvas
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const size = wheelRadius * 2;
-    canvas.width = size;
-    canvas.height = size;
-
+// Global offscreen pre-rendered canvas for instant 60fps drawing without pixel recomputation
+let cachedWheelCanvas: HTMLCanvasElement | null = null;
+function getCachedWheelCanvas(size: number, radius: number): HTMLCanvasElement {
+  if (cachedWheelCanvas && cachedWheelCanvas.width === size) {
+    return cachedWheelCanvas;
+  }
+  const offscreen = document.createElement('canvas');
+  offscreen.width = size;
+  offscreen.height = size;
+  const ctx = offscreen.getContext('2d');
+  if (ctx) {
     const imgData = ctx.createImageData(size, size);
     const data = imgData.data;
 
     for (let y = 0; y < size; y++) {
       for (let x = 0; x < size; x++) {
-        const dx = x - wheelRadius;
-        const dy = y - wheelRadius;
+        const dx = x - radius;
+        const dy = y - radius;
         const dist = Math.sqrt(dx * dx + dy * dy);
-
         const index = (y * size + x) * 4;
 
-        if (dist <= wheelRadius) {
-          // Angle in degrees 0-360 starting top
+        if (dist <= radius) {
           let angle = (Math.atan2(dy, dx) * 180) / Math.PI + 90;
           if (angle < 0) angle += 360;
 
-          const sat = (dist / wheelRadius) * 100; // 0% in center, 100% at border
-          const lit = 50; // standard 50% lightness wheel
+          const sat = (dist / radius) * 100;
+          const lit = 50;
 
-          // HSL to RGB conversion
           const sFrac = sat / 100;
           const lFrac = lit / 100;
           const c = (1 - Math.abs(2 * lFrac - 1)) * sFrac;
@@ -141,16 +117,80 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onCha
           data[index] = Math.round((r1 + m) * 255);
           data[index + 1] = Math.round((g1 + m) * 255);
           data[index + 2] = Math.round((b1 + m) * 255);
-          data[index + 3] = 255; // Alpha
+          data[index + 3] = 255;
         } else {
-          // Anti-aliased outer edge or transparent
           data[index + 3] = 0;
         }
       }
     }
-
     ctx.putImageData(imgData, 0, 0);
-  }, [wheelRadius]);
+  }
+  cachedWheelCanvas = offscreen;
+  return offscreen;
+}
+
+export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onChange }) => {
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const isDraggingRef = useRef(false);
+  const rafIdRef = useRef<number | null>(null);
+  const latestHexRef = useRef<string>(color);
+
+  // Deconstruct current HSL from color prop
+  const currentHsl = hexToHsl(color);
+  const [hue, setHue] = useState<number>(currentHsl.h);
+  const [saturation, setSaturation] = useState<number>(currentHsl.s);
+  const [lightness, setLightness] = useState<number>(currentHsl.l || 50);
+
+  // Only sync external color prop when not dragging
+  useEffect(() => {
+    if (!isDraggingRef.current) {
+      const parsed = hexToHsl(color);
+      setHue(parsed.h);
+      setSaturation(parsed.s);
+      setLightness(parsed.l);
+      latestHexRef.current = color;
+    }
+  }, [color]);
+
+  const wheelRadius = 110;
+  const size = wheelRadius * 2;
+
+  // Instant render from pre-rendered cached canvas
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    canvas.width = size;
+    canvas.height = size;
+    const offscreen = getCachedWheelCanvas(size, wheelRadius);
+    ctx.drawImage(offscreen, 0, 0);
+  }, [size, wheelRadius]);
+
+  // Clean up RAF on unmount
+  useEffect(() => {
+    return () => {
+      if (rafIdRef.current) {
+        cancelAnimationFrame(rafIdRef.current);
+      }
+    };
+  }, []);
+
+  // RAF-throttled color dispatch for ultra-smooth 60fps/120fps dragging without UI stutter
+  const dispatchColorChange = useCallback(
+    (newHex: string) => {
+      latestHexRef.current = newHex;
+      if (rafIdRef.current === null) {
+        rafIdRef.current = requestAnimationFrame(() => {
+          onChange(latestHexRef.current);
+          rafIdRef.current = null;
+        });
+      }
+    },
+    [onChange]
+  );
 
   // Handle color picking from canvas coordinates
   const handlePickColor = useCallback(
@@ -165,7 +205,6 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onCha
       const dy = clientY - centerY;
       const dist = Math.sqrt(dx * dx + dy * dy);
 
-      // Angle from 0 to 360 degrees starting top (0 = Red, 60 = Yellow, 120 = Green, 180 = Cyan, 240 = Blue, 300 = Magenta)
       let angle = (Math.atan2(dy, dx) * 180) / Math.PI + 90;
       if (angle < 0) angle += 360;
 
@@ -178,30 +217,37 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onCha
       setSaturation(sat);
 
       const newHex = hslToHex(h, sat, lightness);
-      onChange(newHex);
+      dispatchColorChange(newHex);
     },
-    [lightness, onChange]
+    [lightness, dispatchColorChange]
   );
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
-    e.currentTarget.setPointerCapture(e.pointerId);
-    setIsDragging(true);
+    isDraggingRef.current = true;
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
     handlePickColor(e.clientX, e.clientY);
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (isDragging) {
+    if (isDraggingRef.current) {
       handlePickColor(e.clientX, e.clientY);
     }
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (isDragging) {
-      setIsDragging(false);
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false;
       try {
         e.currentTarget.releasePointerCapture(e.pointerId);
       } catch {}
+      if (rafIdRef.current !== null) {
+        cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      onChange(latestHexRef.current);
     }
   };
 
@@ -209,7 +255,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onCha
   const handleLightnessChange = (newLightness: number) => {
     setLightness(newLightness);
     const newHex = hslToHex(hue, saturation, newLightness);
-    onChange(newHex);
+    dispatchColorChange(newHex);
   };
 
   // Calculate handle position on wheel circle
@@ -218,10 +264,12 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onCha
   const handleX = wheelRadius + handleDist * Math.cos(handleAngleRad);
   const handleY = wheelRadius + handleDist * Math.sin(handleAngleRad);
 
+  const currentColor = latestHexRef.current || color;
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row items-center gap-6 p-4 rounded-3xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800">
-        {/* Interactive 360 Color Wheel Container */}
+        {/* Interactive Color Wheel Container */}
         <div
           className="relative shrink-0 select-none cursor-crosshair group touch-none"
           ref={containerRef}
@@ -239,16 +287,16 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onCha
           {/* Center Glow Indicator */}
           <div
             className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 rounded-md blur-md pointer-events-none transition-colors"
-            style={{ backgroundColor: color }}
+            style={{ backgroundColor: currentColor }}
           />
 
           {/* Interactive Handle Cursor */}
           <div
-            className="absolute w-6 h-6 -ml-3 -mt-3 rounded-md border-2 border-white shadow-lg pointer-events-none transition-transform flex items-center justify-center scale-110"
+            className="absolute w-6 h-6 -ml-3 -mt-3 rounded-md border-2 border-white shadow-lg pointer-events-none flex items-center justify-center scale-110"
             style={{
               left: `${handleX}px`,
               top: `${handleY}px`,
-              backgroundColor: color,
+              backgroundColor: currentColor,
             }}
           >
             <div className="w-1.5 h-1.5 rounded-sm bg-white shadow-sm" />
@@ -258,8 +306,8 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onCha
         {/* Color Info & Adjustments */}
         <div className="flex-1 w-full space-y-4">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-cyan-500 dark:text-cyan-300" /> 360° Chromatic Wheel
+            <span className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              Accent Color
             </span>
             <span className="px-2.5 py-1 rounded-lg bg-slate-200 dark:bg-slate-800 text-[11px] font-mono font-bold text-slate-700 dark:text-slate-300">
               {hue}° Hue
@@ -270,7 +318,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onCha
           <div className="flex items-center gap-3 p-3 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm">
             <div
               className="w-10 h-10 rounded-xl shrink-0 shadow-md border border-white/20 flex items-center justify-center text-white"
-              style={{ backgroundColor: color }}
+              style={{ backgroundColor: currentColor }}
             >
               <Check className="w-5 h-5 stroke-[3]" />
             </div>
@@ -278,7 +326,7 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onCha
               <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider block">Hex Code</span>
               <input
                 type="text"
-                value={color.toUpperCase()}
+                value={currentColor.toUpperCase()}
                 onChange={(e) => {
                   const val = e.target.value;
                   if (/^#[0-9A-F]{6}$/i.test(val)) {
@@ -330,22 +378,22 @@ export const ColorWheelPicker: React.FC<ColorWheelPickerProps> = ({ color, onCha
               <button
                 type="button"
                 className="px-3 py-1.5 text-xs font-black text-white rounded-xl shadow-md transition-all font-heading"
-                style={{ backgroundColor: color }}
+                style={{ backgroundColor: currentColor }}
               >
                 Primary Button
               </button>
               <span
                 className="px-2.5 py-1 text-[11px] font-bold rounded-lg border shadow-xs flex items-center gap-1.5"
                 style={{
-                  borderColor: `${color}40`,
-                  backgroundColor: `${color}15`,
-                  color: color,
+                  borderColor: `${currentColor}40`,
+                  backgroundColor: `${currentColor}15`,
+                  color: currentColor,
                 }}
               >
-                <span className="w-1.5 h-1.5 rounded-xs inline-block" style={{ backgroundColor: color }} />
+                <span className="w-1.5 h-1.5 rounded-xs inline-block" style={{ backgroundColor: currentColor }} />
                 Active Pill
               </span>
-              <div className="w-5 h-5 rounded-md border-2" style={{ borderColor: color }} />
+              <div className="w-5 h-5 rounded-md border-2" style={{ borderColor: currentColor }} />
             </div>
           </div>
         </div>
