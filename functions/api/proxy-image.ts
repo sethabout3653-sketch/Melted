@@ -36,6 +36,7 @@ export async function onRequest(context: { request: Request }): Promise<Response
       headers: {
         'Content-Type': upstream.headers.get('content-type') || 'image/png',
         'Access-Control-Allow-Origin': '*',
+        'Cross-Origin-Resource-Policy': 'cross-origin',
         'Cache-Control': 'public, max-age=86400',
       },
     });
