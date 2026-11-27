@@ -9,7 +9,6 @@ import { onRequest as proxyStream } from '../functions/api/proxy-stream';
 import { onRequest as proxyImage } from '../functions/api/proxy-image';
 import { onRequest as epgNowNext } from '../functions/api/epg/now-next';
 import { onRequest as aiModels } from '../functions/api/ai/models';
-import { onRequest as aiGenerateVideo } from '../functions/api/ai/generate-video';
 import { onRequest as aiAssistantVision } from '../functions/api/ai/assistant/vision';
 import { onRequest as aiAssistant } from '../functions/api/ai/assistant';
 import { onRequest as aiAssistantStream } from '../functions/api/ai/assistant/stream';
@@ -65,8 +64,8 @@ const routes: Array<{ pattern: RegExp; handler: Handler }> = [
   { pattern: /^\/api\/webrtc\/ice-servers\/?$/, handler: ({ request, env }) => webrtcIceServers({ request, env }) },
   { pattern: /^\/api\/epg\/now-next\/?$/, handler: epgNowNext },
   { pattern: /^\/api\/ai\/models\/?$/, handler: ({ request, env }) => aiModels({ request, env }) },
-  { pattern: /^\/api\/ai\/generate-video\/?$/, handler: ({ request, env }) => aiGenerateVideo({ request, env }) },
   { pattern: /^\/api\/ai\/assistant\/vision\/?$/, handler: ({ request, env }) => aiAssistantVision({ request, env }) },
+  { pattern: /^\/api\/ai\/assistant\/file\/?$/, handler: ({ request, env }) => aiAssistantVision({ request, env }) },
   { pattern: /^\/api\/ai\/assistant\/stream\/?$/, handler: ({ request, env }) => aiAssistantStream({ request, env }) },
   { pattern: /^\/api\/ai\/assistant\/?$/, handler: ({ request, env }) => aiAssistant({ request, env }) },
 ];

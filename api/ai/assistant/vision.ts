@@ -1,43 +1,63 @@
-import { Buffer } from 'node:buffer';
-import { generateText } from 'ai';
+import {
+  extractOpenRouterKey,
+  runOpenRouterFileAnalysis,
+  type OpenRouterFilePayload,
+} from '../../../src/utils/openRouterEdgeHelper';
 
 export const config = {
   maxDuration: 60,
-  api: { bodyParser: { sizeLimit: '15mb' } },
+  api: { bodyParser: { sizeLimit: '50mb' } },
 };
 
 export default async function handler(req: any, res: any) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
-    const imageDataUrl = typeof req.body?.imageDataUrl === 'string' ? req.body.imageDataUrl : '';
-    const match = imageDataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/i);
-    if (!match) return res.status(400).json({ error: 'Attach a valid PNG, JPEG, or WebP image.' });
+    const body = (req.body || {}) as OpenRouterFilePayload & { openRouterApiKey?: string };
 
-    const image = Buffer.from(match[2], 'base64');
-    if (!image.length || image.length > 10 * 1024 * 1024) {
-      return res.status(413).json({ error: 'Images must be 10 MB or smaller.' });
+    const hasFileContent = Boolean(
+      body.imageDataUrl ||
+        (Array.isArray(body.previewImageUrls) && body.previewImageUrls.length > 0) ||
+        body.fileDataUrl ||
+        body.extractedText ||
+        body.binarySummary ||
+        body.fileName
+    );
+
+    if (!hasFileContent && !body.prompt?.trim()) {
+      return res.status(400).json({ error: 'Attach a file or provide a prompt to analyze.' });
     }
 
-    const { text } = await generateText({
-      model: 'google/gemini-3.8-flash',
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', image, mediaType: match[1].toLowerCase() },
-          { type: 'text', text: prompt || 'Describe this image.' },
-        ],
-      }],
-      maxOutputTokens: 1000,
+    const openRouterKey = extractOpenRouterKey(
+      typeof process !== 'undefined' ? (process.env as Record<string, string | undefined>) : {},
+      body.openRouterApiKey
+    );
+
+    if (!openRouterKey) {
+      return res.status(503).json({
+        error: 'OpenRouter API Key is not configured on the server. Add OPENROUTER_API_KEY to your environment secrets.',
+      });
+    }
+
+    const result = await runOpenRouterFileAnalysis({
+      openRouterKey,
+      payload: body,
     });
 
-    const reply = text.trim();
-    if (!reply) return res.status(502).json({ error: 'The image model returned an empty response. Please try again.' });
+    if (!result.reply) {
+      return res.status(502).json({
+        error: result.errorDetail || 'OpenRouter could not analyze this file. Please try again.',
+      });
+    }
+
     res.setHeader('Cache-Control', 'no-store');
-    return res.status(200).json({ success: true, reply });
+    return res.status(200).json({ success: true, reply: result.reply, modelUsed: result.modelUsed });
   } catch (error: any) {
-    console.error('AI Image Analysis Error:', error?.message || error);
-    return res.status(500).json({ error: error?.message || 'Image analysis failed.' });
+    console.error('AI File Analysis Error:', error?.message || error);
+    return res.status(500).json({ error: error?.message || 'File analysis failed.' });
   }
 }

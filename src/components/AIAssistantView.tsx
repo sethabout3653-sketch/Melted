@@ -1,28 +1,30 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { 
-  Bot, 
-  Send, 
-  User, 
-  RefreshCw, 
-  BookOpen, 
-  Calculator, 
-  Globe, 
-  Lightbulb, 
-  Copy, 
-  Check, 
-  Cpu,
-  Search, 
-  Sparkles, 
+import {
+  Bot,
+  Send,
+  User,
+  RefreshCw,
+  BookOpen,
+  Calculator,
+  Globe,
+  Lightbulb,
+  Copy,
+  Check,
+  Search,
+  Sparkles,
   ExternalLink,
   ChevronRight,
   CheckCircle2,
-  Video,
+  Paperclip,
+  FileText,
   Film,
-  Play,
-  Download,
-  Clock,
-  ImagePlus,
-  X
+  Music,
+  FileArchive,
+  FileCode2,
+  File as FileIcon,
+  Image as ImageIcon,
+  Loader2,
+  X,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
@@ -31,7 +33,16 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { slideInVariants } from '../utils/animations';
 import { buildAISystemInstruction } from '../data/aiAssistantPrompt';
-import { OPENROUTER_CHAT_URL, OPENROUTER_MODEL } from '../utils/openRouterEdgeHelper';
+import {
+  OPENROUTER_CHAT_URL,
+  OPENROUTER_MODEL,
+  runOpenRouterFileAnalysis,
+} from '../utils/openRouterEdgeHelper';
+import {
+  prepareFileForOpenRouter,
+  type PreparedFileAttachment,
+  type UploadFileKind,
+} from '../utils/fileUploadInspector';
 
 export interface ThinkingStep {
   id: string;
@@ -48,6 +59,13 @@ export interface MessageSource {
   url: string;
 }
 
+export interface MessageAttachmentMeta {
+  fileName: string;
+  sizeFormatted: string;
+  kind: UploadFileKind;
+  previewUrl?: string;
+}
+
 export interface Message {
   id: string;
   sender: 'user' | 'ai';
@@ -55,21 +73,12 @@ export interface Message {
   timestamp: string;
   sources?: MessageSource[];
   steps?: ThinkingStep[];
-  videoUrl?: string;
   imageUrl?: string;
+  attachment?: MessageAttachmentMeta;
 }
 
 interface PromptOptions {
-  videoMode: 'chat' | 'text-to-video' | 'image-to-video';
-  model: 'google/veo-3.1-generate-001' | 'spacexai/grok-imagine-video-1.5';
-  durationSeconds: number;
-  imageDataUrl?: string;
-  imageUrl?: string;
-}
-
-function isVideoGenerationPrompt(text: string): boolean {
-  return /\b(generate|make|create|render|animate)\b[\s\S]{0,100}\b(video|clip|animation)\b/i.test(text) ||
-    /\b(video|clip|animation)\b[\s\S]{0,50}\b(generate|make|create|render|animate)\b/i.test(text);
+  attachedFile?: PreparedFileAttachment;
 }
 
 const QUICK_PROMPTS = [
@@ -84,6 +93,25 @@ function preprocessLaTeX(text: string): string {
   return text
     .replace(/\\\[([\s\S]*?)\\\]/g, (_, equation) => `\n$$\n${equation.trim()}\n$$\n`)
     .replace(/\\\(([\s\S]*?)\\\)/g, (_, equation) => `$${equation.trim()}$`);
+}
+
+function getKindIcon(kind: UploadFileKind) {
+  switch (kind) {
+    case 'image':
+      return ImageIcon;
+    case 'video':
+      return Film;
+    case 'audio':
+      return Music;
+    case 'archive':
+      return FileArchive;
+    case 'text':
+      return FileCode2;
+    case 'pdf':
+      return FileText;
+    default:
+      return FileIcon;
+  }
 }
 
 interface AIMessageBubbleProps {
@@ -102,6 +130,9 @@ const AIMessageBubble: React.FC<AIMessageBubbleProps> = React.memo(({
   onCopy,
   onToggleStep,
 }) => {
+  const previewSrc = msg.attachment?.previewUrl || msg.imageUrl;
+  const KindIcon = msg.attachment ? getKindIcon(msg.attachment.kind) : FileIcon;
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -110,7 +141,7 @@ const AIMessageBubble: React.FC<AIMessageBubbleProps> = React.memo(({
       className={`flex gap-3 w-full ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
     >
       {msg.sender === 'ai' && (
-        <div 
+        <div
           style={{ backgroundColor: 'var(--brand-blue)' }}
           className="w-10 h-10 rounded-2xl text-white flex items-center justify-center shrink-0 shadow-lg glow-subtle-blue"
         >
@@ -118,7 +149,7 @@ const AIMessageBubble: React.FC<AIMessageBubbleProps> = React.memo(({
         </div>
       )}
 
-      <div 
+      <div
         style={msg.sender === 'user' ? { backgroundColor: 'var(--brand-blue)' } : {}}
         className={`group relative rounded-[2rem] p-6 text-[15px] leading-relaxed max-w-[85%] sm:max-w-[75%] ${
           msg.sender === 'user'
@@ -139,32 +170,19 @@ const AIMessageBubble: React.FC<AIMessageBubbleProps> = React.memo(({
           <div className="whitespace-pre-wrap font-[family-name:var(--app-font-family)]">{msg.text}</div>
         )}
 
-        {msg.sender === 'user' && msg.imageUrl && (
+        {msg.sender === 'user' && previewSrc && (
           <img
-            src={msg.imageUrl}
-            alt="Image attached to prompt"
+            src={previewSrc}
+            alt={msg.attachment?.fileName || 'Attached visual preview'}
             className="mt-3 max-h-64 max-w-full rounded-xl object-contain"
           />
         )}
 
-        {msg.videoUrl && (
-          <div className="mt-4 space-y-3">
-            <video
-              controls
-              playsInline
-              preload="metadata"
-              src={msg.videoUrl}
-              aria-label="AI-generated video"
-              className="w-full max-w-xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-black"
-            />
-            <a
-              href={msg.videoUrl}
-              download="generated-video.mp4"
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Download video
-            </a>
+        {msg.sender === 'user' && msg.attachment && (
+          <div className="mt-2.5 inline-flex items-center gap-2 rounded-xl bg-black/20 px-3 py-1.5 text-xs text-white/95 max-w-full">
+            <KindIcon className="w-3.5 h-3.5 shrink-0" />
+            <span className="truncate font-semibold">{msg.attachment.fileName}</span>
+            <span className="shrink-0 opacity-80">({msg.attachment.sizeFormatted})</span>
           </div>
         )}
 
@@ -257,145 +275,91 @@ interface AIInputBoxProps {
 
 const AIInputBox: React.FC<AIInputBoxProps> = React.memo(({ onSend, isLoading }) => {
   const [text, setText] = useState('');
-  const [videoMode, setVideoMode] = useState<PromptOptions['videoMode']>('chat');
-  const [model, setModel] = useState<PromptOptions['model']>('google/veo-3.1-generate-001');
-  const [durationSeconds, setDurationSeconds] = useState(8);
-  const [imageDataUrl, setImageDataUrl] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
+  const [attachedFile, setAttachedFile] = useState<PreparedFileAttachment | null>(null);
+  const [isPreparingFile, setIsPreparingFile] = useState(false);
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [attachmentError, setAttachmentError] = useState('');
-  const imageInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const changeVideoMode = (mode: PromptOptions['videoMode']) => {
-    setVideoMode(mode);
-    if (mode === 'image-to-video') {
-      setModel('spacexai/grok-imagine-video-1.5');
-      return;
-    }
-    if (mode === 'text-to-video' && model === 'spacexai/grok-imagine-video-1.5') {
-      setModel('google/veo-3.1-generate-001');
-      if (![4, 6, 8].includes(durationSeconds)) setDurationSeconds(8);
+  const processSelectedFile = async (file: File) => {
+    setAttachmentError('');
+    setIsPreparingFile(true);
+    try {
+      const prepared = await prepareFileForOpenRouter(file);
+      setAttachedFile(prepared);
+    } catch (err: any) {
+      setAttachmentError(err?.message || 'Could not inspect this file. Try another file.');
+      setAttachedFile(null);
+    } finally {
+      setIsPreparingFile(false);
     }
   };
 
-  const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setAttachmentError('Choose a PNG, JPEG, or WebP image.');
-      return;
-    }
-    if (file.size > 10 * 1024 * 1024) {
-      setAttachmentError('Images must be 10 MB or smaller.');
-      return;
-    }
+    void processSelectedFile(file);
+  };
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setImageDataUrl(typeof reader.result === 'string' ? reader.result : '');
-      setImageUrl('');
-      setAttachmentError('');
-    };
-    reader.onerror = () => setAttachmentError('This image could not be read. Try another file.');
-    reader.readAsDataURL(file);
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDraggingOver(false);
+    if (isLoading || isPreparingFile) return;
+    const file = event.dataTransfer.files?.[0];
+    if (file) {
+      void processSelectedFile(file);
+    }
   };
 
   const handleTriggerSend = () => {
-    if (isLoading) return;
+    if (isLoading || isPreparingFile) return;
     const trimmedText = text.trim();
-    if (videoMode !== 'chat' && !trimmedText) return;
-    if (!trimmedText && !imageDataUrl) return;
-    if (videoMode === 'image-to-video' && !imageDataUrl && !imageUrl.trim()) return;
+    if (!trimmedText && !attachedFile) return;
 
-    onSend(trimmedText || 'Describe this image.', {
-      videoMode,
-      model,
-      durationSeconds,
-      imageDataUrl: imageDataUrl || undefined,
-      imageUrl: imageUrl.trim() || undefined,
+    const fallbackPrompt = attachedFile
+      ? attachedFile.kind === 'image'
+        ? 'Describe and analyze this image.'
+        : attachedFile.kind === 'video'
+        ? `Analyze this video (${attachedFile.fileName}).`
+        : `Inspect and explain this file (${attachedFile.fileName}).`
+      : '';
+
+    onSend(trimmedText || fallbackPrompt, {
+      attachedFile: attachedFile || undefined,
     });
     setText('');
-    setImageDataUrl('');
-    setImageUrl('');
+    setAttachedFile(null);
     setAttachmentError('');
   };
 
-  const modeButtonClass = (active: boolean) =>
-    `rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${active
-      ? 'bg-[var(--brand-blue)] text-white shadow-sm'
-      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`;
-  const canSend = Boolean(text.trim() || imageDataUrl) && !isLoading &&
-    (videoMode !== 'image-to-video' || Boolean(imageDataUrl || imageUrl.trim()));
+  const canSend = Boolean(text.trim() || attachedFile) && !isLoading && !isPreparingFile;
+  const PreviewKindIcon = attachedFile ? getKindIcon(attachedFile.kind) : FileIcon;
+  const previewThumb = attachedFile?.previewImageUrls?.[0];
 
   return (
-    <div className="w-full shrink-0 space-y-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/50 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
-      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Choose assistant mode">
-        <button type="button" aria-pressed={videoMode === 'chat'} onClick={() => changeVideoMode('chat')} className={modeButtonClass(videoMode === 'chat')}>
-          Chat
-        </button>
-        <button type="button" aria-pressed={videoMode === 'text-to-video'} onClick={() => changeVideoMode('text-to-video')} className={modeButtonClass(videoMode === 'text-to-video')}>
-          Text to video
-        </button>
-        <button type="button" aria-pressed={videoMode === 'image-to-video'} onClick={() => changeVideoMode('image-to-video')} className={modeButtonClass(videoMode === 'image-to-video')}>
-          Image to video
-        </button>
-        {videoMode !== 'chat' && <span className="ml-auto text-[11px] text-slate-500 dark:text-slate-400">Generation uses provider credits; not guaranteed free</span>}
-      </div>
-
-      {videoMode !== 'chat' && (
-        <div className="flex flex-col gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/60 sm:flex-row sm:items-center sm:gap-4">
-          <label className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
-            <span className="shrink-0">Model</span>
-            <select
-              value={model}
-              onChange={(event) => {
-                const nextModel = event.target.value as PromptOptions['model'];
-                setModel(nextModel);
-                if (nextModel === 'google/veo-3.1-generate-001' && ![4, 6, 8].includes(durationSeconds)) setDurationSeconds(8);
-                if (nextModel === 'spacexai/grok-imagine-video-1.5' && durationSeconds < 2) setDurationSeconds(2);
-              }}
-              aria-label="Video generation model"
-              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-            >
-              <option value="google/veo-3.1-generate-001" disabled={videoMode === 'image-to-video'}>Veo 3.1 · text-to-video</option>
-              <option value="spacexai/grok-imagine-video-1.5">Grok Imagine 1.5 · text/image</option>
-            </select>
-          </label>
-          <label className="flex min-w-0 flex-1 items-center gap-3 text-xs font-semibold text-slate-700 dark:text-slate-200">
-            <span className="shrink-0">Duration</span>
-            <input
-              type="range"
-              min={model === 'google/veo-3.1-generate-001' ? 4 : 2}
-              max={model === 'google/veo-3.1-generate-001' ? 8 : 10}
-              step="2"
-              value={durationSeconds}
-              onChange={(event) => setDurationSeconds(Number(event.target.value))}
-              aria-label="Video duration in seconds"
-              className="min-w-0 flex-1 accent-[var(--brand-blue)]"
-            />
-            <output className="w-10 text-right tabular-nums">{durationSeconds}s</output>
-          </label>
-          {videoMode === 'image-to-video' && (
-            <label className="min-w-0 flex-1 text-xs text-slate-600 dark:text-slate-300">
-              <span className="sr-only">Image URL</span>
-              <input
-                type="url"
-                value={imageUrl}
-                onChange={(event) => {
-                  setImageUrl(event.target.value);
-                  if (event.target.value) setImageDataUrl('');
-                }}
-                placeholder="Or paste an image URL (https://...)"
-                aria-label="Image URL for video generation"
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-              />
-            </label>
-          )}
-        </div>
-      )}
-
+    <div
+      onDragOver={(e) => {
+        e.preventDefault();
+        setIsDraggingOver(true);
+      }}
+      onDragLeave={() => setIsDraggingOver(false)}
+      onDrop={handleDrop}
+      className={`w-full shrink-0 space-y-2 rounded-2xl border p-2 shadow-xl shadow-slate-200/50 transition-colors dark:bg-slate-900 dark:shadow-none bg-white ${
+        isDraggingOver
+          ? 'border-[var(--brand-blue)] ring-2 ring-[var(--brand-blue)]/25'
+          : 'border-slate-200 dark:border-slate-800'
+      }`}
+    >
       <div className="flex items-center gap-2">
-        <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={handleImageSelect} className="sr-only" aria-label="Choose an image to attach" />
+        <input
+          ref={fileInputRef}
+          type="file"
+          onChange={handleFileSelect}
+          className="sr-only"
+          aria-label="Choose any file to attach"
+        />
         <textarea
           rows={1}
           value={text}
@@ -406,18 +370,18 @@ const AIInputBox: React.FC<AIInputBoxProps> = React.memo(({ onSend, isLoading })
               handleTriggerSend();
             }
           }}
-          placeholder={videoMode === 'chat' ? 'Ask anything or describe a video to generate...' : videoMode === 'image-to-video' ? 'Describe how this image should move...' : 'Describe the video you want to create...'}
+          placeholder="Ask anything or drop any file..."
           className="min-w-0 flex-1 resize-none bg-transparent px-3 py-3 text-base text-slate-900 placeholder-slate-400 focus:outline-none dark:text-white md:text-sm"
         />
         <button
           type="button"
-          onClick={() => imageInputRef.current?.click()}
-          disabled={isLoading}
-          aria-label={imageDataUrl ? 'Replace attached image' : 'Attach an image'}
-          className="flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-800"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isLoading || isPreparingFile}
+          aria-label={attachedFile ? 'Replace attached file' : 'Attach any file'}
+          className="flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-100 disabled:opacity-50 dark:text-slate-300 dark:hover:bg-slate-800 cursor-pointer"
         >
-          <ImagePlus className="h-4 w-4" />
-          <span className="hidden sm:inline">Image</span>
+          {isPreparingFile ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+          <span className="hidden sm:inline">{isPreparingFile ? 'Reading...' : 'File'}</span>
         </button>
         <motion.button
           type="button"
@@ -433,15 +397,52 @@ const AIInputBox: React.FC<AIInputBoxProps> = React.memo(({ onSend, isLoading })
         </motion.button>
       </div>
 
-      {(imageDataUrl || attachmentError) && (
+      {(isPreparingFile || attachedFile || attachmentError) && (
         <div className="flex items-center gap-3 px-2 pb-1">
-          {imageDataUrl && <img src={imageDataUrl} alt="Selected image attachment" className="h-12 w-12 rounded-lg object-cover" />}
-          {attachmentError && <p role="alert" className="text-xs text-rose-600 dark:text-rose-400">{attachmentError}</p>}
-          {imageDataUrl && <span className="min-w-0 flex-1 truncate text-xs text-slate-500">Image attached{videoMode === 'chat' ? ' · available to chat' : ''}</span>}
-          {imageDataUrl && (
-            <button type="button" onClick={() => setImageDataUrl('')} aria-label="Remove attached image" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
-              <X className="h-4 w-4" />
-            </button>
+          {isPreparingFile && (
+            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <Loader2 className="h-4 w-4 animate-spin text-[var(--brand-blue)]" />
+              <span>Inspecting file for OpenRouter...</span>
+            </div>
+          )}
+          {!isPreparingFile && attachedFile && (
+            <>
+              {previewThumb ? (
+                <img
+                  src={previewThumb}
+                  alt={attachedFile.fileName}
+                  className="h-12 w-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700"
+                />
+              ) : (
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  <PreviewKindIcon className="h-5 w-5" />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  {attachedFile.fileName}
+                </div>
+                <div className="truncate text-[11px] text-slate-500 dark:text-slate-400">
+                  {attachedFile.kind.toUpperCase()} • {attachedFile.sizeFormatted}
+                  {attachedFile.previewImageUrls.length > 1
+                    ? ` • ${attachedFile.previewImageUrls.length} frames`
+                    : ''}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAttachedFile(null)}
+                aria-label="Remove attached file"
+                className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </>
+          )}
+          {attachmentError && (
+            <p role="alert" className="text-xs text-rose-600 dark:text-rose-400">
+              {attachmentError}
+            </p>
           )}
         </div>
       )}
@@ -454,7 +455,7 @@ export const AIAssistantView: React.FC = () => {
     {
       id: 'welcome-1',
       sender: 'ai',
-      text: "What's on your mind? I can search the web and keep my answers short.",
+      text: "What's on your mind? I can search the web, inspect images, and analyze any uploaded file.",
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     },
   ]);
@@ -514,7 +515,7 @@ export const AIAssistantView: React.FC = () => {
       {
         id: 'welcome-1',
         sender: 'ai',
-        text: "What's on your mind? I can search the web and keep my answers short.",
+        text: "What's on your mind? I can search the web, inspect images, and analyze any uploaded file.",
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       },
     ]);
@@ -558,69 +559,137 @@ export const AIAssistantView: React.FC = () => {
       if (mErr?.name === 'AbortError' || signal?.aborted) return '';
     }
     if (signal?.aborted) return '';
-    throw new Error("API error. Please check your key.");
+    throw new Error('API error. Please check your key.');
   };
 
   const toggleStepExpansion = React.useCallback((msgId: string) => {
     setExpandedStepsMap((prev) => ({ ...prev, [msgId]: !prev[msgId] }));
   }, []);
 
-  const handleSend = async (promptText?: string, options: PromptOptions = { videoMode: 'chat', model: 'google/veo-3.1-generate-001', durationSeconds: 8 }) => {
+  const handleSend = async (promptText?: string, options: PromptOptions = {}) => {
     const textToSend = promptText?.trim();
     if (!textToSend || isLoading) return;
     if (abortControllerRef.current) abortControllerRef.current.abort();
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
     const currentRequestId = ++requestIdRef.current;
+
+    const attached = options.attachedFile;
     const userMsg: Message = {
       id: Date.now().toString(),
       sender: 'user',
       text: textToSend,
-      imageUrl: options.imageDataUrl,
+      imageUrl: attached?.previewImageUrls?.[0],
+      attachment: attached
+        ? {
+            fileName: attached.fileName,
+            sizeFormatted: attached.sizeFormatted,
+            kind: attached.kind,
+            previewUrl: attached.previewImageUrls?.[0],
+          }
+        : undefined,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
+
+    const history = messages
+      .filter((m) => m.id !== 'welcome-1')
+      .map((m) => ({
+        role: m.sender === 'user' ? 'user' : 'assistant',
+        text: m.text,
+      }));
+    const activeOpenRouterKey = getActiveOpenRouterKey();
+
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
     setActiveSteps([]);
 
-    const wantsVideo = options.videoMode !== 'chat' || isVideoGenerationPrompt(textToSend);
-    const useImageForVideo = options.videoMode === 'image-to-video' ||
-      (options.videoMode === 'chat' && isVideoGenerationPrompt(textToSend) && Boolean(options.imageDataUrl || options.imageUrl));
+    if (attached) {
+      setActiveSteps([
+        {
+          id: 'inspect-file',
+          title: `Inspecting ${attached.fileName}`,
+          detail: `Analyzing ${attached.sizeFormatted} ${attached.kind} via OpenRouter models...`,
+          icon: 'sparkles',
+          timestamp: Date.now(),
+        },
+      ]);
 
-    if (wantsVideo) {
       try {
-        const response = await fetch('/api/ai/generate-video', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: textToSend,
-            aspectRatio: '16:9',
-            model: useImageForVideo ? 'spacexai/grok-imagine-video-1.5' : options.model,
-            durationSeconds: options.durationSeconds,
-            imageDataUrl: useImageForVideo ? options.imageDataUrl : undefined,
-            imageUrl: useImageForVideo ? options.imageUrl : undefined,
-          }),
-          signal: abortController.signal,
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data.success || !data.videoUrl) {
-          throw new Error(data.error || 'Video generation failed. Please try again.');
+        const payload = {
+          prompt: textToSend,
+          fileName: attached.fileName,
+          mimeType: attached.mimeType,
+          sizeBytes: attached.sizeBytes,
+          sizeFormatted: attached.sizeFormatted,
+          kind: attached.kind,
+          previewImageUrls: attached.previewImageUrls,
+          fileDataUrl: attached.fileDataUrl,
+          extractedText: attached.extractedText,
+          binarySummary: attached.binarySummary,
+          history,
+          openRouterApiKey: activeOpenRouterKey,
+          model: OPENROUTER_MODEL,
+        };
+
+        let replyText = '';
+        let backendError = '';
+
+        try {
+          const response = await fetch('/api/ai/assistant/vision', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: abortController.signal,
+          });
+          const data = await response.json().catch(() => ({}));
+          if (response.ok && data?.success && data?.reply) {
+            replyText = String(data.reply);
+          } else if (data?.error) {
+            backendError = String(data.error);
+          }
+        } catch (err: any) {
+          if (err?.name === 'AbortError' || abortController.signal.aborted) return;
+          backendError = err?.message || 'File analysis request failed.';
         }
-        setMessages((prev) => [...prev, {
-          id: (Date.now() + 1).toString(),
-          sender: 'ai',
-          text: 'Your video is ready.',
-          videoUrl: data.videoUrl,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        }]);
-      } catch (error: any) {
-        if (error?.name !== 'AbortError' && currentRequestId === requestIdRef.current) {
-          setMessages((prev) => [...prev, {
+
+        if (!replyText && activeOpenRouterKey && !abortController.signal.aborted) {
+          const directResult = await runOpenRouterFileAnalysis({
+            openRouterKey: activeOpenRouterKey,
+            payload,
+          });
+          if (directResult.reply) {
+            replyText = directResult.reply;
+          } else if (directResult.errorDetail) {
+            backendError = directResult.errorDetail;
+          }
+        }
+
+        if (abortController.signal.aborted || currentRequestId !== requestIdRef.current) return;
+
+        if (!replyText) {
+          throw new Error(backendError || 'OpenRouter could not analyze this file. Please try again.');
+        }
+
+        setMessages((prev) => [
+          ...prev,
+          {
             id: (Date.now() + 1).toString(),
             sender: 'ai',
-            text: error?.message || 'Video generation failed. Please try again.',
+            text: replyText,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          }]);
+          },
+        ]);
+      } catch (error: any) {
+        if (error?.name !== 'AbortError' && currentRequestId === requestIdRef.current) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: (Date.now() + 1).toString(),
+              sender: 'ai',
+              text: error?.message || 'File analysis failed. Please try again.',
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            },
+          ]);
         }
       } finally {
         if (currentRequestId === requestIdRef.current) {
@@ -631,47 +700,6 @@ export const AIAssistantView: React.FC = () => {
       return;
     }
 
-    if (options.imageDataUrl) {
-      try {
-        const response = await fetch('/api/ai/assistant/vision', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: textToSend, imageDataUrl: options.imageDataUrl }),
-          signal: abortController.signal,
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data.success || !data.reply) {
-          throw new Error(data.error || 'I could not analyze that image. Please try again.');
-        }
-        setMessages((prev) => [...prev, {
-          id: (Date.now() + 1).toString(),
-          sender: 'ai',
-          text: data.reply,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        }]);
-      } catch (error: any) {
-        if (error?.name !== 'AbortError' && currentRequestId === requestIdRef.current) {
-          setMessages((prev) => [...prev, {
-            id: (Date.now() + 1).toString(),
-            sender: 'ai',
-            text: error?.message || 'Image analysis failed. Please try again.',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          }]);
-        }
-      } finally {
-        if (currentRequestId === requestIdRef.current) {
-          setIsLoading(false);
-          setActiveSteps([]);
-        }
-      }
-      return;
-    }
-
-    const history = messages.filter((m) => m.id !== 'welcome-1').map((m) => ({
-      role: m.sender === 'user' ? 'user' : 'assistant',
-      text: m.text,
-    }));
-    const activeOpenRouterKey = getActiveOpenRouterKey();
     let replyText = '';
     let serverError = '';
     let messageSources: MessageSource[] = [];
@@ -686,7 +714,7 @@ export const AIAssistantView: React.FC = () => {
           openRouterApiKey: activeOpenRouterKey,
           model: OPENROUTER_MODEL,
           searchMode: 'auto',
-          }),
+        }),
         signal: abortController.signal,
       });
       if (abortController.signal.aborted || currentRequestId !== requestIdRef.current) return;
@@ -754,7 +782,7 @@ export const AIAssistantView: React.FC = () => {
             openRouterApiKey: activeOpenRouterKey,
             model: OPENROUTER_MODEL,
             searchMode: 'auto',
-            }),
+          }),
           signal: abortController.signal,
         });
         const standardCt = (standardRes.headers.get('content-type') || '').toLowerCase();
@@ -850,12 +878,12 @@ export const AIAssistantView: React.FC = () => {
         </AnimatePresence>
 
         {isLoading && (
-          <motion.div 
-            initial={{ opacity: 0, y: 8 }} 
-            animate={{ opacity: 1, y: 0 }} 
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
             className="flex gap-3 w-full will-change-transform"
           >
-            <div 
+            <div
               style={{ backgroundColor: 'var(--brand-blue)' }}
               className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl text-white flex items-center justify-center shrink-0 shadow-lg glow-subtle-blue"
             >
@@ -865,7 +893,7 @@ export const AIAssistantView: React.FC = () => {
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl rounded-tl-sm p-3.5 sm:p-4 shadow-md max-w-[90%] sm:max-w-[70%] space-y-3">
               {latestStep ? (
                 <div className="flex items-center gap-3">
-                  <div 
+                  <div
                     style={{ backgroundColor: 'color-mix(in srgb, var(--brand-blue) 15%, transparent)' }}
                     className="w-8 h-8 rounded-xl text-[var(--brand-blue)] flex items-center justify-center shrink-0"
                   >

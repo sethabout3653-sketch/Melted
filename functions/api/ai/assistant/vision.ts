@@ -1,4 +1,8 @@
-import { createGateway, generateText } from 'ai';
+import {
+  extractOpenRouterKey,
+  runOpenRouterFileAnalysis,
+  type OpenRouterFilePayload,
+} from '../../../../src/utils/openRouterEdgeHelper';
 
 interface CFContext {
   request: Request;
@@ -24,40 +28,45 @@ export async function onRequest(context: CFContext): Promise<Response> {
   if (request.method !== 'POST') return jsonResponse({ error: 'Method not allowed' }, 405);
 
   try {
-    const body = await request.json().catch(() => ({})) as Record<string, unknown>;
-    const prompt = typeof body.prompt === 'string' ? body.prompt.trim() : '';
-    const imageDataUrl = typeof body.imageDataUrl === 'string' ? body.imageDataUrl : '';
-    const match = imageDataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/i);
-    if (!match) return jsonResponse({ error: 'Attach a valid PNG, JPEG, or WebP image.' }, 400);
+    const body = (await request.json().catch(() => ({}))) as OpenRouterFilePayload & {
+      openRouterApiKey?: string;
+    };
 
-    const gatewayKey = env.AI_GATEWAY_API_KEY || env.VERCEL_AI_GATEWAY_API_KEY;
-    if (!gatewayKey) {
-      return jsonResponse({ error: 'Cloudflare is missing the AI_GATEWAY_API_KEY secret required for image chat.' }, 503);
+    const hasFileContent = Boolean(
+      body.imageDataUrl ||
+        (Array.isArray(body.previewImageUrls) && body.previewImageUrls.length > 0) ||
+        body.fileDataUrl ||
+        body.extractedText ||
+        body.binarySummary ||
+        body.fileName
+    );
+
+    if (!hasFileContent && !body.prompt?.trim()) {
+      return jsonResponse({ error: 'Attach a file or provide a prompt to analyze.' }, 400);
     }
 
-    const binary = atob(match[2]);
-    if (!binary.length || binary.length > 10 * 1024 * 1024) {
-      return jsonResponse({ error: 'Images must be 10 MB or smaller.' }, 413);
+    const openRouterKey = extractOpenRouterKey(env, body.openRouterApiKey);
+    if (!openRouterKey) {
+      return jsonResponse(
+        { error: 'OpenRouter API Key is not configured on Cloudflare. Add OPENROUTER_API_KEY in Cloudflare environment variables.' },
+        503
+      );
     }
-    const image = new Uint8Array(binary.length);
-    for (let index = 0; index < binary.length; index += 1) image[index] = binary.charCodeAt(index);
 
-    const gateway = createGateway({ apiKey: gatewayKey });
-    const { text } = await generateText({
-      model: gateway.languageModel('google/gemini-3.8-flash'),
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', image, mediaType: match[1].toLowerCase() },
-          { type: 'text', text: prompt || 'Describe this image.' },
-        ],
-      }],
-      maxOutputTokens: 1000,
+    const result = await runOpenRouterFileAnalysis({
+      openRouterKey,
+      payload: body,
     });
-    const reply = text.trim();
-    if (!reply) return jsonResponse({ error: 'The image model returned an empty response. Please try again.' }, 502);
-    return jsonResponse({ success: true, reply }, 200);
+
+    if (!result.reply) {
+      return jsonResponse(
+        { error: result.errorDetail || 'OpenRouter could not analyze this file. Please try again.' },
+        502
+      );
+    }
+
+    return jsonResponse({ success: true, reply: result.reply, modelUsed: result.modelUsed }, 200);
   } catch (error: any) {
-    return jsonResponse({ error: error?.message || 'Image analysis failed.' }, 500);
+    return jsonResponse({ error: error?.message || 'File analysis failed.' }, 500);
   }
 }

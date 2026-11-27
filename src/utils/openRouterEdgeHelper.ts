@@ -21,10 +21,11 @@ export interface AIThinkingStep {
 
 export const FALLBACK_OPENROUTER_MODELS = [
   { id: 'openrouter/free', owned_by: 'OpenRouter', context_window: 131072, description: 'OpenRouter Free Model (Default)' },
+  { id: 'google/gemma-4-31b-it:free', owned_by: 'Google', context_window: 131072, description: 'Gemma 4 31B Multimodal (Vision/Video)' },
+  { id: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', owned_by: 'NVIDIA', context_window: 131072, description: 'Nemotron Omni (Image/Audio/Video)' },
+  { id: 'nvidia/nemotron-3.5-super-vl:free', owned_by: 'NVIDIA', context_window: 131072, description: 'Nemotron 3.5 Super VL (Vision/Video)' },
   { id: 'deepseek/deepseek-chat', owned_by: 'DeepSeek', context_window: 64000, description: 'DeepSeek V3 Chat' },
-  { id: 'google/gemini-2.0-flash-exp:free', owned_by: 'Google', context_window: 1048576, description: 'Gemini 2.0 Flash Experimental' },
   { id: 'meta-llama/llama-3.3-70b-instruct:free', owned_by: 'Meta', context_window: 131072, description: 'Llama 3.3 70B Instruct' },
-  { id: 'mistralai/mistral-7b-instruct:free', owned_by: 'Mistral', context_window: 32768, description: 'Mistral 7B Instruct' },
 ];
 
 export function extractOpenRouterKey(env?: Record<string, any>, requestKey?: string): string {
@@ -221,8 +222,8 @@ export async function runOpenRouterAssistantEdge(params: {
   const modelsToTry = [
     targetModel,
     'openrouter/free',
+    'google/gemma-4-31b-it:free',
     'deepseek/deepseek-chat',
-    'google/gemini-2.0-flash-exp:free',
     'meta-llama/llama-3.3-70b-instruct:free',
   ].filter((m, idx, arr) => arr.indexOf(m) === idx);
 
@@ -277,3 +278,219 @@ export async function runOpenRouterAssistantEdge(params: {
     errorDetail: replyText ? undefined : lastError || 'OpenRouter API request failed or timed out.',
   };
 }
+
+export interface OpenRouterFilePayload {
+  prompt?: string;
+  fileName?: string;
+  mimeType?: string;
+  sizeBytes?: number;
+  sizeFormatted?: string;
+  kind?: string;
+  imageDataUrl?: string;
+  previewImageUrls?: string[];
+  fileDataUrl?: string;
+  extractedText?: string;
+  binarySummary?: string;
+  history?: Array<{ role?: string; text?: string }>;
+  model?: string;
+}
+
+export async function runOpenRouterFileAnalysis(params: {
+  openRouterKey: string;
+  payload: OpenRouterFilePayload;
+}): Promise<{ reply: string; modelUsed?: string; errorDetail?: string }> {
+  const { openRouterKey, payload } = params;
+  const prompt = (payload.prompt || '').trim();
+  const fileName = (payload.fileName || '').trim() || 'uploaded-file';
+  const mimeType = (payload.mimeType || '').trim().toLowerCase() || 'application/octet-stream';
+  const sizeLabel = payload.sizeFormatted || (payload.sizeBytes ? `${(payload.sizeBytes / (1024 * 1024)).toFixed(2)} MB` : 'unknown size');
+  const kind = payload.kind || (mimeType.startsWith('image/') ? 'image' : 'file');
+
+  const fileDataUrl = typeof payload.fileDataUrl === 'string' ? payload.fileDataUrl : '';
+  const previewImages = [
+    ...(Array.isArray(payload.previewImageUrls) ? payload.previewImageUrls : []),
+    ...(payload.imageDataUrl ? [payload.imageDataUrl] : []),
+    ...(fileDataUrl.startsWith('data:image/') ? [fileDataUrl] : []),
+  ]
+    .filter((u, idx, arr) => typeof u === 'string' && u.startsWith('data:image/') && arr.indexOf(u) === idx)
+    .slice(0, 6);
+
+  const isPdfDataUrl = fileDataUrl.startsWith('data:application/pdf');
+  const audioMatch = fileDataUrl.match(/^data:audio\/(mpeg|mp3|wav);base64,([A-Za-z0-9+/=]+)$/i);
+  const videoDataUrl = fileDataUrl.startsWith('data:video/') ? fileDataUrl : '';
+
+  const contextLines = [
+    `Uploaded File: "${fileName}"`,
+    `Kind: ${kind}`,
+    `MIME Type: ${mimeType}`,
+    `Size: ${sizeLabel}`,
+    payload.binarySummary ? `\nFile Metadata & Inspection:\n${payload.binarySummary}` : '',
+    payload.extractedText ? `\nExtracted File Content / Structure:\n${payload.extractedText.slice(0, 60000)}` : '',
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  const defaultQuestion =
+    kind === 'image'
+      ? 'Inspect and describe this image clearly and accurately.'
+      : kind === 'video'
+      ? 'Inspect these video frames and metadata, and explain what happens in this video.'
+      : `Analyze and explain this uploaded file ("${fileName}").`;
+
+  const textInstruction = `${contextLines}\n\nUser Question: ${prompt || defaultQuestion}`;
+
+  const priorMessages: Array<{ role: 'system' | 'user' | 'assistant'; content: any }> = [
+    {
+      role: 'system',
+      content: `${buildAISystemInstruction()} You are inspecting an uploaded file or image for the user. Answer directly and accurately based on the visual frames, file data, metadata, and extracted contents provided.`,
+    },
+  ];
+
+  if (Array.isArray(payload.history) && payload.history.length > 0) {
+    for (const msg of payload.history.slice(-8)) {
+      if (msg?.role && msg?.text) {
+        priorMessages.push({
+          role: msg.role === 'user' ? 'user' : 'assistant',
+          content: String(msg.text),
+        });
+      }
+    }
+  }
+
+  // Build multimodal content variants (native media first, then fallback to image keyframes / text inspection)
+  const buildUserContent = (includeNativeBinary: boolean): any => {
+    const parts: Array<Record<string, any>> = [];
+
+    if (includeNativeBinary && isPdfDataUrl) {
+      parts.push({
+        type: 'file',
+        file: {
+          filename: fileName,
+          file_data: fileDataUrl,
+        },
+      });
+    } else if (includeNativeBinary && audioMatch) {
+      parts.push({
+        type: 'input_audio',
+        input_audio: {
+          data: audioMatch[2],
+          format: audioMatch[1].toLowerCase() === 'wav' ? 'wav' : 'mp3',
+        },
+      });
+    } else if (includeNativeBinary && videoDataUrl && previewImages.length === 0) {
+      parts.push({
+        type: 'video_url',
+        video_url: { url: videoDataUrl },
+      });
+    }
+
+    for (const imgUrl of previewImages) {
+      parts.push({
+        type: 'image_url',
+        image_url: { url: imgUrl },
+      });
+    }
+
+    parts.push({
+      type: 'text',
+      text: textInstruction,
+    });
+
+    return parts.length === 1 ? textInstruction : parts;
+  };
+
+  const rawRequested = typeof payload.model === 'string' && payload.model.trim() ? payload.model.trim() : '';
+  const specificRequestedModel = rawRequested && rawRequested !== OPENROUTER_MODEL ? rawRequested : '';
+
+  const candidateAttempts: Array<{ model: string; nativeBinary: boolean; usePdfPlugin: boolean }> = [];
+  if (audioMatch) {
+    if (specificRequestedModel) candidateAttempts.push({ model: specificRequestedModel, nativeBinary: true, usePdfPlugin: false });
+    candidateAttempts.push({ model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', nativeBinary: true, usePdfPlugin: false });
+    candidateAttempts.push({ model: 'google/gemma-4-31b-it:free', nativeBinary: false, usePdfPlugin: false });
+    candidateAttempts.push({ model: 'openrouter/free', nativeBinary: false, usePdfPlugin: false });
+  } else if (isPdfDataUrl) {
+    if (specificRequestedModel) candidateAttempts.push({ model: specificRequestedModel, nativeBinary: true, usePdfPlugin: true });
+    candidateAttempts.push({ model: 'google/gemma-4-31b-it:free', nativeBinary: true, usePdfPlugin: true });
+    candidateAttempts.push({ model: 'openrouter/free', nativeBinary: true, usePdfPlugin: true });
+    candidateAttempts.push({ model: 'google/gemma-4-31b-it:free', nativeBinary: false, usePdfPlugin: false });
+    candidateAttempts.push({ model: 'openrouter/free', nativeBinary: false, usePdfPlugin: false });
+  } else if (previewImages.length > 0 || videoDataUrl) {
+    if (specificRequestedModel) candidateAttempts.push({ model: specificRequestedModel, nativeBinary: true, usePdfPlugin: false });
+    candidateAttempts.push({ model: 'google/gemma-4-31b-it:free', nativeBinary: false, usePdfPlugin: false });
+    candidateAttempts.push({ model: 'nvidia/nemotron-3.5-super-vl:free', nativeBinary: false, usePdfPlugin: false });
+    candidateAttempts.push({ model: 'google/gemma-4-26b-a4b-it:free', nativeBinary: false, usePdfPlugin: false });
+    candidateAttempts.push({ model: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free', nativeBinary: Boolean(videoDataUrl), usePdfPlugin: false });
+    candidateAttempts.push({ model: 'particle-ai/particle-1:free', nativeBinary: false, usePdfPlugin: false });
+    candidateAttempts.push({ model: 'openrouter/free', nativeBinary: false, usePdfPlugin: false });
+  } else {
+    if (specificRequestedModel) candidateAttempts.push({ model: specificRequestedModel, nativeBinary: false, usePdfPlugin: false });
+    candidateAttempts.push({ model: 'openrouter/free', nativeBinary: false, usePdfPlugin: false });
+    candidateAttempts.push({ model: 'google/gemma-4-31b-it:free', nativeBinary: false, usePdfPlugin: false });
+    candidateAttempts.push({ model: 'deepseek/deepseek-chat', nativeBinary: false, usePdfPlugin: false });
+    candidateAttempts.push({ model: 'meta-llama/llama-3.3-70b-instruct:free', nativeBinary: false, usePdfPlugin: false });
+  }
+
+  let lastError = '';
+  for (const attempt of candidateAttempts) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 22000);
+      const reqBody: Record<string, any> = {
+        model: attempt.model,
+        messages: [
+          ...priorMessages,
+          { role: 'user', content: buildUserContent(attempt.nativeBinary) },
+        ],
+        temperature: 0.25,
+        max_tokens: 1400,
+      };
+      if (attempt.usePdfPlugin) {
+        reqBody.plugins = [{ id: 'file-parser', pdf: { engine: 'pdf-text' } }];
+      }
+
+      const res = await fetch(OPENROUTER_CHAT_URL, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${openRouterKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://frosted.app',
+          'X-Title': 'FrostHub AI',
+        },
+        body: JSON.stringify(reqBody),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = (await res.json()) as any;
+        const content = data?.choices?.[0]?.message?.content;
+        const replyText =
+          typeof content === 'string'
+            ? content.trim()
+            : Array.isArray(content)
+            ? content
+                .map((part: any) => (typeof part?.text === 'string' ? part.text : ''))
+                .join('')
+                .trim()
+            : '';
+        if (replyText) {
+          return { reply: replyText, modelUsed: data?.model || attempt.model };
+        }
+      } else {
+        const errText = await res.text().catch(() => '');
+        lastError = `OpenRouter HTTP ${res.status}: ${errText.slice(0, 180)}`;
+        if (res.status === 401 || res.status === 403) {
+          break;
+        }
+      }
+    } catch (err: any) {
+      lastError = err?.message || 'OpenRouter request failed';
+    }
+  }
+
+  return {
+    reply: '',
+    errorDetail: lastError || 'OpenRouter could not analyze this file.',
+  };
+}
+

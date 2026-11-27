@@ -5,8 +5,6 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import http from 'http';
 import https from 'https';
-import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
 import tls from 'tls';
 import zlib from 'zlib';
 import { promisify } from 'util';
@@ -22,12 +20,16 @@ import {
   sanitizeSafeSearchSetCookie,
   sanitizeSafeSearchLocation,
 } from './src/utils/safeSearchOff';
-import { experimental_generateVideo as generateVideo, generateText } from 'ai';
 import { Ytdl, Client as YtdlClient } from '@distube/ytdl-core';
 import { processGameHtml, getScaffoldingBuffer } from './src/server/scaffoldingLoader';
-import { FALLBACK_OPENROUTER_MODELS, OPENROUTER_CHAT_URL, OPENROUTER_MODEL } from './src/utils/openRouterEdgeHelper';
+import {
+  FALLBACK_OPENROUTER_MODELS,
+  OPENROUTER_CHAT_URL,
+  OPENROUTER_MODEL,
+  runOpenRouterFileAnalysis,
+  type OpenRouterFilePayload,
+} from './src/utils/openRouterEdgeHelper';
 import { buildAISystemInstruction } from './src/data/aiAssistantPrompt';
-import { createGeminiClient } from './src/server/geminiService';
 import { initSethsrcEngine } from './src/server/sethsrcEngine';
 import {
   ESRB_ORIGIN,
@@ -1517,8 +1519,8 @@ app.post('/api/scramjet-fetch', express.raw({ type: '*/*', limit: '100mb' }), as
   }
 });
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ limit: '250mb' }));
+app.use(express.urlencoded({ limit: '250mb', extended: true }));
 
 // Global CORS middleware for published & preview apps
 app.use('/api', (req, res, next) => {
@@ -2723,143 +2725,50 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
   }
 });
 
-function isPublicImageHostAddress(address: string): boolean {
-  const version = isIP(address);
-  if (version === 4) {
-    const [a, b, c] = address.split('.').map(Number);
-    return !(a === 0 || a === 10 || a === 127 || a >= 224 ||
-      (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) ||
-      (a === 192 && b === 0 && c === 0) || (a === 198 && (b === 18 || b === 19)));
-  }
-  if (version !== 6) return false;
-  const normalized = address.toLowerCase();
-  return !normalized.startsWith('::ffff:') &&
-    !/^::$|^::1$|^fc|^fd|^fe[89ab]|^ff/i.test(normalized);
-}
-
-async function fetchPromptImage(imageUrl: string): Promise<{ mimeType: string; data: string }> {
-  let url: URL;
+// Analyze any attached image or file via OpenRouter models.
+const handleOpenRouterFileAnalysisRoute = async (req: express.Request, res: express.Response) => {
   try {
-    url = new URL(imageUrl);
-  } catch {
-    throw new Error('Enter a valid public HTTPS image URL.');
-  }
-  if (url.protocol !== 'https:' || url.username || url.password || url.port && url.port !== '443') {
-    throw new Error('Image URLs must use a public HTTPS address.');
-  }
+    const body = (req.body || {}) as OpenRouterFilePayload & { openRouterApiKey?: string };
+    const hasFileContent = Boolean(
+      body.imageDataUrl ||
+        (Array.isArray(body.previewImageUrls) && body.previewImageUrls.length > 0) ||
+        body.fileDataUrl ||
+        body.extractedText ||
+        body.binarySummary ||
+        body.fileName
+    );
 
-  const host = url.hostname.replace(/^\[|\]$/g, '');
-  const resolved = isIP(host) ? [{ address: host }] : await lookup(host, { all: true });
-  if (!resolved.length || resolved.some(({ address }) => !isPublicImageHostAddress(address))) {
-    throw new Error('That image URL does not point to a public address.');
-  }
-
-  const response = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(12_000) });
-  if (!response.ok) throw new Error(`Could not load the image URL (HTTP ${response.status}).`);
-  const mimeType = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
-  if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
-    throw new Error('The image URL must serve a PNG, JPEG, or WebP image.');
-  }
-  const contentLength = Number(response.headers.get('content-length') || 0);
-  if (contentLength > 10 * 1024 * 1024) throw new Error('Images must be 10 MB or smaller.');
-  const bytes = Buffer.from(await response.arrayBuffer());
-  if (!bytes.length || bytes.length > 10 * 1024 * 1024) throw new Error('Images must be 10 MB or smaller.');
-  return { mimeType, data: bytes.toString('base64') };
-}
-
-// Generate a video with Veo and return it inline so the assistant can render it.
-app.post('/api/ai/generate-video', async (req, res) => {
-  try {
-    const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
-    const aspectRatio = req.body?.aspectRatio === '9:16' ? '9:16' : '16:9';
-    const requestedDuration = Number(req.body?.durationSeconds);
-    const model = req.body?.model === 'spacexai/grok-imagine-video-1.5'
-      ? 'spacexai/grok-imagine-video-1.5'
-      : 'google/veo-3.1-generate-001';
-    let durationSeconds = Number.isInteger(requestedDuration) ? Math.min(10, Math.max(2, requestedDuration)) : 8;
-    if (model === 'google/veo-3.1-generate-001') {
-      durationSeconds = [4, 6, 8].includes(durationSeconds) ? durationSeconds : 8;
-    }
-    if (!prompt) {
-      return res.status(400).json({ error: 'Write a description of the video you want to generate.' });
+    if (!hasFileContent && !body.prompt?.trim()) {
+      return res.status(400).json({ error: 'Attach a file or provide a prompt to analyze.' });
     }
 
-    let sourceImage: { mimeType: string; data: string } | undefined;
-    if (typeof req.body?.imageDataUrl === 'string' && req.body.imageDataUrl) {
-      const match = req.body.imageDataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/i);
-      if (!match) return res.status(400).json({ error: 'Choose a valid PNG, JPEG, or WebP image.' });
-      const bytes = Buffer.from(match[2], 'base64');
-      if (!bytes.length || bytes.length > 10 * 1024 * 1024) return res.status(413).json({ error: 'Images must be 10 MB or smaller.' });
-      sourceImage = { mimeType: match[1].toLowerCase(), data: match[2] };
-    } else if (typeof req.body?.imageUrl === 'string' && req.body.imageUrl.trim()) {
-      sourceImage = await fetchPromptImage(req.body.imageUrl.trim());
+    const openRouterKey = readOpenRouterApiKey(body.openRouterApiKey);
+    if (!openRouterKey) {
+      return res.status(503).json({
+        error: 'OpenRouter API Key is not configured on the server. Add OPENROUTER_API_KEY to your server environment secrets.',
+      });
     }
 
-    if (sourceImage && model !== 'spacexai/grok-imagine-video-1.5') {
-      return res.status(400).json({ error: 'Choose Grok Imagine Video 1.5 for image-to-video generation.' });
-    }
-
-    const videoPrompt = sourceImage
-      ? { image: Buffer.from(sourceImage.data, 'base64'), text: prompt }
-      : prompt;
-    const { video } = await generateVideo({
-      model,
-      prompt: videoPrompt,
-      duration: durationSeconds,
-      aspectRatio: sourceImage ? 'adaptive' : aspectRatio,
-      ...(model === 'google/veo-3.1-generate-001' ? { resolution: '1280x720' } : {}),
-      poll: { intervalMs: 5_000, timeoutMs: 280_000 },
+    const result = await runOpenRouterFileAnalysis({
+      openRouterKey,
+      payload: body,
     });
 
-    const videoBase64 = video.base64 || Buffer.from(video.uint8Array).toString('base64');
-    const mimeType = video.mediaType || 'video/mp4';
-    return res.json({
-      success: true,
-      videoUrl: `data:${mimeType};base64,${videoBase64}`,
-      mimeType,
-      prompt,
-      duration: `${durationSeconds}s`,
-      aspectRatio,
-      model,
-    });
+    if (!result.reply) {
+      return res.status(502).json({
+        error: result.errorDetail || 'OpenRouter could not analyze this file. Please try again.',
+      });
+    }
+
+    return res.json({ success: true, reply: result.reply, modelUsed: result.modelUsed });
   } catch (err: any) {
-    console.error('AI Video Generation Error:', err);
-    return res.status(500).json({ error: err?.message || 'Failed to generate video' });
+    console.error('AI File Analysis Error:', err);
+    return res.status(500).json({ error: err?.message || 'File analysis failed.' });
   }
-});
+};
 
-// Analyze attached images for ordinary assistant prompts without switching to video mode.
-app.post('/api/ai/assistant/vision', async (req, res) => {
-  try {
-    const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
-    const imageDataUrl = typeof req.body?.imageDataUrl === 'string' ? req.body.imageDataUrl : '';
-    const match = imageDataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/i);
-    if (!match) return res.status(400).json({ error: 'Attach a valid PNG, JPEG, or WebP image.' });
-    const imageBytes = Buffer.from(match[2], 'base64');
-    if (!imageBytes.length || imageBytes.length > 10 * 1024 * 1024) {
-      return res.status(413).json({ error: 'Images must be 10 MB or smaller.' });
-    }
-
-    const { text: reply } = await generateText({
-      model: 'google/gemini-3.8-flash',
-      messages: [{
-        role: 'user',
-        content: [
-          { type: 'image', image: imageBytes, mediaType: match[1].toLowerCase() },
-          { type: 'text', text: prompt || 'Describe this image.' },
-        ],
-      }],
-      maxOutputTokens: 1000,
-    });
-    const cleanedReply = reply.trim();
-    if (!cleanedReply) return res.status(502).json({ error: 'The image model returned an empty response. Please try again.' });
-    return res.json({ success: true, reply: cleanedReply });
-  } catch (err: any) {
-    console.error('AI Image Analysis Error:', err);
-    return res.status(500).json({ error: err?.message || 'Image analysis failed.' });
-  }
-});
+app.post('/api/ai/assistant/vision', handleOpenRouterFileAnalysisRoute);
+app.post('/api/ai/assistant/file', handleOpenRouterFileAnalysisRoute);
 
 // AI Study Assistant Endpoint (Standard JSON) - Powered exclusively by OpenRouter with Web Search
 app.post('/api/ai/assistant', async (req, res) => {
