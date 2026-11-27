@@ -24,6 +24,7 @@ import { Ytdl, Client as YtdlClient } from '@distube/ytdl-core';
 import { processGameHtml, getScaffoldingBuffer } from './src/server/scaffoldingLoader';
 import { FALLBACK_OPENROUTER_MODELS, OPENROUTER_CHAT_URL, OPENROUTER_MODEL } from './src/utils/openRouterEdgeHelper';
 import { buildAISystemInstruction } from './src/data/aiAssistantPrompt';
+import { createGeminiClient } from './src/server/geminiService';
 import { initSethsrcEngine } from './src/server/sethsrcEngine';
 import {
   ESRB_ORIGIN,
@@ -2716,6 +2717,52 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
     console.error('AI Stream Error:', err);
     sendEvent({ type: 'error', error: err?.message || 'Failed to stream response' });
     res.end();
+  }
+});
+
+// AI Video Generation Endpoint using gemini-omni-1.2-flash via Interactions API
+app.post('/api/ai/generate-video', async (req, res) => {
+  try {
+    const { prompt, duration = '10s', aspectRatio = '16:9' } = req.body;
+    if (!prompt) {
+      return res.status(400).json({ error: 'Missing prompt for video generation' });
+    }
+
+    const ai = createGeminiClient();
+    const interaction = await ai.interactions.create({
+      model: 'gemini-omni-1.2-flash',
+      input: prompt,
+      background: false,
+      store: false,
+      stream: false,
+      response_format: {
+        type: 'video',
+        aspect_ratio: aspectRatio === '9:16' ? '9:16' : '16:9',
+        duration: duration === '15s' ? '15s' : '10s',
+        resolution: '720p',
+      },
+    }, { timeout: 300000 });
+
+    const videoPart = interaction.output_video;
+    if (!videoPart || !videoPart.data) {
+      const textOutput = interaction.output_text || 'Video generation failed to return video data.';
+      return res.status(500).json({ error: textOutput });
+    }
+
+    const mimeType = videoPart.mime_type || 'video/mp4';
+    const videoDataUrl = `data:${mimeType};base64,${videoPart.data}`;
+
+    return res.json({
+      success: true,
+      videoUrl: videoDataUrl,
+      mimeType,
+      prompt,
+      duration,
+      aspectRatio,
+    });
+  } catch (err: any) {
+    console.error('AI Video Generation Error:', err);
+    return res.status(500).json({ error: err?.message || 'Failed to generate video' });
   }
 });
 

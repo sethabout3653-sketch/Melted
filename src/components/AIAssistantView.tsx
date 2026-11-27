@@ -15,7 +15,12 @@ import {
   Sparkles, 
   ExternalLink,
   ChevronRight,
-  CheckCircle2
+  CheckCircle2,
+  Video,
+  Film,
+  Play,
+  Download,
+  Clock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ReactMarkdown from 'react-markdown';
