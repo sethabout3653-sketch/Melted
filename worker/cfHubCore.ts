@@ -1,4 +1,5 @@
 // Shared zero-Node-dependency WebSocket + REST signaling/presence hub core for Cloudflare Workers & Pages
+import { mergeCookieRecordMap, type RammerheadCookieEntry } from '../src/utils/rammerheadCore';
 
 export interface EdgeUser {
   id: string;
@@ -46,6 +47,11 @@ export interface EdgePendingSignal {
 const DISCONNECT_GRACE_MS = 20000;
 const USER_TTL_MS = 300000;
 
+interface CfStorageLike {
+  get<T = unknown>(key: string): Promise<T | undefined>;
+  put(key: string, value: unknown): Promise<void>;
+}
+
 export class CfHubCore {
   private users = new Map<string, EdgeUser>();
   private messages: EdgeMessage[] = [];
@@ -54,6 +60,12 @@ export class CfHubCore {
   private userToSockets = new Map<string, Set<any>>();
   private pendingSignals = new Map<string, EdgePendingSignal[]>();
   private disconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  private rhCookieBuckets = new Map<string, { cookies: Record<string, RammerheadCookieEntry>; updatedAt: number }>();
+  private readonly storage?: CfStorageLike;
+
+  constructor(storage?: CfStorageLike) {
+    this.storage = storage;
+  }
 
   private markDeleted(id: string): void {
     if (!id) return;
@@ -732,6 +744,56 @@ export class CfHubCore {
         const userId = decodeURIComponent(pathname.slice('/api/ws-db/signals/'.length));
         const signals = userId ? this.popPendingSignals(userId) : [];
         return json({ success: true, signals });
+      }
+
+      if (request.method === 'GET' && pathname === '/api/ws-db/rh-cookies') {
+        const bucketKey = (url.searchParams.get('key') || 'default').trim() || 'default';
+        let bucket = this.rhCookieBuckets.get(bucketKey);
+        if (!bucket && this.storage) {
+          try {
+            const persisted = await this.storage.get<{ cookies: Record<string, RammerheadCookieEntry>; updatedAt: number }>(
+              `rh_cookies:${bucketKey}`
+            );
+            if (persisted && typeof persisted === 'object' && persisted.cookies) {
+              bucket = persisted;
+              this.rhCookieBuckets.set(bucketKey, persisted);
+            }
+          } catch {}
+        }
+        return json({
+          success: true,
+          cookies: bucket?.cookies || {},
+          updatedAt: bucket?.updatedAt || 0,
+        });
+      }
+
+      if (request.method === 'POST' && pathname === '/api/ws-db/rh-cookies') {
+        const body = (await request.json().catch(() => ({}))) as {
+          key?: string;
+          cookies?: Record<string, RammerheadCookieEntry>;
+        };
+        const bucketKey = String(body?.key || 'default').trim() || 'default';
+        const incoming = body?.cookies;
+        if (!incoming || typeof incoming !== 'object') {
+          return json({ error: 'Missing cookies map' }, 400);
+        }
+        let existing = this.rhCookieBuckets.get(bucketKey);
+        if (!existing && this.storage) {
+          try {
+            existing = await this.storage.get<{ cookies: Record<string, RammerheadCookieEntry>; updatedAt: number }>(
+              `rh_cookies:${bucketKey}`
+            );
+          } catch {}
+        }
+        const merged = mergeCookieRecordMap(existing?.cookies, incoming);
+        const next = { cookies: merged, updatedAt: Date.now() };
+        this.rhCookieBuckets.set(bucketKey, next);
+        if (this.storage) {
+          try {
+            await this.storage.put(`rh_cookies:${bucketKey}`, next);
+          } catch {}
+        }
+        return json({ success: true, cookies: next.cookies, updatedAt: next.updatedAt });
       }
 
       return json({ error: `Unknown ws-db endpoint: ${request.method} ${pathname}` }, 404);

@@ -46,6 +46,10 @@ export async function syncRammerheadCookies(sessionId: string): Promise<void> {
   const origin = getSafeBrowserOrigin();
   const userId = getEffectiveCookieUserId();
 
+  try {
+    document.cookie = `rh_active_sid=${encodeURIComponent(sessionId)}; Path=/; SameSite=Lax`;
+  } catch {}
+
   let localJar: Record<string, RammerheadCookieEntry> = {};
   try {
     const raw = localStorage.getItem(COOKIE_STORAGE_KEY);
@@ -69,9 +73,16 @@ export async function syncRammerheadCookies(sessionId: string): Promise<void> {
         try {
           localStorage.setItem(COOKIE_STORAGE_KEY, JSON.stringify(merged));
         } catch {}
-        // Push back any local-only cookies that the server didn't have (e.g. after container restart)
-        const serverCount = Object.keys(data.cookies).length;
-        if (Object.keys(merged).length > serverCount) {
+
+        // Push back any local-only OR newer local cookies that the server didn't have
+        const serverCookies = data.cookies as Record<string, RammerheadCookieEntry>;
+        const needsPush = Object.keys(merged).some((k) => {
+          const loc = merged[k];
+          const srv = serverCookies[k];
+          if (!loc || !loc.name) return false;
+          return !srv || (loc.value && !srv.value) || (loc.updatedAt || 0) > (srv.updatedAt || 0);
+        });
+        if (needsPush) {
           await fetch(`${origin}/api/rammerhead/cookies`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -183,7 +194,14 @@ export async function launchInRammerheadFrame(
     throw new Error('No iframe provided to launchInRammerheadFrame');
   }
 
-  const proxiedUrl = await getRammerheadProxiedUrl(targetUrl);
+  const sessionId = await initRammerheadSession();
+  // Ensure server/edge store has latest cookies before opening first proxied request (capped at 600ms)
+  await Promise.race([
+    syncRammerheadCookies(sessionId),
+    new Promise<void>((resolve) => setTimeout(resolve, 600)),
+  ]).catch(() => {});
+
+  const proxiedUrl = await getRammerheadProxiedUrl(targetUrl, sessionId);
 
   iframe.setAttribute(
     'allow',

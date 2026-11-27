@@ -103,11 +103,13 @@ export function enforceSafeSearchOffUrl(inputUrl: URL): URL {
       ) {
         inputUrl.hostname = 'www.google.com';
       }
-      if (!inputUrl.searchParams.has('hl')) inputUrl.searchParams.set('hl', 'en');
-      if (!inputUrl.searchParams.has('gl')) inputUrl.searchParams.set('gl', 'us');
-      inputUrl.searchParams.set('safe', 'off');
-      inputUrl.searchParams.set('safeui', 'off');
-      inputUrl.searchParams.delete('ssui');
+      if (isGoogleSearchPage) {
+        if (!inputUrl.searchParams.has('hl')) inputUrl.searchParams.set('hl', 'en');
+        if (!inputUrl.searchParams.has('gl')) inputUrl.searchParams.set('gl', 'us');
+        inputUrl.searchParams.set('safe', 'off');
+        inputUrl.searchParams.set('safeui', 'off');
+        inputUrl.searchParams.delete('ssui');
+      }
     } else if (
       host === 'duckduckgo.com' ||
       host === 'www.duckduckgo.com' ||

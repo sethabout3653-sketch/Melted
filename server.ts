@@ -27,11 +27,14 @@ import {
   OPENROUTER_CHAT_URL,
   OPENROUTER_MODEL,
   runOpenRouterFileAnalysis,
+  searchWebEdge,
+  shouldSearchWeb,
   type OpenRouterFilePayload,
+  type WebSearchResult,
 } from './src/utils/openRouterEdgeHelper';
 import { initSethsrcEngine } from './src/server/sethsrcEngine';
-import { initRammerheadEngine } from './src/server/rammerheadEngine';
-import { extractRammerheadSessionAndUrl } from './src/utils/rammerheadCore';
+import { initRammerheadEngine, getActiveFallbackSessionId } from './src/server/rammerheadEngine';
+import { extractRammerheadSessionAndUrl, isValidRammerheadSessionId } from './src/utils/rammerheadCore';
 import { buildAISystemInstruction } from './src/data/aiAssistantPrompt';
 import {
   ESRB_ORIGIN,
@@ -2013,116 +2016,7 @@ app.get('/api/ai/models', (req, res) => {
   res.json({ success: true, hasKey, models: FALLBACK_OPENROUTER_MODELS, source: 'curated-free' });
 });
 
-// Web Search helper: DuckDuckGo HTML with Wikipedia Fallback
-interface WebSearchResult {
-  title: string;
-  url: string;
-  snippet: string;
-}
-
-async function searchWeb(query: string): Promise<WebSearchResult[]> {
-  const results: WebSearchResult[] = [];
-  const cleanQ = query.replace(/[?.,!]+$/, '').trim();
-  if (!cleanQ) return results;
-
-  // 1. Try DuckDuckGo HTML
-  try {
-    const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(cleanQ)}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-      },
-      signal: AbortSignal.timeout(4500),
-    });
-
-    if (res.ok) {
-      const html = await res.text();
-      const regex = /<a[^>]+class="result__snippet"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
-      let m;
-      while ((m = regex.exec(html)) !== null && results.length < 5) {
-        let rawUrl = m[1];
-        let url = rawUrl;
-        if (rawUrl.includes('uddg=')) {
-          const match = rawUrl.match(/uddg=([^&]+)/);
-          if (match) url = decodeURIComponent(match[1]);
-        }
-        const snippet = m[2]
-          .replace(/<[^>]+>/g, '')
-          .replace(/&#x27;/g, "'")
-          .replace(/&quot;/g, '"')
-          .replace(/&amp;/g, '&')
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .replace(/\s+/g, ' ')
-          .trim();
-
-        let domain = 'Web';
-        try {
-          domain = new URL(url).hostname.replace(/^www\./, '');
-        } catch {}
-
-        if (snippet && !results.some((r) => r.url === url)) {
-          results.push({ url, title: domain, snippet });
-        }
-      }
-    }
-  } catch (err: any) {
-    console.warn('[Web Search] DuckDuckGo search warning:', err?.message || err);
-  }
-
-  // 2. Fallback to Wikipedia Query Search if DDG returned no snippets
-  if (results.length === 0) {
-    try {
-      const wikiRes = await fetch(
-        `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(cleanQ)}&utf8=&format=json`,
-        {
-          headers: { 'User-Agent': 'FrostedAI/1.0' },
-          signal: AbortSignal.timeout(3500),
-        }
-      );
-      if (wikiRes.ok) {
-        const data = await wikiRes.json();
-        const hits = data?.query?.search || [];
-        for (const hit of hits.slice(0, 4)) {
-          const snippet = (hit.snippet || '')
-            .replace(/<[^>]+>/g, '')
-            .replace(/&#x27;/g, "'")
-            .replace(/&quot;/g, '"')
-            .replace(/&amp;/g, '&')
-            .replace(/\s+/g, ' ')
-            .trim();
-          results.push({
-            url: `https://en.wikipedia.org/wiki/${encodeURIComponent(hit.title.replace(/\s+/g, '_'))}`,
-            title: hit.title,
-            snippet,
-          });
-        }
-      }
-    } catch (wikiErr: any) {
-      console.warn('[Web Search] Wikipedia fallback warning:', wikiErr?.message || wikiErr);
-    }
-  }
-
-  return results;
-}
-
-function shouldSearchWeb(prompt: string, searchMode?: 'auto' | 'always' | 'off'): boolean {
-  if (searchMode === 'off') return false;
-  if (searchMode === 'always') return true;
-
-  const p = prompt.toLowerCase();
-  // Check for search trigger words or factual inquiries
-  const searchTriggers = [
-    'who is', 'who was', 'who won', 'who created', 'who played', 'when was', 'when did', 'when will',
-    'where is', 'where was', 'latest', 'current', 'news', 'score', 'winner', 'weather', 'price',
-    'release date', 'super bowl', 'champion', 'championship', 'today', 'yesterday', 'update',
-    'president', 'ceo', 'stats', 'movie', 'film', 'born', 'died', 'how many', 'population',
-    'search', 'google', 'look up', 'find out', 'history of', 'what is happening', 'record'
-  ];
-
-  return searchTriggers.some((t) => p.includes(t)) || p.length > 35;
-}
+const searchWeb = searchWebEdge;
 
 // AI Assistant SSE Streaming Endpoint - Live step-by-step thinking & web search
 app.post('/api/ai/assistant/stream', async (req, res) => {
@@ -2969,11 +2863,12 @@ async function startServer() {
       }
     }
 
-    // Fallback search escape recovery: if user searched without referer, redirect to DuckDuckGo/Google search via Rammerhead
-    if (!sessionId && (req.query.q || reqPath.includes('search'))) {
-      sessionId = '47d293384b299d7f22af180ce7358743'; // Default persistent session
-      const queryStr = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : `?q=${encodeURIComponent(String(req.query.q || ''))}`;
-      return res.redirect(307, `/api/rammerhead/${sessionId}/https://duckduckgo.com/${queryStr}`);
+    if (!sessionId) {
+      const cookieHeader = String(req.headers.cookie || '');
+      const sidCookieMatch = cookieHeader.match(/(?:^|;\s*)rh_active_sid=([a-f0-9]{32})/i);
+      if (sidCookieMatch && isValidRammerheadSessionId(sidCookieMatch[1])) {
+        sessionId = sidCookieMatch[1].toLowerCase();
+      }
     }
 
     if (sessionId && targetBaseUrl) {
@@ -2983,6 +2878,14 @@ async function startServer() {
         return res.redirect(307, `/api/rammerhead/${sessionId}/${resolved.href}`);
       } catch {}
     }
+
+    // Fallback search escape recovery when Referer was stripped by browser/meta header
+    if (req.query.q || reqPath === '/search' || reqPath.startsWith('/search/')) {
+      const activeSid = sessionId || getActiveFallbackSessionId();
+      const queryStr = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : `?q=${encodeURIComponent(String(req.query.q || ''))}`;
+      return res.redirect(307, `/api/rammerhead/${activeSid}/https://duckduckgo.com/${queryStr}`);
+    }
+
     return next();
   });
 

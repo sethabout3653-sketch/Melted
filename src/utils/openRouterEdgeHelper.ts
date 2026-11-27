@@ -49,16 +49,53 @@ export function shouldSearchWeb(prompt: string, searchMode?: 'auto' | 'always' |
   if (searchMode === 'off') return false;
   if (searchMode === 'always') return true;
 
-  const p = prompt.toLowerCase();
+  const trimmed = (prompt || '').trim().toLowerCase();
+  if (!trimmed) return false;
+  const greetings = /^(?:hi+|hello+|hey+|yo+|sup|ok(?:ay)?|thanks?(?: you)?|ty|np|bye|gn|gm)[!?. ]*$/i;
+  if (greetings.test(trimmed)) return false;
+
+  const p = trimmed;
   const searchTriggers = [
-    'who is', 'who was', 'who won', 'who created', 'who played', 'when was', 'when did', 'when will',
-    'where is', 'where was', 'latest', 'current', 'news', 'score', 'winner', 'weather', 'price',
-    'release date', 'super bowl', 'champion', 'championship', 'today', 'yesterday', 'update',
-    'president', 'ceo', 'stats', 'movie', 'film', 'born', 'died', 'how many', 'population',
-    'search', 'google', 'look up', 'find out', 'history of', 'what is happening', 'record',
+    'who', 'what', 'when', 'where', 'why', 'how', 'latest', 'current', 'news', 'score', 'winner',
+    'weather', 'price', 'release', 'champion', 'today', 'yesterday', 'update', 'stats', 'movie',
+    'film', 'search', 'google', 'look up', 'find', 'history', 'record', 'define', 'meaning',
   ];
 
-  return searchTriggers.some((t) => p.includes(t)) || p.length > 35;
+  const wordCount = trimmed.split(/\s+/).filter(Boolean).length;
+  return wordCount >= 2 || trimmed.includes('?') || trimmed.length >= 4 || searchTriggers.some((t) => p.includes(t));
+}
+
+function decodeHtmlEntities(str: string): string {
+  return String(str || '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&#x27;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function decodeBingTrackingUrl(rawUrl: string): string {
+  try {
+    if (rawUrl.includes('bing.com/ck/a')) {
+      const u = new URL(rawUrl);
+      const uParam = u.searchParams.get('u') || '';
+      if (uParam.startsWith('a1')) {
+        const b64 = uParam.slice(2).replace(/-/g, '+').replace(/_/g, '/');
+        const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+        const decoded =
+          typeof atob === 'function' ? atob(padded) : Buffer.from(padded, 'base64').toString('utf8');
+        if (decoded.startsWith('http://') || decoded.startsWith('https://')) {
+          return decoded;
+        }
+      }
+    }
+  } catch {}
+  return rawUrl;
 }
 
 export async function searchWebEdge(query: string): Promise<WebSearchResult[]> {
@@ -66,50 +103,88 @@ export async function searchWebEdge(query: string): Promise<WebSearchResult[]> {
   const cleanQ = query.replace(/[?.,!]+$/, '').trim();
   if (!cleanQ) return results;
 
-  try {
-    const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(cleanQ)}`, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-        Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'en-US,en;q=0.5',
-      },
-      signal: AbortSignal.timeout(4500),
-    });
+  const addResult = (item: WebSearchResult) => {
+    if (!item.url || !item.snippet) return;
+    if (results.some((r) => r.url === item.url)) return;
+    results.push(item);
+  };
 
-    if (res.ok) {
-      const html = await res.text();
-      const regex = /<a[^>]+class="result__snippet"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/g;
-      let m;
-      while ((m = regex.exec(html)) !== null && results.length < 5) {
-        const rawUrl = m[1];
-        let url = rawUrl;
-        if (rawUrl.includes('uddg=')) {
-          const match = rawUrl.match(/uddg=([^&]+)/);
-          if (match) url = decodeURIComponent(match[1]);
+  // Run Bing HTML, DuckDuckGo Instant Answer JSON, and Wikipedia Search in parallel
+  const bingPromise = (async () => {
+    const bingItems: WebSearchResult[] = [];
+    try {
+      const res = await fetch(
+        `https://www.bing.com/search?q=${encodeURIComponent(cleanQ)}&setlang=en-US&cc=US&adlt=off`,
+        {
+          headers: {
+            'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+          },
+          signal: AbortSignal.timeout(4500),
         }
-        const snippet = m[2]
-          .replace(/<[^>]+>/g, '')
-          .replace(/&#x27;/g, "'")
-          .replace(/&quot;/g, '"')
-          .replace(/&amp;/g, '&')
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .replace(/\s+/g, ' ')
-          .trim();
-
-        let domain = 'Web';
-        try {
-          domain = new URL(url).hostname.replace(/^www\./, '');
-        } catch {}
-
-        if (snippet && !results.some((r) => r.url === url)) {
-          results.push({ url, title: domain, snippet });
+      );
+      if (res.ok) {
+        const html = await res.text();
+        const blockRegex = /<li[^>]+class="[^"]*\bb_algo\b[^"]*"[^>]*>([\s\S]*?)<\/li>/gi;
+        let m: RegExpExecArray | null;
+        while ((m = blockRegex.exec(html)) !== null && bingItems.length < 7) {
+          const block = m[1];
+          const linkMatch = block.match(/<h2[^>]*>[\s\S]*?<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/i);
+          if (!linkMatch) continue;
+          const url = decodeBingTrackingUrl(decodeHtmlEntities(linkMatch[1]));
+          const title = decodeHtmlEntities(linkMatch[2]);
+          const snippetMatch =
+            block.match(/<div[^>]+class="[^"]*\bb_caption\b[^"]*"[^>]*>[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/i) ||
+            block.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+          const snippet = snippetMatch ? decodeHtmlEntities(snippetMatch[1]) : title;
+          if (url && /^https?:\/\//i.test(url) && snippet) {
+            bingItems.push({ url, title: title || 'Web', snippet });
+          }
         }
       }
-    }
-  } catch {}
+    } catch {}
+    return bingItems;
+  })();
 
-  if (results.length === 0) {
+  const ddgInstantPromise = (async () => {
+    const instantItems: WebSearchResult[] = [];
+    try {
+      const res = await fetch(
+        `https://api.duckduckgo.com/?q=${encodeURIComponent(cleanQ)}&format=json&no_html=1&skip_disambig=1`,
+        {
+          headers: { 'User-Agent': 'FrostedAI/1.0' },
+          signal: AbortSignal.timeout(3000),
+        }
+      );
+      if (res.ok) {
+        const data = (await res.json()) as any;
+        if (data?.AbstractText && data?.AbstractURL) {
+          instantItems.push({
+            url: String(data.AbstractURL),
+            title: String(data.Heading || data.AbstractSource || 'Instant Answer'),
+            snippet: decodeHtmlEntities(String(data.AbstractText)),
+          });
+        }
+        const topics = Array.isArray(data?.RelatedTopics) ? data.RelatedTopics : [];
+        for (const t of topics) {
+          if (instantItems.length >= 3) break;
+          if (t?.Text && t?.FirstURL) {
+            instantItems.push({
+              url: String(t.FirstURL),
+              title: String(t.Text).split(' - ')[0].slice(0, 60) || 'DuckDuckGo',
+              snippet: decodeHtmlEntities(String(t.Text)),
+            });
+          }
+        }
+      }
+    } catch {}
+    return instantItems;
+  })();
+
+  const wikiPromise = (async () => {
+    const wikiItems: WebSearchResult[] = [];
     try {
       const wikiRes = await fetch(
         `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(cleanQ)}&utf8=&format=json`,
@@ -121,19 +196,67 @@ export async function searchWebEdge(query: string): Promise<WebSearchResult[]> {
       if (wikiRes.ok) {
         const data = (await wikiRes.json()) as any;
         const hits = data?.query?.search || [];
-        for (const hit of hits.slice(0, 4)) {
-          const snippet = String(hit.snippet || '')
-            .replace(/<[^>]+>/g, '')
-            .replace(/&#x27;/g, "'")
-            .replace(/&quot;/g, '"')
-            .replace(/&amp;/g, '&')
-            .replace(/\s+/g, ' ')
-            .trim();
-          results.push({
-            url: `https://en.wikipedia.org/wiki/${encodeURIComponent(String(hit.title || '').replace(/\s+/g, '_'))}`,
-            title: String(hit.title || 'Wikipedia'),
-            snippet,
+        for (const hit of hits.slice(0, 3)) {
+          const snippet = decodeHtmlEntities(String(hit.snippet || ''));
+          if (snippet) {
+            wikiItems.push({
+              url: `https://en.wikipedia.org/wiki/${encodeURIComponent(String(hit.title || '').replace(/\s+/g, '_'))}`,
+              title: String(hit.title || 'Wikipedia'),
+              snippet,
+            });
+          }
+        }
+      }
+    } catch {}
+    return wikiItems;
+  })();
+
+  const [instantItems, bingItems, wikiItems] = await Promise.all([ddgInstantPromise, bingPromise, wikiPromise]);
+
+  for (const item of instantItems) addResult(item);
+  for (const item of bingItems) {
+    if (results.length >= 8) break;
+    addResult(item);
+  }
+  for (const item of wikiItems) {
+    if (results.length >= 8) break;
+    addResult(item);
+  }
+
+  // Last-resort fallback: DuckDuckGo Lite
+  if (results.length === 0) {
+    try {
+      const res = await fetch(`https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(cleanQ)}`, {
+        headers: {
+          'User-Agent':
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+          Accept: 'text/html',
+        },
+        signal: AbortSignal.timeout(4000),
+      });
+      if (res.ok) {
+        const html = await res.text();
+        const linkRegex = /<a[^>]+class="result-link"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+        const snipRegex = /<td[^>]+class="result-snippet"[^>]*>([\s\S]*?)<\/td>/gi;
+        const links: Array<{ url: string; title: string }> = [];
+        let lm: RegExpExecArray | null;
+        while ((lm = linkRegex.exec(html)) !== null) {
+          let rawUrl = decodeHtmlEntities(lm[1]);
+          if (rawUrl.includes('uddg=')) {
+            const um = rawUrl.match(/uddg=([^&]+)/);
+            if (um) rawUrl = decodeURIComponent(um[1]);
+          }
+          links.push({ url: rawUrl, title: decodeHtmlEntities(lm[2]) });
+        }
+        let idx = 0;
+        let sm: RegExpExecArray | null;
+        while ((sm = snipRegex.exec(html)) !== null && idx < links.length && results.length < 6) {
+          addResult({
+            url: links[idx].url,
+            title: links[idx].title || 'Web',
+            snippet: decodeHtmlEntities(sm[1]),
           });
+          idx++;
         }
       }
     } catch {}

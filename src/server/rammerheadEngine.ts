@@ -11,8 +11,11 @@ import {
   generateRammerheadSessionId,
   isValidRammerheadSessionId,
   extractRammerheadSessionAndUrl,
+  extractHostMatchedCookies,
+  normalizeCaptchaChallengeUrl,
   rewriteHtmlForRammerhead,
   rewriteCssForRammerhead,
+  rewriteJsForRammerhead,
   parseSetCookieHeader,
   mergeCookieRecordMap,
   buildCookieHeaderForUrl,
@@ -20,7 +23,7 @@ import {
   STRIPPED_UPSTREAM_HEADERS,
   STRIPPED_STREAM_HEADERS,
 } from '../utils/rammerheadCore';
-import { enforceSafeSearchOffUrl, sanitizeSafeSearchSetCookie } from '../utils/safeSearchOff';
+import { enforceSafeSearchOffUrl } from '../utils/safeSearchOff';
 import { unfilteredLookup } from './dohResolver';
 
 const gunzipAsync = promisify(zlib.gunzip);
@@ -160,12 +163,24 @@ export function getOrCreateRammerheadSession(id?: string): RammerheadSession {
   return session;
 }
 
+export function getActiveFallbackSessionId(): string {
+  let bestId = '';
+  let bestTs = -1;
+  for (const [id, sess] of sessionStore.entries()) {
+    if ((sess.lastUsedAt || 0) > bestTs) {
+      bestTs = sess.lastUsedAt || 0;
+      bestId = id;
+    }
+  }
+  return bestId || getOrCreateRammerheadSession().id;
+}
+
 function persistUpstreamSetCookies(
   session: RammerheadSession,
   rawSetCookies: string | string[] | undefined,
   requestHost: string
-) {
-  if (!rawSetCookies) return;
+): Record<string, RammerheadCookieEntry> {
+  if (!rawSetCookies) return {};
   const arr = Array.isArray(rawSetCookies) ? rawSetCookies : [rawSetCookies];
   const parsedBatch: Record<string, RammerheadCookieEntry> = {};
   let addedCount = 0;
@@ -177,7 +192,7 @@ function persistUpstreamSetCookies(
       addedCount++;
     }
   }
-  if (addedCount === 0) return;
+  if (addedCount === 0) return {};
 
   session.cookieJar = mergeCookieRecordMap(session.cookieJar, parsedBatch);
   const now = Date.now();
@@ -191,6 +206,13 @@ function persistUpstreamSetCookies(
   };
   scheduleSaveSessions();
   scheduleSaveCookies();
+  return parsedBatch;
+}
+
+function isJsResponse(rawCt: string, pathname: string): boolean {
+  if (rawCt.includes('javascript') || rawCt.includes('ecmascript')) return true;
+  if (!rawCt && /\.(?:m?js|cjs)(\?|$)/i.test(pathname)) return true;
+  return false;
 }
 
 function isMediaOrBinaryStream(targetUrl: URL, req: express.Request, upstreamHeaders: http.IncomingHttpHeaders): boolean {
@@ -198,7 +220,7 @@ function isMediaOrBinaryStream(targetUrl: URL, req: express.Request, upstreamHea
   const pathname = targetUrl.pathname.toLowerCase();
   const ct = String(upstreamHeaders['content-type'] || '').toLowerCase();
 
-  if (ct.includes('text/html') || ct.includes('text/css')) {
+  if (ct.includes('text/html') || ct.includes('text/css') || isJsResponse(ct, pathname)) {
     return false;
   }
   if (
@@ -402,19 +424,25 @@ export function initRammerheadEngine(
 
     const session = getOrCreateRammerheadSession(sessionId);
 
-    let parsedTarget: URL;
-    try {
-      parsedTarget = enforceSafeSearchOffUrl(new URL(targetUrl));
-    } catch {
-      return res.status(400).send('Invalid target URL structure');
-    }
-
-    const host = parsedTarget.hostname.toLowerCase();
     const requestHostHeader = String(req.get('x-forwarded-host') || req.get('host') || '')
       .split(',')[0]
       .trim()
       .split(':')[0]
       .toLowerCase();
+    const refererInfo = referer ? extractRammerheadSessionAndUrl(referer) : null;
+
+    let parsedTarget: URL;
+    try {
+      parsedTarget = normalizeCaptchaChallengeUrl(
+        enforceSafeSearchOffUrl(new URL(targetUrl)),
+        refererInfo?.targetUrl,
+        requestHostHeader
+      );
+    } catch {
+      return res.status(400).send('Invalid target URL structure');
+    }
+
+    const host = parsedTarget.hostname.toLowerCase();
     if (
       host === 'localhost' ||
       host === '127.0.0.1' ||
@@ -469,24 +497,32 @@ export function initRammerheadEngine(
       }
     }
 
-    const forwardHeaders: Record<string, string> = {
-      'User-Agent':
-        (req.headers['user-agent'] as string) ||
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-      Accept: (req.headers['accept'] as string) || '*/*',
-      'Accept-Language': 'en-US,en;q=0.9',
-      'Accept-Encoding': isLikelyMedia ? 'identity' : 'gzip, deflate, br',
-    };
+    const forwardHeaders: Record<string, string> = {};
+    for (const [hdrKey, hdrVal] of Object.entries(req.headers)) {
+      if (hdrVal === undefined) continue;
+      const lower = hdrKey.toLowerCase();
+      if (
+        FORBIDDEN_FORWARD_HEADERS.has(lower) ||
+        lower === 'cookie' ||
+        lower === 'referer' ||
+        lower === 'origin' ||
+        lower.startsWith('sec-') ||
+        lower.startsWith('x-forwarded-') ||
+        lower.startsWith('cf-') ||
+        lower === 'x-real-ip'
+      ) {
+        continue;
+      }
+      forwardHeaders[hdrKey] = Array.isArray(hdrVal) ? hdrVal.join(', ') : String(hdrVal);
+    }
 
-    if (req.headers['range']) {
-      forwardHeaders['Range'] = String(req.headers['range']);
-    }
-    if (req.headers['if-range']) {
-      forwardHeaders['If-Range'] = String(req.headers['if-range']);
-    }
-    if (req.headers['content-type']) {
-      forwardHeaders['Content-Type'] = String(req.headers['content-type']);
-    }
+    forwardHeaders['User-Agent'] =
+      (req.headers['user-agent'] as string) ||
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+    forwardHeaders['Accept'] = (req.headers['accept'] as string) || '*/*';
+    forwardHeaders['Accept-Language'] = (req.headers['accept-language'] as string) || 'en-US,en;q=0.9';
+    forwardHeaders['Accept-Encoding'] = isLikelyMedia ? 'identity' : 'gzip, deflate, br';
+
     if (reqBodyBuf) {
       forwardHeaders['Content-Length'] = String(reqBodyBuf.length);
     }
@@ -503,9 +539,18 @@ export function initRammerheadEngine(
         forwardHeaders['Origin'] = 'https://www.youtube.com';
       }
     } else {
-      forwardHeaders['Referer'] = parsedTarget.origin + '/';
+      let upstreamRef = parsedTarget.origin + '/';
+      let upstreamReqOrigin = parsedTarget.origin;
+      if (refererInfo?.targetUrl && /^https?:\/\//i.test(refererInfo.targetUrl)) {
+        try {
+          const refU = new URL(refererInfo.targetUrl);
+          upstreamRef = refU.href;
+          upstreamReqOrigin = refU.origin;
+        } catch {}
+      }
+      forwardHeaders['Referer'] = upstreamRef;
       if (req.method !== 'GET' && req.method !== 'HEAD') {
-        forwardHeaders['Origin'] = parsedTarget.origin;
+        forwardHeaders['Origin'] = upstreamReqOrigin;
       }
     }
 
@@ -564,9 +609,21 @@ export function initRammerheadEngine(
 
           try {
             // Capture and persistently merge Set-Cookie headers
-            if (upRes.headers['set-cookie']) {
-              persistUpstreamSetCookies(session, upRes.headers['set-cookie'], host);
-            }
+            const capturedCookies = upRes.headers['set-cookie']
+              ? persistUpstreamSetCookies(session, upRes.headers['set-cookie'], host)
+              : {};
+            const hasCapturedCookies = Object.keys(capturedCookies).length > 0;
+
+            const attachCookieSyncHeaders = () => {
+              if (!hasCapturedCookies) return;
+              res.setHeader('X-Rammerhead-Has-Cookies', '1');
+              try {
+                const encoded = encodeURIComponent(JSON.stringify(capturedCookies));
+                if (encoded.length <= 3600) {
+                  res.setHeader('X-Rammerhead-Cookie-Sync', encoded);
+                }
+              } catch {}
+            };
 
             const statusCode = upRes.statusCode || 200;
 
@@ -574,10 +631,13 @@ export function initRammerheadEngine(
             if ([301, 302, 303, 307, 308].includes(statusCode) && upRes.headers.location) {
               upRes.resume();
               try {
-                const resolvedLoc = enforceSafeSearchOffUrl(
-                  new URL(String(upRes.headers.location), parsedTarget.href)
+                const resolvedLoc = normalizeCaptchaChallengeUrl(
+                  enforceSafeSearchOffUrl(new URL(String(upRes.headers.location), parsedTarget.href)),
+                  refererInfo?.targetUrl,
+                  requestHostHeader
                 ).href;
                 setCorsHeaders(res);
+                attachCookieSyncHeaders();
                 res.setHeader('Location', `/api/rammerhead/${sessionId}/${resolvedLoc}`);
                 res.setHeader('Cache-Control', 'no-store');
                 return res.status(statusCode).end();
@@ -587,27 +647,24 @@ export function initRammerheadEngine(
             const rawCt = String(upRes.headers['content-type'] || '').toLowerCase();
             const isHtml = rawCt.includes('text/html');
             const isCss = rawCt.includes('text/css');
+            const isJs = !isHtml && !isCss && isJsResponse(rawCt, parsedTarget.pathname.toLowerCase());
             const streamDirectly =
-              !isHtml &&
-              !isCss &&
-              (isMediaOrBinaryStream(parsedTarget, req, upRes.headers) ||
-                statusCode === 206 ||
-                Number(upRes.headers['content-length'] || 0) > MAX_REWRITE_TEXT_BYTES);
+              req.method === 'HEAD' ||
+              statusCode === 204 ||
+              statusCode === 304 ||
+              (!isHtml && !isCss && !isJs) ||
+              isMediaOrBinaryStream(parsedTarget, req, upRes.headers) ||
+              statusCode === 206 ||
+              Number(upRes.headers['content-length'] || 0) > MAX_REWRITE_TEXT_BYTES;
 
-            // Fast streaming pass-through for YouTube videoplayback & media (zero RAM buffering, crash-proof)
-            if (streamDirectly || (!isHtml && !isCss)) {
+            // Fast streaming pass-through for media/JSON/binary (strip upstream Set-Cookie from FrostHub origin!)
+            if (streamDirectly) {
               setCorsHeaders(res);
+              attachCookieSyncHeaders();
               for (const [k, v] of Object.entries(upRes.headers)) {
                 if (v === undefined) continue;
                 const lower = k.toLowerCase();
-                if (lower === 'set-cookie') {
-                  const arr = Array.isArray(v) ? v : [v];
-                  for (const c of arr) {
-                    res.append('Set-Cookie', sanitizeSafeSearchSetCookie(host, String(c)));
-                  }
-                  continue;
-                }
-                if (STRIPPED_STREAM_HEADERS.has(lower) || FORBIDDEN_FORWARD_HEADERS.has(lower)) {
+                if (lower === 'set-cookie' || STRIPPED_STREAM_HEADERS.has(lower) || FORBIDDEN_FORWARD_HEADERS.has(lower)) {
                   continue;
                 }
                 res.setHeader(k, v);
@@ -626,7 +683,7 @@ export function initRammerheadEngine(
               return;
             }
 
-            // Buffer text/html and text/css cleanly up to cap for rewriting
+            // Buffer text/html, text/css, and JavaScript cleanly up to cap for rewriting
             const chunks: Buffer[] = [];
             let totalBytes = 0;
             let overflowed = false;
@@ -649,6 +706,7 @@ export function initRammerheadEngine(
 
             if (overflowed) {
               setCorsHeaders(res);
+              attachCookieSyncHeaders();
               res.status(statusCode);
               for (const b of chunks) {
                 if (!res.writableEnded) res.write(b);
@@ -669,6 +727,7 @@ export function initRammerheadEngine(
             }
 
             setCorsHeaders(res);
+            attachCookieSyncHeaders();
             for (const [k, v] of Object.entries(upRes.headers)) {
               if (v === undefined) continue;
               const lower = k.toLowerCase();
@@ -704,10 +763,17 @@ export function initRammerheadEngine(
                 }
               }
 
-              const rewrittenHtml = rewriteHtmlForRammerhead(textBody, sessionId, parsedTarget.href);
+              const hostCookies = extractHostMatchedCookies(session.cookieJar, parsedTarget);
+              const rewrittenHtml = rewriteHtmlForRammerhead(textBody, sessionId, parsedTarget.href, { hostCookies });
               res.setHeader('Content-Type', 'text/html; charset=utf-8');
               res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
               return res.status(statusCode).send(rewrittenHtml);
+            }
+
+            if (isJs) {
+              const rewrittenJs = rewriteJsForRammerhead(textBody, sessionId, parsedTarget.href);
+              res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+              return res.status(statusCode).send(rewrittenJs);
             }
 
             const rewrittenCss = rewriteCssForRammerhead(textBody, sessionId, parsedTarget.href);

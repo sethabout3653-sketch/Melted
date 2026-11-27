@@ -136,7 +136,8 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange, searc
     else setIsMoreLoading(true);
     const timer = window.setTimeout(async () => {
       try {
-        const results = await tmdbService.searchMulti(query, page);
+        const res = await tmdbService.searchMultiPaginated(query, page, activeTab);
+        const results = res.results;
         if (!cancelled) {
           if (page === 1) setItems(results);
           else {
@@ -150,7 +151,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange, searc
               });
             });
           }
-          if (results.length < 20) setHasMore(false);
+          setHasMore(res.hasMore);
         }
       } catch (error) {
         console.error('Movie search failed:', error);
@@ -161,12 +162,12 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange, searc
           setIsMoreLoading(false);
         }
       }
-    }, page === 1 ? 350 : 0);
+    }, page === 1 ? 300 : 0);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [query, page]);
+  }, [query, page, activeTab]);
 
   useEffect(() => {
     const observer = new IntersectionObserver(entries => {

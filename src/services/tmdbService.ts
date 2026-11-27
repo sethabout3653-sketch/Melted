@@ -108,6 +108,27 @@ export const tmdbService = {
       }));
   },
 
+  searchMultiPaginated: async (
+    query: string,
+    page = 1,
+    tab: 'all' | 'movies' | 'tv' = 'all'
+  ): Promise<{ results: TMDBMedia[]; hasMore: boolean; totalResults: number }> => {
+    if (!query.trim()) return { results: [], hasMore: false, totalResults: 0 };
+    const endpoint = tab === 'movies' ? '/search/movie' : tab === 'tv' ? '/search/tv' : '/search/multi';
+    const res = await tmdbFetch<TMDBResponse>(endpoint, { query, page: page.toString() });
+    const mapped = (res.results || [])
+      .filter(item => tab !== 'all' || item.media_type === 'movie' || item.media_type === 'tv')
+      .map(item => ({
+        ...item,
+        media_type: (tab === 'movies' ? 'movie' : tab === 'tv' ? 'tv' : item.media_type || (item.title ? 'movie' : 'tv')) as 'movie' | 'tv',
+      }));
+    return {
+      results: mapped,
+      hasMore: (res.page || page) < (res.total_pages || 1),
+      totalResults: res.total_results || mapped.length,
+    };
+  },
+
   getMovieDetails: async (id: number): Promise<TMDBMedia> => {
     const data = await tmdbFetch<TMDBMedia>(`/movie/${id}`, { append_to_response: 'recommendations,similar' });
     return { ...data, media_type: 'movie' };

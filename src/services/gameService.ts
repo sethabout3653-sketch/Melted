@@ -749,6 +749,8 @@ export function shouldUseRammerheadByDefault(game: GameItem): boolean {
     'soundboard',
     'deltarune',
     'duckduckgo',
+    'google search',
+    'google',
   ]);
   return rammerheadAllowed.has(name);
 }
@@ -929,6 +931,22 @@ const BUILTIN_RAMMERHEAD_GAMES: GameItem[] = [
     fallbackCover: '/assets/duckduckgo.png',
     localCover: FEATURED_APP_CONFIG.duckduckgo.coverUrl,
     resolvedUrl: FEATURED_APP_CONFIG.duckduckgo.url,
+  },
+  {
+    id: 900007,
+    name: 'Google Search',
+    cover: '/assets/google-logo.svg',
+    url: 'https://www.google.com/?safe=off',
+    author: 'Google',
+    special: ['google', 'google search', 'web search', 'search', 'browser', 'rammerhead'],
+    featured: true,
+    source: 'rammerhead',
+    library: 'gn-math',
+    category: 'Featured',
+    resolvedCover: '/assets/google-logo.svg',
+    fallbackCover: '/assets/google-logo.svg',
+    localCover: '/assets/google-logo.svg',
+    resolvedUrl: 'https://www.google.com/?safe=off',
   },
   {
     id: 900004,

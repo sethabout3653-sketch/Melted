@@ -14,6 +14,7 @@ import { onRequest as aiAssistantStream } from '../functions/api/ai/assistant/st
 import { onRequest as esrbImage } from '../functions/api/esrb/image';
 import { onRequest as esrbRatings } from '../functions/api/esrb/ratings';
 import { onRequest as webrtcIceServers } from '../functions/api/webrtc/ice-servers';
+import { extractRammerheadSessionAndUrl } from '../src/utils/rammerheadCore';
 import { SignalingHub } from './signalingHub';
 import { handleWispRequest } from './wispServer';
 
@@ -129,6 +130,50 @@ export default {
           'Access-Control-Allow-Origin': '*',
         },
       });
+    }
+
+    // Prevent escaped navigations or search form submissions inside Rammerhead frames from hitting FrostHub SPA fallback
+    const reqPath = url.pathname || '';
+    const isInternalStatic =
+      reqPath.startsWith('/assets/') ||
+      reqPath.startsWith('/embed/') ||
+      reqPath === '/rammerhead.js' ||
+      reqPath === '/favicon.ico' ||
+      reqPath === '/manifest.webmanifest' ||
+      reqPath === '/apple-touch-icon.png';
+
+    if (!isInternalStatic) {
+      const referer = request.headers.get('referer') || '';
+      let escapeSid = '';
+      let targetBaseUrl = '';
+
+      if (referer && (referer.includes('/api/rammerhead/') || /\/[a-f0-9]{32}\//i.test(referer))) {
+        const info = extractRammerheadSessionAndUrl(referer);
+        if (info && info.sessionId && info.targetUrl) {
+          escapeSid = info.sessionId;
+          targetBaseUrl = info.targetUrl;
+        }
+      }
+
+      if (!escapeSid) {
+        const cookieHdr = request.headers.get('cookie') || '';
+        const sidMatch = cookieHdr.match(/(?:^|;\s*)rh_active_sid=([a-f0-9]{32})/i);
+        if (sidMatch) escapeSid = sidMatch[1].toLowerCase();
+      }
+
+      if (escapeSid && targetBaseUrl) {
+        try {
+          const base = new URL(targetBaseUrl);
+          const resolved = new URL(url.pathname + url.search, base.origin);
+          return Response.redirect(`${url.origin}/api/rammerhead/${escapeSid}/${resolved.href}`, 307);
+        } catch {}
+      }
+
+      if (url.searchParams.has('q') || reqPath === '/search' || reqPath.startsWith('/search/')) {
+        const activeSid = escapeSid || '47d293384b299d7f22af180ce7358743';
+        const qStr = url.search || `?q=${encodeURIComponent(url.searchParams.get('q') || '')}`;
+        return Response.redirect(`${url.origin}/api/rammerhead/${activeSid}/https://duckduckgo.com/${qStr}`, 307);
+      }
     }
 
     const assetRes = await env.ASSETS.fetch(request);

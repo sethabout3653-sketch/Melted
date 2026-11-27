@@ -362,23 +362,27 @@ export default function App() {
     const queryTokens = deferredQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
     const compactQuery = deferredQuery.toLowerCase().replace(/[^a-z0-9]/g, '');
 
-    const applyQuery = (list: GameItem[]) => {
+    const getSearchable = (game: GameItem) => {
+      const realRating = game.rating || getCachedGameRating(game.name);
+      return [
+        game.name,
+        game.category,
+        game.author,
+        realRating?.code,
+        realRating?.label,
+        realRating?.descriptors,
+        ...(realRating?.specialTags || []),
+        ...(game.special || []),
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+    };
+
+    const applyQuery = (list: GameItem[], allowPartialFallback = false) => {
       if (queryTokens.length === 0) return list;
-      return list.filter((game) => {
-        const realRating = game.rating || getCachedGameRating(game.name);
-        const searchableText = [
-          game.name,
-          game.category,
-          game.author,
-          realRating?.code,
-          realRating?.label,
-          realRating?.descriptors,
-          ...(realRating?.specialTags || []),
-          ...(game.special || []),
-        ]
-          .filter(Boolean)
-          .join(' ')
-          .toLowerCase();
+      const strict = list.filter((game) => {
+        const searchableText = getSearchable(game);
         if (queryTokens.every((token) => searchableText.includes(token))) {
           return true;
         }
@@ -390,6 +394,21 @@ export default function App() {
         }
         return false;
       });
+      if (strict.length > 0 || !allowPartialFallback || queryTokens.length <= 1) {
+        return strict;
+      }
+      // Partial token fallback ranked by matched token count
+      const partialScored: Array<{ game: GameItem; hits: number }> = [];
+      for (const game of list) {
+        const searchableText = getSearchable(game);
+        let hits = 0;
+        for (const t of queryTokens) {
+          if (t.length >= 2 && searchableText.includes(t)) hits++;
+        }
+        if (hits > 0) partialScored.push({ game, hits });
+      }
+      partialScored.sort((a, b) => b.hits - a.hits);
+      return partialScored.map((item) => item.game);
     };
 
     let result = [...libraryGames];
@@ -404,8 +423,18 @@ export default function App() {
 
     if (queryTokens.length > 0) {
       const categoryMatched = applyQuery(result);
-      // If active category or favorites filter hid valid matches within this library, search across the active library
-      result = categoryMatched.length > 0 ? categoryMatched : applyQuery(libraryGames);
+      if (categoryMatched.length > 0) {
+        result = categoryMatched;
+      } else {
+        const libMatched = applyQuery(libraryGames);
+        if (libMatched.length > 0) {
+          result = libMatched;
+        } else {
+          // Cross-library & partial-token fallback so searches aren't artificially restricted
+          const allStrict = applyQuery(libraryBuckets.all, false);
+          result = allStrict.length > 0 ? allStrict : applyQuery(libraryBuckets.all, true);
+        }
+      }
     }
 
     // Sorting
@@ -418,7 +447,7 @@ export default function App() {
     }
 
     return result;
-  }, [libraryGames, selectedCategory, deferredQuery, favorites, showFavoritesOnly, sortBy, esrbVersion, randomRankMap]);
+  }, [libraryGames, libraryBuckets.all, selectedCategory, deferredQuery, favorites, showFavoritesOnly, sortBy, esrbVersion, randomRankMap]);
 
   const categoryCounts = useMemo(() => {
     const libraryFavCount = libraryGames.filter((g) => favorites.includes(g.id)).length;
@@ -607,19 +636,67 @@ export default function App() {
 
             {/* Search status */}
             {searchQuery && (
-              <div className="mb-4 sm:mb-8 flex items-center justify-between bg-white dark:bg-slate-900 px-4 sm:px-6 py-2.5 sm:py-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+              <div className="mb-4 sm:mb-8 flex flex-wrap items-center justify-between gap-2 bg-white dark:bg-slate-900 px-4 sm:px-6 py-2.5 sm:py-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
                 <div className="flex items-center gap-2.5 sm:gap-3 text-xs sm:text-sm text-slate-600 dark:text-slate-300 font-medium">
                   <Search className="w-4 h-4 sm:w-5 sm:h-5 text-[var(--brand-blue)] dark:text-[var(--brand-accent-tint)] shrink-0" />
                   <span>
                     <strong className="text-slate-900 dark:text-white">{filteredGames.length}</strong> {filteredGames.length === 1 ? 'result' : 'results'} for &ldquo;{searchQuery}&rdquo;
                   </span>
                 </div>
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="text-sm text-[var(--brand-blue)] dark:text-[var(--brand-accent-tint)] hover:opacity-80 font-semibold cursor-pointer px-3 py-1 rounded-full hover:bg-[var(--brand-blue)]/10 transition-colors shrink-0"
-                >
-                  Clear
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => {
+                      const targetUrl = `https://duckduckgo.com/?q=${encodeURIComponent(searchQuery.trim())}&kp=-2`;
+                      handlePlayGame({
+                        id: 990001,
+                        name: `DuckDuckGo: ${searchQuery.trim()}`,
+                        cover: '/assets/duckduckgo.svg',
+                        url: targetUrl,
+                        author: 'DuckDuckGo',
+                        special: ['search'],
+                        source: 'rammerhead',
+                        library: 'gn-math',
+                        category: 'Featured',
+                        resolvedCover: '/assets/duckduckgo.svg',
+                        fallbackCover: '/assets/duckduckgo.png',
+                        localCover: '/assets/duckduckgo.svg',
+                        resolvedUrl: targetUrl,
+                      });
+                    }}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                  >
+                    Search DuckDuckGo
+                  </button>
+                  <button
+                    onClick={() => {
+                      const targetUrl = `https://www.google.com/search?q=${encodeURIComponent(searchQuery.trim())}&safe=off`;
+                      handlePlayGame({
+                        id: 990002,
+                        name: `Google: ${searchQuery.trim()}`,
+                        cover: '/assets/google-logo.svg',
+                        url: targetUrl,
+                        author: 'Google',
+                        special: ['search'],
+                        source: 'rammerhead',
+                        library: 'gn-math',
+                        category: 'Featured',
+                        resolvedCover: '/assets/google-logo.svg',
+                        fallbackCover: '/assets/google-logo.svg',
+                        localCover: '/assets/google-logo.svg',
+                        resolvedUrl: targetUrl,
+                      });
+                    }}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-white/10 dark:hover:bg-white/15 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+                  >
+                    Search Google
+                  </button>
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="text-sm text-[var(--brand-blue)] dark:text-[var(--brand-accent-tint)] hover:opacity-80 font-semibold cursor-pointer px-3 py-1 rounded-full hover:bg-[var(--brand-blue)]/10 transition-colors shrink-0"
+                  >
+                    Clear
+                  </button>
+                </div>
               </div>
             )}
 
@@ -635,16 +712,58 @@ export default function App() {
                 <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
                   {showFavoritesOnly
                     ? 'Tap the heart on any game in this library to keep it here for quick access.'
-                    : searchQuery ? `Nothing turned up for "${searchQuery}" in this library. Try searching all libraries or clearing your filter.` : 'Try another category or switch libraries.'}
+                    : searchQuery ? `Nothing turned up for "${searchQuery}" in FrostHub games. You can search the live web via Rammerhead below or browse all games.` : 'Try another category or switch libraries.'}
                 </p>
                 <div className="flex flex-wrap items-center justify-center gap-3">
-                  {searchQuery && selectedLibrary !== 'all' && (
-                    <button
-                      onClick={() => setSelectedLibrary('all')}
-                      className="px-6 py-3 bg-[var(--brand-blue)] hover:opacity-90 active:scale-95 text-white text-sm font-semibold rounded-full shadow-md shadow-[var(--brand-blue-glow)] transition duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer"
-                    >
-                      Search all libraries
-                    </button>
+                  {searchQuery && (
+                    <>
+                      <button
+                        onClick={() => {
+                          const targetUrl = `https://duckduckgo.com/?q=${encodeURIComponent(searchQuery.trim())}&kp=-2`;
+                          handlePlayGame({
+                            id: 990001,
+                            name: `DuckDuckGo: ${searchQuery.trim()}`,
+                            cover: '/assets/duckduckgo.svg',
+                            url: targetUrl,
+                            author: 'DuckDuckGo',
+                            special: ['search'],
+                            source: 'rammerhead',
+                            library: 'gn-math',
+                            category: 'Featured',
+                            resolvedCover: '/assets/duckduckgo.svg',
+                            fallbackCover: '/assets/duckduckgo.png',
+                            localCover: '/assets/duckduckgo.svg',
+                            resolvedUrl: targetUrl,
+                          });
+                        }}
+                        className="px-5 py-3 bg-[var(--brand-blue)] hover:opacity-90 active:scale-95 text-white text-sm font-semibold rounded-full shadow-md shadow-[var(--brand-blue-glow)] transition duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer"
+                      >
+                        Search DuckDuckGo
+                      </button>
+                      <button
+                        onClick={() => {
+                          const targetUrl = `https://www.google.com/search?q=${encodeURIComponent(searchQuery.trim())}&safe=off`;
+                          handlePlayGame({
+                            id: 990002,
+                            name: `Google: ${searchQuery.trim()}`,
+                            cover: '/assets/google-logo.svg',
+                            url: targetUrl,
+                            author: 'Google',
+                            special: ['search'],
+                            source: 'rammerhead',
+                            library: 'gn-math',
+                            category: 'Featured',
+                            resolvedCover: '/assets/google-logo.svg',
+                            fallbackCover: '/assets/google-logo.svg',
+                            localCover: '/assets/google-logo.svg',
+                            resolvedUrl: targetUrl,
+                          });
+                        }}
+                        className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-white/10 dark:hover:bg-white/15 dark:text-white text-sm font-semibold rounded-full transition duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer"
+                      >
+                        Search Google
+                      </button>
+                    </>
                   )}
                   <button
                     onClick={() => {
@@ -653,7 +772,7 @@ export default function App() {
                       setShowFavoritesOnly(false);
                     }}
                     className={`px-6 py-3 active:scale-95 text-sm font-semibold rounded-full transition duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] cursor-pointer ${
-                      searchQuery && selectedLibrary !== 'all'
+                      searchQuery
                         ? 'bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-white/10 dark:hover:bg-white/15 dark:text-white'
                         : 'bg-[var(--brand-blue)] hover:opacity-90 text-white shadow-md shadow-[var(--brand-blue-glow)]'
                     }`}

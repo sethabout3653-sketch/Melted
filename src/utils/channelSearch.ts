@@ -425,46 +425,34 @@ export function searchChannels(
     ...evaluateChannelSearch(channel, q, tokens),
   }));
 
-  const hasAllNameMatches = evaluated.some((item) => item.matchedAllNameTokens);
-  const hasNameMatches = evaluated.some((item) => item.nameScore > 0);
-  const hasAllDirectMatches = evaluated.some((item) => item.matchedAllDirectTokens);
-  const hasDescMatches = evaluated.some((item) => item.descScore > 0);
-  const hasAllConceptMatches = evaluated.some((item) => item.matchedAllConcepts);
-
   let filteredItems = evaluated;
-  if (tokens.length > 1) {
-    if (hasAllNameMatches) {
-      filteredItems = evaluated.filter((item) => item.matchedAllNameTokens);
-    } else if (hasAllDirectMatches) {
-      filteredItems = evaluated.filter((item) => item.matchedAllDirectTokens);
-    } else if (hasAllConceptMatches) {
-      filteredItems = evaluated.filter((item) => item.matchedAllConcepts);
-    } else if (hasNameMatches) {
-      filteredItems = evaluated.filter((item) => item.nameScore > 0);
-    } else if (hasDescMatches) {
-      filteredItems = evaluated.filter((item) => item.descScore > 0);
-    } else {
-      filteredItems = evaluated.filter((item) => item.catTopicScore > 0);
-    }
+  if (q.length <= 2) {
+    // Ultra-short 1-2 char query: focus on channel name matches
+    filteredItems = evaluated.filter((item) => item.nameScore > 0);
   } else {
-    // Single-token or short specific search: strictly match specific channel names first;
-    // never dump an entire category when channels with that name exist.
-    if (hasNameMatches) {
-      filteredItems = evaluated.filter((item) => item.nameScore > 0);
-    } else if (hasDescMatches) {
-      filteredItems = evaluated.filter((item) => item.descScore > 0);
-    } else {
-      filteredItems = evaluated.filter((item) => item.catTopicScore > 0);
-    }
+    // Include ALL relevant channels (name, description, category, or topic cluster), ranked by match tier
+    filteredItems = evaluated.filter(
+      (item) => item.nameScore > 0 || item.descScore > 0 || item.catTopicScore > 0
+    );
   }
 
   const scored = filteredItems.map((item) => {
+    const tierBonus = item.matchedAllNameTokens
+      ? 5000
+      : item.matchedAllDirectTokens
+      ? 3000
+      : item.matchedAllConcepts
+      ? 1500
+      : item.nameScore > 0
+      ? 800
+      : item.descScore > 0
+      ? 300
+      : 0;
     const baseScore = item.nameScore * 20 + item.descScore * 4 + item.catTopicScore;
-    const conceptBonus = item.matchedAllConcepts ? 1000 : 0;
     const boost = options?.boostPredicate?.(item.channel) ? 60 : 0;
     return {
       channel: item.channel,
-      score: conceptBonus + baseScore + boost,
+      score: tierBonus + baseScore + boost,
     };
   });
 

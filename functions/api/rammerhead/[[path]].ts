@@ -1,10 +1,13 @@
-// Cloudflare Pages / Workers Function: Rammerhead Proxy, Persistent Cookie Store & Session API
+// Cloudflare Pages / Workers Function: Rammerhead Proxy, DO SQLite Persistent Cookie Store & Session API
 import {
   generateRammerheadSessionId,
   isValidRammerheadSessionId,
   extractRammerheadSessionAndUrl,
+  extractHostMatchedCookies,
+  normalizeCaptchaChallengeUrl,
   rewriteHtmlForRammerhead,
   rewriteCssForRammerhead,
+  rewriteJsForRammerhead,
   parseSetCookieHeader,
   mergeCookieRecordMap,
   buildCookieHeaderForUrl,
@@ -13,7 +16,7 @@ import {
   FORBIDDEN_FORWARD_HEADERS,
   type RammerheadCookieEntry,
 } from '../../../src/utils/rammerheadCore';
-import { enforceSafeSearchOffUrl, sanitizeSafeSearchSetCookie } from '../../../src/utils/safeSearchOff';
+import { enforceSafeSearchOffUrl } from '../../../src/utils/safeSearchOff';
 
 interface CFContext {
   request: Request;
@@ -32,21 +35,49 @@ const CORS_HEADERS: Record<string, string> = {
 const edgeSessionStore = new Set<string>();
 const edgeCookieMemory = new Map<string, { cookies: Record<string, RammerheadCookieEntry>; updatedAt: number }>();
 
+function getDoHubStub(env: Record<string, any> | undefined) {
+  try {
+    if (env?.SIGNALING_HUB && typeof env.SIGNALING_HUB.idFromName === 'function') {
+      return env.SIGNALING_HUB.get(env.SIGNALING_HUB.idFromName('global'));
+    }
+  } catch {}
+  return null;
+}
+
 async function readCookieBucket(env: Record<string, any> | undefined, key: string) {
-  const mem = edgeCookieMemory.get(key) || { cookies: {}, updatedAt: 0 };
+  let rec = edgeCookieMemory.get(key) || { cookies: {}, updatedAt: 0 };
+
+  const hub = getDoHubStub(env);
+  if (hub) {
+    try {
+      const doRes = await hub.fetch(new Request(`https://hub.internal/api/ws-db/rh-cookies?key=${encodeURIComponent(key)}`));
+      if (doRes.ok) {
+        const doData = (await doRes.json()) as { cookies?: Record<string, RammerheadCookieEntry>; updatedAt?: number };
+        if (doData?.cookies && typeof doData.cookies === 'object') {
+          rec = {
+            cookies: mergeCookieRecordMap(rec.cookies, doData.cookies),
+            updatedAt: Math.max(rec.updatedAt, doData.updatedAt || 0),
+          };
+          edgeCookieMemory.set(key, rec);
+        }
+      }
+    } catch {}
+  }
+
   const kv = env?.SCRAMJET_COOKIES || env?.RAMMERHEAD_COOKIES;
   if (kv) {
     try {
       const fromKv = await kv.get(`rammerhead:${key}`, 'json');
       if (fromKv && typeof fromKv === 'object') {
-        const merged = mergeCookieRecordMap(mem.cookies, (fromKv as any).cookies);
-        const rec = { cookies: merged, updatedAt: Math.max(mem.updatedAt, (fromKv as any).updatedAt || 0) };
+        rec = {
+          cookies: mergeCookieRecordMap(rec.cookies, (fromKv as any).cookies),
+          updatedAt: Math.max(rec.updatedAt, (fromKv as any).updatedAt || 0),
+        };
         edgeCookieMemory.set(key, rec);
-        return rec;
       }
     } catch {}
   }
-  return mem;
+  return rec;
 }
 
 async function writeCookieBucket(
@@ -58,6 +89,20 @@ async function writeCookieBucket(
   const merged = mergeCookieRecordMap(cur.cookies, incoming);
   const next = { cookies: merged, updatedAt: Date.now() };
   edgeCookieMemory.set(key, next);
+
+  const hub = getDoHubStub(env);
+  if (hub) {
+    try {
+      await hub.fetch(
+        new Request('https://hub.internal/api/ws-db/rh-cookies', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key, cookies: next.cookies }),
+        })
+      );
+    } catch {}
+  }
+
   const kv = env?.SCRAMJET_COOKIES || env?.RAMMERHEAD_COOKIES;
   if (kv) {
     try {
@@ -90,7 +135,7 @@ export async function onRequest(context: CFContext): Promise<Response> {
       const combined = mergeCookieRecordMap(mergeCookieRecordMap(base.cookies, user.cookies), sess.cookies);
       return new Response(JSON.stringify({ success: true, cookies: combined, updatedAt: Date.now() }), {
         status: 200,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
       });
     }
 
@@ -114,7 +159,7 @@ export async function onRequest(context: CFContext): Promise<Response> {
         }
         return new Response(JSON.stringify({ success: true, cookies: saved.cookies, updatedAt: saved.updatedAt }), {
           status: 200,
-          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+          headers: { ...CORS_HEADERS, 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
         });
       } catch (err: any) {
         return new Response(JSON.stringify({ error: err?.message || 'Invalid JSON' }), {
@@ -161,6 +206,7 @@ export async function onRequest(context: CFContext): Promise<Response> {
 
   // 2. Proxy request
   const referer = request.headers.get('referer') || undefined;
+  const refererInfo = referer ? extractRammerheadSessionAndUrl(referer) : null;
   const extracted = extractRammerheadSessionAndUrl(pathname + url.search, referer);
 
   if (!extracted || !isValidRammerheadSessionId(extracted.sessionId) || !extracted.targetUrl) {
@@ -168,16 +214,20 @@ export async function onRequest(context: CFContext): Promise<Response> {
   }
 
   const { sessionId, targetUrl } = extracted;
+  const edgeHost = url.hostname.toLowerCase();
 
   let parsedTarget: URL;
   try {
-    parsedTarget = enforceSafeSearchOffUrl(new URL(targetUrl));
+    parsedTarget = normalizeCaptchaChallengeUrl(
+      enforceSafeSearchOffUrl(new URL(targetUrl)),
+      refererInfo?.targetUrl,
+      edgeHost
+    );
   } catch {
     return new Response('Invalid target URL structure', { status: 400, headers: CORS_HEADERS });
   }
 
   const host = parsedTarget.hostname.toLowerCase();
-  const edgeHost = url.hostname.toLowerCase();
   if (
     host === 'localhost' ||
     host === '127.0.0.1' ||
@@ -194,22 +244,29 @@ export async function onRequest(context: CFContext): Promise<Response> {
 
   try {
     const forwardHeaders = new Headers();
+    request.headers.forEach((val, key) => {
+      const lower = key.toLowerCase();
+      if (
+        FORBIDDEN_FORWARD_HEADERS.has(lower) ||
+        lower === 'cookie' ||
+        lower === 'referer' ||
+        lower === 'origin' ||
+        lower.startsWith('sec-') ||
+        lower.startsWith('x-forwarded-') ||
+        lower.startsWith('cf-') ||
+        lower === 'x-real-ip'
+      ) {
+        return;
+      }
+      forwardHeaders.set(key, val);
+    });
     forwardHeaders.set(
       'User-Agent',
       request.headers.get('user-agent') ||
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
     );
     forwardHeaders.set('Accept', request.headers.get('accept') || '*/*');
-    forwardHeaders.set('Accept-Language', 'en-US,en;q=0.9');
-    if (request.headers.has('range')) {
-      forwardHeaders.set('Range', request.headers.get('range')!);
-    }
-    if (request.headers.has('if-range')) {
-      forwardHeaders.set('If-Range', request.headers.get('if-range')!);
-    }
-    if (request.headers.has('content-type')) {
-      forwardHeaders.set('Content-Type', request.headers.get('content-type')!);
-    }
+    forwardHeaders.set('Accept-Language', request.headers.get('accept-language') || 'en-US,en;q=0.9');
 
     const baseBucket = await readCookieBucket(env, 'default');
     const sessBucket = await readCookieBucket(env, sessionId);
@@ -225,9 +282,18 @@ export async function onRequest(context: CFContext): Promise<Response> {
         forwardHeaders.set('Origin', 'https://www.youtube.com');
       }
     } else {
-      forwardHeaders.set('Referer', parsedTarget.origin + '/');
+      let upstreamRef = parsedTarget.origin + '/';
+      let upstreamReqOrigin = parsedTarget.origin;
+      if (refererInfo?.targetUrl && /^https?:\/\//i.test(refererInfo.targetUrl)) {
+        try {
+          const refU = new URL(refererInfo.targetUrl);
+          upstreamRef = refU.href;
+          upstreamReqOrigin = refU.origin;
+        } catch {}
+      }
+      forwardHeaders.set('Referer', upstreamRef);
       if (request.method !== 'GET' && request.method !== 'HEAD') {
-        forwardHeaders.set('Origin', parsedTarget.origin);
+        forwardHeaders.set('Origin', upstreamReqOrigin);
       }
     }
 
@@ -244,47 +310,73 @@ export async function onRequest(context: CFContext): Promise<Response> {
     });
     clearTimeout(timeoutId);
 
-    // Capture Set-Cookie persistently (never resets cookies)
+    // Capture Set-Cookie persistently into DO SQLite + KV + memory (never resets cookies)
     const setCookies = (upstreamRes.headers as any).getSetCookie?.() || [];
+    const capturedBatch: Record<string, RammerheadCookieEntry> = {};
     if (Array.isArray(setCookies) && setCookies.length > 0) {
-      const parsedBatch: Record<string, RammerheadCookieEntry> = {};
       for (const rawC of setCookies) {
         const parsed = parseSetCookieHeader(String(rawC), host);
-        if (parsed) parsedBatch[parsed.key] = parsed.entry;
+        if (parsed) capturedBatch[parsed.key] = parsed.entry;
       }
-      if (Object.keys(parsedBatch).length > 0) {
-        await writeCookieBucket(env, 'default', parsedBatch);
-        await writeCookieBucket(env, sessionId, parsedBatch);
+      if (Object.keys(capturedBatch).length > 0) {
+        await writeCookieBucket(env, 'default', capturedBatch);
+        await writeCookieBucket(env, sessionId, capturedBatch);
       }
     }
+
+    const attachSyncHeaders = (hdrs: Headers) => {
+      if (Object.keys(capturedBatch).length === 0) return;
+      hdrs.set('X-Rammerhead-Has-Cookies', '1');
+      try {
+        const encoded = encodeURIComponent(JSON.stringify(capturedBatch));
+        if (encoded.length <= 3600) {
+          hdrs.set('X-Rammerhead-Cookie-Sync', encoded);
+        }
+      } catch {}
+    };
 
     // Rewrite 3xx redirect Location manually to keep session + stay off localhost
     if ([301, 302, 303, 307, 308].includes(upstreamRes.status) && upstreamRes.headers.has('location')) {
       const loc = upstreamRes.headers.get('location')!;
-      const resolvedLoc = enforceSafeSearchOffUrl(new URL(loc, parsedTarget.href)).href;
+      const resolvedLoc = normalizeCaptchaChallengeUrl(
+        enforceSafeSearchOffUrl(new URL(loc, parsedTarget.href)),
+        refererInfo?.targetUrl,
+        edgeHost
+      ).href;
       const redirHeaders = new Headers(CORS_HEADERS);
+      attachSyncHeaders(redirHeaders);
       redirHeaders.set('Location', `/api/rammerhead/${sessionId}/${resolvedLoc}`);
       redirHeaders.set('Cache-Control', 'no-store');
       return new Response(null, { status: upstreamRes.status, headers: redirHeaders });
     }
 
     const contentType = (upstreamRes.headers.get('content-type') || '').toLowerCase();
-    const isHtml = contentType.includes('text/html');
-    const isCss = contentType.includes('text/css');
+    const pathLower = parsedTarget.pathname.toLowerCase();
+    const isEmptyStatus =
+      request.method === 'HEAD' || upstreamRes.status === 204 || upstreamRes.status === 304;
+    const isHtml = !isEmptyStatus && contentType.includes('text/html');
+    const isCss = !isEmptyStatus && contentType.includes('text/css');
+    const isJs =
+      !isEmptyStatus &&
+      !isHtml &&
+      !isCss &&
+      (contentType.includes('javascript') ||
+        contentType.includes('ecmascript') ||
+        (!contentType && /\.(?:m?js|cjs)(\?|$)/i.test(pathLower)));
 
     const resHeaders = new Headers(CORS_HEADERS);
+    attachSyncHeaders(resHeaders);
     upstreamRes.headers.forEach((val, key) => {
       const lower = key.toLowerCase();
+      // Never leak upstream Set-Cookie onto FrostHub's root origin
       if (lower === 'set-cookie') {
-        resHeaders.append('Set-Cookie', sanitizeSafeSearchSetCookie(host, val));
         return;
       }
-      if (isHtml || isCss) {
+      if (isHtml || isCss || isJs) {
         if (!STRIPPED_UPSTREAM_HEADERS.has(lower) && !FORBIDDEN_FORWARD_HEADERS.has(lower)) {
           resHeaders.set(key, val);
         }
       } else {
-        // Keep Content-Range / Content-Length intact for video/binary/media streams
         if (
           lower !== 'content-encoding' &&
           !STRIPPED_STREAM_HEADERS.has(lower) &&
@@ -295,12 +387,26 @@ export async function onRequest(context: CFContext): Promise<Response> {
       }
     });
 
+    if (isEmptyStatus) {
+      return new Response(null, { status: upstreamRes.status, headers: resHeaders });
+    }
+
     if (isHtml) {
       const rawHtml = await upstreamRes.text();
-      const rewrittenHtml = rewriteHtmlForRammerhead(rawHtml, sessionId, parsedTarget.href);
+      const postMergedJar =
+        Object.keys(capturedBatch).length > 0 ? mergeCookieRecordMap(mergedJar, capturedBatch) : mergedJar;
+      const hostCookies = extractHostMatchedCookies(postMergedJar, parsedTarget);
+      const rewrittenHtml = rewriteHtmlForRammerhead(rawHtml, sessionId, parsedTarget.href, { hostCookies });
       resHeaders.set('Content-Type', 'text/html; charset=utf-8');
       resHeaders.set('Cache-Control', 'no-cache, no-store, must-revalidate');
       return new Response(rewrittenHtml, { status: upstreamRes.status, headers: resHeaders });
+    }
+
+    if (isJs) {
+      const rawJs = await upstreamRes.text();
+      const rewrittenJs = rewriteJsForRammerhead(rawJs, sessionId, parsedTarget.href);
+      resHeaders.set('Content-Type', 'application/javascript; charset=utf-8');
+      return new Response(rewrittenJs, { status: upstreamRes.status, headers: resHeaders });
     }
 
     if (isCss) {
