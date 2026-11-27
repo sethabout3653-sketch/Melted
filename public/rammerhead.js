@@ -8,6 +8,21 @@
 (function () {
   'use strict';
 
+  try {
+    var host = (window.location && window.location.hostname) || '';
+    var path = (window.location && window.location.pathname) || '';
+    if (
+      host.indexOf('recaptcha') !== -1 ||
+      host.indexOf('hcaptcha') !== -1 ||
+      host.indexOf('turnstile') !== -1 ||
+      host.indexOf('cloudflare.com') !== -1 ||
+      path.indexOf('/recaptcha/') !== -1 ||
+      path.indexOf('/sorry/') !== -1
+    ) {
+      return;
+    }
+  } catch (e) {}
+
   if (window.__rammerhead_injected) return;
   window.__rammerhead_injected = true;
 

@@ -358,6 +358,17 @@ export function rewriteHtmlForRammerhead(
   upstreamUrl: string,
   _proxyOrigin: string = ''
 ): string {
+  const lowerUpstream = (upstreamUrl || '').toLowerCase();
+  if (
+    lowerUpstream.includes('recaptcha') ||
+    lowerUpstream.includes('hcaptcha') ||
+    lowerUpstream.includes('turnstile') ||
+    lowerUpstream.includes('challenges.cloudflare') ||
+    lowerUpstream.includes('/sorry/')
+  ) {
+    return html;
+  }
+
   let upstreamObj: URL;
   try {
     upstreamObj = new URL(upstreamUrl);
