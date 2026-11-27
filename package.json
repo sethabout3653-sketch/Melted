@@ -7,9 +7,9 @@
     "node": ">=20.19.0"
   },
   "scripts": {
-    "dev": "tsx server.ts",
+    "dev": "NODE_OPTIONS=--max-old-space-size=4096 tsx server.ts",
     "build": "vite build",
-    "start": "tsx server.ts",
+    "start": "NODE_OPTIONS=--max-old-space-size=4096 tsx server.ts",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
@@ -22,10 +22,6 @@
     "@distube/ytdl-core": "^5.2.1",
     "@giphy/js-fetch-api": "^5.8.0",
     "@google/genai": "^3.6.1",
-    "@mercuryworkshop/epoxy-transport": "3.0.2",
-    "@mercuryworkshop/libcurl-transport": "2.0.6",
-    "@mercuryworkshop/scramjet": "2.0.67-alpha.2",
-    "@mercuryworkshop/scramjet-controller": "0.0.14",
     "@mercuryworkshop/wisp-js": "0.5.3",
     "@tailwindcss/typography": "^0.5.20",
     "@tailwindcss/vite": "^4.3.3",

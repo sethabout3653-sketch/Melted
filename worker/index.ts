@@ -1,6 +1,5 @@
 import { onRequest as health } from '../functions/api/health';
-import { onRequest as scramjetCookies } from '../functions/api/scramjet-cookies';
-import { onRequest as scramjetFetch } from '../functions/api/scramjet-fetch';
+import { onRequest as rammerhead } from '../functions/api/rammerhead/[[path]]';
 import { onRequest as raw } from '../functions/api/raw/[filename]';
 import { onRequest as ugs } from '../functions/api/ugs/[[path]]';
 import { onRequest as ckv } from '../functions/api/ckv/[[path]]';
@@ -51,8 +50,15 @@ type Handler = (context: { request: Request; env: Env; params: Record<string, st
 
 const routes: Array<{ pattern: RegExp; handler: Handler }> = [
   { pattern: /^\/api\/health\/?$/, handler: health },
-  { pattern: /^\/api\/scramjet-cookies\/?$/, handler: ({ request, env }) => scramjetCookies({ request, env }) },
-  { pattern: /^\/api\/scramjet-fetch\/?$/, handler: scramjetFetch },
+  { pattern: /^\/api\/rammerhead\/(.+)\/?$/, handler: ({ request, env, params }) => rammerhead({ request, env, params: { path: params.filename } }) },
+  { pattern: /^\/api\/rammerhead\/?$/, handler: ({ request, env }) => rammerhead({ request, env }) },
+  { pattern: /^\/newsession\/?$/, handler: ({ request, env }) => rammerhead({ request, env }) },
+  { pattern: /^\/sessionexists\/?$/, handler: ({ request, env }) => rammerhead({ request, env }) },
+  { pattern: /^\/editsession\/?$/, handler: ({ request, env }) => rammerhead({ request, env }) },
+  { pattern: /^\/deletesession\/?$/, handler: ({ request, env }) => rammerhead({ request, env }) },
+  { pattern: /^\/needpassword\/?$/, handler: ({ request, env }) => rammerhead({ request, env }) },
+  { pattern: /^\/mainport\/?$/, handler: ({ request, env }) => rammerhead({ request, env }) },
+  { pattern: /^\/([a-f0-9]{32})\/(.+)$/, handler: ({ request, env, params }) => rammerhead({ request, env, params: { path: params.filename } }) },
   { pattern: /^\/api\/raw\/(.+)\/?$/, handler: ({ params }) => raw({ params: { filename: params.filename } }) },
   { pattern: /^\/api\/ugs\/(.+)\/?$/, handler: ({ request, params }) => ugs({ request, params: { path: params.filename } }) },
   { pattern: /^\/api\/ckv\/(.+)\/?$/, handler: ({ request, params }) => ckv({ request, params: { path: params.filename } }) },

@@ -223,6 +223,36 @@ function attachSharedConnection(transport: ClientTransport, registerClose: (cb: 
         case 'REGISTER_USER': {
           if (msg.user && msg.user.id) {
             const uId: string = msg.user.id;
+            const prevBoundId = boundUserId;
+            const replacedId: string | undefined =
+              typeof msg.replacesUserId === 'string' && msg.replacesUserId && msg.replacesUserId !== uId
+                ? msg.replacesUserId
+                : prevBoundId && prevBoundId !== uId
+                ? prevBoundId
+                : undefined;
+
+            if (replacedId) {
+              if (disconnectTimers.has(replacedId)) {
+                clearTimeout(disconnectTimers.get(replacedId)!);
+                disconnectTimers.delete(replacedId);
+              }
+              const oldTransports = userTransportsMap.get(replacedId);
+              if (oldTransports) {
+                oldTransports.delete(transport);
+                if (oldTransports.size === 0 || replacedId === msg.replacesUserId) {
+                  userTransportsMap.delete(replacedId);
+                }
+              }
+              if (!userTransportsMap.has(replacedId) || replacedId === msg.replacesUserId) {
+                const staleUser = globalWsDb.getUser(replacedId);
+                const staleChannel = staleUser?.current_channel;
+                globalWsDb.deleteUser(replacedId);
+                if (staleChannel === 'video-general' || staleChannel === 'voice-general') {
+                  broadcastMediaPresence('USER_LEFT_MEDIA', replacedId, staleChannel);
+                }
+              }
+            }
+
             boundUserId = uId;
 
             if (disconnectTimers.has(uId)) {

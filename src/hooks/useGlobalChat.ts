@@ -1,7 +1,14 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useWebSocketDatabase } from '../services/wsDatabaseClient';
 import { useWebRTC } from '../services/useWebRTC';
-import { auth, db } from '../services/firebase';
+import {
+  auth,
+  db,
+  extractGoogleProfile,
+  signInToFrostHubWithGoogle,
+  signOutFromFrostHub,
+  type FrostHubGoogleProfile,
+} from '../services/firebase';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDocFromServer } from 'firebase/firestore';
 
@@ -110,15 +117,108 @@ export function useGlobalChat({
   }, [firebaseUserId]);
 
   const hasAttemptedAnonAuth = useRef(false);
+  const manualSignedOutRef = useRef(false);
+  const [googleUser, setGoogleUser] = useState<FrostHubGoogleProfile | null>(() =>
+    extractGoogleProfile(auth.currentUser)
+  );
+  const [isSigningInWithGoogle, setIsSigningInWithGoogle] = useState(false);
+  const [googleAuthError, setGoogleAuthError] = useState<string | null>(null);
+
+  const clearGoogleAuthError = useCallback(() => {
+    setGoogleAuthError(null);
+  }, []);
+
+  const signInWithGoogle = useCallback(async () => {
+    setGoogleAuthError(null);
+    setIsSigningInWithGoogle(true);
+    try {
+      manualSignedOutRef.current = false;
+      const profile = await signInToFrostHubWithGoogle();
+      setGoogleUser(profile);
+      setCurrentUser((prev) => {
+        const nextName = profile.displayName || prev.username;
+        const nextAvatar = profile.photoURL || prev.avatar_url;
+        try {
+          localStorage.setItem('frosthub_chat_user_id', profile.uid);
+          localStorage.setItem('frosthub_chat_username', nextName);
+          if (nextAvatar) localStorage.setItem('frosthub_chat_avatar_url', nextAvatar);
+          localStorage.setItem('frosthub_google_linked_uid', profile.uid);
+        } catch {}
+        return {
+          ...prev,
+          id: profile.uid,
+          username: nextName,
+          avatar_url: nextAvatar,
+        };
+      });
+      return profile;
+    } catch (err: any) {
+      setGoogleAuthError(err?.message || 'Could not sign in with Google.');
+      return null;
+    } finally {
+      setIsSigningInWithGoogle(false);
+    }
+  }, []);
+
+  const signOutGoogle = useCallback(async () => {
+    setGoogleAuthError(null);
+    manualSignedOutRef.current = true;
+    try {
+      await signOutFromFrostHub();
+    } catch {}
+    setGoogleUser(null);
+    const fallbackGuestId = 'u_' + Math.random().toString(36).slice(2, 8);
+    try {
+      localStorage.removeItem('frosthub_google_linked_uid');
+      localStorage.setItem('frosthub_chat_user_id', fallbackGuestId);
+    } catch {}
+    setCurrentUser((prev) => ({
+      ...prev,
+      id: fallbackGuestId,
+    }));
+  }, []);
 
   // Firebase Auth & Connection Guard
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (user) => {
-      if (!user && !hasAttemptedAnonAuth.current) {
+      if (user && !user.isAnonymous) {
+        const profile = extractGoogleProfile(user);
+        setGoogleUser(profile);
+        if (profile) {
+          setCurrentUser((prev) => {
+            const linkedUid = (() => {
+              try {
+                return localStorage.getItem('frosthub_google_linked_uid');
+              } catch {
+                return null;
+              }
+            })();
+            const isFreshLink = linkedUid !== profile.uid;
+            const nextName = isFreshLink && profile.displayName ? profile.displayName : prev.username;
+            const nextAvatar = isFreshLink && profile.photoURL ? profile.photoURL : prev.avatar_url;
+            try {
+              localStorage.setItem('frosthub_chat_user_id', profile.uid);
+              localStorage.setItem('frosthub_chat_username', nextName);
+              if (nextAvatar) localStorage.setItem('frosthub_chat_avatar_url', nextAvatar);
+              localStorage.setItem('frosthub_google_linked_uid', profile.uid);
+            } catch {}
+            return {
+              ...prev,
+              id: profile.uid,
+              username: nextName,
+              avatar_url: nextAvatar,
+            };
+          });
+        }
+      } else {
+        setGoogleUser(null);
+      }
+
+      if (!user && !hasAttemptedAnonAuth.current && !manualSignedOutRef.current) {
         hasAttemptedAnonAuth.current = true;
         try {
           await signInAnonymously(auth);
-        } catch (err) {
+        } catch {
           // If anonymous auth is not enabled in Firebase project, log gracefully without repeating
           console.info('[Firebase] Anonymous sign-in skipped or disabled (auth/admin-restricted-operation). App is fully operational via WebSocket/local mode.');
         }
@@ -128,12 +228,47 @@ export function useGlobalChat({
           await getDocFromServer(doc(db, 'test', 'connection'));
         } catch (error: any) {
           if (error?.message?.includes('offline')) {
-            console.error("Firebase is offline. Falling back to WebSocket.");
+            console.error('Firebase is offline. Falling back to WebSocket.');
           }
         }
       }
     });
     return () => unsub();
+  }, []);
+
+  // Keep multiple tabs in the same browser synchronized to a single user identity
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (
+        e.key !== 'frosthub_chat_user_id' &&
+        e.key !== 'frosthub_chat_username' &&
+        e.key !== 'frosthub_chat_avatar_url' &&
+        e.key !== 'frosthub_chat_usercolor' &&
+        e.key !== 'frosthub_google_linked_uid'
+      ) {
+        return;
+      }
+      try {
+        const nextId = localStorage.getItem('frosthub_chat_user_id');
+        const nextName = localStorage.getItem('frosthub_chat_username');
+        const nextColor = localStorage.getItem('frosthub_chat_usercolor');
+        const nextAvatar = localStorage.getItem('frosthub_chat_avatar_url') || '';
+        setCurrentUser((prev) => ({
+          ...prev,
+          id: nextId || prev.id,
+          username: nextName || prev.username,
+          avatar_color: nextColor || prev.avatar_color,
+          avatar_url: nextAvatar,
+        }));
+        if (!localStorage.getItem('frosthub_google_linked_uid')) {
+          setGoogleUser(null);
+        } else if (auth.currentUser && !auth.currentUser.isAnonymous) {
+          setGoogleUser(extractGoogleProfile(auth.currentUser));
+        }
+      } catch {}
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   const chat = useWebSocketDatabase(currentUser);
@@ -876,6 +1011,16 @@ export function useGlobalChat({
 
       activeChannel,
       setActiveChannel,
+
+      // FrostHub Google Account Auth
+      googleUser,
+      isGoogleSignedIn: Boolean(googleUser),
+      isSigningInWithGoogle,
+      googleAuthError,
+      clearGoogleAuthError,
+      signInWithGoogle,
+      signOutGoogle,
+
       ...chat,
     }),
     [
@@ -903,6 +1048,12 @@ export function useGlobalChat({
       toggleCamera,
       toggleScreenShare,
       activeChannel,
+      googleUser,
+      isSigningInWithGoogle,
+      googleAuthError,
+      clearGoogleAuthError,
+      signInWithGoogle,
+      signOutGoogle,
       chat,
     ]
   );

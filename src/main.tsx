@@ -55,8 +55,29 @@ if (typeof window !== 'undefined') {
   }, true);
 }
 
-createRoot(document.getElementById('root')!).render(
-  <ErrorBoundary>
-    <App />
-  </ErrorBoundary>
-);
+let isNestedFrostHubEmbed = false;
+try {
+  isNestedFrostHubEmbed =
+    typeof window !== 'undefined' &&
+    window !== window.top &&
+    window.frameElement?.getAttribute?.('data-frosthub-embed') === 'true';
+} catch {}
+
+if (isNestedFrostHubEmbed) {
+  createRoot(document.getElementById('root')!).render(
+    <div className="w-screen h-screen bg-[#05070c] text-white flex flex-col items-center justify-center p-6 text-center select-none">
+      <p className="text-sm font-bold text-slate-200">
+        This page could not load inside the proxy frame.
+      </p>
+      <p className="text-xs text-slate-400 mt-1.5 max-w-sm">
+        Use the reload button above or navigate to a valid URL.
+      </p>
+    </div>
+  );
+} else {
+  createRoot(document.getElementById('root')!).render(
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
+}

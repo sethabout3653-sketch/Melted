@@ -326,7 +326,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange, searc
               </div>
             )}
           </div>
-          <div className="relative flex-1 bg-black w-full min-h-0"><iframe key={`${selectedMedia.id}-${season}-${episode}-${serverIndex}`} src={playerUrl} title={selectedMedia.title || selectedMedia.name || 'Media player'} className="w-full h-full border-0" allowFullScreen allow="autoplay; encrypted-media; picture-in-picture" /></div>
+          <div className="relative flex-1 bg-black w-full min-h-0"><iframe data-frosthub-embed="true" key={`${selectedMedia.id}-${season}-${episode}-${serverIndex}`} src={playerUrl} title={selectedMedia.title || selectedMedia.name || 'Media player'} className="w-full h-full border-0" allowFullScreen allow="autoplay; encrypted-media; picture-in-picture" /></div>
         </div>, document.body
       )}
     </div>

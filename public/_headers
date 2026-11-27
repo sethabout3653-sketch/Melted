@@ -19,47 +19,11 @@
   Access-Control-Allow-Origin: *
   Cross-Origin-Resource-Policy: cross-origin
 
-/sj-sw.js
+/rammerhead.js
   Content-Type: application/javascript; charset=utf-8
-  Service-Worker-Allowed: /
-  Cache-Control: no-cache, no-store, must-revalidate
-  Access-Control-Allow-Origin: *
-
-/controller/*
-  Service-Worker-Allowed: /
   Cross-Origin-Resource-Policy: cross-origin
   Access-Control-Allow-Origin: *
-  Cache-Control: no-cache, must-revalidate
-
-/scramjet/*.wasm
-  Content-Type: application/wasm
-  Cross-Origin-Resource-Policy: cross-origin
-  Access-Control-Allow-Origin: *
-  Cache-Control: public, max-age=604800
-
-/scramjet/*
-  Cross-Origin-Resource-Policy: cross-origin
-  Access-Control-Allow-Origin: *
-
-/epoxy/*.wasm
-  Content-Type: application/wasm
-  Cross-Origin-Resource-Policy: cross-origin
-  Access-Control-Allow-Origin: *
-  Cache-Control: public, max-age=604800
-
-/epoxy/*
-  Cross-Origin-Resource-Policy: cross-origin
-  Access-Control-Allow-Origin: *
-
-/libcurl/*.wasm
-  Content-Type: application/wasm
-  Cross-Origin-Resource-Policy: cross-origin
-  Access-Control-Allow-Origin: *
-  Cache-Control: public, max-age=604800
-
-/libcurl/*
-  Cross-Origin-Resource-Policy: cross-origin
-  Access-Control-Allow-Origin: *
+  Cache-Control: public, max-age=86400
 
 /api/raw/*
   Content-Type: text/html; charset=utf-8

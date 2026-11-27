@@ -140,12 +140,12 @@ export default function App() {
     });
   }, []);
 
-  // Immediately prewarm Scramjet SW & controller so games and soundboard launch cleanly on first click
+  // Immediately prewarm Rammerhead session so games and featured apps launch cleanly on first click
   useEffect(() => {
-    if (typeof window === 'undefined' || !('serviceWorker' in navigator)) return;
+    if (typeof window === 'undefined') return;
     const timer = window.setTimeout(() => {
-      import('./services/scramjetProxyService')
-        .then((m) => m.initScramjetProxy())
+      import('./services/rammerheadProxyService')
+        .then((m) => m.initRammerheadSession())
         .catch(() => {});
     }, 50);
     return () => window.clearTimeout(timer);

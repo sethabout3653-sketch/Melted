@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { GameItem } from '../types/game';
-import { shouldUseScramjetByDefault, getScramjetTargetUrl, getPlayableGameUrl } from '../services/gameService';
-import { initScramjetProxy, launchInScramjetFrame } from '../services/scramjetProxyService';
+import { shouldUseRammerheadByDefault, getRammerheadTargetUrl, getPlayableGameUrl } from '../services/gameService';
+import { initRammerheadSession, launchInRammerheadFrame } from '../services/rammerheadProxyService';
 
 export interface CloakPreset {
   id: string;
@@ -449,8 +449,8 @@ export function launchAboutBlank(gameUrl: string, gameTitle: string) {
 
 export async function launchGameInNewTab(game: GameItem) {
   const gameTitle = game.name || 'Game';
-  const useSj = shouldUseScramjetByDefault(game);
-  const targetUrl = useSj ? getScramjetTargetUrl(game) : getPlayableGameUrl(game);
+  const useRh = shouldUseRammerheadByDefault(game);
+  const targetUrl = useRh ? getRammerheadTargetUrl(game) : getPlayableGameUrl(game);
 
   try {
     const win = window.open('about:blank', '_blank');
@@ -490,9 +490,9 @@ export async function launchGameInNewTab(game: GameItem) {
     win.document.body.style.backgroundColor = '#000';
     win.document.body.appendChild(iframe);
 
-    if (useSj && targetUrl) {
-      await initScramjetProxy();
-      await launchInScramjetFrame(iframe, targetUrl);
+    if (useRh && targetUrl) {
+      await initRammerheadSession();
+      await launchInRammerheadFrame(iframe, targetUrl);
     } else {
       iframe.src = targetUrl;
     }

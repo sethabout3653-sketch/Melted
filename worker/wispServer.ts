@@ -1,5 +1,5 @@
 // Cloudflare Worker Wisp v1/v2 Server with SOCKS5 Split-Routing & connect()
-// Pairs with client-side @mercuryworkshop/epoxy-transport for Scramjet proxying
+// Pairs with Rammerhead & Wisp transport proxying
 //
 // Features:
 // 1. High-speed Wisp protocol handling over Cloudflare WebSocketPair.

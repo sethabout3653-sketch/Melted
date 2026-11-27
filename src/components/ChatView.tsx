@@ -35,13 +35,35 @@ import {
   Trash2,
   Maximize2,
   Minimize2,
-  User
+  User,
+  LogOut
 } from 'lucide-react';
 
 import { UserAvatar } from './UserAvatar';
 import { processAvatarImage, persistAvatarUrl } from '../utils/avatarUtils';
 import { FontSettingsSection } from './FontSettingsSection';
 import { FrostHubLogo } from './FrostHubLogo';
+
+const GoogleLogoIcon: React.FC<{ className?: string }> = ({ className = 'w-4 h-4' }) => (
+  <svg viewBox="0 0 24 24" className={className} aria-hidden="true">
+    <path
+      fill="#4285F4"
+      d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17Z"
+    />
+    <path
+      fill="#34A853"
+      d="M12 24c3.3 0 6.08-1.09 8.1-2.96l-3.88-3.05c-1.1.74-2.51 1.18-4.22 1.18-3.25 0-6.01-2.19-6.99-5.14H1.01v3.14C3.05 21.22 7.21 24 12 24Z"
+    />
+    <path
+      fill="#FBBC05"
+      d="M5.01 14.03c-.25-.74-.39-1.54-.39-2.36 0-.82.14-1.62.39-2.36V6.17H1.01A11.96 11.96 0 0 0 0 11.67c0 1.94.46 3.77 1.01 5.5l4-3.14Z"
+    />
+    <path
+      fill="#EA4335"
+      d="M12 4.75c1.8 0 3.41.62 4.68 1.84l3.51-3.51C18.07 1.19 15.3 0 12 0 7.21 0 3.05 2.78 1.01 6.84l4 3.14C5.99 7.03 8.75 4.75 12 4.75Z"
+    />
+  </svg>
+);
 
 interface ChatViewProps {
   globalChat: any;
@@ -1327,6 +1349,13 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
     setScreenShareError,
     toggleCamera,
     toggleScreenShare,
+    googleUser,
+    isGoogleSignedIn,
+    isSigningInWithGoogle,
+    googleAuthError,
+    clearGoogleAuthError,
+    signInWithGoogle,
+    signOutGoogle,
   } = globalChat;
 
   const toggleMute = () => setIsMuted(!isMuted);
@@ -2098,38 +2127,54 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
           </div>
         </div>
 
-        {/* CURRENT USER FOOTER */}
-        <div className="p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between shrink-0">
-          <motion.div 
-            whileHover={{ scale: 1.01 }}
-            onClick={() => setIsProfileModalOpen(true)}
-            className="flex items-center gap-3 min-w-0 cursor-pointer p-2 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex-1"
-          >
-            <div className="relative shrink-0">
-              {renderAvatar(currentUser, 'w-10 h-10 text-xs')}
-              <div className="absolute bottom-0 right-0 w-3 h-3 rounded-sm bg-emerald-500 border-2 border-white dark:border-slate-900" />
-            </div>
-
-            <div className="min-w-0">
-              <div className="font-black text-slate-900 dark:text-white text-sm truncate tracking-tight">
-                {currentUser.username}
-              </div>
-              <div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Active Now</div>
-            </div>
-          </motion.div>
-
-          <div className="flex items-center gap-1">
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.9 }}
-              onClick={toggleMute}
-              className={`p-2 rounded-xl transition-all cursor-pointer ${
-                isMuted ? 'text-red-600 bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50' : 'text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-              }`}
-              title={isMuted ? 'Unmute' : 'Mute'}
+        {/* CURRENT USER FOOTER + GOOGLE ACCOUNT */}
+        <div className="p-3 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 shrink-0 space-y-2">
+          {!isGoogleSignedIn && (
+            <button
+              type="button"
+              disabled={isSigningInWithGoogle}
+              onClick={() => void signInWithGoogle?.()}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+              title="Sign in to FrostHub with any Google account (including @bcpss.org)"
             >
-              {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-            </motion.button>
+              <GoogleLogoIcon className="w-4 h-4 shrink-0" />
+              <span className="truncate">{isSigningInWithGoogle ? 'Signing in...' : 'Sign in with Google'}</span>
+            </button>
+          )}
+          <div className="flex items-center justify-between">
+            <motion.div
+              whileHover={{ scale: 1.01 }}
+              onClick={() => setIsProfileModalOpen(true)}
+              className="flex items-center gap-3 min-w-0 cursor-pointer p-1.5 rounded-2xl hover:bg-slate-50 dark:hover:bg-slate-800/60 transition-colors flex-1"
+            >
+              <div className="relative shrink-0">
+                {renderAvatar(currentUser, 'w-10 h-10 text-xs')}
+                <div className="absolute bottom-0 right-0 w-3 h-3 rounded-sm bg-emerald-500 border-2 border-white dark:border-slate-900" />
+              </div>
+
+              <div className="min-w-0">
+                <div className="font-black text-slate-900 dark:text-white text-sm truncate tracking-tight">
+                  {currentUser.username}
+                </div>
+                <div className="text-[10px] text-slate-400 dark:text-slate-500 font-bold truncate">
+                  {isGoogleSignedIn && googleUser?.email ? googleUser.email : 'ACTIVE NOW'}
+                </div>
+              </div>
+            </motion.div>
+
+            <div className="flex items-center gap-1">
+              <motion.button
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.9 }}
+                onClick={toggleMute}
+                className={`p-2 rounded-xl transition-all cursor-pointer ${
+                  isMuted ? 'text-red-600 bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50' : 'text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                }`}
+                title={isMuted ? 'Unmute' : 'Mute'}
+              >
+                {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+              </motion.button>
+            </div>
           </div>
         </div>
 
@@ -2181,6 +2226,32 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
                 </div>
 
                 <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                  {/* FrostHub Google Sign-In / Signed-in Pill */}
+                  {isGoogleSignedIn ? (
+                    <button
+                      type="button"
+                      onClick={() => setIsProfileModalOpen(true)}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-600 dark:text-emerald-300 text-xs font-bold transition-colors cursor-pointer max-w-[160px]"
+                      title={`Signed in to FrostHub as ${googleUser?.email || currentUser.username}`}
+                    >
+                      <GoogleLogoIcon className="w-3.5 h-3.5 shrink-0" />
+                      <span className="truncate hidden sm:inline">{googleUser?.email || currentUser.username}</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      disabled={isSigningInWithGoogle}
+                      onClick={() => void signInWithGoogle?.()}
+                      className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white text-xs font-bold shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+                      title="Sign in to FrostHub with any Google account (including @bcpss.org)"
+                    >
+                      <GoogleLogoIcon className="w-3.5 h-3.5 shrink-0" />
+                      <span className="hidden xs:inline sm:inline">
+                        {isSigningInWithGoogle ? 'Signing in...' : 'Sign in with Google'}
+                      </span>
+                    </button>
+                  )}
+
                   {/* Mobile Search Toggle */}
                   <button
                     type="button"
@@ -3461,28 +3532,43 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
               </div>
 
               {/* Mobile User Footer */}
-              <div className="mt-auto pt-4 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between shrink-0 gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsMobileChannelsOpen(false);
-                    setIsProfileModalOpen(true);
-                  }}
-                  className="flex items-center gap-3 min-w-0 flex-1 text-left p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                >
-                  {renderAvatar(currentUser, 'w-9 h-9 text-xs')}
-                  <div className="min-w-0">
-                    <div className="font-black text-slate-900 dark:text-white text-xs truncate">{currentUser.username}</div>
-                    <div className="text-[9px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest">Edit Profile</div>
-                  </div>
-                </button>
-                <button
-                  type="button"
-                  onClick={toggleMute}
-                  className={`p-2 rounded-xl border shrink-0 cursor-pointer ${isMuted ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-transparent'}`}
-                >
-                  {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                </button>
+              <div className="mt-auto pt-4 border-t border-slate-200 dark:border-slate-800 shrink-0 space-y-2">
+                {!isGoogleSignedIn && (
+                  <button
+                    type="button"
+                    disabled={isSigningInWithGoogle}
+                    onClick={() => void signInWithGoogle?.()}
+                    className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-white text-xs font-bold transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    <GoogleLogoIcon className="w-4 h-4 shrink-0" />
+                    <span>{isSigningInWithGoogle ? 'Signing in...' : 'Sign in with Google'}</span>
+                  </button>
+                )}
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsMobileChannelsOpen(false);
+                      setIsProfileModalOpen(true);
+                    }}
+                    className="flex items-center gap-3 min-w-0 flex-1 text-left p-1.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    {renderAvatar(currentUser, 'w-9 h-9 text-xs')}
+                    <div className="min-w-0">
+                      <div className="font-black text-slate-900 dark:text-white text-xs truncate">{currentUser.username}</div>
+                      <div className="text-[9px] text-slate-400 dark:text-slate-500 font-bold truncate">
+                        {isGoogleSignedIn && googleUser?.email ? googleUser.email : 'EDIT PROFILE'}
+                      </div>
+                    </div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleMute}
+                    className={`p-2 rounded-xl border shrink-0 cursor-pointer ${isMuted ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-slate-100 dark:bg-slate-800 text-slate-500 border-transparent'}`}
+                  >
+                    {isMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
             </motion.aside>
           </div>
@@ -3504,6 +3590,68 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
               >
                 <X className="w-5 h-5" />
               </button>
+            </div>
+
+            {/* FrostHub Google Account Sign-In Section (supports any domain including @bcpss.org) */}
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h4 className="text-xs font-black uppercase tracking-widest text-slate-700 dark:text-slate-200">
+                    FrostHub Google Account
+                  </h4>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                    Works with any Google account, including Gmail &amp; @bcpss.org.
+                  </p>
+                </div>
+                {isGoogleSignedIn && (
+                  <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-[10px] font-bold shrink-0">
+                    Connected
+                  </span>
+                )}
+              </div>
+
+              {isGoogleSignedIn && googleUser ? (
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {renderAvatar({ username: googleUser.displayName, avatar_url: googleUser.photoURL }, 'w-9 h-9 text-xs')}
+                    <div className="min-w-0">
+                      <div className="text-xs font-bold text-slate-900 dark:text-white truncate">{googleUser.displayName}</div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{googleUser.email}</div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void signOutGoogle?.()}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 text-xs font-bold transition-colors cursor-pointer shrink-0"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                    <span>Sign Out</span>
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  disabled={isSigningInWithGoogle}
+                  onClick={() => void signInWithGoogle?.()}
+                  className="w-full flex items-center justify-center gap-2.5 px-4 py-2.5 rounded-xl bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white text-xs font-bold shadow-sm transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <GoogleLogoIcon className="w-4 h-4 shrink-0" />
+                  <span>{isSigningInWithGoogle ? 'Connecting Google Account...' : 'Sign in to FrostHub with Google'}</span>
+                </button>
+              )}
+
+              {googleAuthError && (
+                <div className="flex items-start justify-between gap-2 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-[11px] font-semibold">
+                  <span>{googleAuthError}</span>
+                  <button
+                    type="button"
+                    onClick={() => clearGoogleAuthError?.()}
+                    className="p-0.5 hover:opacity-75 cursor-pointer shrink-0"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Avatar Preview & Upload */}

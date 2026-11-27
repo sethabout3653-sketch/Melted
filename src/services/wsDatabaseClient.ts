@@ -246,18 +246,59 @@ export function useWebSocketDatabase(currentUser: {
     updated_at: Date.now(),
   });
 
+  const lastRegisteredUserIdRef = useRef<string>(currentUser.id);
+  const replacedUserIdsRef = useRef<Set<string>>(new Set());
+
   useEffect(() => {
+    const prevId = lastRegisteredUserIdRef.current;
+    const nextId = currentUser.id;
     Object.assign(activeUserStateRef.current, {
-      id: currentUser.id,
+      id: nextId,
       username: currentUser.username,
       avatar_color: currentUser.avatar_color || '#0066ff',
       avatar_url: currentUser.avatar_url || '',
     });
+
+    if (prevId && nextId && prevId !== nextId) {
+      replacedUserIdsRef.current.add(prevId);
+      replacedUserIdsRef.current.delete(nextId);
+      lastRegisteredUserIdRef.current = nextId;
+
+      serverUsersRef.current = serverUsersRef.current.filter((u) => u && u.id !== prevId);
+
+      try {
+        if (rawWsRef.current && rawWsRef.current.readyState === WebSocket.OPEN) {
+          rawWsRef.current.send(JSON.stringify({ type: 'USER_DISCONNECT', userId: prevId }));
+        }
+        if (socketRef.current?.connected) {
+          socketRef.current.emit('message', { type: 'USER_DISCONNECT', userId: prevId });
+        }
+        fetch('/api/ws-db/leave', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: prevId }),
+          keepalive: true,
+        }).catch(() => {});
+      } catch {}
+
+      const me = { ...activeUserStateRef.current };
+      const others = serverUsersRef.current.filter(
+        (u) => u && u.id !== me.id && !replacedUserIdsRef.current.has(u.id)
+      );
+      const next = deduplicateUsers([me, ...others], me.id);
+      setUsers(next);
+      broadcastChannelRef.current?.postMessage({ type: 'SYNC_USERS', users: next });
+    } else if (nextId) {
+      replacedUserIdsRef.current.delete(nextId);
+      lastRegisteredUserIdRef.current = nextId;
+    }
   }, [currentUser.id, currentUser.username, currentUser.avatar_color, currentUser.avatar_url]);
 
   const publishUsers = useCallback(() => {
     const me = { ...activeUserStateRef.current };
-    const others = serverUsersRef.current.filter((u) => u && u.id !== me.id);
+    const others = serverUsersRef.current.filter(
+      (u) => u && u.id !== me.id && !replacedUserIdsRef.current.has(u.id)
+    );
     const next = deduplicateUsers([me, ...others], me.id);
     setUsers(next);
     return next;
@@ -1040,6 +1081,14 @@ export function useWebSocketDatabase(currentUser: {
       current_channel?: string;
       activity?: string;
     }) => {
+      const prevId = activeUserStateRef.current.id;
+      const replacesUserId = prevId && prevId !== user.id ? prevId : undefined;
+      if (replacesUserId) {
+        replacedUserIdsRef.current.add(replacesUserId);
+      }
+      replacedUserIdsRef.current.delete(user.id);
+      lastRegisteredUserIdRef.current = user.id;
+
       const activeChannel = (user as any).current_channel || activeUserStateRef.current.current_channel || 'text-general';
       const dbUser: DbUser = {
         ...activeUserStateRef.current,
@@ -1054,11 +1103,11 @@ export function useWebSocketDatabase(currentUser: {
       Object.assign(activeUserStateRef.current, dbUser);
 
       // WebSocket / REST relay
-      safeSend({ type: 'REGISTER_USER', user: dbUser });
+      safeSend({ type: 'REGISTER_USER', user: dbUser, replacesUserId });
       fetch('/api/ws-db/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user: dbUser }),
+        body: JSON.stringify({ user: dbUser, replacesUserId }),
       }).catch(() => {});
 
       const next = publishUsers();

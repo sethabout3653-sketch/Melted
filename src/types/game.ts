@@ -13,7 +13,7 @@ export interface RawGame {
   localCover?: string;
   special?: string[];
   featured?: boolean;
-  source?: 'native' | 'ugs' | 'CKV' | 'scramjet';
+  source?: 'native' | 'ugs' | 'CKV' | 'rammerhead' | 'scramjet';
   library?: GameLibraryId;
 }
 

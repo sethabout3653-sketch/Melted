@@ -11,9 +11,9 @@ import {
 import { GameItem, GameRatingInfo } from '../types/game';
 import {
   getPlayableGameUrl,
-  getScramjetTargetUrl,
+  getRammerheadTargetUrl,
   resolveUgsUrl,
-  shouldUseScramjetByDefault,
+  shouldUseRammerheadByDefault,
 } from '../services/gameService';
 import {
   fetchSingleEsrbRating,
@@ -21,10 +21,9 @@ import {
 } from '../services/gameRatingService';
 import { EsrbBadge } from './EsrbBadge';
 import {
-  launchInScramjetFrame,
-  flushScramjetCookies,
-  cleanupScramjetFrame,
-} from '../services/scramjetProxyService';
+  launchInRammerheadFrame,
+  cleanupRammerheadFrame,
+} from '../services/rammerheadProxyService';
 import { storeGameSave, restoreAutoSaveToIframe, flushPendingSaves } from '../services/saveService';
 import { getGameControls } from '../services/gameControlsService';
 import { GameControlsOverlay } from './GameControlsOverlay';
@@ -47,7 +46,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const initialRating = game.rating || getCachedGameRating(game.name) || null;
   const [ratingInfo, setRatingInfo] = useState<GameRatingInfo | null>(initialRating);
   const [ageConfirmed, setAgeConfirmed] = useState<boolean>(() => !initialRating?.requiresGate);
-  const [useScramjet, setUseScramjet] = useState<boolean>(() => shouldUseScramjetByDefault(game));
+  const [useRammerhead, setUseRammerhead] = useState<boolean>(() => shouldUseRammerheadByDefault(game));
   const [directUrl, setDirectUrl] = useState<string>('');
   const [reloadNonce, setReloadNonce] = useState<number>(0);
   const [hasError, setHasError] = useState(false);
@@ -61,7 +60,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const prevGameIdRef = useRef<number | string | null>(null);
 
-  // Sync default Scramjet mode and fetch real ESRB rating whenever switching to a different game
+  // Sync default Rammerhead mode and fetch real ESRB rating whenever switching to a different game
   useEffect(() => {
     let active = true;
     const cached = game.rating || getCachedGameRating(game.name) || null;
@@ -69,7 +68,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       prevGameIdRef.current = game.id;
       setRatingInfo(cached);
       setAgeConfirmed(!cached?.requiresGate);
-      setUseScramjet(shouldUseScramjetByDefault(game));
+      setUseRammerhead(shouldUseRammerheadByDefault(game));
       setReloadNonce(0);
     }
 
@@ -102,7 +101,6 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     return () => {
       window.removeEventListener('message', handleMessage);
       flushPendingSaves(game.id, game.name);
-      flushScramjetCookies(true);
     };
   }, [game.id, game.name]);
 
@@ -208,9 +206,9 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     }
 
     const fallbackUrl = getPlayableGameUrl(game);
-    const scramjetTarget = getScramjetTargetUrl(game);
+    const rammerheadTarget = getRammerheadTargetUrl(game);
 
-    if (useScramjet && scramjetTarget) {
+    if (useRammerhead && rammerheadTarget) {
       setDirectUrl('');
       setIsLoadingProxy(true);
 
@@ -219,11 +217,11 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
       const launchTimer = setTimeout(async () => {
         if (!active || !targetIframe) return;
         try {
-          await launchInScramjetFrame(targetIframe, scramjetTarget);
+          await launchInRammerheadFrame(targetIframe, rammerheadTarget);
           if (!active) return;
           // Note: Keep isLoadingProxy=true until iframe onLoad fires so user never sees a bare black screen
         } catch (err: any) {
-          console.warn('[GamePlayer] Scramjet v2 launch error:', err);
+          console.warn('[GamePlayer] Rammerhead launch error:', err);
           if (!active) return;
           setIsLoadingProxy(false);
           setErrorDetail(String(err?.message || '').trim());
@@ -242,7 +240,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
         active = false;
         clearTimeout(launchTimer);
         window.clearTimeout(safetyTimer);
-        cleanupScramjetFrame(targetIframe);
+        cleanupRammerheadFrame(targetIframe);
       };
     }
 
@@ -256,7 +254,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
     return () => {
       active = false;
     };
-  }, [game.id, game.resolvedUrl, game.url, game.name, useScramjet, reloadNonce, ageConfirmed]);
+  }, [game.id, game.resolvedUrl, game.url, game.name, useRammerhead, reloadNonce, ageConfirmed]);
 
   if (!game) return null;
 
@@ -486,11 +484,12 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
           )}
 
           {/* Iframe (strictly rendered only after ageConfirmed) */}
-          {ageConfirmed && (useScramjet || directUrl) && (
+          {ageConfirmed && (useRammerhead || directUrl) && (
             <iframe
-              key={`${game.id}-${useScramjet ? 'sj' : 'direct'}-${reloadNonce}`}
+              data-frosthub-embed="true"
+              key={`${game.id}-${useRammerhead ? 'rh' : 'direct'}-${reloadNonce}`}
               ref={iframeRef}
-              src={useScramjet ? undefined : (reloadNonce > 0 && directUrl ? `${directUrl}${directUrl.includes('?') ? '&' : '?'}reload=${reloadNonce}` : directUrl)}
+              src={useRammerhead ? undefined : (reloadNonce > 0 && directUrl ? `${directUrl}${directUrl.includes('?') ? '&' : '?'}reload=${reloadNonce}` : directUrl)}
               title={game.name}
               tabIndex={0}
               loading="eager"
@@ -504,21 +503,31 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
                     const win = iframeRef.current.contentWindow;
                     restoreAutoSaveToIframe(game.id, win);
 
-                    if (useScramjet) {
+                    if (useRammerhead) {
                       try {
                         const doc = iframeRef.current.contentDocument || win.document;
                         if (doc) {
                           const bodyText = (doc.body?.textContent || '').trim();
-                          if (bodyText.includes("Page couldn't load") || bodyText.includes('Reconnecting Scramjet Proxy')) {
+                          const isSpaClone =
+                            Boolean(doc.getElementById('root')) &&
+                            ((doc.title || '').toLowerCase().includes('frosthub') ||
+                              Boolean(doc.querySelector('script[src*="/assets/index-"], script[src*="/src/main.tsx"]')));
+                          if (isSpaClone || bodyText.includes('This page could not load inside the proxy frame')) {
+                            setHasError(true);
+                            setErrorDetail('Proxy route escaped to app shell. Click Try again to reload cleanly.');
+                            return;
+                          }
+                          if (bodyText.includes("Page couldn't load") || bodyText.includes('Reconnecting Rammerhead Proxy')) {
                             setHasError(true);
                             setErrorDetail(bodyText.slice(0, 200));
+                            return;
                           }
                         }
                       } catch {}
                     }
 
-                    // Inject Scaffolding compatibility layer for direct non-Scramjet frames when same-origin
-                    if (!useScramjet) {
+                    // Inject Scaffolding compatibility layer for direct non-Rammerhead frames when same-origin
+                    if (!useRammerhead) {
                       try {
                         const doc = iframeRef.current.contentDocument || iframeRef.current.contentWindow?.document;
                         if (doc) {
@@ -570,7 +579,7 @@ export const GamePlayer: React.FC<GamePlayerProps> = ({
               />
             )}
 
-          {/* Loading overlay while Scramjet initializes & connects */}
+          {/* Loading overlay while Rammerhead initializes & connects */}
           {ageConfirmed && isLoadingProxy && !hasError && (
             <div className="absolute inset-0 bg-slate-950/90 flex flex-col items-center justify-center p-6 text-center z-10 pointer-events-none">
               <div className="w-10 h-10 rounded-full border-2 border-slate-700 border-t-[var(--brand-blue)] animate-spin mb-3" />

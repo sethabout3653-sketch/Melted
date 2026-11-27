@@ -731,18 +731,18 @@ export function getPlayableGameUrl(game: GameItem): string {
 }
 
 /**
- * GN-Math native games run directly by default ("except gn-math games they are fine").
- * External URLs, UGS, and CKV games run via Scramjet v2 by default unless explicitly configured otherwise.
- * Undertale runs directly via the official webport without Scramjet.
+ * GN-Math native games run directly by default.
+ * Featured apps (TikTok, Soundboard, Google, DuckDuckGo, Gemini) and proxy apps run via Rammerhead by default.
+ * Undertale runs directly via the official webport without Rammerhead.
  */
-export function shouldUseScramjetByDefault(game: GameItem): boolean {
+export function shouldUseRammerheadByDefault(game: GameItem): boolean {
   if (!game) return false;
   const name = (game.name || '').toLowerCase().trim();
   if (name === 'undertale' || game.url?.includes('undertale-webportforfrosthub')) {
     return false;
   }
-  if (game.source === 'scramjet') return true;
-  const scramjetAllowed = new Set([
+  if (game.source === 'rammerhead' || game.source === 'scramjet') return true;
+  const rammerheadAllowed = new Set([
     'gemini',
     'soundboard 2',
     'soundboard 2 ',
@@ -750,13 +750,16 @@ export function shouldUseScramjetByDefault(game: GameItem): boolean {
     'deltarune',
     'duckduckgo',
   ]);
-  return scramjetAllowed.has(name);
+  return rammerheadAllowed.has(name);
 }
 
+// Backward-compatible alias
+export const shouldUseScramjetByDefault = shouldUseRammerheadByDefault;
+
 /**
- * Resolves the absolute upstream target URL required by Scramjet frame.go(url).
+ * Resolves the absolute upstream target URL required by Rammerhead.
  */
-export function getScramjetTargetUrl(game: GameItem): string {
+export function getRammerheadTargetUrl(game: GameItem): string {
   if (!game) return '';
   const name = (game.name || '').toLowerCase().trim();
   if (name === 'undertale') {
@@ -774,6 +777,9 @@ export function getScramjetTargetUrl(game: GameItem): string {
   }
   return game.resolvedUrl || resolveGameUrl(game.url, game.id);
 }
+
+// Backward-compatible alias
+export const getScramjetTargetUrl = getRammerheadTargetUrl;
 
 function generateSoundboardSvgCover(): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300" width="400" height="300">
@@ -859,16 +865,16 @@ export const FEATURED_APP_CONFIG = {
   },
 };
 
-const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
+const BUILTIN_RAMMERHEAD_GAMES: GameItem[] = [
   {
     id: 900002,
     name: FEATURED_APP_CONFIG.tiktok.name,
     cover: FEATURED_APP_CONFIG.tiktok.coverUrl,
     url: FEATURED_APP_CONFIG.tiktok.url,
     author: 'Soundboard Guys',
-    special: ['tiktok', 'video', 'videos', 'short videos', 'scramjet'],
+    special: ['tiktok', 'video', 'videos', 'short videos', 'rammerhead'],
     featured: true,
-    source: 'scramjet',
+    source: 'rammerhead',
     library: 'gn-math',
     category: 'Featured',
     resolvedCover: FEATURED_APP_CONFIG.tiktok.coverUrl,
@@ -882,9 +888,9 @@ const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
     cover: FEATURED_APP_CONFIG.soundboard.coverUrl,
     url: FEATURED_APP_CONFIG.soundboard.url,
     author: 'Myinstants',
-    special: ['soundboard', 'myinstants', 'audio', 'sound effects', 'buttons', 'scramjet'],
+    special: ['soundboard', 'myinstants', 'audio', 'sound effects', 'buttons', 'rammerhead'],
     featured: true,
-    source: 'scramjet',
+    source: 'rammerhead',
     library: 'gn-math',
     category: 'Featured',
     resolvedCover: FEATURED_APP_CONFIG.soundboard.coverUrl,
@@ -898,9 +904,9 @@ const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
     cover: FEATURED_APP_CONFIG.google.coverUrl,
     url: FEATURED_APP_CONFIG.google.url,
     author: 'By Google',
-    special: ['google', 'search', 'scramjet'],
+    special: ['google', 'search', 'rammerhead'],
     featured: true,
-    source: 'scramjet',
+    source: 'rammerhead',
     library: 'gn-math',
     category: 'Featured',
     resolvedCover: FEATURED_APP_CONFIG.google.coverUrl,
@@ -914,9 +920,9 @@ const BUILTIN_SCRAMJET_GAMES: GameItem[] = [
     cover: FEATURED_APP_CONFIG.duckduckgo.coverUrl,
     url: FEATURED_APP_CONFIG.duckduckgo.url,
     author: FEATURED_APP_CONFIG.duckduckgo.author,
-    special: ['duckduckgo', 'duck duck go', 'search', 'privacy', 'browser', 'scramjet'],
+    special: ['duckduckgo', 'duck duck go', 'search', 'privacy', 'browser', 'rammerhead'],
     featured: true,
-    source: 'scramjet',
+    source: 'rammerhead',
     library: 'gn-math',
     category: 'Featured',
     resolvedCover: FEATURED_APP_CONFIG.duckduckgo.coverUrl,
@@ -994,7 +1000,7 @@ export function getAllGames(): GameItem[] {
   const coverLookupByName = new Map<string, string>();
   const sharedExistingNames = new Set<string>(GN_MATH_EXCLUSIVE_NORMS);
 
-  const builtInsWithRatings = BUILTIN_SCRAMJET_GAMES.map((g) => ({
+  const builtInsWithRatings = BUILTIN_RAMMERHEAD_GAMES.map((g) => ({
     ...g,
     library: 'gn-math' as GameLibraryId,
     rating: g.rating || resolveGameRating(g.name),

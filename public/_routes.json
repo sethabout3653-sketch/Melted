@@ -3,15 +3,17 @@
   "include": [
     "/api/*",
     "/ws-db",
-    "/ws-db/*"
+    "/ws-db/*",
+    "/newsession*",
+    "/sessionexists*",
+    "/editsession*",
+    "/deletesession*",
+    "/needpassword*",
+    "/mainport*"
   ],
   "exclude": [
     "/assets/*",
-    "/scramjet/*",
-    "/controller/*",
-    "/epoxy/*",
-    "/libcurl/*",
-    "/sj-sw.js",
+    "/rammerhead.js",
     "/favicon.ico",
     "/manifest.webmanifest",
     "/*.png",

@@ -273,6 +273,42 @@ export class CfHubCore {
           case 'REGISTER_USER': {
             if (msg.user && typeof msg.user.id === 'string') {
               const uId = msg.user.id;
+              const prevBoundId = boundUserId;
+              const replacedId =
+                typeof msg.replacesUserId === 'string' && msg.replacesUserId && msg.replacesUserId !== uId
+                  ? msg.replacesUserId
+                  : prevBoundId && prevBoundId !== uId
+                  ? prevBoundId
+                  : undefined;
+
+              if (replacedId) {
+                const staleTimer = this.disconnectTimers.get(replacedId);
+                if (staleTimer) {
+                  clearTimeout(staleTimer);
+                  this.disconnectTimers.delete(replacedId);
+                }
+                const oldSocks = this.userToSockets.get(replacedId);
+                if (oldSocks) {
+                  oldSocks.delete(server);
+                  if (oldSocks.size === 0 || replacedId === msg.replacesUserId) {
+                    this.userToSockets.delete(replacedId);
+                  }
+                }
+                if (!this.userToSockets.has(replacedId) || replacedId === msg.replacesUserId) {
+                  const staleUser = this.users.get(replacedId);
+                  const staleChannel = staleUser?.current_channel;
+                  this.users.delete(replacedId);
+                  if (staleChannel === 'voice-general' || staleChannel === 'video-general') {
+                    this.broadcast({
+                      type: 'USER_LEFT_MEDIA',
+                      userId: replacedId,
+                      channel: staleChannel,
+                      timestamp: Date.now(),
+                    });
+                  }
+                }
+              }
+
               boundUserId = uId;
 
               const pendingTimer = this.disconnectTimers.get(uId);
@@ -552,6 +588,11 @@ export class CfHubCore {
         const body = (await request.json().catch(() => ({}))) as any;
         const user = body?.user;
         if (!user || !user.id) return json({ error: 'Missing user object or user.id' }, 400);
+        const replacesUserId = typeof body?.replacesUserId === 'string' ? body.replacesUserId : '';
+        if (replacesUserId && replacesUserId !== user.id) {
+          this.users.delete(replacesUserId);
+          this.userToSockets.delete(replacesUserId);
+        }
         const userObj = this.upsertUser(user);
         this.broadcastUsers();
         return json({ success: true, user: userObj, users: this.getUsers() });
