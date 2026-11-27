@@ -32,7 +32,7 @@ import {
   toggleGameFavorite,
 } from './services/favoritesService';
 import { GameItem, GameCategory, GameLibrarySelection } from './types/game';
-import { Search, ArrowRight, Gamepad2 } from 'lucide-react';
+import { Search, ArrowRight, Gamepad2, Sparkles } from 'lucide-react';
 
 const PAGE_SIZE = 72;
 
@@ -505,11 +505,11 @@ export default function App() {
       <FrostHubLoadingScreen />
       <AppCanvasBackground themeConfig={themeConfig} isDark={theme === 'dark'} />
       <div 
-        className={`relative z-10 text-slate-900 dark:text-slate-100 flex font-sans selection:bg-[var(--brand-blue)] selection:text-white dark:border-slate-900 transition-colors overflow-hidden ${
+        className={`relative z-10 flex h-[100dvh] max-h-[100dvh] overflow-hidden pb-[env(safe-area-inset-bottom)] font-sans text-slate-900 transition-colors selection:bg-[var(--brand-blue)] selection:text-white dark:text-slate-100 ${
           themeConfig.bgMode !== 'solid' || (themeConfig.bgSolidColor !== '#090d16' && themeConfig.bgSolidColor !== '#0a1128')
-            ? 'bg-white/90 dark:bg-transparent'
-            : 'bg-[#f8fafc] dark:bg-slate-950'
-        } h-[100dvh] max-h-[100dvh] pb-[env(safe-area-inset-bottom)]`}
+            ? 'bg-white/80 dark:bg-transparent'
+            : 'bg-[var(--bg-light)] dark:bg-[var(--brand-navy-bg)]'
+        }`}
         style={
           theme === 'dark' && themeConfig.bgMode === 'solid'
             ? {
@@ -592,9 +592,37 @@ export default function App() {
             exit="exit"
             className="flex-1 w-full overflow-y-auto"
           >
-            <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pb-24 lg:pb-16 sm:pt-6">
+            <div className="max-w-7xl mx-auto px-4 sm:px-7 lg:px-9 pb-24 lg:pb-16 pt-4 sm:pt-6">
+            {!searchQuery && (
+              <section
+                aria-labelledby="games-discovery-title"
+                className="relative isolate mb-7 overflow-hidden rounded-[1.75rem] border border-white/[0.08] bg-[#111722] p-5 text-white shadow-[0_24px_70px_-36px_rgba(1,14,10,0.8)] sm:p-7 lg:p-9"
+                style={{ background: 'radial-gradient(circle at 86% 12%, color-mix(in srgb, var(--brand-blue) 24%, transparent), transparent 42%), linear-gradient(135deg, color-mix(in srgb, var(--brand-blue) 16%, #101a19), #101b1d 56%, #111722)' }}
+              >
+                <div className="relative flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
+                  <div className="max-w-2xl">
+                    <p className="hub-eyebrow">FrostHub arcade · {allGames.length.toLocaleString()} games</p>
+                    <h1 id="games-discovery-title" className="mt-3 text-3xl font-extrabold leading-[1.04] tracking-[-0.05em] sm:text-4xl lg:text-[3.25rem]">
+                      Find your next<br className="hidden sm:block" /> favorite.
+                    </h1>
+                    <p className="mt-3 max-w-xl text-sm leading-6 text-slate-300 sm:text-base">
+                      Pick a quick round, explore a new genre, or jump back into something you love.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2.5">
+                    <button type="button" onClick={() => handleSelectCategory('Featured')} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[var(--brand-blue)] px-4 text-sm font-bold text-white shadow-lg shadow-[var(--brand-blue-glow)] transition hover:bg-[var(--brand-blue-hover)]">
+                      <Sparkles className="h-4 w-4" /> Explore featured
+                    </button>
+                    <button type="button" onClick={() => setCurrentTab('movies')} className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-white/15 bg-white/[0.06] px-4 text-sm font-semibold text-slate-100 transition hover:bg-white/10">
+                      Browse movies <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </section>
+            )}
+
             {/* Categories & Sorting */}
-            <div className="mb-4 sm:mb-6">
+            <div className="mb-5 sm:mb-7">
               <CategoryFilter
                 selectedCategory={selectedCategory}
                 onSelectCategory={handleSelectCategory}
@@ -607,7 +635,7 @@ export default function App() {
 
             {/* Search status */}
             {searchQuery && (
-              <div className="mb-4 sm:mb-8 flex items-center justify-between bg-white dark:bg-slate-900 px-4 sm:px-6 py-2.5 sm:py-4 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+              <div className="hub-panel mb-5 flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
                 <div className="flex items-center gap-2.5 sm:gap-3 text-xs sm:text-sm text-slate-600 dark:text-slate-300 font-medium">
                   <Search className="w-4 h-4 sm:w-5 sm:h-5 text-[var(--brand-blue)] dark:text-[var(--brand-accent-tint)] shrink-0" />
                   <span>
@@ -625,7 +653,7 @@ export default function App() {
 
             {/* Empty State */}
             {filteredGames.length === 0 ? (
-              <div className="py-24 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-12 max-w-lg mx-auto space-y-6 shadow-xl shadow-slate-200/20 dark:shadow-none">
+              <div className="hub-panel mx-auto max-w-lg space-y-6 p-8 py-20 text-center sm:p-12">
                 <div className="w-16 h-16 rounded-2xl bg-[var(--brand-blue)]/15 text-[var(--brand-blue)] dark:text-[var(--brand-accent-tint)] flex items-center justify-center mx-auto">
                   <Gamepad2 className="w-8 h-8" />
                 </div>
@@ -665,7 +693,7 @@ export default function App() {
             ) : (
               /* Game Grid - Animated Container */
               <div 
-                className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-6 lg:gap-8"
+                className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4 lg:gap-5"
               >
                 {visibleGames.map((game, index) => (
                   <GameCard

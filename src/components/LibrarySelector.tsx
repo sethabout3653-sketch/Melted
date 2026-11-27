@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { BookOpen, ChevronDown } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { GameLibrarySelection } from '../types/game';
 
@@ -52,15 +52,16 @@ export const LibrarySelector: React.FC<LibrarySelectorProps> = React.memo(({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-label={`Select game library (current: ${activeLabel})`}
-        className={`flex items-center gap-2 min-h-[40px] sm:min-h-[42px] px-3.5 sm:px-4 rounded-xl border text-sm font-medium transition-colors duration-150 cursor-pointer whitespace-nowrap ${
+        className={`flex items-center gap-2 min-h-[40px] sm:min-h-[42px] px-2.5 sm:px-4 rounded-xl border text-sm font-medium transition-colors duration-150 cursor-pointer whitespace-nowrap ${
           isOpen || selectedLibrary !== 'all'
             ? 'bg-white dark:bg-[#13131c] text-slate-900 dark:text-white border-[var(--brand-blue)] ring-1 ring-[var(--brand-blue)]/30 shadow-sm'
             : 'bg-slate-100 hover:bg-slate-200/70 dark:bg-[#181824] dark:hover:bg-[#1e1e2d] text-slate-800 dark:text-slate-100 border-slate-200 dark:border-[#2a2a3c]'
         }`}
       >
-        <span>{activeLabel}</span>
+        <BookOpen className="h-4 w-4 shrink-0 sm:hidden" aria-hidden="true" />
+        <span className="hidden sm:inline">{activeLabel}</span>
         <ChevronDown
-          className={`w-4 h-4 text-slate-400 dark:text-slate-400 transition-transform duration-150 ${
+          className={`hidden h-4 w-4 text-slate-400 transition-transform duration-150 dark:text-slate-400 sm:block ${
             isOpen ? 'rotate-180 text-[var(--brand-blue)]' : ''
           }`}
         />

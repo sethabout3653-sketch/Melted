@@ -10,19 +10,21 @@
 
 @layer base {
   :root {
-    --bg-light: #f8fafc;
-    --bg-white: #ffffff;
-    --brand-blue: #2563eb;
-    --brand-blue-hover: #1d4ed8;
-    --brand-blue-glow: rgba(37, 99, 235, 0.4);
+    --bg-light: #f2f6f3;
+    --bg-white: #fbfcfb;
+    --brand-blue: #16765e;
+    --brand-blue-hover: #105d4a;
+    --brand-blue-glow: rgba(22, 118, 94, 0.28);
     --brand-accent-tint: color-mix(in srgb, var(--brand-blue) 76%, #ffffff);
-    --brand-navy-bg: color-mix(in srgb, var(--brand-blue) 14%, #050609);
-    --brand-navy-surface: color-mix(in srgb, var(--brand-blue) 10%, #090a0f);
-    --brand-navy-elevated: color-mix(in srgb, var(--brand-blue) 15%, #12131c);
-    --brand-navy-border: color-mix(in srgb, var(--brand-blue) 22%, #1d1e29);
-    --text-slate: #0f172a;
-    --text-muted: #64748b;
-    --border-slate: #f1f5f9;
+    --brand-navy-bg: color-mix(in srgb, var(--brand-blue) 10%, #080b0d);
+    --brand-navy-surface: color-mix(in srgb, var(--brand-blue) 7%, #101619);
+    --brand-navy-elevated: color-mix(in srgb, var(--brand-blue) 12%, #192123);
+    --brand-navy-border: color-mix(in srgb, var(--brand-blue) 17%, #293333);
+    --text-slate: #17211f;
+    --text-muted: #66756f;
+    --border-slate: #e0e9e3;
+    --app-radius: 18px;
+    --shadow-soft: 0 18px 55px -30px rgba(2, 15, 12, 0.5);
 
     /* Tailwind v4 theme color variable overrides */
     --color-blue-400: var(--brand-blue);
@@ -180,6 +182,64 @@
   }
   .press:active:not(:disabled) {
     transform: scale(0.97);
+  }
+
+  .hub-panel {
+    border: 1px solid var(--border-slate);
+    border-radius: 1.5rem;
+    background: color-mix(in srgb, #ffffff 88%, var(--bg-light));
+    box-shadow: 0 18px 55px -38px rgba(14, 41, 31, 0.34);
+  }
+
+  .dark .hub-panel {
+    border-color: color-mix(in srgb, var(--brand-navy-border) 72%, transparent);
+    background: color-mix(in srgb, var(--brand-navy-surface) 90%, transparent);
+    box-shadow: var(--shadow-soft);
+  }
+
+  .hub-panel-raised {
+    border: 1px solid var(--border-slate);
+    border-radius: 1.35rem;
+    background: #ffffff;
+    box-shadow: 0 12px 38px -28px rgba(14, 41, 31, 0.28);
+  }
+
+  .dark .hub-panel-raised {
+    border-color: color-mix(in srgb, var(--brand-navy-border) 82%, transparent);
+    background: color-mix(in srgb, var(--brand-navy-elevated) 95%, transparent);
+    box-shadow: 0 12px 38px -28px rgba(0, 0, 0, 0.8);
+  }
+
+  .hub-eyebrow {
+    color: var(--brand-blue);
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.16em;
+    line-height: 1.2;
+    text-transform: uppercase;
+  }
+
+  .dark .hub-eyebrow {
+    color: var(--brand-accent-tint);
+  }
+
+  .hub-page-title {
+    font-family: var(--app-font-heading);
+    font-size: clamp(1.65rem, 3vw, 2.4rem);
+    font-weight: 800;
+    letter-spacing: -0.045em;
+    line-height: 1.04;
+  }
+
+  .hub-glass-header {
+    border-bottom: 1px solid var(--border-slate);
+    background: color-mix(in srgb, #ffffff 88%, transparent);
+    backdrop-filter: blur(18px);
+  }
+
+  .dark .hub-glass-header {
+    border-bottom-color: color-mix(in srgb, var(--brand-navy-border) 75%, transparent);
+    background: color-mix(in srgb, var(--brand-navy-bg) 88%, transparent);
   }
 }
 

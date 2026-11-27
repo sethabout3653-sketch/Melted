@@ -231,9 +231,9 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange, searc
   };
 
   return (
-    <div className="w-full min-h-full bg-slate-50 dark:bg-[#08090b] text-slate-900 dark:text-white flex flex-col font-sans pb-8 lg:pb-12">
+    <div className="w-full min-h-full bg-[var(--bg-light)] text-slate-900 dark:bg-[var(--brand-navy-bg)] dark:text-white flex flex-col font-sans pb-8 lg:pb-12">
       {!isPlayerOpen && <>
-        <header className="sticky top-0 z-30 bg-white/95 dark:bg-[#08090b]/95 border-b border-slate-200 dark:border-white/10 px-3 sm:px-8 py-3 sm:py-4">
+        <header className="hub-glass-header sticky top-0 z-30 px-4 py-3 sm:px-8 sm:py-4">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-4">
             <nav aria-label="Movie categories" className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto max-w-full w-full sm:w-auto scrollbar-none">
               {tabs.map(({ id, label, Icon }) => (
@@ -244,7 +244,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange, searc
             </nav>
             <div className="relative w-full sm:w-[22rem]">
               <Search className="w-4 h-4 text-slate-400 dark:text-white/60 absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Search movies and TV shows..." className="w-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-full pl-11 pr-10 py-2 sm:py-2.5 text-base sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/50 focus:outline-none focus:border-slate-400 dark:focus:border-white/30" />
+              <input aria-label="Search movies and TV shows" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search movies and TV shows..." className="w-full bg-slate-100 dark:bg-white/5 border border-slate-200 dark:border-white/10 rounded-full pl-11 pr-10 py-2 sm:py-2.5 text-base sm:text-sm text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-white/50 focus:outline-none focus:border-slate-400 dark:focus:border-white/30" />
               {query && (
                 <button type="button" onClick={() => setQuery('')} aria-label="Clear search" className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-900 dark:text-white/60 dark:hover:text-white cursor-pointer">
                   <X className="w-4 h-4" />
@@ -285,7 +285,7 @@ export const MovieView: React.FC<MovieViewProps> = ({ onActiveMediaChange, searc
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 sm:gap-5">
               {items.map(item => (
-                <button key={`${item.id}-${item.media_type || (item.title ? 'movie' : 'tv')}`} type="button" onClick={() => void selectMedia(item)} className="press group text-left bg-white dark:bg-[#141519] rounded-xl overflow-hidden border border-slate-200 dark:border-white/10 hover:border-slate-400 dark:hover:border-white/40 hover:-translate-y-0.5 transition-[transform,border-color] duration-200 cursor-pointer">
+                <button key={`${item.id}-${item.media_type || (item.title ? 'movie' : 'tv')}`} type="button" onClick={() => void selectMedia(item)} className="press group text-left bg-white/90 dark:bg-[#131a1c] rounded-[1.15rem] overflow-hidden border border-slate-200/80 dark:border-white/[0.07] hover:border-[var(--brand-blue)]/55 dark:hover:border-[var(--brand-accent-tint)]/40 hover:-translate-y-1 transition-[transform,border-color,box-shadow] duration-200 cursor-pointer shadow-sm hover:shadow-xl hover:shadow-emerald-950/10 dark:shadow-none">
                   <div className="relative aspect-[2/3] bg-slate-200 dark:bg-slate-900">
                     <img src={getPosterUrl(item.poster_path)} alt={item.title || item.name || 'Title poster'} loading="lazy" className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" />
                     <span className="absolute top-2 left-2 bg-black/80 text-white text-[9px] font-bold px-2 py-0.5 rounded">{item.media_type === 'tv' || item.first_air_date ? 'TV' : 'MOVIE'}</span>

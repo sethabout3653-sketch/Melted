@@ -39,7 +39,7 @@ const NavLinks: React.FC<NavLinksProps> = ({ currentTab, onTabChange, onlineCoun
       <nav
         aria-label="Main navigation"
         onMouseLeave={() => setHoveredId(null)}
-        className="flex flex-col gap-1"
+        className="flex flex-col gap-1.5"
       >
         {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
           const isActive = currentTab === id;
@@ -160,22 +160,24 @@ const UtilityActions: React.FC<NavigationProps & { onNavigate?: () => void }> = 
 export const AppSidebar: React.FC<NavigationProps> = (props) => (
   <aside
     aria-label="Sidebar"
-    className="hidden lg:flex flex-col w-60 shrink-0 h-full border-r border-slate-200/70 dark:border-white/10 bg-white/95 dark:bg-[#090d16]/95 transition-colors duration-[250ms]"
+    className="hidden lg:flex flex-col w-[252px] shrink-0 h-full border-r border-slate-200/70 dark:border-white/[0.07] bg-white/70 dark:bg-[#0b1114]/90 backdrop-blur-xl transition-colors duration-200"
   >
-    <div className="h-[4.25rem] flex items-center px-5 shrink-0">
+    <div className="h-[76px] flex items-center px-6 shrink-0 border-b border-slate-200/70 dark:border-white/[0.06]">
       <button
         type="button"
         onClick={props.onGoHome}
         aria-label="Go to FrostHub home"
-        className="cursor-pointer rounded-xl transition duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] hover:scale-[1.03] active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-blue)]"
+        className="cursor-pointer rounded-xl transition duration-200 hover:scale-[1.03] active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--brand-blue)]"
       >
         <FrostHubLogo size="md" />
       </button>
     </div>
-    <div className="flex-1 overflow-y-auto px-3 py-2">
+    <div className="flex-1 overflow-y-auto px-4 py-6">
+      <p className="hub-eyebrow mb-3 px-3">Explore</p>
       <NavLinks {...props} layoutGroupId="desktop-sidebar-nav" />
     </div>
-    <div className="px-3 py-3 border-t border-slate-200/70 dark:border-white/10">
+    <div className="px-4 py-5 border-t border-slate-200/70 dark:border-white/[0.06]">
+      <p className="hub-eyebrow mb-3 px-3">Your space</p>
       <UtilityActions {...props} />
     </div>
   </aside>
@@ -205,7 +207,7 @@ export const MobileMenu: React.FC<MobileMenuProps> = ({ isOpen, onClose, ...nav 
           animate={{ x: 0 }}
           exit={{ x: '-100%' }}
           transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
-          className="absolute inset-y-0 left-0 w-72 max-w-[85vw] flex flex-col bg-white dark:bg-[#0d0d12] shadow-2xl"
+          className="absolute inset-y-0 left-0 w-72 max-w-[85vw] flex flex-col bg-white/95 dark:bg-[#0b1114]/98 backdrop-blur-2xl shadow-2xl"
         >
           <div className="h-14 flex items-center justify-between px-4 border-b border-slate-200 dark:border-white/10 shrink-0">
             <FrostHubLogo size="sm" />

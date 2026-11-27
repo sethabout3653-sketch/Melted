@@ -15,7 +15,7 @@ export interface ThemeConfig {
 }
 
 export const ACCENT_PRESETS = [
-  { name: 'FrostHub Blue', color: '#2563eb', hover: '#1d4ed8', glow: 'rgba(37, 99, 235, 0.4)' },
+  { name: 'FrostHub Mint', color: '#16765e', hover: '#105d4a', glow: 'rgba(22, 118, 94, 0.28)' },
   { name: 'Emerald Cyber', color: '#10b981', hover: '#059669', glow: 'rgba(16, 185, 129, 0.4)' },
   { name: 'Amethyst Purple', color: '#8b5cf6', hover: '#7c3aed', glow: 'rgba(139, 92, 246, 0.4)' },
   { name: 'Electric Crimson', color: '#f43f5e', hover: '#e11d48', glow: 'rgba(244, 63, 94, 0.4)' },
@@ -62,9 +62,9 @@ export const BG_IMAGE_PRESETS = [
 ];
 
 export const DEFAULT_THEME_CONFIG: ThemeConfig = {
-  accentColor: '#2563eb',
-  accentHover: '#1d4ed8',
-  accentGlow: 'rgba(37, 99, 235, 0.4)',
+  accentColor: '#16765e',
+  accentHover: '#105d4a',
+  accentGlow: 'rgba(22, 118, 94, 0.28)',
   radius: 'balanced',
   bgMode: 'gradient',
   bgSolidColor: '#0a1128',

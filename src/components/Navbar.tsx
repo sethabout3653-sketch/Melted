@@ -25,6 +25,14 @@ const MOBILE_QUICK_TABS: { id: AppTab; label: string; icon: React.ComponentType<
   { id: 'chat', label: 'Chat', icon: MessageSquare },
 ];
 
+const TAB_CONTEXT: Record<AppTab, { title: string; description: string }> = {
+  games: { title: 'Discover', description: 'Your next favorite starts here' },
+  movies: { title: 'Movies & series', description: 'A little something for tonight' },
+  tv: { title: 'Live television', description: 'Find a channel and tune in' },
+  ai: { title: 'AI assistant', description: 'Ask a question or explore an idea' },
+  chat: { title: 'Community', description: 'Your people, all in one place' },
+};
+
 interface NavSearchInputProps {
   searchQuery: string;
   onSearchChange: (q: string) => void;
@@ -60,7 +68,7 @@ const NavSearchInput: React.FC<NavSearchInputProps> = React.memo(({
         type="text"
         value={localVal}
         onChange={handleChange}
-        placeholder="What are you in the mood for?"
+        placeholder="Search games..."
         className="w-full bg-slate-100 hover:bg-slate-200/70 focus:bg-white dark:bg-[#181824] dark:hover:bg-[#1e1e2d] dark:focus:bg-[#13131c] text-base sm:text-sm text-slate-900 dark:text-white placeholder-slate-400 rounded-xl pl-10 pr-10 py-2.5 border border-slate-200 dark:border-[#2a2a3c] focus:border-[var(--brand-blue)] focus:ring-1 focus:ring-[var(--brand-blue)] transition-[background-color,border-color,box-shadow] duration-[250ms] ease-[cubic-bezier(0.22,1,0.36,1)] focus:outline-none shadow-inner"
       />
       <AnimatePresence>
@@ -100,14 +108,10 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
       initial={{ opacity: 0, y: -12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.36, ease: [0.22, 1, 0.36, 1] }}
-      className={`sticky top-0 z-50 w-full shrink-0 text-slate-900 dark:text-white lg:transition-[max-height,opacity,translate,transform] lg:duration-[280ms] lg:ease-[cubic-bezier(0.22,1,0.36,1)] ${
-        isGames
-          ? 'lg:max-h-[69px] lg:opacity-100 lg:translate-y-0'
-          : 'lg:max-h-0 lg:opacity-0 lg:-translate-y-2 lg:pointer-events-none lg:overflow-hidden'
-      }`}
+      className="sticky top-0 z-50 w-full shrink-0 text-slate-900 dark:text-white"
     >
-      <div className="bg-white/95 dark:bg-[#070d1a]/95 border-b border-slate-200/70 dark:border-white/10 transition-colors duration-[250ms]">
-        <div className="h-14 lg:h-[4.25rem] px-3 sm:px-6 lg:px-8 flex items-center gap-2 sm:gap-4">
+      <div className="hub-glass-header text-slate-900 dark:text-white transition-colors duration-200">
+        <div className="h-[60px] lg:h-[72px] px-3 sm:px-6 lg:px-8 flex items-center gap-2 sm:gap-4">
           <button
             type="button"
             onClick={onOpenMenu}
@@ -126,31 +130,30 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
             <FrostHubLogo size="sm" />
           </button>
 
-          <AnimatePresence mode="wait" initial={false}>
-            {isGames ? (
-              <motion.div
-                key="navbar-search-zone"
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 4 }}
-                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                className="flex-1 min-w-0 max-w-4xl flex items-center gap-2 sm:gap-2.5"
-              >
-                <div className="flex-1 min-w-0">
-                  <NavSearchInput searchQuery={searchQuery} onSearchChange={onSearchChange} />
-                </div>
-                <LibrarySelector
-                  selectedLibrary={selectedLibrary}
-                  onSelectLibrary={onSelectLibrary}
-                />
-              </motion.div>
-            ) : (
+          {isGames ? (
+            <motion.div
+              key="navbar-search-zone"
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+              className="flex-1 min-w-0 max-w-4xl flex items-center gap-2 sm:gap-2.5"
+            >
+              <div className="flex-1 min-w-0">
+                <NavSearchInput searchQuery={searchQuery} onSearchChange={onSearchChange} />
+              </div>
+              <LibrarySelector selectedLibrary={selectedLibrary} onSelectLibrary={onSelectLibrary} />
+            </motion.div>
+          ) : (
+            <>
+              <div className="hidden min-w-0 flex-1 flex-col justify-center lg:flex">
+                <span className="hub-eyebrow">{TAB_CONTEXT[currentTab].description}</span>
+                <h1 className="mt-1 truncate text-lg font-bold tracking-tight text-slate-900 dark:text-white">{TAB_CONTEXT[currentTab].title}</h1>
+              </div>
               <motion.nav
                 key="navbar-tabs-zone"
                 aria-label="Quick tabs"
                 initial={{ opacity: 0, y: -4 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 4 }}
                 transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
                 className="lg:hidden flex-1 min-w-0 flex items-center justify-end gap-1 overflow-x-auto scrollbar-none"
               >
@@ -164,19 +167,9 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                         onClick={() => onTabChange(id)}
                         aria-label={label}
                         aria-current={active ? 'page' : undefined}
-                        className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition duration-200 ease-[cubic-bezier(0.22,1,0.36,1)] active:scale-95 cursor-pointer touch-manipulation ${
-                          active
-                            ? 'text-white'
-                            : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 dark:text-slate-300 dark:hover:text-white dark:hover:bg-white/10'
-                        }`}
+                        className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition duration-200 active:scale-95 cursor-pointer touch-manipulation ${active ? 'text-white' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5'}`}
                       >
-                        {active && (
-                          <motion.span
-                            layoutId="navbar-active-pill"
-                            transition={{ type: 'spring', stiffness: 460, damping: 34, mass: 0.8 }}
-                            className="absolute inset-0 rounded-lg bg-[var(--brand-blue)] shadow-sm"
-                          />
-                        )}
+                        {active && <motion.span layoutId="navbar-active-pill" transition={{ type: 'spring', stiffness: 460, damping: 34 }} className="absolute inset-0 rounded-lg bg-[var(--brand-blue)] shadow-sm" />}
                         <Icon className="relative z-10 w-4 h-4 shrink-0" />
                         <span className="relative z-10 hidden xs:inline sm:inline">{label}</span>
                       </button>
@@ -184,8 +177,8 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
                   })}
                 </LayoutGroup>
               </motion.nav>
-            )}
-          </AnimatePresence>
+            </>
+          )}
         </div>
       </div>
     </motion.header>
