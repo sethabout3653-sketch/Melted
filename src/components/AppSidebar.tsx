@@ -157,6 +157,26 @@ const UtilityActions: React.FC<NavigationProps & { onNavigate?: () => void }> = 
   </div>
 );
 
+export const MobileBottomNav: React.FC<Pick<NavigationProps, 'currentTab' | 'onTabChange'>> = ({ currentTab, onTabChange }) => (
+  <nav aria-label="Primary navigation" className="fixed inset-x-0 bottom-0 z-[240] flex gap-1 border-t border-slate-200/80 bg-white/95 px-2 pt-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] backdrop-blur-xl dark:border-white/[0.07] dark:bg-[#0b1114]/95 lg:hidden">
+    {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
+      const active = currentTab === id;
+      return (
+        <button
+          key={id}
+          type="button"
+          onClick={() => onTabChange(id)}
+          aria-current={active ? 'page' : undefined}
+          className={`flex min-w-0 flex-1 flex-col items-center justify-center gap-1 rounded-xl px-1 py-1.5 text-[10px] font-semibold transition-colors ${active ? 'bg-[var(--brand-blue)]/10 text-[var(--brand-blue)] dark:text-[var(--brand-accent-tint)]' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-white/[0.05]'}`}
+        >
+          <Icon className="h-[18px] w-[18px]" />
+          <span className="truncate">{label}</span>
+        </button>
+      );
+    })}
+  </nav>
+);
+
 export const AppSidebar: React.FC<NavigationProps> = (props) => (
   <aside
     aria-label="Sidebar"

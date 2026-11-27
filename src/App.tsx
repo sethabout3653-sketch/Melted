@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useDeferredValue, useCallback, useRef } from 'react';
 import { Navbar } from './components/Navbar';
-import { AppSidebar, MobileMenu } from './components/AppSidebar';
+import { AppSidebar, MobileBottomNav, MobileMenu } from './components/AppSidebar';
 import { motion, AnimatePresence } from 'motion/react';
 import { CategoryFilter } from './components/CategoryFilter';
 import { GameCard } from './components/GameCard';
@@ -524,7 +524,7 @@ export default function App() {
         
         <AppSidebar {...navProps} />
 
-        <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+        <div className={`flex-1 min-w-0 min-h-0 flex flex-col ${currentTab !== 'games' ? 'pb-[calc(64px+env(safe-area-inset-bottom))] lg:pb-0' : ''}`}>
         <Navbar
           currentTab={currentTab}
           onTabChange={setCurrentTab}
@@ -782,6 +782,7 @@ export default function App() {
       />
 
       <MobileMenu isOpen={isMenuOpen} onClose={() => setIsMenuOpen(false)} {...navProps} />
+      <MobileBottomNav currentTab={currentTab} onTabChange={setCurrentTab} />
 
       {/* Global Voice Audio Engine - Stays mounted across all tabs */}
       <VoiceAudioEngine 

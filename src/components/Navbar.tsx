@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Film, Gamepad2, Menu, MessageSquare, Search, Sparkles, Tv, X } from 'lucide-react';
-import { AnimatePresence, LayoutGroup, motion } from 'motion/react';
+import { Menu, Search, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { FrostHubLogo } from './FrostHubLogo';
 import { AppTab } from './AppSidebar';
 import { LibrarySelector } from './LibrarySelector';
@@ -16,14 +16,6 @@ interface NavbarProps {
   onGoHome: () => void;
   onOpenMenu: () => void;
 }
-
-const MOBILE_QUICK_TABS: { id: AppTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { id: 'games', label: 'Games', icon: Gamepad2 },
-  { id: 'movies', label: 'Movies', icon: Film },
-  { id: 'tv', label: 'Live TV', icon: Tv },
-  { id: 'ai', label: 'AI', icon: Sparkles },
-  { id: 'chat', label: 'Chat', icon: MessageSquare },
-];
 
 const TAB_CONTEXT: Record<AppTab, { title: string; description: string }> = {
   games: { title: 'Discover', description: 'Your next favorite starts here' },
@@ -144,40 +136,10 @@ export const Navbar: React.FC<NavbarProps> = React.memo(({
               <LibrarySelector selectedLibrary={selectedLibrary} onSelectLibrary={onSelectLibrary} />
             </motion.div>
           ) : (
-            <>
-              <div className="hidden min-w-0 flex-1 flex-col justify-center lg:flex">
-                <span className="hub-eyebrow">{TAB_CONTEXT[currentTab].description}</span>
-                <h1 className="mt-1 truncate text-lg font-bold tracking-tight text-slate-900 dark:text-white">{TAB_CONTEXT[currentTab].title}</h1>
-              </div>
-              <motion.nav
-                key="navbar-tabs-zone"
-                aria-label="Quick tabs"
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-                className="lg:hidden flex-1 min-w-0 flex items-center justify-end gap-1 overflow-x-auto scrollbar-none"
-              >
-                <LayoutGroup id="navbar-mobile-tabs">
-                  {MOBILE_QUICK_TABS.map(({ id, label, icon: Icon }) => {
-                    const active = currentTab === id;
-                    return (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => onTabChange(id)}
-                        aria-label={label}
-                        aria-current={active ? 'page' : undefined}
-                        className={`relative flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition duration-200 active:scale-95 cursor-pointer touch-manipulation ${active ? 'text-white' : 'text-slate-500 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5'}`}
-                      >
-                        {active && <motion.span layoutId="navbar-active-pill" transition={{ type: 'spring', stiffness: 460, damping: 34 }} className="absolute inset-0 rounded-lg bg-[var(--brand-blue)] shadow-sm" />}
-                        <Icon className="relative z-10 w-4 h-4 shrink-0" />
-                        <span className="relative z-10 hidden xs:inline sm:inline">{label}</span>
-                      </button>
-                    );
-                  })}
-                </LayoutGroup>
-              </motion.nav>
-            </>
+            <div className="flex min-w-0 flex-1 flex-col justify-center lg:flex">
+              <span className="hub-eyebrow hidden sm:block">{TAB_CONTEXT[currentTab].description}</span>
+              <h1 className="truncate text-sm font-bold tracking-tight text-slate-900 dark:text-white sm:mt-1 sm:text-lg">{TAB_CONTEXT[currentTab].title}</h1>
+            </div>
           )}
         </div>
       </div>
