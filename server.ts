@@ -5,6 +5,8 @@ import { fileURLToPath } from 'url';
 import fs from 'fs';
 import http from 'http';
 import https from 'https';
+import { lookup } from 'node:dns/promises';
+import { isIP } from 'node:net';
 import tls from 'tls';
 import zlib from 'zlib';
 import { promisify } from 'util';
@@ -20,6 +22,7 @@ import {
   sanitizeSafeSearchSetCookie,
   sanitizeSafeSearchLocation,
 } from './src/utils/safeSearchOff';
+import { experimental_generateVideo as generateVideo, generateText } from 'ai';
 import { Ytdl, Client as YtdlClient } from '@distube/ytdl-core';
 import { processGameHtml, getScaffoldingBuffer } from './src/server/scaffoldingLoader';
 import { FALLBACK_OPENROUTER_MODELS, OPENROUTER_CHAT_URL, OPENROUTER_MODEL } from './src/utils/openRouterEdgeHelper';
@@ -2720,71 +2723,141 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
   }
 });
 
+function isPublicImageHostAddress(address: string): boolean {
+  const version = isIP(address);
+  if (version === 4) {
+    const [a, b, c] = address.split('.').map(Number);
+    return !(a === 0 || a === 10 || a === 127 || a >= 224 ||
+      (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) ||
+      (a === 192 && b === 0 && c === 0) || (a === 198 && (b === 18 || b === 19)));
+  }
+  if (version !== 6) return false;
+  const normalized = address.toLowerCase();
+  return !normalized.startsWith('::ffff:') &&
+    !/^::$|^::1$|^fc|^fd|^fe[89ab]|^ff/i.test(normalized);
+}
+
+async function fetchPromptImage(imageUrl: string): Promise<{ mimeType: string; data: string }> {
+  let url: URL;
+  try {
+    url = new URL(imageUrl);
+  } catch {
+    throw new Error('Enter a valid public HTTPS image URL.');
+  }
+  if (url.protocol !== 'https:' || url.username || url.password || url.port && url.port !== '443') {
+    throw new Error('Image URLs must use a public HTTPS address.');
+  }
+
+  const host = url.hostname.replace(/^\[|\]$/g, '');
+  const resolved = isIP(host) ? [{ address: host }] : await lookup(host, { all: true });
+  if (!resolved.length || resolved.some(({ address }) => !isPublicImageHostAddress(address))) {
+    throw new Error('That image URL does not point to a public address.');
+  }
+
+  const response = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(12_000) });
+  if (!response.ok) throw new Error(`Could not load the image URL (HTTP ${response.status}).`);
+  const mimeType = (response.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+  if (!['image/jpeg', 'image/png', 'image/webp'].includes(mimeType)) {
+    throw new Error('The image URL must serve a PNG, JPEG, or WebP image.');
+  }
+  const contentLength = Number(response.headers.get('content-length') || 0);
+  if (contentLength > 10 * 1024 * 1024) throw new Error('Images must be 10 MB or smaller.');
+  const bytes = Buffer.from(await response.arrayBuffer());
+  if (!bytes.length || bytes.length > 10 * 1024 * 1024) throw new Error('Images must be 10 MB or smaller.');
+  return { mimeType, data: bytes.toString('base64') };
+}
+
 // Generate a video with Veo and return it inline so the assistant can render it.
 app.post('/api/ai/generate-video', async (req, res) => {
-  let downloadPath = '';
   try {
     const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
     const aspectRatio = req.body?.aspectRatio === '9:16' ? '9:16' : '16:9';
+    const requestedDuration = Number(req.body?.durationSeconds);
+    const model = req.body?.model === 'spacexai/grok-imagine-video-1.5'
+      ? 'spacexai/grok-imagine-video-1.5'
+      : 'google/veo-3.1-generate-001';
+    let durationSeconds = Number.isInteger(requestedDuration) ? Math.min(10, Math.max(2, requestedDuration)) : 8;
+    if (model === 'google/veo-3.1-generate-001') {
+      durationSeconds = [4, 6, 8].includes(durationSeconds) ? durationSeconds : 8;
+    }
     if (!prompt) {
       return res.status(400).json({ error: 'Write a description of the video you want to generate.' });
     }
 
-    const ai = createGeminiClient();
-    let operation = await ai.models.generateVideos({
-      model: 'veo-3.1-generate-preview',
-      source: { prompt },
-      config: {
-        numberOfVideos: 1,
-        aspectRatio,
-        durationSeconds: 8,
-        resolution: '720p',
-        generateAudio: true,
-      },
+    let sourceImage: { mimeType: string; data: string } | undefined;
+    if (typeof req.body?.imageDataUrl === 'string' && req.body.imageDataUrl) {
+      const match = req.body.imageDataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/i);
+      if (!match) return res.status(400).json({ error: 'Choose a valid PNG, JPEG, or WebP image.' });
+      const bytes = Buffer.from(match[2], 'base64');
+      if (!bytes.length || bytes.length > 10 * 1024 * 1024) return res.status(413).json({ error: 'Images must be 10 MB or smaller.' });
+      sourceImage = { mimeType: match[1].toLowerCase(), data: match[2] };
+    } else if (typeof req.body?.imageUrl === 'string' && req.body.imageUrl.trim()) {
+      sourceImage = await fetchPromptImage(req.body.imageUrl.trim());
+    }
+
+    if (sourceImage && model !== 'spacexai/grok-imagine-video-1.5') {
+      return res.status(400).json({ error: 'Choose Grok Imagine Video 1.5 for image-to-video generation.' });
+    }
+
+    const videoPrompt = sourceImage
+      ? { image: Buffer.from(sourceImage.data, 'base64'), text: prompt }
+      : prompt;
+    const { video } = await generateVideo({
+      model,
+      prompt: videoPrompt,
+      duration: durationSeconds,
+      aspectRatio: sourceImage ? 'adaptive' : aspectRatio,
+      ...(model === 'google/veo-3.1-generate-001' ? { resolution: '1280x720' } : {}),
+      poll: { intervalMs: 5_000, timeoutMs: 280_000 },
     });
 
-    const deadline = Date.now() + 280_000;
-    while (!operation.done && Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 8_000));
-      operation = await ai.operations.getVideosOperation({ operation });
-    }
-
-    if (!operation.done) {
-      return res.status(504).json({ error: 'Video generation is taking longer than expected. Please try again.' });
-    }
-    if (operation.error) {
-      throw new Error(String(operation.error.message || 'The video model could not complete this request.'));
-    }
-
-    const video = operation.response?.generatedVideos?.[0]?.video;
-    if (!video) {
-      const filtered = operation.response?.raiMediaFilteredCount;
-      throw new Error(filtered ? 'This prompt was blocked by the video safety filters. Try a different description.' : 'The video model returned no video. Please try again.');
-    }
-
-    let videoBase64 = video.videoBytes;
-    if (!videoBase64 && video.uri) {
-      downloadPath = path.join('/tmp', `generated-video-${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`);
-      await ai.files.download({ file: video, downloadPath });
-      videoBase64 = (await fs.promises.readFile(downloadPath)).toString('base64');
-    }
-    if (!videoBase64) {
-      throw new Error('The generated video could not be downloaded. Please try again.');
-    }
-
+    const videoBase64 = video.base64 || Buffer.from(video.uint8Array).toString('base64');
+    const mimeType = video.mediaType || 'video/mp4';
     return res.json({
       success: true,
-      videoUrl: `data:${video.mimeType || 'video/mp4'};base64,${videoBase64}`,
-      mimeType: video.mimeType || 'video/mp4',
+      videoUrl: `data:${mimeType};base64,${videoBase64}`,
+      mimeType,
       prompt,
-      duration: '8s',
+      duration: `${durationSeconds}s`,
       aspectRatio,
+      model,
     });
   } catch (err: any) {
     console.error('AI Video Generation Error:', err);
     return res.status(500).json({ error: err?.message || 'Failed to generate video' });
-  } finally {
-    if (downloadPath) await fs.promises.unlink(downloadPath).catch(() => {});
+  }
+});
+
+// Analyze attached images for ordinary assistant prompts without switching to video mode.
+app.post('/api/ai/assistant/vision', async (req, res) => {
+  try {
+    const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
+    const imageDataUrl = typeof req.body?.imageDataUrl === 'string' ? req.body.imageDataUrl : '';
+    const match = imageDataUrl.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+={0,2})$/i);
+    if (!match) return res.status(400).json({ error: 'Attach a valid PNG, JPEG, or WebP image.' });
+    const imageBytes = Buffer.from(match[2], 'base64');
+    if (!imageBytes.length || imageBytes.length > 10 * 1024 * 1024) {
+      return res.status(413).json({ error: 'Images must be 10 MB or smaller.' });
+    }
+
+    const { text: reply } = await generateText({
+      model: 'google/gemini-3.8-flash',
+      messages: [{
+        role: 'user',
+        content: [
+          { type: 'image', image: imageBytes, mediaType: match[1].toLowerCase() },
+          { type: 'text', text: prompt || 'Describe this image.' },
+        ],
+      }],
+      maxOutputTokens: 1000,
+    });
+    const cleanedReply = reply.trim();
+    if (!cleanedReply) return res.status(502).json({ error: 'The image model returned an empty response. Please try again.' });
+    return res.json({ success: true, reply: cleanedReply });
+  } catch (err: any) {
+    console.error('AI Image Analysis Error:', err);
+    return res.status(500).json({ error: err?.message || 'Image analysis failed.' });
   }
 });
 
