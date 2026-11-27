@@ -53,8 +53,13 @@ export interface Message {
   timestamp: string;
   sources?: MessageSource[];
   steps?: ThinkingStep[];
+  videoUrl?: string;
 }
 
+function isVideoGenerationPrompt(text: string): boolean {
+  return /\b(generate|make|create|render|animate)\b[\s\S]{0,100}\b(video|clip|animation)\b/i.test(text) ||
+    /\b(video|clip|animation)\b[\s\S]{0,50}\b(generate|make|create|render|animate)\b/i.test(text);
+}
 
 const QUICK_PROMPTS = [
   { icon: Calculator, label: 'Math Formula', prompt: 'What is the quadratic formula about?' },
@@ -121,6 +126,27 @@ const AIMessageBubble: React.FC<AIMessageBubbleProps> = React.memo(({
           </div>
         ) : (
           <div className="whitespace-pre-wrap font-[family-name:var(--app-font-family)]">{msg.text}</div>
+        )}
+
+        {msg.videoUrl && (
+          <div className="mt-4 space-y-3">
+            <video
+              controls
+              playsInline
+              preload="metadata"
+              src={msg.videoUrl}
+              aria-label="AI-generated video"
+              className="w-full max-w-xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-black"
+            />
+            <a
+              href={msg.videoUrl}
+              download="generated-video.mp4"
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+            >
+              <Download className="h-3.5 w-3.5" />
+              Download video
+            </a>
+          </div>
         )}
 
         {msg.sources && msg.sources.length > 0 && (
@@ -226,12 +252,12 @@ const AIInputBox: React.FC<AIInputBoxProps> = React.memo(({ onSend, isLoading })
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && !e.shiftKey) {
+          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing && e.keyCode !== 229) {
             e.preventDefault();
             handleTriggerSend();
           }
         }}
-        placeholder="Ask anything..."
+        placeholder="Ask anything or describe a video to generate..."
         className="flex-1 bg-transparent px-3 py-3 text-base md:text-sm text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none resize-none"
       />
       <motion.button
@@ -382,6 +408,44 @@ export const AIAssistantView: React.FC = () => {
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
     setActiveSteps([]);
+
+    if (isVideoGenerationPrompt(textToSend)) {
+      try {
+        const response = await fetch('/api/ai/generate-video', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: textToSend, aspectRatio: '16:9' }),
+          signal: abortController.signal,
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success || !data.videoUrl) {
+          throw new Error(data.error || 'Video generation failed. Please try again.');
+        }
+        setMessages((prev) => [...prev, {
+          id: (Date.now() + 1).toString(),
+          sender: 'ai',
+          text: 'Your video is ready.',
+          videoUrl: data.videoUrl,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        }]);
+      } catch (error: any) {
+        if (error?.name !== 'AbortError' && currentRequestId === requestIdRef.current) {
+          setMessages((prev) => [...prev, {
+            id: (Date.now() + 1).toString(),
+            sender: 'ai',
+            text: error?.message || 'Video generation failed. Please try again.',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          }]);
+        }
+      } finally {
+        if (currentRequestId === requestIdRef.current) {
+          setIsLoading(false);
+          setActiveSteps([]);
+        }
+      }
+      return;
+    }
+
     const history = messages.filter((m) => m.id !== 'welcome-1').map((m) => ({
       role: m.sender === 'user' ? 'user' : 'assistant',
       text: m.text,

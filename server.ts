@@ -2720,49 +2720,71 @@ app.post('/api/ai/assistant/stream', async (req, res) => {
   }
 });
 
-// AI Video Generation Endpoint using gemini-omni-1.2-flash via Interactions API
+// Generate a video with Veo and return it inline so the assistant can render it.
 app.post('/api/ai/generate-video', async (req, res) => {
+  let downloadPath = '';
   try {
-    const { prompt, duration = '10s', aspectRatio = '16:9' } = req.body;
+    const prompt = typeof req.body?.prompt === 'string' ? req.body.prompt.trim() : '';
+    const aspectRatio = req.body?.aspectRatio === '9:16' ? '9:16' : '16:9';
     if (!prompt) {
-      return res.status(400).json({ error: 'Missing prompt for video generation' });
+      return res.status(400).json({ error: 'Write a description of the video you want to generate.' });
     }
 
     const ai = createGeminiClient();
-    const interaction = await ai.interactions.create({
-      model: 'gemini-omni-1.2-flash',
-      input: prompt,
-      background: false,
-      store: false,
-      stream: false,
-      response_format: {
-        type: 'video',
-        aspect_ratio: aspectRatio === '9:16' ? '9:16' : '16:9',
-        duration: duration === '15s' ? '15s' : '10s',
+    let operation = await ai.models.generateVideos({
+      model: 'veo-3.1-generate-preview',
+      source: { prompt },
+      config: {
+        numberOfVideos: 1,
+        aspectRatio,
+        durationSeconds: 8,
         resolution: '720p',
+        generateAudio: true,
       },
-    }, { timeout: 300000 });
+    });
 
-    const videoPart = interaction.output_video;
-    if (!videoPart || !videoPart.data) {
-      const textOutput = interaction.output_text || 'Video generation failed to return video data.';
-      return res.status(500).json({ error: textOutput });
+    const deadline = Date.now() + 280_000;
+    while (!operation.done && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 8_000));
+      operation = await ai.operations.getVideosOperation({ operation });
     }
 
-    const mimeType = videoPart.mime_type || 'video/mp4';
-    const videoDataUrl = `data:${mimeType};base64,${videoPart.data}`;
+    if (!operation.done) {
+      return res.status(504).json({ error: 'Video generation is taking longer than expected. Please try again.' });
+    }
+    if (operation.error) {
+      throw new Error(String(operation.error.message || 'The video model could not complete this request.'));
+    }
+
+    const video = operation.response?.generatedVideos?.[0]?.video;
+    if (!video) {
+      const filtered = operation.response?.raiMediaFilteredCount;
+      throw new Error(filtered ? 'This prompt was blocked by the video safety filters. Try a different description.' : 'The video model returned no video. Please try again.');
+    }
+
+    let videoBase64 = video.videoBytes;
+    if (!videoBase64 && video.uri) {
+      downloadPath = path.join('/tmp', `generated-video-${Date.now()}-${Math.random().toString(36).slice(2)}.mp4`);
+      await ai.files.download({ file: video, downloadPath });
+      videoBase64 = (await fs.promises.readFile(downloadPath)).toString('base64');
+    }
+    if (!videoBase64) {
+      throw new Error('The generated video could not be downloaded. Please try again.');
+    }
 
     return res.json({
       success: true,
-      videoUrl: videoDataUrl,
-      mimeType,
+      videoUrl: `data:${video.mimeType || 'video/mp4'};base64,${videoBase64}`,
+      mimeType: video.mimeType || 'video/mp4',
       prompt,
-      duration,
+      duration: '8s',
       aspectRatio,
     });
   } catch (err: any) {
     console.error('AI Video Generation Error:', err);
     return res.status(500).json({ error: err?.message || 'Failed to generate video' });
+  } finally {
+    if (downloadPath) await fs.promises.unlink(downloadPath).catch(() => {});
   }
 });
 
