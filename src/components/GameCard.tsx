@@ -82,14 +82,24 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
   return (
     <div 
       style={entryDelayMs > 0 ? { animationDelay: `${entryDelayMs}ms` } : undefined}
-      className={`group relative bg-white/90 dark:bg-[#10101a] border border-slate-200/80 dark:border-white/10 shadow-sm dark:shadow-none hover:border-[var(--brand-blue)] rounded-2xl p-2 flex flex-col card-smooth-in card-smooth-hover [contain:layout_style] ${
+      className={`group relative flex flex-col rounded-[1.35rem] border border-slate-200/80 bg-white/90 p-2 shadow-[0_12px_30px_-24px_rgba(14,41,31,0.45)] transition-[border-color,box-shadow] duration-200 hover:border-[var(--brand-blue)]/50 hover:shadow-[0_18px_42px_-26px_var(--brand-blue-glow)] dark:border-white/[0.07] dark:bg-[#111819] dark:shadow-none dark:hover:border-[var(--brand-accent-tint)]/35 card-smooth-in [contain:layout_style] ${
         variant === 'large' ? 'md:col-span-2 md:row-span-2' : ''
       }`}
     >
       {/* Thumbnail Container */}
-      <div 
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Play ${game.name}`}
         onClick={() => onPlay(game)}
-        className="relative w-full aspect-[16/10] sm:aspect-[4/3] rounded-xl overflow-hidden bg-slate-100 dark:bg-[#0d0d12] cursor-pointer border border-slate-200 dark:border-[#1d1d2b] shadow-inner group"
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onPlay(game);
+          }
+        }}
+        className="relative w-full aspect-[16/10] sm:aspect-[4/3] rounded-[1.05rem] overflow-hidden bg-slate-100 dark:bg-[#0b1012] cursor-pointer border border-slate-200/70 dark:border-white/[0.06] group focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--brand-blue)]"
       >
         {imageError || !currentCover ? (
           <div className="absolute inset-0 bg-slate-100 dark:bg-[#0f0f18] flex flex-col items-center justify-center p-3 text-center select-none">
@@ -113,6 +123,10 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
           />
         )}
 
+        <span className="absolute left-2 top-2 z-10 max-w-[70%] truncate rounded-md border border-white/15 bg-black/55 px-2 py-1 text-[9px] font-bold uppercase tracking-[0.12em] text-white/90 backdrop-blur-md">
+          {game.category || 'Arcade'}
+        </span>
+
         {/* Favorite Button overlay */}
         <button
           type="button"
@@ -123,7 +137,7 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
           aria-label={isFavorite ? `Remove ${game.name} from favorites` : `Add ${game.name} to favorites`}
           className={`absolute top-1.5 right-1.5 min-w-[38px] min-h-[38px] sm:min-w-[34px] sm:min-h-[34px] flex items-center justify-center rounded-xl transition-colors duration-150 cursor-pointer z-10 border shadow-md ${
             isFavorite 
-              ? 'bg-[var(--brand-blue)] border-[var(--brand-blue)] text-[#090d16]' 
+              ? 'bg-[var(--brand-blue)] border-[var(--brand-blue)] text-white'
               : 'bg-[#090d16]/75 border-[#222232] text-slate-300 hover:text-white'
           }`}
           title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
@@ -150,12 +164,10 @@ export const GameCard: React.FC<GameCardProps & { variant?: 'standard' | 'large'
 
       {/* Title & Info */}
       <div className="px-2 py-2 sm:p-2.5 space-y-0.5 sm:space-y-1">
-        <h3 
-          onClick={() => onPlay(game)}
-          className="font-semibold text-slate-900 dark:text-white text-sm hover:text-[var(--brand-blue)] transition-colors leading-snug line-clamp-1 cursor-pointer"
-          title={game.name}
-        >
-          {game.name}
+        <h3 className="truncate text-sm font-semibold leading-snug text-slate-900 dark:text-white">
+          <button type="button" onClick={() => onPlay(game)} className="truncate text-left transition-colors hover:text-[var(--brand-blue)]" title={game.name}>
+            {game.name}
+          </button>
         </h3>
         <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate">
           {game.author || game.category || 'Instant Play'}

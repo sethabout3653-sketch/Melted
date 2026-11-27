@@ -10,17 +10,11 @@ import {
   Lightbulb, 
   Copy, 
   Check, 
-  Cpu,
   Search, 
   Sparkles, 
   ExternalLink,
   ChevronRight,
   CheckCircle2,
-  Video,
-  Film,
-  Play,
-  Download,
-  Clock,
   ImagePlus,
   X
 } from 'lucide-react';
@@ -55,21 +49,7 @@ export interface Message {
   timestamp: string;
   sources?: MessageSource[];
   steps?: ThinkingStep[];
-  videoUrl?: string;
   imageUrl?: string;
-}
-
-interface PromptOptions {
-  videoMode: 'chat' | 'text-to-video' | 'image-to-video';
-  model: 'google/veo-3.1-generate-001' | 'spacexai/grok-imagine-video-1.5';
-  durationSeconds: number;
-  imageDataUrl?: string;
-  imageUrl?: string;
-}
-
-function isVideoGenerationPrompt(text: string): boolean {
-  return /\b(generate|make|create|render|animate)\b[\s\S]{0,100}\b(video|clip|animation)\b/i.test(text) ||
-    /\b(video|clip|animation)\b[\s\S]{0,50}\b(generate|make|create|render|animate)\b/i.test(text);
 }
 
 const QUICK_PROMPTS = [
@@ -123,7 +103,7 @@ const AIMessageBubble: React.FC<AIMessageBubbleProps> = React.memo(({
         className={`group relative rounded-[2rem] p-6 text-[15px] leading-relaxed max-w-[85%] sm:max-w-[75%] ${
           msg.sender === 'user'
             ? 'text-white rounded-tr-md shadow-xl'
-            : 'bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 rounded-tl-md border border-slate-100 dark:border-slate-800 shadow-md'
+            : 'hub-panel-raised text-slate-800 dark:text-slate-100 rounded-tl-md'
         }`}
       >
         {msg.sender === 'ai' ? (
@@ -145,27 +125,6 @@ const AIMessageBubble: React.FC<AIMessageBubbleProps> = React.memo(({
             alt="Image attached to prompt"
             className="mt-3 max-h-64 max-w-full rounded-xl object-contain"
           />
-        )}
-
-        {msg.videoUrl && (
-          <div className="mt-4 space-y-3">
-            <video
-              controls
-              playsInline
-              preload="metadata"
-              src={msg.videoUrl}
-              aria-label="AI-generated video"
-              className="w-full max-w-xl rounded-2xl border border-slate-200 dark:border-slate-700 bg-black"
-            />
-            <a
-              href={msg.videoUrl}
-              download="generated-video.mp4"
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-            >
-              <Download className="h-3.5 w-3.5" />
-              Download video
-            </a>
-          </div>
         )}
 
         {msg.sources && msg.sources.length > 0 && (
@@ -251,31 +210,15 @@ const AIMessageBubble: React.FC<AIMessageBubbleProps> = React.memo(({
 });
 
 interface AIInputBoxProps {
-  onSend: (text: string, options: PromptOptions) => void;
+  onSend: (text: string, imageDataUrl?: string) => void;
   isLoading: boolean;
 }
 
 const AIInputBox: React.FC<AIInputBoxProps> = React.memo(({ onSend, isLoading }) => {
   const [text, setText] = useState('');
-  const [videoMode, setVideoMode] = useState<PromptOptions['videoMode']>('chat');
-  const [model, setModel] = useState<PromptOptions['model']>('google/veo-3.1-generate-001');
-  const [durationSeconds, setDurationSeconds] = useState(8);
   const [imageDataUrl, setImageDataUrl] = useState('');
-  const [imageUrl, setImageUrl] = useState('');
   const [attachmentError, setAttachmentError] = useState('');
   const imageInputRef = useRef<HTMLInputElement>(null);
-
-  const changeVideoMode = (mode: PromptOptions['videoMode']) => {
-    setVideoMode(mode);
-    if (mode === 'image-to-video') {
-      setModel('spacexai/grok-imagine-video-1.5');
-      return;
-    }
-    if (mode === 'text-to-video' && model === 'spacexai/grok-imagine-video-1.5') {
-      setModel('google/veo-3.1-generate-001');
-      if (![4, 6, 8].includes(durationSeconds)) setDurationSeconds(8);
-    }
-  };
 
   const handleImageSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -293,7 +236,6 @@ const AIInputBox: React.FC<AIInputBoxProps> = React.memo(({ onSend, isLoading })
     const reader = new FileReader();
     reader.onload = () => {
       setImageDataUrl(typeof reader.result === 'string' ? reader.result : '');
-      setImageUrl('');
       setAttachmentError('');
     };
     reader.onerror = () => setAttachmentError('This image could not be read. Try another file.');
@@ -301,99 +243,17 @@ const AIInputBox: React.FC<AIInputBoxProps> = React.memo(({ onSend, isLoading })
   };
 
   const handleTriggerSend = () => {
-    if (isLoading) return;
-    const trimmedText = text.trim();
-    if (videoMode !== 'chat' && !trimmedText) return;
-    if (!trimmedText && !imageDataUrl) return;
-    if (videoMode === 'image-to-video' && !imageDataUrl && !imageUrl.trim()) return;
-
-    onSend(trimmedText || 'Describe this image.', {
-      videoMode,
-      model,
-      durationSeconds,
-      imageDataUrl: imageDataUrl || undefined,
-      imageUrl: imageUrl.trim() || undefined,
-    });
+    if (isLoading || (!text.trim() && !imageDataUrl)) return;
+    onSend(text.trim() || 'Describe this image.', imageDataUrl || undefined);
     setText('');
     setImageDataUrl('');
-    setImageUrl('');
     setAttachmentError('');
   };
 
-  const modeButtonClass = (active: boolean) =>
-    `rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${active
-      ? 'bg-[var(--brand-blue)] text-white shadow-sm'
-      : 'text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}`;
-  const canSend = Boolean(text.trim() || imageDataUrl) && !isLoading &&
-    (videoMode !== 'image-to-video' || Boolean(imageDataUrl || imageUrl.trim()));
+  const canSend = Boolean(text.trim() || imageDataUrl) && !isLoading;
 
   return (
-    <div className="w-full shrink-0 space-y-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/50 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
-      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Choose assistant mode">
-        <button type="button" aria-pressed={videoMode === 'chat'} onClick={() => changeVideoMode('chat')} className={modeButtonClass(videoMode === 'chat')}>
-          Chat
-        </button>
-        <button type="button" aria-pressed={videoMode === 'text-to-video'} onClick={() => changeVideoMode('text-to-video')} className={modeButtonClass(videoMode === 'text-to-video')}>
-          Text to video
-        </button>
-        <button type="button" aria-pressed={videoMode === 'image-to-video'} onClick={() => changeVideoMode('image-to-video')} className={modeButtonClass(videoMode === 'image-to-video')}>
-          Image to video
-        </button>
-        {videoMode !== 'chat' && <span className="ml-auto text-[11px] text-slate-500 dark:text-slate-400">Generation uses provider credits; not guaranteed free</span>}
-      </div>
-
-      {videoMode !== 'chat' && (
-        <div className="flex flex-col gap-3 rounded-xl bg-slate-50 p-3 dark:bg-slate-800/60 sm:flex-row sm:items-center sm:gap-4">
-          <label className="flex min-w-0 flex-1 items-center gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200">
-            <span className="shrink-0">Model</span>
-            <select
-              value={model}
-              onChange={(event) => {
-                const nextModel = event.target.value as PromptOptions['model'];
-                setModel(nextModel);
-                if (nextModel === 'google/veo-3.1-generate-001' && ![4, 6, 8].includes(durationSeconds)) setDurationSeconds(8);
-                if (nextModel === 'spacexai/grok-imagine-video-1.5' && durationSeconds < 2) setDurationSeconds(2);
-              }}
-              aria-label="Video generation model"
-              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-            >
-              <option value="google/veo-3.1-generate-001" disabled={videoMode === 'image-to-video'}>Veo 3.1 · text-to-video</option>
-              <option value="spacexai/grok-imagine-video-1.5">Grok Imagine 1.5 · text/image</option>
-            </select>
-          </label>
-          <label className="flex min-w-0 flex-1 items-center gap-3 text-xs font-semibold text-slate-700 dark:text-slate-200">
-            <span className="shrink-0">Duration</span>
-            <input
-              type="range"
-              min={model === 'google/veo-3.1-generate-001' ? 4 : 2}
-              max={model === 'google/veo-3.1-generate-001' ? 8 : 10}
-              step="2"
-              value={durationSeconds}
-              onChange={(event) => setDurationSeconds(Number(event.target.value))}
-              aria-label="Video duration in seconds"
-              className="min-w-0 flex-1 accent-[var(--brand-blue)]"
-            />
-            <output className="w-10 text-right tabular-nums">{durationSeconds}s</output>
-          </label>
-          {videoMode === 'image-to-video' && (
-            <label className="min-w-0 flex-1 text-xs text-slate-600 dark:text-slate-300">
-              <span className="sr-only">Image URL</span>
-              <input
-                type="url"
-                value={imageUrl}
-                onChange={(event) => {
-                  setImageUrl(event.target.value);
-                  if (event.target.value) setImageDataUrl('');
-                }}
-                placeholder="Or paste an image URL (https://...)"
-                aria-label="Image URL for video generation"
-                className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-900 outline-none focus:border-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
-              />
-            </label>
-          )}
-        </div>
-      )}
-
+    <div className="hub-panel w-full shrink-0 space-y-2 p-2.5 sm:p-3">
       <div className="flex items-center gap-2">
         <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/webp" onChange={handleImageSelect} className="sr-only" aria-label="Choose an image to attach" />
         <textarea
@@ -406,7 +266,7 @@ const AIInputBox: React.FC<AIInputBoxProps> = React.memo(({ onSend, isLoading })
               handleTriggerSend();
             }
           }}
-          placeholder={videoMode === 'chat' ? 'Ask anything or describe a video to generate...' : videoMode === 'image-to-video' ? 'Describe how this image should move...' : 'Describe the video you want to create...'}
+          placeholder="Ask anything..."
           className="min-w-0 flex-1 resize-none bg-transparent px-3 py-3 text-base text-slate-900 placeholder-slate-400 focus:outline-none dark:text-white md:text-sm"
         />
         <button
@@ -437,7 +297,7 @@ const AIInputBox: React.FC<AIInputBoxProps> = React.memo(({ onSend, isLoading })
         <div className="flex items-center gap-3 px-2 pb-1">
           {imageDataUrl && <img src={imageDataUrl} alt="Selected image attachment" className="h-12 w-12 rounded-lg object-cover" />}
           {attachmentError && <p role="alert" className="text-xs text-rose-600 dark:text-rose-400">{attachmentError}</p>}
-          {imageDataUrl && <span className="min-w-0 flex-1 truncate text-xs text-slate-500">Image attached{videoMode === 'chat' ? ' · available to chat' : ''}</span>}
+          {imageDataUrl && <span className="min-w-0 flex-1 truncate text-xs text-slate-500">Image attached</span>}
           {imageDataUrl && (
             <button type="button" onClick={() => setImageDataUrl('')} aria-label="Remove attached image" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800">
               <X className="h-4 w-4" />
@@ -565,8 +425,8 @@ export const AIAssistantView: React.FC = () => {
     setExpandedStepsMap((prev) => ({ ...prev, [msgId]: !prev[msgId] }));
   }, []);
 
-  const handleSend = async (promptText?: string, options: PromptOptions = { videoMode: 'chat', model: 'google/veo-3.1-generate-001', durationSeconds: 8 }) => {
-    const textToSend = promptText?.trim();
+  const handleSend = async (promptText?: string, imageDataUrl?: string) => {
+    const textToSend = promptText?.trim() || (imageDataUrl ? 'Describe this image.' : '');
     if (!textToSend || isLoading) return;
     if (abortControllerRef.current) abortControllerRef.current.abort();
     const abortController = new AbortController();
@@ -576,67 +436,19 @@ export const AIAssistantView: React.FC = () => {
       id: Date.now().toString(),
       sender: 'user',
       text: textToSend,
-      imageUrl: options.imageDataUrl,
+      imageUrl: imageDataUrl,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
     setActiveSteps([]);
 
-    const wantsVideo = options.videoMode !== 'chat' || isVideoGenerationPrompt(textToSend);
-    const useImageForVideo = options.videoMode === 'image-to-video' ||
-      (options.videoMode === 'chat' && isVideoGenerationPrompt(textToSend) && Boolean(options.imageDataUrl || options.imageUrl));
-
-    if (wantsVideo) {
-      try {
-        const response = await fetch('/api/ai/generate-video', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: textToSend,
-            aspectRatio: '16:9',
-            model: useImageForVideo ? 'spacexai/grok-imagine-video-1.5' : options.model,
-            durationSeconds: options.durationSeconds,
-            imageDataUrl: useImageForVideo ? options.imageDataUrl : undefined,
-            imageUrl: useImageForVideo ? options.imageUrl : undefined,
-          }),
-          signal: abortController.signal,
-        });
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok || !data.success || !data.videoUrl) {
-          throw new Error(data.error || 'Video generation failed. Please try again.');
-        }
-        setMessages((prev) => [...prev, {
-          id: (Date.now() + 1).toString(),
-          sender: 'ai',
-          text: 'Your video is ready.',
-          videoUrl: data.videoUrl,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        }]);
-      } catch (error: any) {
-        if (error?.name !== 'AbortError' && currentRequestId === requestIdRef.current) {
-          setMessages((prev) => [...prev, {
-            id: (Date.now() + 1).toString(),
-            sender: 'ai',
-            text: error?.message || 'Video generation failed. Please try again.',
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          }]);
-        }
-      } finally {
-        if (currentRequestId === requestIdRef.current) {
-          setIsLoading(false);
-          setActiveSteps([]);
-        }
-      }
-      return;
-    }
-
-    if (options.imageDataUrl) {
+    if (imageDataUrl) {
       try {
         const response = await fetch('/api/ai/assistant/vision', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: textToSend, imageDataUrl: options.imageDataUrl }),
+          body: JSON.stringify({ prompt: textToSend, imageDataUrl }),
           signal: abortController.signal,
         });
         const data = await response.json().catch(() => ({}));
@@ -815,8 +627,12 @@ export const AIAssistantView: React.FC = () => {
   const latestStep = activeSteps[activeSteps.length - 1];
 
   return (
-    <div className="w-full h-full flex-1 min-h-0 px-3 sm:px-8 py-2.5 sm:py-4 flex flex-col font-sans overflow-hidden">
-      <div className="mb-2.5 sm:mb-4 flex items-center justify-end gap-2 sm:gap-3 shrink-0">
+    <div className="w-full h-full flex-1 min-h-0 px-4 sm:px-8 py-4 sm:py-6 flex flex-col font-sans overflow-hidden">
+      <div className="mb-4 sm:mb-6 flex items-center justify-between gap-3 shrink-0">
+        <div className="min-w-0">
+          <p className="hub-eyebrow">FrostHub intelligence</p>
+          <h1 className="hub-page-title mt-1 text-slate-900 dark:text-white">Ask anything</h1>
+        </div>
         <motion.button
           type="button"
           whileHover={{ scale: 1.05 }}
@@ -903,7 +719,7 @@ export const AIAssistantView: React.FC = () => {
                 whileTap={{ scale: 0.98 }}
                 type="button"
                 onClick={() => handleSend(qp.prompt)}
-                className="p-2.5 sm:p-3.5 bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-2xl text-left transition-colors duration-150 cursor-pointer group shadow-sm flex flex-col justify-between will-change-transform"
+                className="hub-panel-raised p-2.5 sm:p-3.5 text-left transition-colors duration-150 cursor-pointer group flex flex-col justify-between will-change-transform hover:border-[var(--brand-blue)]/50"
               >
                 <Icon style={{ color: 'var(--brand-blue)' }} className="w-4 h-4 mb-1 group-hover:scale-110 transition-transform" />
                 <span className="text-xs font-bold text-slate-800 dark:text-slate-200 block truncate">{qp.label}</span>

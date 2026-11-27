@@ -2004,7 +2004,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
   };
 
   return (
-    <div className="flex flex-1 min-h-0 h-full w-full bg-white/90 dark:bg-slate-950/80 text-slate-900 dark:text-slate-100 font-sans antialiased overflow-hidden select-none transition-colors">
+    <div className="flex flex-1 min-h-0 h-full w-full bg-[var(--bg-white)]/95 dark:bg-[var(--brand-navy-bg)] text-slate-900 dark:text-slate-100 font-sans antialiased overflow-hidden select-none transition-colors">
       <audio ref={handRaiseAudioRef} src="/hand-raise.mp3" preload="auto" className="hidden" aria-hidden="true" />
       
       {/* Hidden Global File Input */}
@@ -2017,7 +2017,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
       />
 
       {/* LEFT NAVIGATION SIDEBAR - Desktop & Tablet view */}
-      <aside className="hidden md:flex w-60 lg:w-72 bg-slate-50 dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 flex-col justify-between shrink-0 overflow-hidden">
+      <aside className="hidden md:flex w-60 lg:w-72 bg-[var(--bg-light)] dark:bg-[var(--brand-navy-surface)] border-r border-slate-200 dark:border-[var(--brand-navy-border)] flex-col justify-between shrink-0 overflow-hidden">
         <div className="p-6 space-y-6 flex-1 min-h-0 overflow-y-auto">
           
           {/* Header Branding */}
@@ -2136,7 +2136,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
       </aside>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 flex flex-col bg-white dark:bg-slate-950 min-w-0 min-h-0 relative overflow-hidden">
+      <main className="flex-1 flex flex-col bg-[var(--bg-white)] dark:bg-[var(--brand-navy-bg)] min-w-0 min-h-0 relative overflow-hidden">
         
         {/* TEXT CHANNEL & PRIVATE CHAT VIEW */}
         {(activeChannel === 'text-general' || activeChannel.startsWith('dm-')) && (
@@ -2146,7 +2146,7 @@ export const ChatView: React.FC<ChatViewProps> = ({ globalChat, initialChannel }
             <div className="flex-1 min-h-0 flex flex-col min-w-0 relative overflow-hidden">
               
               {/* Top Header */}
-              <header className="h-14 sm:h-16 md:h-20 px-3 sm:px-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-white/95 dark:bg-slate-950/95 shrink-0 gap-2 sm:gap-4">
+              <header className="hub-glass-header h-14 sm:h-16 md:h-20 px-3 sm:px-6 flex items-center justify-between shrink-0 gap-2 sm:gap-4">
                 <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                   {/* Mobile Channels button */}
                   <button

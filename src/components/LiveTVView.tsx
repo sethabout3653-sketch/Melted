@@ -1177,9 +1177,9 @@ let inMemoryEpgCache: Record<string, ChannelNowNext> | null = null;
   const clockLabel = formatEpgTime(clockNow.getTime());
 
   return (
-    <div className="flex flex-col h-full min-h-0 flex-1 bg-slate-50 dark:bg-[#0b0e14] text-slate-900 dark:text-white overflow-hidden transition-colors">
+    <div className="flex flex-col h-full min-h-0 flex-1 bg-[var(--bg-light)] dark:bg-[var(--brand-navy-bg)] text-slate-900 dark:text-white overflow-hidden transition-colors">
       {/* Guide Header */}
-      <div className="flex items-stretch bg-white dark:bg-[#070b14] border-b border-slate-200 dark:border-[#1c2a48] shrink-0 transition-colors">
+      <div className="hub-glass-header flex items-stretch shrink-0 transition-colors">
         <div className="hidden sm:flex items-center gap-2 px-4 border-r border-slate-200 dark:border-[#1c2a48] shrink-0">
           <Tv className="w-4 h-4 text-[var(--brand-blue)]" />
           <span className="text-xs font-extrabold uppercase tracking-widest text-slate-900 dark:text-white">Live TV</span>

@@ -53,7 +53,7 @@ export const CategoryFilter: React.FC<CategoryFilterProps> = React.memo(({
   };
 
   return (
-    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-4 py-1.5 sm:py-2 border-b border-slate-200 dark:border-[#1f1f2e]">
+    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-4 rounded-2xl border border-slate-200/80 bg-white/70 px-2.5 py-2 dark:border-white/[0.06] dark:bg-white/[0.025] sm:px-3">
       {/* Category Navigation Bar / Chips */}
       <div 
         onWheel={handleWheel}

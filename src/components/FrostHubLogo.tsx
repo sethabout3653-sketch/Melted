@@ -50,7 +50,7 @@ export const FrostHubLogo: React.FC<FrostHubLogoProps> = ({
           Frost
         </span>
         <span 
-          className={`frosthub-logo-badge bg-[var(--brand-blue)] text-[#090d16] flex items-center justify-center transition-all duration-200 font-black ${sizeClasses.badge}`}
+          className={`frosthub-logo-badge bg-[var(--brand-blue)] text-white flex items-center justify-center transition-all duration-200 font-black ${sizeClasses.badge}`}
           style={{ 
             boxShadow: '0 0 14px var(--brand-blue-glow)', 
             fontFamily: 'var(--app-font-heading)',
